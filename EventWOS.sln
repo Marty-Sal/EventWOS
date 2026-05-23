@@ -1,0 +1,56 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventWOS.Api",           "src\Api\EventWOS.Api.csproj",                         "{A1B2C3D4-0001-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventWOS.Application",   "src\Application\EventWOS.Application.csproj",         "{A1B2C3D4-0002-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventWOS.Domain",        "src\Domain\EventWOS.Domain.csproj",                   "{A1B2C3D4-0003-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventWOS.Infrastructure", "src\Infrastructure\EventWOS.Infrastructure.csproj",   "{A1B2C3D4-0004-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventWOS.Persistence",   "src\Persistence\EventWOS.Persistence.csproj",         "{A1B2C3D4-0005-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventWOS.Shared",        "src\Shared\EventWOS.Shared.csproj",                   "{A1B2C3D4-0006-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventWOS.BlazorWeb",     "src\BlazorWeb\EventWOS.BlazorWeb.csproj",             "{A1B2C3D4-0007-0000-0000-000000000001}"
+EndProject
+
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|Any CPU = Debug|Any CPU
+        Release|Any CPU = Release|Any CPU
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {A1B2C3D4-0001-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg   = Debug|Any CPU
+        {A1B2C3D4-0001-0000-0000-000000000001}.Debug|Any CPU.Build.0     = Debug|Any CPU
+        {A1B2C3D4-0001-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {A1B2C3D4-0001-0000-0000-000000000001}.Release|Any CPU.Build.0   = Release|Any CPU
+        {A1B2C3D4-0002-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg   = Debug|Any CPU
+        {A1B2C3D4-0002-0000-0000-000000000001}.Debug|Any CPU.Build.0     = Debug|Any CPU
+        {A1B2C3D4-0002-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {A1B2C3D4-0002-0000-0000-000000000001}.Release|Any CPU.Build.0   = Release|Any CPU
+        {A1B2C3D4-0003-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg   = Debug|Any CPU
+        {A1B2C3D4-0003-0000-0000-000000000001}.Debug|Any CPU.Build.0     = Debug|Any CPU
+        {A1B2C3D4-0003-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {A1B2C3D4-0003-0000-0000-000000000001}.Release|Any CPU.Build.0   = Release|Any CPU
+        {A1B2C3D4-0004-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg   = Debug|Any CPU
+        {A1B2C3D4-0004-0000-0000-000000000001}.Debug|Any CPU.Build.0     = Debug|Any CPU
+        {A1B2C3D4-0004-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {A1B2C3D4-0004-0000-0000-000000000001}.Release|Any CPU.Build.0   = Release|Any CPU
+        {A1B2C3D4-0005-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg   = Debug|Any CPU
+        {A1B2C3D4-0005-0000-0000-000000000001}.Debug|Any CPU.Build.0     = Debug|Any CPU
+        {A1B2C3D4-0005-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {A1B2C3D4-0005-0000-0000-000000000001}.Release|Any CPU.Build.0   = Release|Any CPU
+        {A1B2C3D4-0006-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg   = Debug|Any CPU
+        {A1B2C3D4-0006-0000-0000-000000000001}.Debug|Any CPU.Build.0     = Debug|Any CPU
+        {A1B2C3D4-0006-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {A1B2C3D4-0006-0000-0000-000000000001}.Release|Any CPU.Build.0   = Release|Any CPU
+        {A1B2C3D4-0007-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg   = Debug|Any CPU
+        {A1B2C3D4-0007-0000-0000-000000000001}.Debug|Any CPU.Build.0     = Debug|Any CPU
+        {A1B2C3D4-0007-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {A1B2C3D4-0007-0000-0000-000000000001}.Release|Any CPU.Build.0   = Release|Any CPU
+    EndGlobalSection
+EndGlobal

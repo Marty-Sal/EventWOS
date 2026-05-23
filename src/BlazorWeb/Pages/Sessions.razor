@@ -1,0 +1,74 @@
+@page "/sessions"
+@attribute [Authorize]
+@inject ISessionApiService SessionApi
+
+<PageTitle>Sessions — EventWOS</PageTitle>
+
+<div class="space-y-5">
+    <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-gray-800">Active Sessions</h2>
+        <span class="text-xs text-gray-400">@_sessions.Count active session(s)</span>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex items-center justify-center py-16 text-gray-400">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
+    }
+    else if (!_sessions.Any())
+    {
+        <div class="text-center py-16 text-gray-400 bg-white rounded-2xl border border-gray-100 shadow-sm">
+            <p class="text-4xl mb-3">🔌</p>
+            <p class="text-sm">No active sessions.</p>
+        </div>
+    }
+    else
+    {
+        <div class="grid gap-4">
+            @foreach (var session in _sessions)
+            {
+                var currentSession = session;
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-indigo-200 transition-colors">
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl flex-shrink-0">
+                            📱
+                        </div>
+                        <div>
+                            <p class="font-semibold text-gray-800 text-sm">@currentSession.DeviceName</p>
+                            <p class="text-xs text-gray-400 mt-0.5">ID: <span class="font-mono">@currentSession.DeviceId</span></p>
+                            <p class="text-xs text-gray-400">IP: @currentSession.IpAddress</p>
+                            <p class="text-xs text-gray-400 mt-1">
+                                Last active: <span class="text-gray-600">@currentSession.LastActivityAt.ToString("dd MMM yyyy, HH:mm")</span>
+                            </p>
+                        </div>
+                    </div>
+                    <button @onclick="@(() => RevokeAsync(currentSession.Id))"
+                            class="self-start sm:self-center px-4 py-2 rounded-xl text-xs font-semibold text-red-600 border border-red-100 hover:bg-red-50 transition-colors">
+                        Revoke
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<SessionDto> _sessions = Array.Empty<SessionDto>();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sessions = await SessionApi.GetSessionsAsync();
+        _loading = false;
+    }
+
+    private async Task RevokeAsync(Guid id)
+    {
+        await SessionApi.RevokeSessionAsync(id);
+        _sessions = await SessionApi.GetSessionsAsync();
+    }
+}

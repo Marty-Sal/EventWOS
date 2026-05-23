@@ -1,0 +1,107 @@
+@page "/profile"
+@attribute [Authorize]
+@inject IUserApiService UserApi
+
+<PageTitle>My Profile — EventWOS</PageTitle>
+
+<div class="max-w-2xl mx-auto space-y-6">
+    @if (_loading)
+    {
+        <div class="flex items-center justify-center py-16">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
+    }
+    else if (_profile is not null)
+    {
+        <!-- Profile header -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <div class="flex items-center gap-5">
+                <div class="w-16 h-16 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl font-bold shadow-md">
+                    @_profile.FullName.FirstOrDefault()
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">@_profile.FullName</h2>
+                    <p class="text-sm text-gray-500">@_profile.Mobile</p>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">@_profile.Role</span>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">@_profile.Status</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit form -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+            <h3 class="text-sm font-semibold text-gray-700">Edit Profile</h3>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Full Name</label>
+                <input @bind="_fullName" type="text" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Email (optional)</label>
+                <input @bind="_email" type="email" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+
+            @if (_success)
+            {
+                <div class="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+                    ✅ Profile updated successfully.
+                </div>
+            }
+
+            @if (_error is not null)
+            {
+                <div class="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                    ⚠️ @_error
+                </div>
+            }
+
+            <button @onclick="SaveAsync" disabled="@_saving"
+                    class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-all disabled:opacity-50 shadow-md hover:shadow-lg">
+                @(_saving ? "Saving…" : "Save Changes")
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private UserProfileDto? _profile;
+    private string _fullName = string.Empty;
+    private string? _email;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _success;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _profile = await UserApi.GetMeAsync();
+        if (_profile is not null)
+        {
+            _fullName = _profile.FullName;
+            _email = _profile.Email;
+        }
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true; _success = false; _error = null;
+        var ok = await UserApi.UpdateProfileAsync(_fullName, _email, _profile?.AvatarUrl);
+        if (ok)
+        {
+            _success = true;
+            _profile = await UserApi.GetMeAsync();
+        }
+        else
+        {
+            _error = "Failed to update profile.";
+        }
+        _saving = false;
+    }
+}

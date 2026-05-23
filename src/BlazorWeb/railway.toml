@@ -1,0 +1,13 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# EventWOS — Railway Config (Blazor WASM service)
+# Railway dashboard → Blazor service → Root Directory: src/BlazorWeb
+# Dockerfile path is relative to Root Directory
+# ─────────────────────────────────────────────────────────────────────────────
+
+[build]
+builder        = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+restartPolicyType       = "ON_FAILURE"
+restartPolicyMaxRetries = 3

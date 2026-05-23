@@ -1,0 +1,114 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@inject AppAuthStateProvider AuthState
+@inject IAuthApiService AuthApi
+@inject NotificationHubService Hub
+
+<div class="flex h-screen bg-gray-50 overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="hidden md:flex md:flex-shrink-0">
+        <div class="flex flex-col w-64 bg-gray-900 text-white">
+            <!-- Logo -->
+            <div class="flex items-center h-16 px-6 border-b border-gray-700">
+                <span class="text-xl font-bold tracking-tight text-white">⚡ EventWOS</span>
+            </div>
+
+            <!-- Nav Items -->
+            <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+                <NavItem Href="/dashboard"  Icon="🏠" Label="Dashboard" />
+                <NavItem Href="/users"       Icon="👥" Label="Users" />
+                <NavItem Href="/sessions"    Icon="🔌" Label="Sessions" />
+                <NavItem Href="/profile"     Icon="👤" Label="My Profile" />
+
+                <AuthorizeView Roles="Admin">
+                    <div class="pt-4 mt-4 border-t border-gray-700 space-y-1">
+                        <p class="px-2 text-xs font-semibold uppercase tracking-widest text-gray-500">Admin</p>
+                        <NavItem Href="/admin/roles"       Icon="🛡️" Label="Roles" />
+                        <NavItem Href="/admin/permissions" Icon="🔑" Label="Permissions" />
+                        <NavItem Href="/admin/audit"       Icon="📋" Label="Audit Log" />
+                    </div>
+                </AuthorizeView>
+            </nav>
+
+            <!-- User block -->
+            <div class="p-4 border-t border-gray-700">
+                <AuthorizeView>
+                    <Authorized>
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">
+                                @GetInitials(context.User.FindFirst("mobile")?.Value ?? "?")
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-white truncate">
+                                    @context.User.FindFirst("mobile")?.Value
+                                </p>
+                                <p class="text-xs text-gray-400 truncate">
+                                    @context.User.FindFirst("role")?.Value
+                                </p>
+                            </div>
+                            <button @onclick="LogoutAsync"
+                                    class="text-gray-400 hover:text-white transition-colors"
+                                    title="Logout">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h7a1 1 0 000-2H4V5h6a1 1 0 000-2H3zm11.707 4.293a1 1 0 010 1.414L13.414 10l1.293 1.293a1 1 0 01-1.414 1.414l-2-2a1 1 0 010-1.414l2-2a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    <path d="M13 10a1 1 0 011-1h3a1 1 0 110 2h-3a1 1 0 01-1-1z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="flex flex-col flex-1 overflow-hidden">
+        <!-- Top bar -->
+        <header class="flex items-center justify-between h-16 px-6 bg-white border-b border-gray-200 shadow-sm">
+            <h1 class="text-lg font-semibold text-gray-800">@PageTitle</h1>
+            <div class="flex items-center gap-3">
+                <div class="w-2 h-2 rounded-full @(Hub.IsConnected ? "bg-green-400" : "bg-red-400")"
+                     title="@(Hub.IsConnected ? "Live" : "Reconnecting…")"></div>
+                <span class="text-xs text-gray-400">@(Hub.IsConnected ? "Live" : "Reconnecting…")</span>
+            </div>
+        </header>
+
+        <!-- Page body -->
+        <main class="flex-1 overflow-y-auto p-6">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private string PageTitle => Nav.Uri.Split('/').Last() switch
+    {
+        "dashboard"   => "Dashboard",
+        "users"       => "Users",
+        "sessions"    => "Sessions",
+        "profile"     => "My Profile",
+        "roles"       => "Roles",
+        "permissions" => "Permissions",
+        "audit"       => "Audit Log",
+        _             => "EventWOS"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { await Hub.StartAsync(); }
+        catch { /* will auto-reconnect */ }
+        Hub.ConnectionStateChanged += StateHasChanged;
+    }
+
+    private async Task LogoutAsync()
+    {
+        var refresh = await AuthState.GetRefreshTokenAsync();
+        await AuthApi.LogoutAsync(refresh ?? string.Empty);
+        await Hub.StopAsync();
+        Nav.NavigateTo("/login");
+    }
+
+    private static string GetInitials(string mobile) =>
+        mobile.Length >= 2 ? mobile[^2..] : mobile;
+}

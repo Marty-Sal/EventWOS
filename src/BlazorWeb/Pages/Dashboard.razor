@@ -1,0 +1,51 @@
+@page "/dashboard"
+@attribute [Authorize]
+@inject IUserApiService UserApi
+
+<PageTitle>Dashboard — EventWOS</PageTitle>
+
+<div class="space-y-6">
+    <!-- Welcome banner -->
+    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
+        <h2 class="text-2xl font-bold">
+            Welcome back @(_profile?.FullName.Split(' ').FirstOrDefault() ?? "there") 👋
+        </h2>
+        <p class="text-indigo-100 mt-1 text-sm">
+            You're signed in as <span class="font-semibold">@_profile?.Role</span> ·
+            Last login: @(_profile?.LastLoginAt?.ToString("dd MMM yyyy, HH:mm") ?? "—")
+        </p>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard Title="Role"        Value="@(_profile?.Role ?? "—")"    Icon="🛡️" Color="indigo" />
+        <KpiCard Title="Status"      Value="@(_profile?.Status ?? "—")"  Icon="✅" Color="green" />
+        <KpiCard Title="Permissions" Value="@(_profile?.Permissions.Count.ToString() ?? "0")" Icon="🔑" Color="amber" />
+        <KpiCard Title="Mobile"      Value="@(_profile?.Mobile ?? "—")"  Icon="📱" Color="sky" />
+    </div>
+
+    <!-- Permissions list -->
+    @if (_profile?.Permissions.Any() == true)
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4">Your Permissions</h3>
+            <div class="flex flex-wrap gap-2">
+                @foreach (var perm in _profile.Permissions.OrderBy(p => p))
+                {
+                    <span class="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-mono font-medium border border-indigo-100">
+                        @perm
+                    </span>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private UserProfileDto? _profile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _profile = await UserApi.GetMeAsync();
+    }
+}

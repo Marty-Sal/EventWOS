@@ -1,0 +1,28 @@
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Authorization
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
+                <NotAuthorized>
+                    <RedirectToLogin />
+                </NotAuthorized>
+                <Authorizing>
+                    <div class="flex h-screen items-center justify-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                    </div>
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not Found — EventWOS</PageTitle>
+            <div class="flex h-screen flex-col items-center justify-center text-gray-500">
+                <h1 class="text-6xl font-bold text-gray-200">404</h1>
+                <p class="mt-4 text-lg">Page not found.</p>
+                <a href="/" class="mt-6 text-indigo-600 hover:underline">Go home</a>
+            </div>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

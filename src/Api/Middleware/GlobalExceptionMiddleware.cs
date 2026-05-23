@@ -1,0 +1,66 @@
+using EventWOS.Shared.Common;
+using FluentValidation;
+using System.Text.Json;
+
+namespace EventWOS.Api.Middleware;
+
+/// <summary>
+/// Global unhandled exception handler. Catches all exceptions and returns
+/// a structured ApiResponse with appropriate HTTP status codes.
+/// Prevents stack traces leaking to clients in production.
+/// </summary>
+public sealed class GlobalExceptionMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<GlobalExceptionMiddleware> _logger;
+    private readonly IHostEnvironment _env;
+
+    public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger, IHostEnvironment env)
+    {
+        _next = next;
+        _logger = logger;
+        _env = env;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (ValidationException ex)
+        {
+            _logger.LogWarning("Validation failed: {Errors}", ex.Errors.Select(e => e.ErrorMessage));
+            await WriteErrorResponseAsync(context, 400,
+                ex.Errors.Select(e => e.ErrorMessage).ToList(),
+                context.TraceIdentifier);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning("Unauthorized: {Message}", ex.Message);
+            await WriteErrorResponseAsync(context, 403, new[] { "Forbidden." }, context.TraceIdentifier);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            await WriteErrorResponseAsync(context, 404, new[] { ex.Message }, context.TraceIdentifier);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled exception for {Path}", context.Request.Path);
+            var message = _env.IsDevelopment() ? ex.Message : "An unexpected error occurred.";
+            await WriteErrorResponseAsync(context, 500, new[] { message }, context.TraceIdentifier);
+        }
+    }
+
+    private static async Task WriteErrorResponseAsync(
+        HttpContext context, int statusCode,
+        IEnumerable<string> errors, string traceId)
+    {
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = "application/json";
+
+        var response = ApiResponse<object>.Fail(errors.ToList(), traceId);
+        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        await context.Response.WriteAsync(json);
+    }
+}

@@ -1,0 +1,27 @@
+@* Reusable KPI card for the dashboard. *@
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+    <div class="w-11 h-11 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 @BgClass">
+        @Icon
+    </div>
+    <div class="min-w-0">
+        <p class="text-xs text-gray-400 uppercase tracking-wider font-medium truncate">@Title</p>
+        <p class="text-lg font-bold text-gray-800 truncate mt-0.5">@Value</p>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title  { get; set; } = "";
+    [Parameter] public string Value  { get; set; } = "";
+    [Parameter] public string Icon   { get; set; } = "";
+    [Parameter] public string Color  { get; set; } = "indigo";
+
+    private string BgClass => Color switch
+    {
+        "green"  => "bg-green-50",
+        "amber"  => "bg-amber-50",
+        "sky"    => "bg-sky-50",
+        "red"    => "bg-red-50",
+        "purple" => "bg-purple-50",
+        _        => "bg-indigo-50"
+    };
+}

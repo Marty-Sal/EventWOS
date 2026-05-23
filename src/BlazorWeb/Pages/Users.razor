@@ -1,0 +1,188 @@
+@page "/users"
+@attribute [Authorize]
+@inject IUserApiService UserApi
+
+<PageTitle>Users — EventWOS</PageTitle>
+
+<div class="space-y-5">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h2 class="text-lg font-bold text-gray-800">User Management</h2>
+        <div class="relative">
+            <input value="@_search" @oninput="OnSearchChanged"
+                   type="search" placeholder="Search users…"
+                   class="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64" />
+            <span class="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        @if (_loading)
+        {
+            <div class="flex items-center justify-center py-16 text-gray-400">
+                <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+            </div>
+        }
+        else if (_users?.Items.Any() != true)
+        {
+            <div class="text-center py-16 text-gray-400">
+                <p class="text-4xl mb-3">👥</p>
+                <p class="text-sm">No users found.</p>
+            </div>
+        }
+        else
+        {
+            <table class="min-w-full divide-y divide-gray-100">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">User</th>
+                        <th class="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Role</th>
+                        <th class="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
+                        <th class="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Joined</th>
+                        <AuthorizeView Roles="Admin">
+                            <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+                        </AuthorizeView>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-50">
+                    @foreach (var user in _users.Items)
+                    {
+                        var currentUser = user;
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                                        @currentUser.FullName.FirstOrDefault()
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-800">@currentUser.FullName</p>
+                                        <p class="text-xs text-gray-400">@currentUser.Mobile</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-2.5 py-1 rounded-full text-xs font-medium @GetRoleBadgeClass(currentUser.Role)">
+                                    @currentUser.Role
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center gap-1.5 text-xs font-medium @GetStatusClass(currentUser.Status)">
+                                    <span class="w-1.5 h-1.5 rounded-full @GetStatusDotClass(currentUser.Status)"></span>
+                                    @currentUser.Status
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-xs text-gray-400">
+                                @currentUser.CreatedAt.ToString("dd MMM yyyy")
+                            </td>
+                            <AuthorizeView Roles="Admin">
+                                <td class="px-6 py-4 text-right">
+                                    @if (currentUser.Status == "Active")
+                                    {
+                                        <button @onclick="@(() => ChangeStatusAsync(currentUser.Id, StatusSuspended))"
+                                                class="text-xs text-red-600 hover:underline font-medium">Suspend</button>
+                                    }
+                                    else if (currentUser.Status == "Suspended")
+                                    {
+                                        <button @onclick="@(() => ChangeStatusAsync(currentUser.Id, StatusActive))"
+                                                class="text-xs text-green-600 hover:underline font-medium">Activate</button>
+                                    }
+                                </td>
+                            </AuthorizeView>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            @if (_users.TotalPages > 1)
+            {
+                <div class="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50">
+                    <p class="text-xs text-gray-500">
+                        Showing @((_page - 1) * _pageSize + 1)–@(Math.Min(_page * _pageSize, _users.TotalCount)) of @_users.TotalCount
+                    </p>
+                    <div class="flex gap-2">
+                        <button @onclick="PrevPage" disabled="@(_page <= 1)"
+                                class="px-3 py-1.5 text-xs rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-indigo-50 transition-colors">
+                            ← Prev
+                        </button>
+                        <button @onclick="NextPage" disabled="@(_page >= _users.TotalPages)"
+                                class="px-3 py-1.5 text-xs rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-indigo-50 transition-colors">
+                            Next →
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private const string StatusActive    = "Active";
+    private const string StatusSuspended = "Suspended";
+
+    private PagedResult<UserListItemDto>? _users;
+    private bool _loading = true;
+    private string _search = string.Empty;
+    private int _page = 1;
+    private const int _pageSize = 20;
+    private System.Timers.Timer? _debounce;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _users = await UserApi.GetUsersAsync(_page, _pageSize, _search);
+        _loading = false;
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        _debounce?.Stop();
+        _debounce = new System.Timers.Timer(350);
+        _debounce.Elapsed += async (_, _) =>
+        {
+            _page = 1;
+            await InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+            _debounce.Stop();
+        };
+        _debounce.Start();
+    }
+
+    private async Task ChangeStatusAsync(Guid userId, string status)
+    {
+        await UserApi.ChangeStatusAsync(userId, status);
+        await LoadAsync();
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { if (_users != null && _page < _users.TotalPages) { _page++; await LoadAsync(); } }
+
+    private static string GetRoleBadgeClass(string role) => role switch
+    {
+        "Admin"   => "bg-purple-100 text-purple-700",
+        "Manager" => "bg-blue-100 text-blue-700",
+        "Vendor"  => "bg-amber-100 text-amber-700",
+        _         => "bg-gray-100 text-gray-700"
+    };
+
+    private static string GetStatusClass(string status) => status switch
+    {
+        "Active"      => "text-green-700",
+        "Suspended"   => "text-red-600",
+        "Deactivated" => "text-gray-400",
+        _             => "text-gray-500"
+    };
+
+    private static string GetStatusDotClass(string status) => status switch
+    {
+        "Active"    => "bg-green-500",
+        "Suspended" => "bg-red-500",
+        _           => "bg-gray-400"
+    };
+}
