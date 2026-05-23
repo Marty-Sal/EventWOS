@@ -1,0 +1,68 @@
+@page "/admin/permissions"
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+
+<PageTitle>Permissions — EventWOS</PageTitle>
+
+<div class="space-y-6">
+    <div>
+        <h2 class="text-lg font-bold text-gray-800">Permissions</h2>
+        <p class="text-sm text-gray-500 mt-0.5">All system permissions grouped by resource.</p>
+    </div>
+
+    @foreach (var group in _permissionGroups)
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <div class="flex items-center gap-2">
+                <span class="text-lg">@group.Icon</span>
+                <h3 class="font-semibold text-gray-700 capitalize">@group.Resource</h3>
+                <span class="ml-auto px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs">@group.Permissions.Count actions</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                @foreach (var perm in group.Permissions)
+                {
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                        <div>
+                            <p class="font-mono text-sm text-indigo-700">@perm.Key</p>
+                            <p class="text-xs text-gray-400 mt-0.5">@perm.Description</p>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium @(perm.AdminOnly ? "bg-red-50 text-red-600 border border-red-100" : "bg-green-50 text-green-700 border border-green-100")">
+                            @(perm.AdminOnly ? "Admin only" : "Assignable")
+                        </span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly List<PermissionGroup> _permissionGroups = new()
+    {
+        new("users", "👥", new()
+        {
+            new("users:read",  "View user list and profiles", false),
+            new("users:write", "Create and edit users",       true),
+        }),
+        new("sessions", "🔌", new()
+        {
+            new("sessions:read",  "View active sessions", false),
+            new("sessions:write", "Revoke sessions",      true),
+        }),
+        new("audit", "📋", new()
+        {
+            new("audit:read", "View audit logs", false),
+        }),
+        new("roles", "🛡️", new()
+        {
+            new("roles:manage", "Assign and manage roles", true),
+        }),
+        new("permissions", "🔑", new()
+        {
+            new("permissions:manage", "Manage permission assignments", true),
+        }),
+    };
+
+    private sealed record PermissionGroup(string Resource, string Icon, List<PermissionViewModel> Permissions);
+    private sealed record PermissionViewModel(string Key, string Description, bool AdminOnly);
+}

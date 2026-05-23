@@ -1,0 +1,50 @@
+@page "/admin/roles"
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+
+<PageTitle>Roles — EventWOS</PageTitle>
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">Roles</h2>
+            <p class="text-sm text-gray-500 mt-0.5">System roles and their associated permissions.</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        @foreach (var role in _roles)
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-xl">
+                        @role.Icon
+                    </div>
+                    <div>
+                        <p class="font-semibold text-gray-800">@role.Name</p>
+                        <p class="text-xs text-gray-400">@role.Description</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-1.5 pt-2 border-t border-gray-50">
+                    @foreach (var perm in role.Permissions)
+                    {
+                        <span class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-mono border border-indigo-100">
+                            @perm
+                        </span>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private readonly List<RoleViewModel> _roles = new()
+    {
+        new("Admin", "🛡️", "Full system access", new[] { "users:read", "users:write", "sessions:read", "sessions:write", "audit:read", "roles:manage", "permissions:manage" }),
+        new("Manager", "👔", "Team management access", new[] { "users:read", "sessions:read", "audit:read" }),
+        new("Staff", "👷", "Basic operational access", new[] { "sessions:read" }),
+    };
+
+    private sealed record RoleViewModel(string Name, string Icon, string Description, IEnumerable<string> Permissions);
+}

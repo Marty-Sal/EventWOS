@@ -14,16 +14,26 @@
             </svg>
         </div>
     }
+    else if (_loadError is not null)
+    {
+        <div class="bg-red-50 border border-red-100 rounded-2xl p-6 text-red-600 text-sm">
+            <p class="font-semibold mb-1">⚠️ Could not load profile</p>
+            <p class="text-xs text-red-400">@_loadError</p>
+            <button @onclick="LoadAsync" class="mt-3 px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition">
+                Try again
+            </button>
+        </div>
+    }
     else if (_profile is not null)
     {
         <!-- Profile header -->
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <div class="flex items-center gap-5">
                 <div class="w-16 h-16 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl font-bold shadow-md">
-                    @_profile.FullName.FirstOrDefault()
+                    @(_profile.FullName?.FirstOrDefault().ToString() ?? _profile.Mobile.Last().ToString())
                 </div>
                 <div>
-                    <h2 class="text-xl font-bold text-gray-800">@_profile.FullName</h2>
+                    <h2 class="text-xl font-bold text-gray-800">@(_profile.FullName ?? "—")</h2>
                     <p class="text-sm text-gray-500">@_profile.Mobile</p>
                     <div class="flex items-center gap-2 mt-1">
                         <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">@_profile.Role</span>
@@ -39,12 +49,14 @@
 
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Full Name</label>
-                <input @bind="_fullName" type="text" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input @bind="_fullName" type="text"
+                       class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
 
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Email (optional)</label>
-                <input @bind="_email" type="email" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input @bind="_email" type="email"
+                       class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
 
             @if (_success)
@@ -66,6 +78,18 @@
                 @(_saving ? "Saving…" : "Save Changes")
             </button>
         </div>
+
+        <!-- Info cards -->
+        <div class="grid grid-cols-2 gap-4">
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+                <p class="text-2xl font-bold text-indigo-600">@(_profile.Permissions?.Count ?? 0)</p>
+                <p class="text-xs text-gray-400 mt-1">Permissions</p>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+                <p class="text-sm font-semibold text-gray-700">@(_profile.LastLoginAt?.ToLocalTime().ToString("dd MMM HH:mm") ?? "—")</p>
+                <p class="text-xs text-gray-400 mt-1">Last Login</p>
+            </div>
+        </div>
     }
 </div>
 
@@ -77,16 +101,31 @@
     private bool _saving;
     private bool _success;
     private string? _error;
+    private string? _loadError;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
     {
-        _profile = await UserApi.GetMeAsync();
-        if (_profile is not null)
+        _loading = true; _loadError = null;
+        try
         {
-            _fullName = _profile.FullName;
-            _email = _profile.Email;
+            _profile = await UserApi.GetMeAsync();
+            if (_profile is not null)
+            {
+                _fullName = _profile.FullName ?? string.Empty;
+                _email    = _profile.Email;
+            }
+            else
+            {
+                _loadError = "Profile data unavailable. The API may be temporarily unreachable.";
+            }
         }
-        _loading = false;
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally { _loading = false; }
     }
 
     private async Task SaveAsync()
@@ -97,11 +136,9 @@
         {
             _success = true;
             _profile = await UserApi.GetMeAsync();
+            if (_profile is not null) { _fullName = _profile.FullName ?? string.Empty; _email = _profile.Email; }
         }
-        else
-        {
-            _error = "Failed to update profile.";
-        }
+        else { _error = "Failed to update profile. Please try again."; }
         _saving = false;
     }
 }
