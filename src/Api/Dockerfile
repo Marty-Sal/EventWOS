@@ -12,7 +12,7 @@ COPY src/Api/EventWOS.Api.csproj                   src/Api/
 RUN dotnet restore src/Api/EventWOS.Api.csproj --no-cache
 
 # ── Copy source and build ─────────────────────────────────────────────────────
-# Cache bust: 1779536895
+# Cache bust: 1779661227
 COPY . .
 
 RUN dotnet publish src/Api/EventWOS.Api.csproj \
