@@ -307,6 +307,57 @@ try
     {
         Log.Information("Running EF Core migrations...");
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        // ── Emergency schema patch ─────────────────────────────────────────
+        // Runs BEFORE MigrateAsync so that even if __EFMigrationsHistory already
+        // recorded older (broken) migration versions, the live DB gets the columns
+        // it needs. Every statement is fully idempotent (IF NOT EXISTS guards).
+        Log.Information("Applying emergency schema patch for users table...");
+        await db.Database.ExecuteSqlRawAsync(@"
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='business_name') THEN
+        ALTER TABLE users ADD COLUMN business_name VARCHAR(200); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='referral_code') THEN
+        ALTER TABLE users ADD COLUMN referral_code VARCHAR(20); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='rating') THEN
+        ALTER TABLE users ADD COLUMN rating NUMERIC(3,2); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='events_completed') THEN
+        ALTER TABLE users ADD COLUMN events_completed INT NOT NULL DEFAULT 0; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='vendor_id') THEN
+        ALTER TABLE users ADD COLUMN vendor_id UUID; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='discipline_score') THEN
+        ALTER TABLE users ADD COLUMN discipline_score NUMERIC(5,2) NOT NULL DEFAULT 100.0; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='events_attended') THEN
+        ALTER TABLE users ADD COLUMN events_attended INT NOT NULL DEFAULT 0; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='device_id') THEN
+        ALTER TABLE users ADD COLUMN device_id VARCHAR(255); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_known_ip') THEN
+        ALTER TABLE users ADD COLUMN last_known_ip VARCHAR(45); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_login_at') THEN
+        ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='failed_otp_attempts') THEN
+        ALTER TABLE users ADD COLUMN failed_otp_attempts INT NOT NULL DEFAULT 0; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='locked_until') THEN
+        ALTER TABLE users ADD COLUMN locked_until TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='manager_id') THEN
+        ALTER TABLE users ADD COLUMN manager_id UUID; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='updated_at') THEN
+        ALTER TABLE users ADD COLUMN updated_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='updated_by') THEN
+        ALTER TABLE users ADD COLUMN updated_by UUID; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='deleted_at') THEN
+        ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='deleted_by') THEN
+        ALTER TABLE users ADD COLUMN deleted_by UUID; END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='ix_users_referral_code') THEN
+        CREATE UNIQUE INDEX ix_users_referral_code ON users(referral_code) WHERE referral_code IS NOT NULL; END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='ix_users_vendor_id') THEN
+        CREATE INDEX ix_users_vendor_id ON users(vendor_id); END IF;
+END $$;
+");
+        Log.Information("Emergency schema patch complete.");
+
         await db.Database.MigrateAsync();
         Log.Information("Migrations complete. Running seeder...");
         var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
