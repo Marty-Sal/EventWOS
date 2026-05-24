@@ -358,6 +358,10 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='ix_users_vendor_id') THEN
         CREATE INDEX ix_users_vendor_id ON users(vendor_id); END IF;
 
+    -- otp_requests: rename hashed_otp -> otp_hash if old column name exists
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=\'otp_requests\' AND column_name=\'hashed_otp\')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=\'otp_requests\' AND column_name=\'otp_hash\') THEN
+        ALTER TABLE otp_requests RENAME COLUMN hashed_otp TO otp_hash; END IF;
     -- ═══ otp_requests ═══════════════════════════════════════════════════════
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='otp_hash') THEN
         ALTER TABLE otp_requests ADD COLUMN otp_hash VARCHAR(255) NOT NULL DEFAULT ''; END IF;
