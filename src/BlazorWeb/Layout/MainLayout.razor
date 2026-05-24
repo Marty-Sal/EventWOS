@@ -17,9 +17,11 @@
             <!-- Nav Items -->
             <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
                 <NavItem Href="/dashboard"  Icon="🏠" Label="Dashboard" />
-                <NavItem Href="/users"       Icon="👥" Label="Users" />
-                <NavItem Href="/sessions"    Icon="🔌" Label="Sessions" />
-                <NavItem Href="/profile"     Icon="👤" Label="My Profile" />
+                <NavItem Href="/users"      Icon="👥" Label="Users" />
+                <NavItem Href="/vendors"    Icon="🏢" Label="Vendors" />
+                <NavItem Href="/crew"       Icon="👷" Label="Crew" />
+                <NavItem Href="/sessions"   Icon="🔌" Label="Sessions" />
+                <NavItem Href="/profile"    Icon="👤" Label="My Profile" />
 
                 <AuthorizeView Roles="Admin">
                     <div class="pt-4 mt-4 border-t border-gray-700 space-y-1">
@@ -47,9 +49,7 @@
                                     @context.User.FindFirst("role")?.Value
                                 </p>
                             </div>
-                            <button @onclick="LogoutAsync"
-                                    class="text-gray-400 hover:text-white transition-colors"
-                                    title="Logout">
+                            <button @onclick="LogoutAsync" class="text-gray-400 hover:text-white transition-colors" title="Logout">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h7a1 1 0 000-2H4V5h6a1 1 0 000-2H3zm11.707 4.293a1 1 0 010 1.414L13.414 10l1.293 1.293a1 1 0 01-1.414 1.414l-2-2a1 1 0 010-1.414l2-2a1 1 0 011.414 0z" clip-rule="evenodd" />
                                     <path d="M13 10a1 1 0 011-1h3a1 1 0 110 2h-3a1 1 0 01-1-1z" />
@@ -64,7 +64,6 @@
 
     <!-- Main content -->
     <div class="flex flex-col flex-1 overflow-hidden">
-        <!-- Top bar -->
         <header class="flex items-center justify-between h-16 px-6 bg-white border-b border-gray-200 shadow-sm">
             <h1 class="text-lg font-semibold text-gray-800">@PageTitle</h1>
             <div class="flex items-center gap-3">
@@ -73,11 +72,7 @@
                 <span class="text-xs text-gray-400">@(Hub.IsConnected ? "Live" : "Reconnecting…")</span>
             </div>
         </header>
-
-        <!-- Page body -->
-        <main class="flex-1 overflow-y-auto p-6">
-            @Body
-        </main>
+        <main class="flex-1 overflow-y-auto p-6">@Body</main>
     </div>
 </div>
 
@@ -86,6 +81,8 @@
     {
         "dashboard"   => "Dashboard",
         "users"       => "Users",
+        "vendors"     => "Vendors",
+        "crew"        => "Crew",
         "sessions"    => "Sessions",
         "profile"     => "My Profile",
         "roles"       => "Roles",
@@ -97,7 +94,7 @@
     protected override async Task OnInitializedAsync()
     {
         try { await Hub.StartAsync(); }
-        catch { /* will auto-reconnect */ }
+        catch { }
         Hub.ConnectionStateChanged += StateHasChanged;
     }
 

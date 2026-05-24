@@ -25,6 +25,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
 builder.Services.AddScoped<IAuthApiService, AuthApiService>();
 builder.Services.AddScoped<IUserApiService, UserApiService>();
 builder.Services.AddScoped<ISessionApiService, SessionApiService>();
+builder.Services.AddScoped<IVendorApiService, VendorApiService>();
 builder.Services.AddScoped<TokenRefreshService>();
 builder.Services.AddScoped<NotificationHubService>();
 
