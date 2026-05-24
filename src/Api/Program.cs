@@ -354,6 +354,51 @@ BEGIN
         CREATE UNIQUE INDEX ix_users_referral_code ON users(referral_code) WHERE referral_code IS NOT NULL; END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='ix_users_vendor_id') THEN
         CREATE INDEX ix_users_vendor_id ON users(vendor_id); END IF;
+    -- otp_requests columns
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='otp_hash') THEN
+        ALTER TABLE otp_requests ADD COLUMN otp_hash VARCHAR(255) NOT NULL DEFAULT ''; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='user_agent') THEN
+        ALTER TABLE otp_requests ADD COLUMN user_agent VARCHAR(500); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='ip_address') THEN
+        ALTER TABLE otp_requests ADD COLUMN ip_address VARCHAR(45); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='attempts') THEN
+        ALTER TABLE otp_requests ADD COLUMN attempts INT NOT NULL DEFAULT 0; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='verified_at') THEN
+        ALTER TABLE otp_requests ADD COLUMN verified_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='updated_at') THEN
+        ALTER TABLE otp_requests ADD COLUMN updated_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='updated_by') THEN
+        ALTER TABLE otp_requests ADD COLUMN updated_by UUID; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='deleted_at') THEN
+        ALTER TABLE otp_requests ADD COLUMN deleted_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='deleted_by') THEN
+        ALTER TABLE otp_requests ADD COLUMN deleted_by UUID; END IF;
+    -- refresh_tokens columns
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='user_agent') THEN
+        ALTER TABLE refresh_tokens ADD COLUMN user_agent VARCHAR(500); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='ip_address') THEN
+        ALTER TABLE refresh_tokens ADD COLUMN ip_address VARCHAR(45); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='updated_at') THEN
+        ALTER TABLE refresh_tokens ADD COLUMN updated_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='updated_by') THEN
+        ALTER TABLE refresh_tokens ADD COLUMN updated_by UUID; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='deleted_at') THEN
+        ALTER TABLE refresh_tokens ADD COLUMN deleted_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='deleted_by') THEN
+        ALTER TABLE refresh_tokens ADD COLUMN deleted_by UUID; END IF;
+    -- user_sessions columns
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='user_agent') THEN
+        ALTER TABLE user_sessions ADD COLUMN user_agent VARCHAR(500); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='ip_address') THEN
+        ALTER TABLE user_sessions ADD COLUMN ip_address VARCHAR(45); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='updated_at') THEN
+        ALTER TABLE user_sessions ADD COLUMN updated_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='updated_by') THEN
+        ALTER TABLE user_sessions ADD COLUMN updated_by UUID; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='deleted_at') THEN
+        ALTER TABLE user_sessions ADD COLUMN deleted_at TIMESTAMP; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='deleted_by') THEN
+        ALTER TABLE user_sessions ADD COLUMN deleted_by UUID; END IF;
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");
