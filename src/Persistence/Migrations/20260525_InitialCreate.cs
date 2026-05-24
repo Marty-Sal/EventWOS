@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EventWOS.Persistence.Migrations
 {
+    [Migration("20260525000000_InitialCreate")]
     /// <inheritdoc />
     public partial class InitialCreate : Migration
     {

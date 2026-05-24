@@ -46,8 +46,19 @@ public sealed class GlobalExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception for {Path}", context.Request.Path);
-            var message = _env.IsDevelopment() ? ex.Message : "An unexpected error occurred.";
+            // Always log full exception detail to structured logs (visible in Railway)
+            _logger.LogError(ex,
+                "Unhandled exception [{ExType}] for {Method} {Path} — {Message}",
+                ex.GetType().Name,
+                context.Request.Method,
+                context.Request.Path,
+                ex.Message);
+
+            // Return detail to client in dev; generic message in prod
+            var message = _env.IsDevelopment()
+                ? $"{ex.GetType().Name}: {ex.Message}"
+                : "An unexpected error occurred.";
+
             await WriteErrorResponseAsync(context, 500, new[] { message }, context.TraceIdentifier);
         }
     }
