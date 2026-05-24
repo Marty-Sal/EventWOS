@@ -1,3 +1,4 @@
+using EventWOS.Application.Crew.Commands;
 using EventWOS.Application.Interfaces;
 using EventWOS.Application.Vendors.DTOs;
 using EventWOS.Domain.Enums;
@@ -22,7 +23,6 @@ public sealed class GetCrewHandler : IRequestHandler<GetCrewQuery, Result<PagedC
 
     public async Task<Result<PagedCrewResult>> Handle(GetCrewQuery req, CancellationToken ct)
     {
-        // Build query without Include first for filtering, then project
         var query = _db.Users.Where(u => u.Role == UserRole.Crew && !u.IsDeleted);
 
         if (req.VendorId.HasValue)
@@ -39,7 +39,6 @@ public sealed class GetCrewHandler : IRequestHandler<GetCrewQuery, Result<PagedC
             .Take(req.PageSize)
             .ToListAsync(ct);
 
-        // Load vendor names separately to avoid Include casting issues
         var vendorIds = crew.Where(c => c.VendorId.HasValue).Select(c => c.VendorId!.Value).Distinct().ToList();
         var vendors   = vendorIds.Count > 0
             ? await _db.Users.Where(u => vendorIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct)
