@@ -358,11 +358,19 @@ BEGIN
         CREATE INDEX ix_users_vendor_id ON users(vendor_id); END IF;
 
     -- ═══ otp_requests ════════════════════════════════════════════════════════
+    -- Case A: both hashed_otp (old) and otp_hash (blank, added by prev patch) exist
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='hashed_otp')
+       AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='otp_hash') THEN
+        ALTER TABLE otp_requests ALTER COLUMN otp_hash DROP NOT NULL;
+        UPDATE otp_requests SET otp_hash = hashed_otp WHERE otp_hash IS NULL OR otp_hash = '';
+        ALTER TABLE otp_requests DROP COLUMN hashed_otp;
+        ALTER TABLE otp_requests ALTER COLUMN otp_hash SET NOT NULL; END IF;
+    -- Case B: only hashed_otp exists (rename it)
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='hashed_otp')
        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='otp_hash') THEN
         ALTER TABLE otp_requests RENAME COLUMN hashed_otp TO otp_hash; END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='otp_hash') THEN
-        ALTER TABLE otp_requests ADD COLUMN otp_hash VARCHAR(255) NOT NULL DEFAULT '' ; END IF;
+        ALTER TABLE otp_requests ADD COLUMN otp_hash VARCHAR(255) NOT NULL DEFAULT ''; END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='user_agent') THEN
         ALTER TABLE otp_requests ADD COLUMN user_agent VARCHAR(500); END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='ip_address') THEN
