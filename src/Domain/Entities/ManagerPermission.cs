@@ -28,6 +28,7 @@ public sealed class ManagerPermission : BaseEntity
     public User Manager { get; private set; } = default!;
     public Permission Permission { get; private set; } = default!;
 
-    public void Revoke() => IsActive = false;
+    public void Revoke()     => IsActive = false;
+    public void Reactivate()  => IsActive = true;
     public void SetExpiry(DateTime expiresAt) => ExpiresAt = expiresAt;
 }

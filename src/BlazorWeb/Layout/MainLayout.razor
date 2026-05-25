@@ -27,6 +27,7 @@
                 @* Admin & Manager only *@
                 <AuthorizeView Roles="Admin,Manager">
                     <NavItem Href="/users"    Icon="👥" Label="Users" />
+                    <NavItem Href="/managers" Icon="👔" Label="Managers" />
                     <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" />
                     <NavItem Href="/crew"     Icon="👷" Label="Crew" />
                     <NavItem Href="/payments" Icon="💰" Label="Payments" />
@@ -120,6 +121,7 @@
     {
         "dashboard"   => "Dashboard",
         "users"       => "Users",
+        "managers"    => "Managers",
         "events"      => "Events",
         "vendors"     => "Vendors",
         "crew"        => "Crew",

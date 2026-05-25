@@ -1,0 +1,438 @@
+@page "/managers"
+@attribute [Authorize(Roles = "Admin")]
+@inject IManagerApiService ManagerApi
+
+<PageTitle>Managers — EventWOS</PageTitle>
+
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">Managers</h2>
+            <p class="text-sm text-gray-500 mt-0.5">Create manager accounts and configure their permissions.</p>
+        </div>
+        <button @onclick="() => { _showCreate = true; _createError = null; _cMobile = _cName = string.Empty; _cEmail = null; }"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white
+                       text-sm font-semibold hover:bg-indigo-700 transition shadow-sm">
+            + New Manager
+        </button>
+    </div>
+
+    <!-- Search -->
+    <div class="relative max-w-xs">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+        <input @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKey"
+               placeholder="Search by name or mobile…"
+               class="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+    </div>
+
+    <!-- List -->
+    @if (_loading)
+    {
+        <div class="flex justify-center py-16 text-gray-400 text-sm animate-pulse">Loading managers…</div>
+    }
+    else if (_managers is null || _managers.Items.Count == 0)
+    {
+        <div class="flex flex-col items-center justify-center py-24 text-gray-400 space-y-2">
+            <span class="text-5xl">👔</span>
+            <p class="text-sm font-medium text-gray-500">No managers yet</p>
+            <p class="text-xs">Create a manager account to start delegating access.</p>
+        </div>
+    }
+    else
+    {
+        <div class="space-y-4">
+            @foreach (var m in _managers.Items)
+            {
+                var activePerms = m.Permissions.Where(p => p.IsActive).ToList();
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden
+                            transition hover:shadow-md">
+
+                    <!-- Manager row -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500
+                                        flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                                @GetInitials(m.FullName)
+                            </div>
+                            <div>
+                                <p class="font-semibold text-gray-800">@m.FullName</p>
+                                <p class="text-xs text-gray-400 mt-0.5">
+                                    @m.Mobile
+                                    @if (m.Email is not null)
+                                    {<span class="mx-1 text-gray-300">·</span><span>@m.Email</span>}
+                                </p>
+                                <p class="text-xs text-gray-300 mt-0.5">
+                                    Created @m.CreatedAt.ToString("MMM d, yyyy")
+                                    @if (m.LastLoginAt.HasValue)
+                                    {<span> · Last login @m.LastLoginAt.Value.ToString("MMM d")</span>}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <!-- Status badge -->
+                            <span class="px-2.5 py-1 rounded-full text-xs font-medium
+                                         @(m.Status == "Active"
+                                           ? "bg-green-100 text-green-700"
+                                           : "bg-red-100 text-red-700")">
+                                @m.Status
+                            </span>
+
+                            <!-- Permission count -->
+                            <span class="px-2.5 py-1 rounded-full text-xs bg-indigo-50 text-indigo-700 font-medium">
+                                @activePerms.Count perm@(activePerms.Count == 1 ? "" : "s")
+                            </span>
+
+                            <!-- Manage permissions button -->
+                            <button @onclick="() => OpenPanel(m)"
+                                    class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-indigo-200
+                                           text-indigo-700 hover:bg-indigo-50 transition">
+                                🔑 Permissions
+                            </button>
+
+                            <!-- Suspend / Reactivate -->
+                            @if (m.Status == "Active")
+                            {
+                                <button @onclick="() => ChangeStatus(m, \"Suspended\")"
+                                        class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-orange-200
+                                               text-orange-700 hover:bg-orange-50 transition">
+                                    Suspend
+                                </button>
+                            }
+                            else
+                            {
+                                <button @onclick="() => ChangeStatus(m, \"Active\")"
+                                        class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-green-200
+                                               text-green-700 hover:bg-green-50 transition">
+                                    Reactivate
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Permission chips -->
+                    <div class="px-5 pb-4 border-t border-gray-50 pt-3">
+                        @if (activePerms.Count > 0)
+                        {
+                            <div class="flex flex-wrap gap-1.5">
+                                @foreach (var p in activePerms)
+                                {
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full
+                                                 bg-indigo-50 text-indigo-700 text-xs font-mono border border-indigo-100">
+                                        @p.Name
+                                        @if (p.ExpiresAt.HasValue)
+                                        {<span class="text-indigo-300 text-xs">⏱</span>}
+                                        <button @onclick="() => QuickRevoke(m, p)"
+                                                class="ml-0.5 text-indigo-300 hover:text-red-500 transition leading-none font-sans">
+                                            ✕
+                                        </button>
+                                    </span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-xs text-gray-400 italic">
+                                No permissions yet — click 🔑 Permissions to assign access.
+                            </p>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (_managers.HasNextPage || _managers.HasPreviousPage)
+        {
+            <div class="flex justify-center items-center gap-3 pt-2">
+                <button disabled="@(!_managers.HasPreviousPage)" @onclick="() => LoadPage(_page - 1)"
+                        class="px-4 py-2 rounded-xl text-sm border disabled:opacity-40 hover:bg-gray-50 transition">
+                    ← Prev
+                </button>
+                <span class="text-sm text-gray-500">Page @_page</span>
+                <button disabled="@(!_managers.HasNextPage)" @onclick="() => LoadPage(_page + 1)"
+                        class="px-4 py-2 rounded-xl text-sm border disabled:opacity-40 hover:bg-gray-50 transition">
+                    Next →
+                </button>
+            </div>
+        }
+    }
+</div>
+
+<!-- ═══════════════════════════════════════════ CREATE MANAGER MODAL ══════════ -->
+@if (_showCreate)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+         @onclick="() => _showCreate = false">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5"
+             @onclick:stopPropagation>
+
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-gray-800">New Manager</h3>
+                    <p class="text-xs text-gray-400 mt-0.5">Manager accounts have no default permissions.</p>
+                </div>
+                <button @onclick="() => _showCreate = false"
+                        class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Mobile *</label>
+                    <input @bind="_cMobile" placeholder="+919876543210"
+                           class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm
+                                  focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Full Name *</label>
+                    <input @bind="_cName" placeholder="e.g. Rahul Sharma"
+                           class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm
+                                  focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Email (optional)</label>
+                    <input @bind="_cEmail" type="email" placeholder="rahul@example.com"
+                           class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm
+                                  focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+            </div>
+
+            @if (_createError is not null)
+            {
+                <p class="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">@_createError</p>
+            }
+
+            <div class="flex gap-2 pt-1">
+                <button @onclick="() => _showCreate = false"
+                        class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600
+                               hover:bg-gray-50 transition">
+                    Cancel
+                </button>
+                <button @onclick="CreateManager" disabled="@_creating"
+                        class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold
+                               hover:bg-indigo-700 disabled:opacity-50 transition">
+                    @(_creating ? "Creating…" : "Create Manager")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ═══════════════════════════════════════════ PERMISSION PANEL ══════════════ -->
+@if (_panel is not null)
+{
+    <div class="fixed inset-0 z-50 flex" @onclick="() => _panel = null">
+        <div class="flex-1 bg-black/30 backdrop-blur-sm"></div>
+        <div class="w-full max-w-sm bg-white shadow-2xl flex flex-col" @onclick:stopPropagation>
+
+            <!-- Panel header -->
+            <div class="flex items-center justify-between p-5 border-b border-gray-100">
+                <div>
+                    <p class="font-bold text-gray-800">Manage Permissions</p>
+                    <p class="text-xs text-gray-400 mt-0.5">@_panel.FullName</p>
+                </div>
+                <button @onclick="() => _panel = null"
+                        class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+
+            <!-- Permission toggles grouped by resource -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-5">
+                @if (_allPerms is null)
+                {
+                    <p class="text-center text-sm text-gray-400 py-10 animate-pulse">Loading…</p>
+                }
+                else
+                {
+                    @foreach (var group in _allPerms.GroupBy(p => p.Resource).OrderBy(g => g.Key))
+                    {
+                        <div class="space-y-2">
+                            <p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                                @group.Key
+                            </p>
+                            @foreach (var perm in group)
+                            {
+                                var grant = _panel.Permissions
+                                    .FirstOrDefault(g => g.PermissionId == perm.Id && g.IsActive);
+                                bool on = grant is not null;
+                                bool busy = _togglingId == perm.Id;
+
+                                <div class="flex items-center justify-between p-3 rounded-xl border transition
+                                            @(on ? "bg-indigo-50 border-indigo-200" : "bg-gray-50 border-gray-100")">
+                                    <div class="flex-1 min-w-0 pr-3">
+                                        <p class="font-mono text-xs text-gray-800 truncate">@perm.Name</p>
+                                        @if (perm.Description is not null)
+                                        {
+                                            <p class="text-xs text-gray-400 mt-0.5 truncate">@perm.Description</p>
+                                        }
+                                        @if (grant?.ExpiresAt is not null)
+                                        {
+                                            <p class="text-xs text-orange-500 mt-0.5">
+                                                ⏱ Expires @grant.ExpiresAt.Value.ToString("MMM d, yyyy")
+                                            </p>
+                                        }
+                                    </div>
+
+                                    @if (busy)
+                                    {
+                                        <div class="w-9 h-5 rounded-full bg-gray-200 animate-pulse flex-shrink-0"></div>
+                                    }
+                                    else
+                                    {
+                                        <button @onclick="() => Toggle(_panel, perm, grant)"
+                                                class="w-9 h-5 rounded-full flex-shrink-0 relative transition
+                                                       @(on ? "bg-indigo-600" : "bg-gray-300")">
+                                            <span class="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all
+                                                         @(on ? "right-0.5" : "left-0.5")"></span>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+
+            @if (_permError is not null)
+            {
+                <div class="mx-4 mb-3">
+                    <p class="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">@_permError</p>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    // ── Data ──────────────────────────────────────────────────────────────────
+    private PagedManagerResult?          _managers;
+    private IReadOnlyList<PermissionDef>? _allPerms;
+    private bool    _loading  = true;
+    private int     _page     = 1;
+    private string  _search   = string.Empty;
+    private System.Timers.Timer? _debounce;
+
+    // Create modal
+    private bool    _showCreate  = false;
+    private bool    _creating    = false;
+    private string  _cMobile     = string.Empty;
+    private string  _cName       = string.Empty;
+    private string? _cEmail;
+    private string? _createError;
+
+    // Permission panel
+    private ManagerRecord? _panel;
+    private Guid?   _togglingId;
+    private string? _permError;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = LoadPage(1);
+        var t2 = LoadAllPerms();
+        await Task.WhenAll(t1, t2);
+    }
+
+    private async Task LoadPage(int page)
+    {
+        _loading = true; _page = page;
+        _managers = await ManagerApi.GetManagersAsync(page, string.IsNullOrWhiteSpace(_search) ? null : _search.Trim());
+        _loading = false;
+    }
+
+    private async Task LoadAllPerms()
+    {
+        _allPerms = await ManagerApi.GetAllPermissionsAsync();
+    }
+
+    private void OnSearchKey(KeyboardEventArgs _)
+    {
+        _debounce?.Stop(); _debounce?.Dispose();
+        _debounce = new System.Timers.Timer(380);
+        _debounce.Elapsed += async (_, _) =>
+        {
+            _debounce?.Stop();
+            await InvokeAsync(async () => { await LoadPage(1); StateHasChanged(); });
+        };
+        _debounce.AutoReset = false;
+        _debounce.Start();
+    }
+
+    // ── Create ────────────────────────────────────────────────────────────────
+    private async Task CreateManager()
+    {
+        if (string.IsNullOrWhiteSpace(_cMobile) || string.IsNullOrWhiteSpace(_cName))
+        { _createError = "Mobile and Full Name are required."; return; }
+
+        _creating = true; _createError = null;
+        var (ok, data, err) = await ManagerApi.CreateManagerAsync(_cMobile.Trim(), _cName.Trim(), _cEmail?.Trim());
+        _creating = false;
+
+        if (ok)
+        {
+            _showCreate = false;
+            await LoadPage(1);
+        }
+        else _createError = err;
+    }
+
+    // ── Panel ─────────────────────────────────────────────────────────────────
+    private void OpenPanel(ManagerRecord m) { _panel = m; _permError = null; }
+
+    private async Task Toggle(ManagerRecord manager, PermissionDef perm, ManagerPermissionRecord? grant)
+    {
+        _togglingId = perm.Id; _permError = null; StateHasChanged();
+
+        if (grant is not null)
+        {
+            var (ok, err) = await ManagerApi.RevokePermissionAsync(manager.Id, grant.GrantId);
+            if (ok) UpdatePanel(manager, grant with { IsActive = false });
+            else _permError = err;
+        }
+        else
+        {
+            var (ok, newGrant, err) = await ManagerApi.GrantPermissionAsync(manager.Id, perm.Id, null);
+            if (ok && newGrant is not null) UpdatePanel(manager, newGrant);
+            else _permError = err;
+        }
+
+        _togglingId = null;
+    }
+
+    private async Task QuickRevoke(ManagerRecord m, ManagerPermissionRecord p)
+        => await Toggle(m, new PermissionDef(p.PermissionId, p.Name, p.Resource, p.Action, p.Description), p);
+
+    private void UpdatePanel(ManagerRecord manager, ManagerPermissionRecord updatedGrant)
+    {
+        var newPerms = manager.Permissions
+            .Where(p => p.GrantId != updatedGrant.GrantId)
+            .Append(updatedGrant)
+            .ToList();
+
+        var updated = manager with { Permissions = newPerms };
+        if (_managers is not null)
+        {
+            var items = _managers.Items.Select(m => m.Id == updated.Id ? updated : m).ToList();
+            _managers = _managers with { Items = items };
+        }
+        if (_panel?.Id == manager.Id) _panel = updated;
+    }
+
+    // ── Status ────────────────────────────────────────────────────────────────
+    private async Task ChangeStatus(ManagerRecord m, string status)
+    {
+        var (ok, _) = await ManagerApi.ChangeStatusAsync(m.Id, status);
+        if (ok) await LoadPage(_page);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    private static string GetInitials(string name)
+    {
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            ? $"{parts[0][0]}{parts[^1][0]}"
+            : name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+    }
+}
