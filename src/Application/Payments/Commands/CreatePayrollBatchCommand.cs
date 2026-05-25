@@ -59,7 +59,11 @@ public sealed class CreatePayrollBatchHandler : IRequestHandler<CreatePayrollBat
         foreach (var p in payments)
             p.AttachToPayroll(batch.Id);
 
-        batch.RecalculateTotal();
+        // Calculate total in-memory (Payments nav prop not loaded yet)
+        var total = payments
+            .Where(p => p.Status != Domain.Enums.PaymentStatus.Rejected)
+            .Sum(p => p.AgreedAmount);
+        batch.SetTotal(total);
         await _uow.SaveChangesAsync(ct);
 
         return Result.Success(batch.Id);

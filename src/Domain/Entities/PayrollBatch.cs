@@ -42,6 +42,9 @@ public sealed class PayrollBatch : BaseEntity
     public void RecalculateTotal()
         => TotalAmount = Payments.Where(p => p.Status != PaymentStatus.Rejected).Sum(p => p.AgreedAmount);
 
+    /// <summary>Set total directly when Payments nav collection isn't loaded.</summary>
+    public void SetTotal(decimal amount) => TotalAmount = amount;
+
     public void Submit()
     {
         if (Status != PayrollStatus.Draft)

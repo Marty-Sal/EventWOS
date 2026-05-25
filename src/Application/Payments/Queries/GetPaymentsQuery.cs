@@ -1,4 +1,5 @@
 using EventWOS.Application.Interfaces;
+using EventWOS.Domain.Enums;
 using EventWOS.Application.Payments.DTOs;
 using EventWOS.Shared.Common;
 using EventWOS.Shared.Result;
@@ -28,8 +29,9 @@ public sealed class GetPaymentsHandler : IRequestHandler<GetPaymentsQuery, Resul
         if (q.EventId.HasValue)  query = query.Where(p => p.EventId  == q.EventId.Value);
         if (q.VendorId.HasValue) query = query.Where(p => p.VendorId == q.VendorId.Value);
         if (q.CrewId.HasValue)   query = query.Where(p => p.CrewId   == q.CrewId.Value);
-        if (!string.IsNullOrWhiteSpace(q.Status))
-            query = query.Where(p => p.Status.ToString() == q.Status);
+        if (!string.IsNullOrWhiteSpace(q.Status) &&
+            Enum.TryParse<PaymentStatus>(q.Status, true, out var parsedStatus))
+            query = query.Where(p => p.Status == parsedStatus);
 
         var total = await query.CountAsync(ct);
 

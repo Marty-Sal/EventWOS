@@ -64,6 +64,8 @@ public sealed class AppDbContext : DbContext, IAppDbContext
         modelBuilder.Entity<Event>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<EventAssignment>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<AttendanceRecord>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<CrewPayment>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<PayrollBatch>().HasQueryFilter(e => !e.IsDeleted);
 
         // Join tables reference soft-deleted principals (User, Permission).
         // Add matching filters so EF never returns orphaned rows.

@@ -1,4 +1,5 @@
 using EventWOS.Application.Interfaces;
+using EventWOS.Domain.Enums;
 using EventWOS.Application.Payments.DTOs;
 using EventWOS.Shared.Common;
 using EventWOS.Shared.Result;
@@ -28,8 +29,9 @@ public sealed class GetPayrollBatchesHandler
 
         if (q.VendorId.HasValue) query = query.Where(b => b.VendorId == q.VendorId.Value);
         if (q.EventId.HasValue)  query = query.Where(b => b.EventId  == q.EventId.Value);
-        if (!string.IsNullOrWhiteSpace(q.Status))
-            query = query.Where(b => b.Status.ToString() == q.Status);
+        if (!string.IsNullOrWhiteSpace(q.Status) &&
+            Enum.TryParse<PayrollStatus>(q.Status, true, out var parsedStatus))
+            query = query.Where(b => b.Status == parsedStatus);
 
         var total = await query.CountAsync(ct);
 
