@@ -150,4 +150,23 @@
 
     private static string GetInitials(string mobile) =>
         mobile.Length >= 2 ? mobile[^2..] : mobile;
+
+    // ── Pending invite badge (Crew role) ──────────────────────────────────────
+    private int _pendingInvites;
+
+    private async Task LoadPendingInvites()
+    {
+        try
+        {
+            var authState = await AuthState.GetAuthenticationStateAsync();
+            var role      = authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                         ?? authState.User.FindFirst("role")?.Value;
+            if (role != "Crew") return;
+
+            var data = await EventApi.GetMyAssignmentsAsync(page: 1);
+            _pendingInvites = data?.Items.Count(a => a.Status == "Invited") ?? 0;
+            StateHasChanged();
+        }
+        catch { }
+    }
 }
