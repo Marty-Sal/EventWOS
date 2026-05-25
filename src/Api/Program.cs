@@ -548,6 +548,15 @@ BEGIN
         -- Ensure updated_at is nullable (EF only sets it on Update, not Insert)
         ALTER TABLE payroll_batches ALTER COLUMN updated_at DROP NOT NULL;
         ALTER TABLE payroll_batches ALTER COLUMN updated_at DROP DEFAULT;
+        -- Fix created_by column type: varchar -> uuid
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='payroll_batches' AND column_name='created_by'
+              AND data_type='character varying'
+        ) THEN
+            ALTER TABLE payroll_batches
+                ALTER COLUMN created_by TYPE UUID USING NULLIF(created_by, '')::UUID;
+        END IF;
     END IF;
 
     -- ═══ crew_payments ═══════════════════════════════════════════════════════
@@ -599,8 +608,15 @@ BEGIN
         -- Ensure updated_at is nullable (EF only sets it on Update, not Insert)
         ALTER TABLE crew_payments ALTER COLUMN updated_at DROP NOT NULL;
         ALTER TABLE crew_payments ALTER COLUMN updated_at DROP DEFAULT;
-        -- Ensure created_by is UUID type (may have been created as varchar)
-        -- (skip type change if already uuid — postgres will error if wrong type anyway)
+        -- Fix created_by / created_by column type: varchar -> uuid
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='crew_payments' AND column_name='created_by'
+              AND data_type='character varying'
+        ) THEN
+            ALTER TABLE crew_payments
+                ALTER COLUMN created_by TYPE UUID USING NULLIF(created_by, '')::UUID;
+        END IF;
     END IF;
 END $$;
 ");
