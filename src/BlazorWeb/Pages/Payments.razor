@@ -226,7 +226,7 @@
                     else
                     {
                         <input class="inp" placeholder="Search event by name…"
-                               @bind="_pmtEventSearch" @bind:event="oninput"
+                               @value="_pmtEventSearch"
                                @onfocus="() => _pmtEventDropOpen = true"
                                @oninput="OnPmtEventSearch" />
                         @if (_pmtEventDropOpen && _pmtEventResults.Count > 0)
@@ -260,7 +260,7 @@
                     else
                     {
                         <input class="inp" placeholder="Search vendor by name…"
-                               @bind="_pmtVendorSearch" @bind:event="oninput"
+                               @value="_pmtVendorSearch"
                                @onfocus="() => _pmtVendorDropOpen = true"
                                @oninput="OnPmtVendorSearch" />
                         @if (_pmtVendorDropOpen && _pmtVendorResults.Count > 0)
@@ -294,7 +294,7 @@
                     else
                     {
                         <input class="inp" placeholder="@(_pmtSelectedVendor != null ? "Search crew under this vendor…" : "Search crew by name…")"
-                               @bind="_pmtCrewSearch" @bind:event="oninput"
+                               @value="_pmtCrewSearch"
                                @onfocus="() => _pmtCrewDropOpen = true"
                                @oninput="OnPmtCrewSearch" />
                         @if (_pmtCrewDropOpen && _pmtCrewResults.Count > 0)
@@ -421,7 +421,7 @@
                     else
                     {
                         <input class="inp" placeholder="Search vendor by name…"
-                               @bind="_batchVendorSearch" @bind:event="oninput"
+                               @value="_batchVendorSearch"
                                @onfocus="() => _batchVendorDropOpen = true"
                                @oninput="OnBatchVendorSearch" />
                         @if (_batchVendorDropOpen && _batchVendorResults.Count > 0)
@@ -455,7 +455,7 @@
                     else
                     {
                         <input class="inp" placeholder="Search event by name…"
-                               @bind="_batchEventSearch" @bind:event="oninput"
+                               @value="_batchEventSearch"
                                @onfocus="() => _batchEventDropOpen = true"
                                @oninput="OnBatchEventSearch" />
                         @if (_batchEventDropOpen && _batchEventResults.Count > 0)
