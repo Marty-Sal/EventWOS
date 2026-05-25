@@ -11,13 +11,31 @@ public sealed class CrewPaymentConfiguration : IEntityTypeConfiguration<CrewPaym
         b.ToTable("crew_payments");
         b.HasKey(p => p.Id);
 
-        b.Property(p => p.AgreedAmount).HasColumnType("numeric(12,2)").IsRequired();
-        b.Property(p => p.PaidAmount).HasColumnType("numeric(12,2)");
-        b.Property(p => p.Status).HasConversion<string>().IsRequired();
-        b.Property(p => p.Method).HasConversion<string>();
-        b.Property(p => p.TransactionRef).HasMaxLength(200);
-        b.Property(p => p.Notes).HasMaxLength(1000);
+        // ── BaseEntity columns ────────────────────────────────────────────────
+        b.Property(p => p.Id)         .HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        b.Property(p => p.CreatedAt)  .HasColumnName("created_at");
+        b.Property(p => p.CreatedBy)  .HasColumnName("created_by");
+        b.Property(p => p.UpdatedAt)  .HasColumnName("updated_at");
+        b.Property(p => p.UpdatedBy)  .HasColumnName("updated_by");
+        b.Property(p => p.IsDeleted)  .HasColumnName("is_deleted").HasDefaultValue(false);
+        b.Property(p => p.DeletedAt)  .HasColumnName("deleted_at");
+        b.Property(p => p.DeletedBy)  .HasColumnName("deleted_by");
 
+        // ── Domain columns ────────────────────────────────────────────────────
+        b.Property(p => p.EventId)      .HasColumnName("event_id");
+        b.Property(p => p.AssignmentId) .HasColumnName("assignment_id");
+        b.Property(p => p.CrewId)       .HasColumnName("crew_id");
+        b.Property(p => p.VendorId)     .HasColumnName("vendor_id");
+        b.Property(p => p.AgreedAmount) .HasColumnName("agreed_amount").HasColumnType("numeric(12,2)").IsRequired();
+        b.Property(p => p.PaidAmount)   .HasColumnName("paid_amount").HasColumnType("numeric(12,2)");
+        b.Property(p => p.Status)       .HasColumnName("status").HasConversion<string>().IsRequired();
+        b.Property(p => p.Method)       .HasColumnName("method").HasConversion<string>();
+        b.Property(p => p.TransactionRef).HasColumnName("transaction_ref").HasMaxLength(200);
+        b.Property(p => p.Notes)        .HasColumnName("notes").HasMaxLength(1000);
+        b.Property(p => p.PaidAt)       .HasColumnName("paid_at");
+        b.Property(p => p.PayrollBatchId).HasColumnName("payroll_batch_id");
+
+        // ── Relationships ─────────────────────────────────────────────────────
         b.HasOne(p => p.Event)
             .WithMany()
             .HasForeignKey(p => p.EventId)
@@ -43,10 +61,11 @@ public sealed class CrewPaymentConfiguration : IEntityTypeConfiguration<CrewPaym
             .HasForeignKey(p => p.PayrollBatchId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        b.HasIndex(p => p.EventId);
-        b.HasIndex(p => p.CrewId);
-        b.HasIndex(p => p.VendorId);
-        b.HasIndex(p => p.Status);
-        b.HasIndex(p => p.PayrollBatchId);
+        // ── Indexes ───────────────────────────────────────────────────────────
+        b.HasIndex(p => p.EventId)        .HasDatabaseName("ix_crew_payments_event_id");
+        b.HasIndex(p => p.CrewId)         .HasDatabaseName("ix_crew_payments_crew_id");
+        b.HasIndex(p => p.VendorId)       .HasDatabaseName("ix_crew_payments_vendor_id");
+        b.HasIndex(p => p.Status)         .HasDatabaseName("ix_crew_payments_status");
+        b.HasIndex(p => p.PayrollBatchId) .HasDatabaseName("ix_crew_payments_payroll_batch_id");
     }
 }

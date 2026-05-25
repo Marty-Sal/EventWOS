@@ -25,9 +25,9 @@ namespace EventWOS.Persistence.Migrations
                     approved_at         = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     disbursed_at        = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     approved_by_user_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    created_date        = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
-                    updated_date        = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
-                    created_by          = table.Column<string>(maxLength: 100, nullable: true),
+                    created_at          = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
+                    updated_at          = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
+                    created_by          = table.Column<Guid>(type: "uuid", nullable: true),
                     is_deleted          = table.Column<bool>(nullable: false, defaultValue: false)
                 },
                 constraints: table =>
@@ -74,9 +74,9 @@ namespace EventWOS.Persistence.Migrations
                     notes           = table.Column<string>(maxLength: 1000, nullable: true),
                     paid_at         = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     payroll_batch_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    created_date    = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
-                    updated_date    = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
-                    created_by      = table.Column<string>(maxLength: 100, nullable: true),
+                    created_at      = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
+                    updated_at      = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
+                    created_by      = table.Column<Guid>(type: "uuid", nullable: true),
                     is_deleted      = table.Column<bool>(nullable: false, defaultValue: false)
                 },
                 constraints: table =>
