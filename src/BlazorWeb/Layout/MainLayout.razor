@@ -31,8 +31,11 @@
                         <NavItem Href="/events" Icon="📅" Label="Events" />
                     }
                 </AuthorizeView>
-                <AuthorizeView Roles="Crew,Vendor">
-                    <NavItem Href="/events" Icon="📅" Label="Events" />
+                <AuthorizeView Roles="Crew">
+                    <NavItem Href="/my-events" Icon="📅" Label="My Events" />
+                </AuthorizeView>
+                <AuthorizeView Roles="Vendor">
+                    <NavItem Href="/my-events" Icon="📅" Label="My Events" />
                 </AuthorizeView>
 
                 @* Admin always sees all nav *@
@@ -62,7 +65,7 @@
                     }
                 </AuthorizeView>
 
-                @* Crew — My Assignments with pending badge *@
+                @* Crew — My Assignments with pending badge + My Attendance *@
                 <AuthorizeView Roles="Crew">
                     <div class="relative">
                         <NavItem Href="/my-assignments" Icon="📬" Label="My Assignments" />
@@ -74,6 +77,7 @@
                             </span>
                         }
                     </div>
+                    <NavItem Href="/my-attendance" Icon="📍" Label="My Attendance" />
                 </AuthorizeView>
 
                 @* Vendor — My Crew + Crew Assignments *@

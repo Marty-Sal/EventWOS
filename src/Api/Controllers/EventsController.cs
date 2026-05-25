@@ -30,9 +30,9 @@ public sealed class EventsController : ControllerBase
         _currentUser = currentUser;
     }
 
-    // ── Events CRUD ───────────────────────────────────────────────────────────
+    // ── Events CRUD (Admin / Manager only) ────────────────────────────────────
 
-    /// <summary>List events with optional filters.</summary>
+    /// <summary>List ALL events. Requires events:read (Admin/Manager).</summary>
     [Permission("events:read")]
     [HttpGet]
     public async Task<IActionResult> GetEvents(
@@ -46,7 +46,7 @@ public sealed class EventsController : ControllerBase
         return Ok(ApiResponse<PagedEventResult>.Ok(result.Value));
     }
 
-    /// <summary>Get event by ID.</summary>
+    /// <summary>Get event by ID. Requires events:read (Admin/Manager).</summary>
     [Permission("events:read")]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetEvent(Guid id, CancellationToken ct)
@@ -62,8 +62,6 @@ public sealed class EventsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateEvent([FromBody] CreateEventRequest req, CancellationToken ct)
     {
-        if (!_currentUser.HasPermission("events:write")) return Forbid();
-
         var result = await _mediator.Send(new CreateEventCommand(
             req.Title, req.Description, req.Venue, req.Address,
             req.StartAt, req.EndAt, req.MaxCrew, _currentUser.UserId!.Value), ct);
@@ -79,29 +77,27 @@ public sealed class EventsController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateEvent(Guid id, [FromBody] UpdateEventRequest req, CancellationToken ct)
     {
-        if (!_currentUser.HasPermission("events:write")) return Forbid();
-
         var result = await _mediator.Send(new UpdateEventCommand(
             id, req.Title, req.Description, req.Venue, req.Address,
             req.StartAt, req.EndAt, req.MaxCrew), ct);
 
-        return result.IsSuccess ? Ok(ApiResponse.Ok("Event updated.")) : BadRequest(ApiResponse.Fail(result.Error.Message));
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok("Event updated."))
+            : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 
-    /// <summary>Change event status (publish/start/complete/cancel).</summary>
+    /// <summary>Change event status (publish/start/complete/cancel). Admin/Manager only.</summary>
     [Permission("events:write")]
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeEventStatusRequest req, CancellationToken ct)
     {
-        if (!_currentUser.HasPermission("events:write")) return Forbid();
-
         var result = await _mediator.Send(new ChangeEventStatusCommand(id, req.Action, req.Reason), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 
-    // ── Assignments ───────────────────────────────────────────────────────────
+    // ── Assignments (Admin / Manager) ─────────────────────────────────────────
 
-    /// <summary>List assignments for an event.</summary>
+    /// <summary>List assignments for an event. Requires events:read.</summary>
     [Permission("events:read")]
     [HttpGet("{id:guid}/assignments")]
     public async Task<IActionResult> GetAssignments(
@@ -114,13 +110,11 @@ public sealed class EventsController : ControllerBase
         return Ok(ApiResponse<PagedAssignmentResult>.Ok(result.Value));
     }
 
-    /// <summary>Assign a crew member to an event.</summary>
+    /// <summary>Assign a crew member to an event. Requires events:write.</summary>
     [Permission("events:write")]
     [HttpPost("{id:guid}/assignments")]
     public async Task<IActionResult> AssignCrew(Guid id, [FromBody] AssignCrewRequest req, CancellationToken ct)
     {
-        if (!_currentUser.HasPermission("events:write")) return Forbid();
-
         var result = await _mediator.Send(new AssignCrewCommand(
             id, req.CrewId, req.VendorId, _currentUser.UserId!.Value), ct);
 
@@ -129,8 +123,53 @@ public sealed class EventsController : ControllerBase
             : BadRequest(ApiResponse<EventAssignmentDto>.Fail(result.Error.Message));
     }
 
-    /// <summary>Crew responds to their assignment (confirm/decline).</summary>
-    [Permission("events:write")]
+    // ── Crew self-service endpoints (profile:read / profile:write — all roles) ─
+
+    /// <summary>
+    /// Get assignments for the authenticated crew member.
+    /// Uses profile:read so Crew (who have no events:read) can call this.
+    /// </summary>
+    [Permission("profile:read")]
+    [HttpGet("my-assignments")]
+    public async Task<IActionResult> GetMyAssignments(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new GetMyAssignmentsQuery(_currentUser.UserId!.Value, page, pageSize), ct);
+        return Ok(ApiResponse<PagedAssignmentResult>.Ok(result.Value));
+    }
+
+    /// <summary>
+    /// Get events the authenticated crew member is assigned to (their personal event list).
+    /// Uses profile:read so Crew can call this without events:read.
+    /// </summary>
+    [Permission("profile:read")]
+    [HttpGet("my-events")]
+    public async Task<IActionResult> GetMyEvents(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new GetMyEventsQuery(_currentUser.UserId!.Value, page, pageSize), ct);
+        return Ok(ApiResponse<PagedEventResult>.Ok(result.Value));
+    }
+
+    /// <summary>
+    /// Get assignments for the authenticated vendor's crew.
+    /// Uses profile:read so Vendor (who may not have events:read) can call this.
+    /// </summary>
+    [Permission("profile:read")]
+    [HttpGet("vendor-assignments")]
+    public async Task<IActionResult> GetVendorAssignments(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new GetVendorAssignmentsQuery(_currentUser.UserId!.Value, page, pageSize), ct);
+        return Ok(ApiResponse<PagedAssignmentResult>.Ok(result.Value));
+    }
+
+    /// <summary>
+    /// Crew responds to an assignment invitation (confirm / decline).
+    /// Uses profile:write — Crew always has this permission.
+    /// </summary>
+    [Permission("profile:write")]
     [HttpPatch("assignments/{assignmentId:guid}/respond")]
     public async Task<IActionResult> RespondAssignment(Guid assignmentId, [FromBody] RespondAssignmentRequest req, CancellationToken ct)
     {
@@ -142,33 +181,13 @@ public sealed class EventsController : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 
-    /// <summary>Get current crew member's assignments.</summary>
-    [Permission("events:read")]
-    [HttpGet("my-assignments")]
-    public async Task<IActionResult> GetMyAssignments(
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
-    {
-        var result = await _mediator.Send(new GetMyAssignmentsQuery(_currentUser.UserId!.Value, page, pageSize), ct);
-        return Ok(ApiResponse<PagedAssignmentResult>.Ok(result.Value));
-    }
-
-    /// <summary>Get all crew assignments that belong to the authenticated vendor.</summary>
-    [Permission("events:read")]
-    [HttpGet("vendor-assignments")]
-    public async Task<IActionResult> GetVendorAssignments(
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
-    {
-        // Any authenticated user can call this — query filters by their own VendorId.
-        // Non-vendors simply get 0 results (safe, no data leakage).
-        var result = await _mediator.Send(
-            new GetVendorAssignmentsQuery(_currentUser.UserId!.Value, page, pageSize), ct);
-        return Ok(ApiResponse<PagedAssignmentResult>.Ok(result.Value));
-    }
-
     // ── Attendance ────────────────────────────────────────────────────────────
 
-    /// <summary>Record check-in or check-out for an assignment.</summary>
-    [Permission("events:write")]
+    /// <summary>
+    /// Record check-in or check-out for an assignment.
+    /// Uses profile:write so Crew can self-check-in without attendance:write.
+    /// </summary>
+    [Permission("profile:write")]
     [HttpPost("assignments/{assignmentId:guid}/attendance")]
     public async Task<IActionResult> RecordAttendance(Guid assignmentId, [FromBody] RecordAttendanceRequest req, CancellationToken ct)
     {
@@ -180,12 +199,11 @@ public sealed class EventsController : ControllerBase
             : BadRequest(ApiResponse<AttendanceRecordDto>.Fail(result.Error.Message));
     }
 
-    /// <summary>Get attendance summary for an event.</summary>
+    /// <summary>Get attendance summary for an event. Requires events:read.</summary>
     [Permission("events:read")]
     [HttpGet("{id:guid}/attendance")]
     public async Task<IActionResult> GetAttendance(Guid id, CancellationToken ct)
     {
-        if (!_currentUser.HasPermission("events:read")) return Forbid();
         var result = await _mediator.Send(new GetAttendanceSummaryQuery(id), ct);
         return result.IsSuccess
             ? Ok(ApiResponse<AttendanceSummaryDto>.Ok(result.Value))
