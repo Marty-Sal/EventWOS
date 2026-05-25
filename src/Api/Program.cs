@@ -509,7 +509,7 @@ BEGIN
             vendor_id           UUID          NOT NULL REFERENCES users(id)   ON DELETE RESTRICT,
             event_id            UUID          NOT NULL REFERENCES events(id)  ON DELETE RESTRICT,
             batch_ref           VARCHAR(100)  NOT NULL,
-            status              VARCHAR(50)   NOT NULL DEFAULT ''Draft'',
+            status              VARCHAR(50)   NOT NULL DEFAULT 'Draft',
             total_amount        NUMERIC(14,2) NOT NULL DEFAULT 0,
             notes               TEXT,
             submitted_at        TIMESTAMPTZ,
@@ -530,20 +530,20 @@ BEGIN
         CREATE INDEX ix_payroll_batches_status    ON payroll_batches(status);
     ELSE
         -- Rename wrongly-named columns if they exist
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''payroll_batches'' AND column_name=''created_date'') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_batches' AND column_name='created_date') THEN
             ALTER TABLE payroll_batches RENAME COLUMN created_date TO created_at; END IF;
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''payroll_batches'' AND column_name=''updated_date'') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_batches' AND column_name='updated_date') THEN
             ALTER TABLE payroll_batches RENAME COLUMN updated_date TO updated_at; END IF;
         -- Add missing columns
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''payroll_batches'' AND column_name=''created_at'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_batches' AND column_name='created_at') THEN
             ALTER TABLE payroll_batches ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(); END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''payroll_batches'' AND column_name=''updated_at'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_batches' AND column_name='updated_at') THEN
             ALTER TABLE payroll_batches ADD COLUMN updated_at TIMESTAMPTZ; END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''payroll_batches'' AND column_name=''updated_by'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_batches' AND column_name='updated_by') THEN
             ALTER TABLE payroll_batches ADD COLUMN updated_by UUID; END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''payroll_batches'' AND column_name=''deleted_at'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_batches' AND column_name='deleted_at') THEN
             ALTER TABLE payroll_batches ADD COLUMN deleted_at TIMESTAMPTZ; END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''payroll_batches'' AND column_name=''deleted_by'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_batches' AND column_name='deleted_by') THEN
             ALTER TABLE payroll_batches ADD COLUMN deleted_by UUID; END IF;
     END IF;
 
@@ -557,7 +557,7 @@ BEGIN
             vendor_id        UUID          NOT NULL REFERENCES users(id)              ON DELETE RESTRICT,
             agreed_amount    NUMERIC(12,2) NOT NULL,
             paid_amount      NUMERIC(12,2),
-            status           VARCHAR(50)   NOT NULL DEFAULT ''Pending'',
+            status           VARCHAR(50)   NOT NULL DEFAULT 'Pending',
             method           VARCHAR(50),
             transaction_ref  VARCHAR(200),
             notes            TEXT,
@@ -578,20 +578,20 @@ BEGIN
         CREATE INDEX ix_crew_payments_payroll_batch_id ON crew_payments(payroll_batch_id);
     ELSE
         -- Rename wrongly-named columns if they exist
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''crew_payments'' AND column_name=''created_date'') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='crew_payments' AND column_name='created_date') THEN
             ALTER TABLE crew_payments RENAME COLUMN created_date TO created_at; END IF;
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''crew_payments'' AND column_name=''updated_date'') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='crew_payments' AND column_name='updated_date') THEN
             ALTER TABLE crew_payments RENAME COLUMN updated_date TO updated_at; END IF;
         -- Add missing columns
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''crew_payments'' AND column_name=''created_at'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='crew_payments' AND column_name='created_at') THEN
             ALTER TABLE crew_payments ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(); END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''crew_payments'' AND column_name=''updated_at'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='crew_payments' AND column_name='updated_at') THEN
             ALTER TABLE crew_payments ADD COLUMN updated_at TIMESTAMPTZ; END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''crew_payments'' AND column_name=''updated_by'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='crew_payments' AND column_name='updated_by') THEN
             ALTER TABLE crew_payments ADD COLUMN updated_by UUID; END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''crew_payments'' AND column_name=''deleted_at'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='crew_payments' AND column_name='deleted_at') THEN
             ALTER TABLE crew_payments ADD COLUMN deleted_at TIMESTAMPTZ; END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''crew_payments'' AND column_name=''deleted_by'') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='crew_payments' AND column_name='deleted_by') THEN
             ALTER TABLE crew_payments ADD COLUMN deleted_by UUID; END IF;
     END IF;
 END $$;
