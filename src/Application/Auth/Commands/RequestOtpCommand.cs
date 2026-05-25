@@ -15,5 +15,6 @@ public sealed record RequestOtpResponse(
     Guid OtpRequestId,
     string Mobile,
     int ExpiryMinutes,
-    string Message
+    string Message,
+    string? DevOtp = null   // Only set in development mode
 );

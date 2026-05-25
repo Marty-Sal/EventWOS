@@ -27,6 +27,7 @@ public sealed class DatabaseSeeder
         await SeedPermissionsAsync(ct);
         await SeedRolePermissionsAsync(ct);
         await SeedAdminUserAsync(ct);
+        await SeedTestUsersAsync(ct);
         _logger.LogInformation("Database seeding complete.");
     }
 
@@ -176,5 +177,28 @@ public sealed class DatabaseSeeder
         _db.Users.Add(admin);
         await _db.SaveChangesAsync(ct);
         _logger.LogInformation("Seeded default admin user (mobile: +911234567890)");
+    }
+
+    // ─── Dev/Test Users ──────────────────────────────────────────────────────
+    private async Task SeedTestUsersAsync(CancellationToken ct)
+    {
+        var testMobiles = new[]
+        {
+            ("+911233456789", "Sameer Khan",    UserRole.Crew),
+            ("+911223456789", "Priya Vendors",  UserRole.Vendor),
+        };
+
+        foreach (var (mobile, name, role) in testMobiles)
+        {
+            var exists = await _db.Users.IgnoreQueryFilters()
+                .AnyAsync(u => u.Mobile == mobile, ct);
+            if (exists) continue;
+
+            var user = new User(mobile, name, role);
+            user.Activate();
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync(ct);
+            _logger.LogInformation("Seeded test user {Name} ({Mobile}) as {Role}", name, mobile, role);
+        }
     }
 }

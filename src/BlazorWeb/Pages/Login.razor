@@ -64,9 +64,17 @@
                 <div class="space-y-5">
                     <div class="text-center text-sm text-gray-500 bg-gray-50 rounded-xl py-3 px-4">
                         OTP sent to <span class="font-semibold text-gray-700">@_mobile</span>
-                        <button @onclick="() => { _otpSent = false; _otp = string.Empty; _error = null; }"
+                        <button @onclick="() => { _otpSent = false; _otp = string.Empty; _error = null; _devOtp = null; }"
                                 class="ml-2 text-indigo-600 hover:underline text-xs">Change</button>
                     </div>
+
+                    @if (_devOtp is not null)
+                    {
+                        <div class="flex items-center justify-between text-sm bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                            <span class="text-amber-700">🔐 <strong>Dev mode OTP:</strong></span>
+                            <span class="font-mono text-lg font-bold tracking-widest text-amber-800">@_devOtp</span>
+                        </div>
+                    }
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Enter 6-digit OTP</label>
@@ -123,6 +131,7 @@
     [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
 
     private string _mobile = string.Empty;
+    private string? _devOtp;   // Only set in dev/staging — shown as on-screen hint
     private string _otp = string.Empty;
     private Guid _otpRequestId;
     private bool _otpSent;
@@ -138,6 +147,9 @@
             if (result.Success && result.Data is not null)
             {
                 _otpRequestId = result.Data.OtpRequestId;
+                _devOtp = result.Data.DevOtp;
+                if (_devOtp is not null)
+                    _otp = _devOtp;   // auto-fill in dev mode
                 _otpSent = true;
             }
             else

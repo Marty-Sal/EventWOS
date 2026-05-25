@@ -90,10 +90,15 @@ public sealed class RequestOtpHandler : IRequestHandler<RequestOtpCommand, Resul
 
         _logger.LogInformation("OTP requested for {Mobile}, RequestId: {Id}", request.Mobile, otpRequest.Id);
 
+        // In development mode, include the plaintext OTP in the response
+        // so the UI can show it without needing a real SMS provider
+        var devOtp = _otpService.IsDevelopmentMode ? plaintext : null;
+
         return Result.Success(new RequestOtpResponse(
             otpRequest.Id,
             request.Mobile,
             10,
-            "OTP sent successfully."));
+            "OTP sent successfully.",
+            devOtp));
     }
 }

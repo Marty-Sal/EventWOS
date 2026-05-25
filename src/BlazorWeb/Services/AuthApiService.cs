@@ -11,7 +11,7 @@ public sealed record VerifyOtpRequest(string Mobile, string Otp, Guid OtpRequest
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record LogoutRequest(string RefreshToken);
 
-public sealed record OtpInitiatedDto(Guid OtpRequestId, string Mobile, int ExpiryMinutes, string Message);
+public sealed record OtpInitiatedDto(Guid OtpRequestId, string Mobile, int ExpiryMinutes, string Message, string? DevOtp = null);
 public sealed record AuthResultDto(
     string AccessToken, string RefreshToken,
     DateTime AccessTokenExpiry, DateTime RefreshTokenExpiry,

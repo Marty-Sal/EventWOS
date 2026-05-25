@@ -11,4 +11,7 @@ public interface IOtpService
 
     /// <summary>Sends the OTP via configured SMS provider.</summary>
     Task<bool> SendOtpAsync(string mobile, string otp, CancellationToken cancellationToken = default);
+
+    /// <summary>True when running in development/stub mode. Allows returning OTP in response.</summary>
+    bool IsDevelopmentMode { get; }
 }
