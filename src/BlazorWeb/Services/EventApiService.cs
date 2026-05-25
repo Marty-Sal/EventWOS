@@ -56,6 +56,7 @@ public interface IEventApiService
 
     // Crew / Vendor — my own assignments
     Task<PagedEventAssignmentResult?> GetMyAssignmentsAsync(int page = 1, CancellationToken ct = default);
+    Task<PagedEventAssignmentResult?> GetVendorAssignmentsAsync(int page = 1, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> RespondAssignmentAsync(Guid assignmentId, string response, string? reason = null, CancellationToken ct = default);
 }
 
@@ -189,6 +190,17 @@ public sealed class EventApiService : IEventApiService
         {
             var r = await _http.GetFromJsonAsync<ApiResult<PagedEventAssignmentResult>>(
                 $"api/v1/events/my-assignments?page={page}&pageSize=20", _jsonOpts, ct);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<PagedEventAssignmentResult?> GetVendorAssignmentsAsync(int page = 1, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await _http.GetFromJsonAsync<ApiResult<PagedEventAssignmentResult>>(
+                $"api/v1/events/vendor-assignments?page={page}&pageSize=20", _jsonOpts, ct);
             return r?.Data;
         }
         catch { return null; }

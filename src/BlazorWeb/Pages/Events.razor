@@ -309,8 +309,10 @@ else
          ════════════════════════════════════════════════════════════════════ -->
     <div class="space-y-5">
         <div>
-            <h2 class="text-lg font-bold text-gray-800">My Assignments</h2>
-            <p class="text-sm text-gray-500">Events you've been assigned to by your vendor.</p>
+            <h2 class="text-lg font-bold text-gray-800">@(_role == "Vendor" ? "My Crew Assignments" : "My Assignments")</h2>
+            <p class="text-sm text-gray-500">
+            @(_role == "Vendor" ? "Crew members from your roster assigned to events." : "Events you've been assigned to by your vendor.")
+        </p>
         </div>
 
         @if (_loading)
@@ -347,7 +349,16 @@ else
                         <div class="flex items-start justify-between gap-3 flex-wrap">
                             <div class="flex-1 min-w-0">
                                 <p class="font-semibold text-gray-800">@a.EventTitle</p>
-                                <p class="text-xs text-gray-500 mt-0.5">via <span class="font-medium text-gray-700">@a.VendorName</span></p>
+                                <p class="text-xs text-gray-500 mt-0.5">
+                                    @if (_role == "Vendor")
+                                    {
+                                        <span>Crew: <span class="font-medium text-gray-700">@a.CrewName</span> · @a.CrewMobile</span>
+                                    }
+                                    else
+                                    {
+                                        <span>via <span class="font-medium text-gray-700">@a.VendorName</span></span>
+                                    }
+                                </p>
                             </div>
                             <span class="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full @GetAssignmentStatusClass(a.Status)">
                                 @a.Status
@@ -471,8 +482,10 @@ else
 
         if (_role is "Admin" or "Manager")
             await LoadEvents();
+        else if (_role == "Vendor")
+            await LoadVendorAssignments();
         else
-            await LoadMyAssignments();
+            await LoadMyAssignments(); // Crew
     }
 
     // ── Admin/Manager ──────────────────────────────────────────────────────────
@@ -602,8 +615,29 @@ else
         _loading = false;
     }
 
-    private async Task PrevMyPage() { if (_myPage > 1) { _myPage--; await LoadMyAssignments(); } }
-    private async Task NextMyPage() { if (_myPage < _totalMyPages) { _myPage++; await LoadMyAssignments(); } }
+    private async Task LoadVendorAssignments()
+    {
+        _loading = true;
+        _myAssignments = await EventApi.GetVendorAssignmentsAsync(_myPage);
+        if (_myAssignments is not null)
+            _totalMyPages = (int)Math.Ceiling((double)_myAssignments.TotalCount / 20);
+        _loading = false;
+    }
+
+    private async Task PrevMyPage()
+    {
+        if (_myPage > 1) { _myPage--;
+            if (_role == "Vendor") await LoadVendorAssignments();
+            else await LoadMyAssignments();
+        }
+    }
+    private async Task NextMyPage()
+    {
+        if (_myPage < _totalMyPages) { _myPage++;
+            if (_role == "Vendor") await LoadVendorAssignments();
+            else await LoadMyAssignments();
+        }
+    }
 
     private async Task RespondToAssignment(Guid assignmentId, string response)
     {

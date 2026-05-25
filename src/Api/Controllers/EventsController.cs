@@ -142,6 +142,19 @@ public sealed class EventsController : ControllerBase
         return Ok(ApiResponse<PagedAssignmentResult>.Ok(result.Value));
     }
 
+    /// <summary>Get all crew assignments that belong to the authenticated vendor.</summary>
+    [HttpGet("vendor-assignments")]
+    public async Task<IActionResult> GetVendorAssignments(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (_currentUser.Role != UserRole.Vendor && !_currentUser.HasPermission("events:read"))
+            return Forbid();
+
+        var result = await _mediator.Send(
+            new GetVendorAssignmentsQuery(_currentUser.UserId!.Value, page, pageSize), ct);
+        return Ok(ApiResponse<PagedAssignmentResult>.Ok(result.Value));
+    }
+
     // ── Attendance ────────────────────────────────────────────────────────────
 
     /// <summary>Record check-in or check-out for an assignment.</summary>
