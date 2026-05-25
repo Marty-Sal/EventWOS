@@ -23,6 +23,9 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(e => e.Status)         .HasColumnName("status")            .HasConversion<int>();
         builder.Property(e => e.MaxCrew)        .HasColumnName("max_crew")          .HasDefaultValue(0);
         builder.Property(e => e.CreatedByUserId).HasColumnName("created_by_user_id");
+
+        // BaseEntity audit Guid (distinct from Creator nav property which uses CreatedByUserId FK)
+        builder.Property(e => e.CreatedBy).HasColumnName("created_by");
         builder.Property(e => e.Notes)          .HasColumnName("notes")             .HasMaxLength(1000);
 
         // Audit
