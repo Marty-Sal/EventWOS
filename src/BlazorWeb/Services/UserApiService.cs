@@ -22,6 +22,8 @@ public interface IUserApiService
     Task<PagedResult<UserListItemDto>?> GetUsersAsync(int page = 1, int pageSize = 20, string? search = null, CancellationToken ct = default);
     Task<bool> ChangeStatusAsync(Guid userId, string status, CancellationToken ct = default);
     Task<bool> UpdateProfileAsync(string fullName, string? email, string? avatarUrl, CancellationToken ct = default);
+    Task<(bool Ok, string? Error)> CreateVendorAsync(string mobile, string fullName, string? businessName, string? email, CancellationToken ct = default);
+    Task<(bool Ok, string? Error)> CreateCrewAsync(string mobile, string fullName, string? email, string? referralCode, CancellationToken ct = default);
 }
 
 public sealed class UserApiService : IUserApiService
@@ -100,4 +102,34 @@ public sealed class FlexibleEnumStringConverter : JsonConverter<string>
         => reader.GetString();
     public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
         => writer.WriteStringValue(value);
+    public async Task<(bool Ok, string? Error)> CreateVendorAsync(
+        string mobile, string fullName, string? businessName, string? email, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("api/v1/vendors",
+                new { mobile, fullName, businessName, email }, ct);
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            var parsed = JsonSerializer.Deserialize<ApiResult<object>>(body, JsonOpts);
+            return (false, parsed?.Errors?.FirstOrDefault() ?? "Failed to create vendor.");
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    public async Task<(bool Ok, string? Error)> CreateCrewAsync(
+        string mobile, string fullName, string? email, string? referralCode, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("api/v1/crew",
+                new { mobile, fullName, email, referralCode }, ct);
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            var parsed = JsonSerializer.Deserialize<ApiResult<object>>(body, JsonOpts);
+            return (false, parsed?.Errors?.FirstOrDefault() ?? "Failed to create crew.");
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
 }

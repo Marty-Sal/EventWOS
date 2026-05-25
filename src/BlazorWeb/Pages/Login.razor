@@ -171,8 +171,10 @@
             if (result.Success)
             {
                 RefreshSvc.Start();
+                // Force a full page reload so the auth state provider picks up
+                // the newly stored tokens from localStorage on fresh initialisation
                 var target = ReturnUrl is not null ? Uri.UnescapeDataString(ReturnUrl) : "/dashboard";
-                Nav.NavigateTo(target);
+                Nav.NavigateTo(target, forceLoad: true);
             }
             else
             {

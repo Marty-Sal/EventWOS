@@ -41,9 +41,30 @@
 @code {
     private readonly List<RoleViewModel> _roles = new()
     {
-        new("Admin", "🛡️", "Full system access", new[] { "users:read", "users:write", "sessions:read", "sessions:write", "audit:read", "roles:manage", "permissions:manage" }),
-        new("Manager", "👔", "Team management access", new[] { "users:read", "sessions:read", "audit:read" }),
-        new("Staff", "👷", "Basic operational access", new[] { "sessions:read" }),
+        new("Admin", "🛡️", "Full system access", new[]
+        {
+            "users:read", "users:write",
+            "vendors:read", "vendors:write",
+            "crew:read", "crew:write",
+            "sessions:read", "sessions:write",
+            "audit:read", "roles:manage", "permissions:manage"
+        }),
+        new("Manager", "👔", "Team management access", new[]
+        {
+            "users:read",
+            "vendors:read", "vendors:write",
+            "crew:read", "crew:write",
+            "sessions:read", "audit:read"
+        }),
+        new("Vendor", "🏢", "Vendor company access", new[]
+        {
+            "profile:read", "profile:write",
+            "crew:read", "crew:write"
+        }),
+        new("Crew", "👷", "Field crew access", new[]
+        {
+            "profile:read", "profile:write"
+        }),
     };
 
     private sealed record RoleViewModel(string Name, string Icon, string Description, IEnumerable<string> Permissions);
