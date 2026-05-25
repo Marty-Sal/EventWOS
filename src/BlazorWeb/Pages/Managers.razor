@@ -96,7 +96,7 @@
                             <!-- Suspend / Reactivate -->
                             @if (m.Status == "Active")
                             {
-                                <button @onclick="() => ChangeStatus(m, 'Suspended')"
+                                <button @onclick="() => SuspendManager(m)"
                                         class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-orange-200
                                                text-orange-700 hover:bg-orange-50 transition">
                                     Suspend
@@ -104,7 +104,7 @@
                             }
                             else
                             {
-                                <button @onclick="() => ChangeStatus(m, 'Active')"
+                                <button @onclick="() => ReactivateManager(m)"
                                         class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-green-200
                                                text-green-700 hover:bg-green-50 transition">
                                     Reactivate
@@ -424,6 +424,9 @@
     }
 
     // ── Status ────────────────────────────────────────────────────────────────
+    private Task SuspendManager(ManagerRecord m)    => ChangeStatus(m, "Suspended");
+    private Task ReactivateManager(ManagerRecord m) => ChangeStatus(m, "Active");
+
     private async Task ChangeStatus(ManagerRecord m, string status)
     {
         var (ok, _) = await ManagerApi.ChangeStatusAsync(m.Id, status);
