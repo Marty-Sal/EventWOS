@@ -1,3 +1,4 @@
+using EventWOS.Api.Authorization;
 using Asp.Versioning;
 using EventWOS.Application.Analytics.Queries;
 using EventWOS.Domain.Interfaces;
@@ -24,6 +25,7 @@ public sealed class AnalyticsController : ControllerBase
     }
 
     /// <summary>Get aggregated dashboard statistics (Admin/Manager).</summary>
+    [Permission("reports:read")]
     [HttpGet("dashboard")]
     public async Task<IActionResult> GetDashboard(CancellationToken ct = default)
     {

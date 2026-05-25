@@ -1,3 +1,4 @@
+using EventWOS.Api.Authorization;
 using Asp.Versioning;
 using EventWOS.Application.Payments.Commands;
 using EventWOS.Application.Payments.DTOs;
@@ -28,6 +29,7 @@ public sealed class PaymentsController : ControllerBase
     // ── Crew Payments ────────────────────────────────────────────────────────
 
     /// <summary>List crew payments (filterable by event/vendor/crew/status).</summary>
+    [Permission("payments:read")]
     [HttpGet]
     public async Task<IActionResult> GetPayments(
         [FromQuery] Guid?   eventId,
@@ -44,6 +46,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     /// <summary>Create a crew payment record for an assignment.</summary>
+    [Permission("payments:write")]
     [HttpPost]
     public async Task<IActionResult> CreatePayment(
         [FromBody] CreatePaymentRequest req, CancellationToken ct = default)
@@ -59,6 +62,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     /// <summary>Update payment status: approve | pay | reject | hold.</summary>
+    [Permission("payments:write")]
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> UpdatePaymentStatus(
         Guid id, [FromBody] UpdatePaymentStatusRequest req, CancellationToken ct = default)
@@ -75,6 +79,7 @@ public sealed class PaymentsController : ControllerBase
     // ── Payroll Batches ──────────────────────────────────────────────────────
 
     /// <summary>List payroll batches.</summary>
+    [Permission("payments:read")]
     [HttpGet("payroll")]
     public async Task<IActionResult> GetPayrollBatches(
         [FromQuery] Guid?   vendorId,
@@ -90,6 +95,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     /// <summary>Create a payroll batch grouping multiple payments.</summary>
+    [Permission("payments:write")]
     [HttpPost("payroll")]
     public async Task<IActionResult> CreatePayrollBatch(
         [FromBody] CreatePayrollBatchRequest req, CancellationToken ct = default)
@@ -104,6 +110,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     /// <summary>Update payroll batch status: submit | approve | disburse | reject.</summary>
+    [Permission("payments:write")]
     [HttpPatch("payroll/{id:guid}/status")]
     public async Task<IActionResult> UpdatePayrollStatus(
         Guid id, [FromBody] UpdatePayrollStatusRequest req, CancellationToken ct = default)

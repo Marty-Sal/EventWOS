@@ -1,3 +1,4 @@
+using EventWOS.Api.Authorization;
 using EventWOS.Domain.Enums;
 using Asp.Versioning;
 using EventWOS.Application.Vendors.Commands;
@@ -32,6 +33,7 @@ public sealed class VendorsController : ControllerBase
     /// Admin/Manager: full paginated list.
     /// Vendor: returns only their own record as a single-item list.
     /// </summary>
+    [Permission("vendors:read")]
     [HttpGet]
     public async Task<IActionResult> GetVendors(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
@@ -56,6 +58,7 @@ public sealed class VendorsController : ControllerBase
     }
 
     /// <summary>Get vendor by ID.</summary>
+    [Permission("vendors:read")]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetVendor(Guid id, CancellationToken ct)
     {
@@ -67,6 +70,7 @@ public sealed class VendorsController : ControllerBase
     }
 
     /// <summary>Create a new vendor. Admin only.</summary>
+    [Permission("vendors:write")]
     [HttpPost]
     public async Task<IActionResult> CreateVendor([FromBody] CreateVendorRequest req, CancellationToken ct)
     {
@@ -79,6 +83,7 @@ public sealed class VendorsController : ControllerBase
     }
 
     /// <summary>Rate a vendor (0.0–5.0). Admin only.</summary>
+    [Permission("vendors:write")]
     [HttpPatch("{id:guid}/rating")]
     public async Task<IActionResult> RateVendor(Guid id, [FromBody] RateVendorRequest req, CancellationToken ct)
     {
@@ -88,6 +93,7 @@ public sealed class VendorsController : ControllerBase
     }
 
     /// <summary>Change vendor status. Admin only.</summary>
+    [Permission("vendors:write")]
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeVendorStatusRequest req, CancellationToken ct)
     {

@@ -1,3 +1,4 @@
+using EventWOS.Api.Authorization;
 using Asp.Versioning;
 using EventWOS.Application.Sessions.Commands;
 using EventWOS.Application.Sessions.Queries;
@@ -30,6 +31,7 @@ public sealed class UsersController : ControllerBase
     }
 
     /// <summary>Get authenticated user's own profile.</summary>
+    [Permission("users:read")]
     [HttpGet("me")]
     [ProducesResponseType(typeof(ApiResponse<UserProfileDto>), 200)]
     public async Task<IActionResult> GetMe(CancellationToken ct)
@@ -41,6 +43,7 @@ public sealed class UsersController : ControllerBase
     }
 
     /// <summary>Update authenticated user's own profile.</summary>
+    [Permission("users:write")]
     [HttpPut("me")]
     [ProducesResponseType(typeof(ApiResponse), 200)]
     public async Task<IActionResult> UpdateMe([FromBody] UpdateProfileRequest dto, CancellationToken ct)
@@ -51,6 +54,7 @@ public sealed class UsersController : ControllerBase
     }
 
     /// <summary>List all users. Admin/Manager only.</summary>
+    [Permission("users:read")]
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<PagedResult<UserDto>>), 200)]
     public async Task<IActionResult> GetUsers(
@@ -69,6 +73,7 @@ public sealed class UsersController : ControllerBase
     }
 
     /// <summary>Change user status (suspend/activate/deactivate). Admin only.</summary>
+    [Permission("users:status")]
     [HttpPatch("{id:guid}/status")]
     [ProducesResponseType(typeof(ApiResponse), 200)]
     public async Task<IActionResult> ChangeStatus(

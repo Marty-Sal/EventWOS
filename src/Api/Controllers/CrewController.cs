@@ -1,3 +1,4 @@
+using EventWOS.Api.Authorization;
 using Asp.Versioning;
 using EventWOS.Application.Crew.Commands;
 using EventWOS.Application.Crew.Queries;
@@ -28,6 +29,7 @@ public sealed class CrewController : ControllerBase
     }
 
     /// <summary>List crew. Admin/Manager sees all; Vendor sees own crew.</summary>
+    [Permission("crew:read")]
     [HttpGet]
     public async Task<IActionResult> GetCrew(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
@@ -46,6 +48,7 @@ public sealed class CrewController : ControllerBase
     }
 
     /// <summary>Create a crew member. Admin/Vendor.</summary>
+    [Permission("crew:write")]
     [HttpPost]
     public async Task<IActionResult> CreateCrew([FromBody] CreateCrewRequest req, CancellationToken ct)
     {
@@ -57,6 +60,7 @@ public sealed class CrewController : ControllerBase
     }
 
     /// <summary>Crew joins a vendor via referral code.</summary>
+    [Permission("crew:write")]
     [HttpPost("join-vendor")]
     public async Task<IActionResult> JoinVendor([FromBody] JoinVendorRequest req, CancellationToken ct)
     {

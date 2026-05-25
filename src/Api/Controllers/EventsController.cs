@@ -1,3 +1,4 @@
+using EventWOS.Api.Authorization;
 using Asp.Versioning;
 using EventWOS.Application.Attendance.Commands;
 using EventWOS.Application.Events.Commands;
@@ -32,6 +33,7 @@ public sealed class EventsController : ControllerBase
     // ── Events CRUD ───────────────────────────────────────────────────────────
 
     /// <summary>List events with optional filters.</summary>
+    [Permission("events:read")]
     [HttpGet]
     public async Task<IActionResult> GetEvents(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
@@ -45,6 +47,7 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>Get event by ID.</summary>
+    [Permission("events:read")]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetEvent(Guid id, CancellationToken ct)
     {
@@ -55,6 +58,7 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>Create event. Admin/Manager only.</summary>
+    [Permission("events:write")]
     [HttpPost]
     public async Task<IActionResult> CreateEvent([FromBody] CreateEventRequest req, CancellationToken ct)
     {
@@ -71,6 +75,7 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>Update event. Admin/Manager only.</summary>
+    [Permission("events:write")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateEvent(Guid id, [FromBody] UpdateEventRequest req, CancellationToken ct)
     {
@@ -84,6 +89,7 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>Change event status (publish/start/complete/cancel).</summary>
+    [Permission("events:write")]
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeEventStatusRequest req, CancellationToken ct)
     {
@@ -96,6 +102,7 @@ public sealed class EventsController : ControllerBase
     // ── Assignments ───────────────────────────────────────────────────────────
 
     /// <summary>List assignments for an event.</summary>
+    [Permission("events:read")]
     [HttpGet("{id:guid}/assignments")]
     public async Task<IActionResult> GetAssignments(
         Guid id,
@@ -108,6 +115,7 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>Assign a crew member to an event.</summary>
+    [Permission("events:write")]
     [HttpPost("{id:guid}/assignments")]
     public async Task<IActionResult> AssignCrew(Guid id, [FromBody] AssignCrewRequest req, CancellationToken ct)
     {
@@ -122,6 +130,7 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>Crew responds to their assignment (confirm/decline).</summary>
+    [Permission("events:write")]
     [HttpPatch("assignments/{assignmentId:guid}/respond")]
     public async Task<IActionResult> RespondAssignment(Guid assignmentId, [FromBody] RespondAssignmentRequest req, CancellationToken ct)
     {
@@ -134,6 +143,7 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>Get current crew member's assignments.</summary>
+    [Permission("events:read")]
     [HttpGet("my-assignments")]
     public async Task<IActionResult> GetMyAssignments(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
@@ -143,6 +153,7 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>Get all crew assignments that belong to the authenticated vendor.</summary>
+    [Permission("events:read")]
     [HttpGet("vendor-assignments")]
     public async Task<IActionResult> GetVendorAssignments(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
@@ -157,6 +168,7 @@ public sealed class EventsController : ControllerBase
     // ── Attendance ────────────────────────────────────────────────────────────
 
     /// <summary>Record check-in or check-out for an assignment.</summary>
+    [Permission("events:write")]
     [HttpPost("assignments/{assignmentId:guid}/attendance")]
     public async Task<IActionResult> RecordAttendance(Guid assignmentId, [FromBody] RecordAttendanceRequest req, CancellationToken ct)
     {
@@ -169,6 +181,7 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>Get attendance summary for an event.</summary>
+    [Permission("events:read")]
     [HttpGet("{id:guid}/attendance")]
     public async Task<IActionResult> GetAttendance(Guid id, CancellationToken ct)
     {

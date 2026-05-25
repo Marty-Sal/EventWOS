@@ -1,3 +1,4 @@
+using EventWOS.Api.Authorization;
 using Asp.Versioning;
 using EventWOS.Api.Hubs;
 using EventWOS.Api.Middleware;
@@ -166,7 +167,36 @@ try
         });
     }
 
-    builder.Services.AddAuthorization();
+    builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("perm:attendance:read", policy => policy.Requirements.Add(new PermissionRequirement("attendance:read")));
+    options.AddPolicy("perm:attendance:write", policy => policy.Requirements.Add(new PermissionRequirement("attendance:write")));
+    options.AddPolicy("perm:audit:read", policy => policy.Requirements.Add(new PermissionRequirement("audit:read")));
+    options.AddPolicy("perm:crew:approve", policy => policy.Requirements.Add(new PermissionRequirement("crew:approve")));
+    options.AddPolicy("perm:crew:invite", policy => policy.Requirements.Add(new PermissionRequirement("crew:invite")));
+    options.AddPolicy("perm:crew:read", policy => policy.Requirements.Add(new PermissionRequirement("crew:read")));
+    options.AddPolicy("perm:crew:write", policy => policy.Requirements.Add(new PermissionRequirement("crew:write")));
+    options.AddPolicy("perm:events:read", policy => policy.Requirements.Add(new PermissionRequirement("events:read")));
+    options.AddPolicy("perm:events:write", policy => policy.Requirements.Add(new PermissionRequirement("events:write")));
+    options.AddPolicy("perm:payments:read", policy => policy.Requirements.Add(new PermissionRequirement("payments:read")));
+    options.AddPolicy("perm:payments:write", policy => policy.Requirements.Add(new PermissionRequirement("payments:write")));
+    options.AddPolicy("perm:permissions:read", policy => policy.Requirements.Add(new PermissionRequirement("permissions:read")));
+    options.AddPolicy("perm:permissions:write", policy => policy.Requirements.Add(new PermissionRequirement("permissions:write")));
+    options.AddPolicy("perm:profile:read", policy => policy.Requirements.Add(new PermissionRequirement("profile:read")));
+    options.AddPolicy("perm:profile:write", policy => policy.Requirements.Add(new PermissionRequirement("profile:write")));
+    options.AddPolicy("perm:reports:read", policy => policy.Requirements.Add(new PermissionRequirement("reports:read")));
+    options.AddPolicy("perm:roles:read", policy => policy.Requirements.Add(new PermissionRequirement("roles:read")));
+    options.AddPolicy("perm:roles:write", policy => policy.Requirements.Add(new PermissionRequirement("roles:write")));
+    options.AddPolicy("perm:sessions:read", policy => policy.Requirements.Add(new PermissionRequirement("sessions:read")));
+    options.AddPolicy("perm:sessions:revoke", policy => policy.Requirements.Add(new PermissionRequirement("sessions:revoke")));
+    options.AddPolicy("perm:users:delete", policy => policy.Requirements.Add(new PermissionRequirement("users:delete")));
+    options.AddPolicy("perm:users:read", policy => policy.Requirements.Add(new PermissionRequirement("users:read")));
+    options.AddPolicy("perm:users:status", policy => policy.Requirements.Add(new PermissionRequirement("users:status")));
+    options.AddPolicy("perm:users:write", policy => policy.Requirements.Add(new PermissionRequirement("users:write")));
+    options.AddPolicy("perm:vendors:read", policy => policy.Requirements.Add(new PermissionRequirement("vendors:read")));
+    options.AddPolicy("perm:vendors:write", policy => policy.Requirements.Add(new PermissionRequirement("vendors:write")));
+});
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
     // ─── Application Services ─────────────────────────────────────────────────
     builder.Services.Configure<OtpOptions>(builder.Configuration.GetSection(OtpOptions.SectionName));

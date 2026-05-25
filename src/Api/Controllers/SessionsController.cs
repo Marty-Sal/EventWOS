@@ -1,3 +1,4 @@
+using EventWOS.Api.Authorization;
 using Asp.Versioning;
 using EventWOS.Application.Sessions.Commands;
 using EventWOS.Application.Sessions.Queries;
@@ -27,6 +28,7 @@ public sealed class SessionsController : ControllerBase
     }
 
     /// <summary>Get all active sessions for current user.</summary>
+    [Permission("sessions:read")]
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<SessionDto>>), 200)]
     public async Task<IActionResult> GetSessions(CancellationToken ct)
@@ -36,6 +38,7 @@ public sealed class SessionsController : ControllerBase
     }
 
     /// <summary>Revoke a specific session.</summary>
+    [Permission("sessions:revoke")]
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(typeof(ApiResponse), 200)]
     public async Task<IActionResult> RevokeSession(Guid id, CancellationToken ct)
