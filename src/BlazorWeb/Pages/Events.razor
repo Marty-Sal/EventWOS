@@ -31,7 +31,7 @@
                    class="w-64 pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
         </div>
-        <select @bind="_statusFilter" @bind:event="onchange" @onchange="LoadEvents"
+        <select @bind:get="_statusFilter" @bind:set="OnStatusFilterChanged"
                 class="px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             <option value="">All Statuses</option>
             <option value="0">Draft</option>
@@ -104,21 +104,21 @@
                             </button>
                             @if (ev.Status == "Draft")
                             {
-                                <button @onclick="() => ChangeStatus(ev.Id, \"publish\")"
+                                <button @onclick='() => ChangeStatus(ev.Id, "publish")'
                                         class="px-3 text-xs py-1.5 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 font-medium transition">
                                     Publish
                                 </button>
                             }
                             @if (ev.Status == "Published")
                             {
-                                <button @onclick="() => ChangeStatus(ev.Id, \"start\")"
+                                <button @onclick='() => ChangeStatus(ev.Id, "start")'
                                         class="px-3 text-xs py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium transition">
                                     Start
                                 </button>
                             }
                             @if (ev.Status == "InProgress")
                             {
-                                <button @onclick="() => ChangeStatus(ev.Id, \"complete\")"
+                                <button @onclick='() => ChangeStatus(ev.Id, "complete")'
                                         class="px-3 text-xs py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium transition">
                                     Complete
                                 </button>
@@ -310,12 +310,12 @@
                 </div>
                 <div>
                     <label class="text-xs text-gray-500 font-medium">Start Date/Time *</label>
-                    <input @bind="_form.StartAtStr" type="datetime-local"
+                    <input value="@_form.StartAtStr" @onchange="e => _form.StartAtStr = e.Value?.ToString() ?? string.Empty" type="datetime-local"
                            class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
                     <label class="text-xs text-gray-500 font-medium">End Date/Time *</label>
-                    <input @bind="_form.EndAtStr" type="datetime-local"
+                    <input value="@_form.EndAtStr" @onchange="e => _form.EndAtStr = e.Value?.ToString() ?? string.Empty" type="datetime-local"
                            class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
             </div>
@@ -435,6 +435,13 @@
         if (_events is not null)
             _totalPages = (int)Math.Ceiling((double)_events.TotalCount / 20);
         _loading = false;
+    }
+
+    private async Task OnStatusFilterChanged(string? value)
+    {
+        _statusFilter = value;
+        _page = 1;
+        await LoadEvents();
     }
 
     private async Task OnSearchKeyUp(KeyboardEventArgs e)
