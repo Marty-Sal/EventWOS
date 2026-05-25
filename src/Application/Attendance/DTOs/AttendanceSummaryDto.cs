@@ -17,3 +17,4 @@ public sealed record CrewAttendanceDto(
     DateTime? CheckInAt,
     DateTime? CheckOutAt
 );
+

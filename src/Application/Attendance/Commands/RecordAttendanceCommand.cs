@@ -1,3 +1,4 @@
+using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Attendance.DTOs;
 using EventWOS.Application.Interfaces;
 using EventWOS.Domain.Entities;
