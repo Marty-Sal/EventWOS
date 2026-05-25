@@ -43,6 +43,7 @@ public sealed record PagedEventAssignmentResult(
 // ── Interface ─────────────────────────────────────────────────────────────────
 public interface IEventApiService
 {
+    // Admin / Manager
     Task<PagedEventResult?> GetEventsAsync(int page = 1, string? search = null, string? status = null, CancellationToken ct = default);
     Task<EventDetailDto?> GetEventAsync(Guid id, CancellationToken ct = default);
     Task<(bool Ok, string? Error, EventDetailDto? Data)> CreateEventAsync(CreateEventRequest req, CancellationToken ct = default);
@@ -52,6 +53,10 @@ public interface IEventApiService
     Task<(bool Ok, string? Error)> AssignCrewAsync(Guid eventId, Guid crewId, Guid vendorId, CancellationToken ct = default);
     Task<AttendanceSummaryDto?> GetAttendanceSummaryAsync(Guid eventId, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> RecordAttendanceAsync(Guid assignmentId, string action, string? location = null, CancellationToken ct = default);
+
+    // Crew / Vendor — my own assignments
+    Task<PagedEventAssignmentResult?> GetMyAssignmentsAsync(int page = 1, CancellationToken ct = default);
+    Task<(bool Ok, string? Error)> RespondAssignmentAsync(Guid assignmentId, string response, string? reason = null, CancellationToken ct = default);
 }
 
 public sealed record CreateEventRequest(
@@ -169,6 +174,33 @@ public sealed class EventApiService : IEventApiService
         try
         {
             var resp = await _http.PostAsJsonAsync($"api/v1/events/assignments/{assignmentId}/attendance", new { action, location }, ct);
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var body = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+            return (false, body?.Errors?.FirstOrDefault() ?? "Unknown error");
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    // ── Crew / Vendor ─────────────────────────────────────────────────────────
+
+    public async Task<PagedEventAssignmentResult?> GetMyAssignmentsAsync(int page = 1, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await _http.GetFromJsonAsync<ApiResult<PagedEventAssignmentResult>>(
+                $"api/v1/events/my-assignments?page={page}&pageSize=20", _jsonOpts, ct);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<(bool Ok, string? Error)> RespondAssignmentAsync(Guid assignmentId, string response, string? reason = null, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PatchAsJsonAsync(
+                $"api/v1/events/assignments/{assignmentId}/respond",
+                new { response, reason }, ct);
             if (resp.IsSuccessStatusCode) return (true, null);
             var body = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
             return (false, body?.Errors?.FirstOrDefault() ?? "Unknown error");

@@ -22,10 +22,12 @@
                 @* Admin & Manager only *@
                 <AuthorizeView Roles="Admin,Manager">
                     <NavItem Href="/users"    Icon="👥" Label="Users" />
-                    <NavItem Href="/events"   Icon="📅" Label="Events" />
                     <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" />
                     <NavItem Href="/sessions" Icon="🔌" Label="Sessions" />
                 </AuthorizeView>
+
+                @* Events — all roles see this, but Crew/Vendor see "My Assignments" *@
+                <NavItem Href="/events" Icon="📅" Label="Events" />
 
                 @* Admin, Manager & Vendor can see Crew *@
                 <AuthorizeView Roles="Admin,Manager,Vendor">

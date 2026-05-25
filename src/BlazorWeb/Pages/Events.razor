@@ -6,98 +6,89 @@
 
 <PageTitle>Events — EventWOS</PageTitle>
 
-<div class="space-y-5">
-
-    <!-- Header -->
-    <div class="flex items-center justify-between flex-wrap gap-3">
-        <div>
-            <h2 class="text-lg font-bold text-gray-800">Events</h2>
-            <p class="text-sm text-gray-500">Manage workforce events end-to-end.</p>
-        </div>
-        @if (_isAdminOrManager)
-        {
+@if (_role is "Admin" or "Manager")
+{
+    <!-- ══════════════════════════════════════════════════════════════════════
+         ADMIN / MANAGER — Full Event Management Board
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="space-y-5">
+        <!-- Header -->
+        <div class="flex items-center justify-between flex-wrap gap-3">
+            <div>
+                <h2 class="text-lg font-bold text-gray-800">Events</h2>
+                <p class="text-sm text-gray-500">Manage workforce events end-to-end.</p>
+            </div>
             <button @onclick="() => OpenCreateModal()"
                     class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
                 + Create Event
             </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex flex-wrap gap-3 items-center">
+            <div class="relative">
+                <input @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp"
+                       placeholder="Search events…"
+                       class="w-64 pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+            </div>
+            <select @bind:get="_statusFilter" @bind:set="OnStatusFilterChanged"
+                    class="px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">All Statuses</option>
+                <option value="0">Draft</option>
+                <option value="1">Published</option>
+                <option value="2">In Progress</option>
+                <option value="3">Completed</option>
+                <option value="4">Cancelled</option>
+            </select>
+        </div>
+
+        <!-- Loading -->
+        @if (_loading)
+        {
+            <div class="flex justify-center py-16">
+                <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+            </div>
         }
-    </div>
-
-    <!-- Filters -->
-    <div class="flex flex-wrap gap-3 items-center">
-        <div class="relative">
-            <input @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp"
-                   placeholder="Search events…"
-                   class="w-64 pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-        </div>
-        <select @bind:get="_statusFilter" @bind:set="OnStatusFilterChanged"
-                class="px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <option value="">All Statuses</option>
-            <option value="0">Draft</option>
-            <option value="1">Published</option>
-            <option value="2">In Progress</option>
-            <option value="3">Completed</option>
-            <option value="4">Cancelled</option>
-        </select>
-    </div>
-
-    <!-- Loading -->
-    @if (_loading)
-    {
-        <div class="flex justify-center py-16">
-            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-            </svg>
-        </div>
-    }
-    else if (_events?.Items.Count == 0)
-    {
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-            <p class="text-4xl mb-3">📅</p>
-            <p class="text-gray-500 text-sm">No events found. Create your first event!</p>
-        </div>
-    }
-    else
-    {
-        <!-- Event Cards Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            @foreach (var ev in _events!.Items)
-            {
-                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col gap-3">
-                    <!-- Status badge + Title -->
-                    <div class="flex items-start justify-between gap-2">
-                        <div>
-                            <p class="font-semibold text-gray-800 text-sm leading-tight">@ev.Title</p>
-                            <p class="text-xs text-gray-400 mt-0.5">📍 @ev.Venue</p>
+        else if (_events?.Items.Count == 0)
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+                <p class="text-4xl mb-3">📅</p>
+                <p class="text-gray-500 text-sm">No events found. Create your first event!</p>
+            </div>
+        }
+        else
+        {
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                @foreach (var ev in _events!.Items)
+                {
+                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col gap-3">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <p class="font-semibold text-gray-800 text-sm leading-tight">@ev.Title</p>
+                                <p class="text-xs text-gray-400 mt-0.5">📍 @ev.Venue</p>
+                            </div>
+                            <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full @GetStatusClass(ev.Status)">
+                                @ev.Status
+                            </span>
                         </div>
-                        <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full @GetStatusClass(ev.Status)">
-                            @ev.Status
-                        </span>
-                    </div>
-
-                    <!-- Time -->
-                    <div class="text-xs text-gray-500 space-y-0.5">
-                        <p>🕐 @ev.StartAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</p>
-                        <p>🔚 @ev.EndAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</p>
-                    </div>
-
-                    <!-- Crew pill -->
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-medium">
-                            👥 @ev.AssignedCrew @(ev.MaxCrew > 0 ? $"/ {ev.MaxCrew}" : "") Crew
-                        </span>
-                    </div>
-
-                    <!-- Actions -->
-                    <div class="flex gap-2 pt-1 border-t border-gray-50">
-                        <button @onclick="() => OpenDetailPanel(ev)"
-                                class="flex-1 text-xs py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium transition">
-                            View Details
-                        </button>
-                        @if (_isAdminOrManager)
-                        {
+                        <div class="text-xs text-gray-500 space-y-0.5">
+                            <p>🕐 @ev.StartAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</p>
+                            <p>🔚 @ev.EndAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</p>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs">
+                            <span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-medium">
+                                👥 @ev.AssignedCrew @(ev.MaxCrew > 0 ? $"/ {ev.MaxCrew}" : "") Crew
+                            </span>
+                        </div>
+                        <div class="flex gap-2 pt-1 border-t border-gray-50">
+                            <button @onclick="() => OpenDetailPanel(ev)"
+                                    class="flex-1 text-xs py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium transition">
+                                View Details
+                            </button>
                             <button @onclick="() => OpenEditModal(ev)"
                                     class="px-3 text-xs py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium transition">
                                 Edit
@@ -123,117 +114,110 @@
                                     Complete
                                 </button>
                             }
-                        }
+                        </div>
                     </div>
+                }
+            </div>
+
+            @if (_totalPages > 1)
+            {
+                <div class="flex justify-center gap-2 pt-2">
+                    <button @onclick="PrevPage" disabled="@(_page == 1)"
+                            class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">← Prev</button>
+                    <span class="px-3 py-1.5 text-sm text-gray-500">Page @_page of @_totalPages</span>
+                    <button @onclick="NextPage" disabled="@(_page >= _totalPages)"
+                            class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next →</button>
                 </div>
             }
-        </div>
+        }
 
-        <!-- Pagination -->
-        @if (_totalPages > 1)
+        @* Toasts *@
+        @if (_error is not null)
         {
-            <div class="flex justify-center gap-2 pt-2">
-                <button @onclick="PrevPage" disabled="@(_page == 1)"
-                        class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">← Prev</button>
-                <span class="px-3 py-1.5 text-sm text-gray-500">Page @_page of @_totalPages</span>
-                <button @onclick="NextPage" disabled="@(_page >= _totalPages)"
-                        class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next →</button>
+            <div class="fixed bottom-5 right-5 bg-red-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
+                ⚠️ @_error <button @onclick="() => _error = null" class="ml-3 font-bold">✕</button>
             </div>
         }
-    }
-
-    <!-- Error toast -->
-    @if (_error is not null)
-    {
-        <div class="fixed bottom-5 right-5 bg-red-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
-            ⚠️ @_error
-            <button @onclick="() => _error = null" class="ml-3 font-bold">✕</button>
-        </div>
-    }
-    @if (_success is not null)
-    {
-        <div class="fixed bottom-5 right-5 bg-green-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
-            ✅ @_success
-            <button @onclick="() => _success = null" class="ml-3 font-bold">✕</button>
-        </div>
-    }
-</div>
-
-<!-- ── Detail Side Panel ─────────────────────────────────────────────────────── -->
-@if (_selectedEvent is not null)
-{
-    <div class="fixed inset-0 bg-black/40 z-40 flex justify-end" @onclick="CloseDetailPanel">
-        <div class="bg-white w-full max-w-lg h-full overflow-y-auto shadow-2xl p-6 space-y-5 relative"
-             @onclick:stopPropagation>
-            <button @onclick="CloseDetailPanel"
-                    class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
-
-            <div>
-                <h3 class="text-lg font-bold text-gray-800">@_selectedEvent.Title</h3>
-                <span class="text-xs font-semibold px-2.5 py-1 rounded-full @GetStatusClass(_selectedEvent.Status)">
-                    @_selectedEvent.Status
-                </span>
+        @if (_success is not null)
+        {
+            <div class="fixed bottom-5 right-5 bg-green-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
+                ✅ @_success <button @onclick="() => _success = null" class="ml-3 font-bold">✕</button>
             </div>
+        }
+    </div>
 
-            @if (_selectedEvent.Description is not null)
-            {
-                <p class="text-sm text-gray-600">@_selectedEvent.Description</p>
-            }
+    <!-- ── Detail Side Panel ──────────────────────────────────────────────────── -->
+    @if (_selectedEvent is not null)
+    {
+        <div class="fixed inset-0 bg-black/40 z-40 flex justify-end" @onclick="CloseDetailPanel">
+            <div class="bg-white w-full max-w-lg h-full overflow-y-auto shadow-2xl p-6 space-y-5 relative"
+                 @onclick:stopPropagation>
+                <button @onclick="CloseDetailPanel"
+                        class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
 
-            <div class="grid grid-cols-2 gap-3 text-sm">
-                <div class="bg-gray-50 rounded-xl p-3">
-                    <p class="text-xs text-gray-400 mb-1">Venue</p>
-                    <p class="font-medium text-gray-700">@_selectedEvent.Venue</p>
-                    @if (_selectedEvent.Address is not null)
-                    {
-                        <p class="text-xs text-gray-400">@_selectedEvent.Address</p>
-                    }
-                </div>
-                <div class="bg-gray-50 rounded-xl p-3">
-                    <p class="text-xs text-gray-400 mb-1">Schedule</p>
-                    <p class="font-medium text-gray-700 text-xs">@_selectedEvent.StartAt.ToLocalTime().ToString("MMM dd HH:mm")</p>
-                    <p class="text-xs text-gray-400">→ @_selectedEvent.EndAt.ToLocalTime().ToString("MMM dd HH:mm")</p>
-                </div>
-                <div class="bg-indigo-50 rounded-xl p-3">
-                    <p class="text-xs text-indigo-400 mb-1">Crew Assigned</p>
-                    <p class="font-bold text-indigo-700">@_selectedEvent.AssignedCrew @((_selectedEvent.MaxCrew > 0) ? $"/ {_selectedEvent.MaxCrew}" : "")</p>
-                </div>
-                <div class="bg-gray-50 rounded-xl p-3">
-                    <p class="text-xs text-gray-400 mb-1">Created By</p>
-                    <p class="font-medium text-gray-700 text-xs">@_selectedEvent.CreatedByName</p>
-                </div>
-            </div>
-
-            <!-- Assignments section -->
-            @if (_isAdminOrManager)
-            {
                 <div>
-                    <div class="flex items-center justify-between mb-3">
-                        <h4 class="font-semibold text-sm text-gray-700">Crew Assignments</h4>
-                        <button @onclick="OpenAssignCrewModal"
-                                class="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">
-                            + Assign Crew
-                        </button>
+                    <h3 class="text-lg font-bold text-gray-800">@_selectedEvent.Title</h3>
+                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full @GetStatusClass(_selectedEvent.Status)">
+                        @_selectedEvent.Status
+                    </span>
+                </div>
+
+                @if (_selectedEvent.Description is not null)
+                {
+                    <p class="text-sm text-gray-600">@_selectedEvent.Description</p>
+                }
+
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="bg-gray-50 rounded-xl p-3">
+                        <p class="text-xs text-gray-400 mb-1">Venue</p>
+                        <p class="font-medium text-gray-700">@_selectedEvent.Venue</p>
+                        @if (_selectedEvent.Address is not null)
+                        {
+                            <p class="text-xs text-gray-400">@_selectedEvent.Address</p>
+                        }
                     </div>
+                    <div class="bg-gray-50 rounded-xl p-3">
+                        <p class="text-xs text-gray-400 mb-1">Schedule</p>
+                        <p class="font-medium text-gray-700 text-xs">@_selectedEvent.StartAt.ToLocalTime().ToString("MMM dd HH:mm")</p>
+                        <p class="text-xs text-gray-400">→ @_selectedEvent.EndAt.ToLocalTime().ToString("MMM dd HH:mm")</p>
+                    </div>
+                    <div class="bg-indigo-50 rounded-xl p-3">
+                        <p class="text-xs text-indigo-400 mb-1">Crew Assigned</p>
+                        <p class="font-bold text-indigo-700">@_selectedEvent.AssignedCrew @((_selectedEvent.MaxCrew > 0) ? $"/ {_selectedEvent.MaxCrew}" : "")</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-xl p-3">
+                        <p class="text-xs text-gray-400 mb-1">Created By</p>
+                        <p class="font-medium text-gray-700 text-xs">@_selectedEvent.CreatedByName</p>
+                    </div>
+                </div>
+
+                <!-- Assignments -->
+                <div>
+                    <h4 class="font-semibold text-gray-700 text-sm mb-3">Crew Assignments</h4>
                     @if (_loadingAssignments)
                     {
-                        <p class="text-sm text-gray-400 py-4 text-center">Loading…</p>
+                        <div class="flex justify-center py-4">
+                            <svg class="animate-spin h-5 w-5 text-indigo-400" viewBox="0 0 24 24" fill="none">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                        </div>
                     }
                     else if (_assignments?.Items.Count == 0)
                     {
-                        <p class="text-sm text-gray-400 py-4 text-center">No crew assigned yet.</p>
+                        <p class="text-xs text-gray-400 text-center py-4">No crew assigned yet.</p>
                     }
                     else
                     {
                         <div class="space-y-2">
                             @foreach (var a in _assignments!.Items)
                             {
-                                <div class="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2.5">
+                                <div class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
                                     <div>
-                                        <p class="text-sm font-medium text-gray-700">@a.CrewName</p>
+                                        <p class="text-sm font-medium text-gray-800">@a.CrewName</p>
                                         <p class="text-xs text-gray-400">@a.CrewMobile · via @a.VendorName</p>
                                     </div>
-                                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full @GetAssignmentStatusClass(a.Status)">
+                                    <span class="text-xs px-2.5 py-1 rounded-full font-semibold @GetAssignmentStatusClass(a.Status)">
                                         @a.Status
                                     </span>
                                 </div>
@@ -242,192 +226,256 @@
                     }
                 </div>
 
-                <!-- Attendance Summary (for InProgress/Completed) -->
-                @if (_selectedEvent.Status == "InProgress" || _selectedEvent.Status == "Completed")
+                <!-- Assign Crew (Admin/Manager) -->
+                <div class="border-t border-gray-100 pt-4 space-y-3">
+                    <h4 class="font-semibold text-gray-700 text-sm">Assign Crew Member</h4>
+                    <div class="flex gap-2">
+                        <input @bind="_assignVendorId" placeholder="Vendor ID"
+                               class="flex-1 px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        <input @bind="_assignCrewId" placeholder="Crew ID"
+                               class="flex-1 px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        <button @onclick="AssignCrew"
+                                class="px-3 py-2 text-xs rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">
+                            Assign
+                        </button>
+                    </div>
+                    @if (_assignError is not null)
+                    {
+                        <p class="text-xs text-red-600">@_assignError</p>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ── Create / Edit Event Modal ─────────────────────────────────────────── -->
+    @if (_showEventModal)
+    {
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @onclick="CloseModal">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5" @onclick:stopPropagation>
+                <div class="flex items-center justify-between">
+                    <h3 class="text-base font-bold text-gray-800">@(_editingEvent is null ? "Create Event" : "Edit Event")</h3>
+                    <button @onclick="CloseModal" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                </div>
+
+                <div class="space-y-3">
+                    <input @bind="_form.Title" placeholder="Event title *"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <textarea @bind="_form.Description" placeholder="Description (optional)" rows="2"
+                              class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+                    <input @bind="_form.Venue" placeholder="Venue *"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input @bind="_form.Address" placeholder="Address (optional)"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-gray-500 mb-1 block">Start *</label>
+                            <input type="datetime-local" @bind="_form.StartAt"
+                                   class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500 mb-1 block">End *</label>
+                            <input type="datetime-local" @bind="_form.EndAt"
+                                   class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        </div>
+                    </div>
+                    <input type="number" @bind="_form.MaxCrew" placeholder="Max crew (0 = unlimited)"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+
+                @if (_formError is not null)
                 {
-                    <div>
-                        <h4 class="font-semibold text-sm text-gray-700 mb-3">Attendance Summary</h4>
-                        @if (_attendance is not null)
+                    <p class="text-sm text-red-600">⚠️ @_formError</p>
+                }
+
+                <div class="flex gap-3">
+                    <button @onclick="CloseModal"
+                            class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition">
+                        Cancel
+                    </button>
+                    <button @onclick="SaveEvent" disabled="@_saving"
+                            class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-60">
+                        @(_saving ? "Saving…" : (_editingEvent is null ? "Create" : "Save Changes"))
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+else
+{
+    <!-- ══════════════════════════════════════════════════════════════════════
+         CREW / VENDOR — My Assignments View
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="space-y-5">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">My Assignments</h2>
+            <p class="text-sm text-gray-500">Events you've been assigned to by your vendor.</p>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="flex justify-center py-16">
+                <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+            </div>
+        }
+        else if (_myAssignments?.Items.Count == 0)
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+                <p class="text-4xl mb-3">📋</p>
+                @if (_role == "Vendor")
+                {
+                    <p class="text-gray-500 text-sm font-medium">No event assignments found.</p>
+                    <p class="text-gray-400 text-xs mt-1">As a vendor, your crew members will appear here once assigned to events by an admin.</p>
+                }
+                else
+                {
+                    <p class="text-gray-500 text-sm font-medium">No assignments yet.</p>
+                    <p class="text-gray-400 text-xs mt-1">You'll see your event assignments here once your vendor assigns you.</p>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="space-y-3">
+                @foreach (var a in _myAssignments!.Items)
+                {
+                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <div class="flex items-start justify-between gap-3 flex-wrap">
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-gray-800">@a.EventTitle</p>
+                                <p class="text-xs text-gray-500 mt-0.5">via <span class="font-medium text-gray-700">@a.VendorName</span></p>
+                            </div>
+                            <span class="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full @GetAssignmentStatusClass(a.Status)">
+                                @a.Status
+                            </span>
+                        </div>
+
+                        <div class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+                            <span>📅 Assigned @a.CreatedAt.ToLocalTime().ToString("MMM dd, yyyy")</span>
+                            @if (a.ConfirmedAt.HasValue)
+                            {
+                                <span class="text-green-600">✓ Confirmed @a.ConfirmedAt.Value.ToLocalTime().ToString("MMM dd")</span>
+                            }
+                            @if (a.DeclinedAt.HasValue)
+                            {
+                                <span class="text-red-500">✗ Declined @a.DeclinedAt.Value.ToLocalTime().ToString("MMM dd")</span>
+                            }
+                        </div>
+
+                        <!-- Crew: respond to pending assignment -->
+                        @if (_role == "Crew" && a.Status == "Pending")
                         {
-                            <div class="grid grid-cols-4 gap-2 mb-3">
-                                <div class="bg-blue-50 rounded-xl p-2 text-center">
-                                    <p class="text-lg font-bold text-blue-700">@_attendance.TotalAssigned</p>
-                                    <p class="text-xs text-blue-400">Assigned</p>
-                                </div>
-                                <div class="bg-green-50 rounded-xl p-2 text-center">
-                                    <p class="text-lg font-bold text-green-700">@_attendance.TotalConfirmed</p>
-                                    <p class="text-xs text-green-400">Confirmed</p>
-                                </div>
-                                <div class="bg-indigo-50 rounded-xl p-2 text-center">
-                                    <p class="text-lg font-bold text-indigo-700">@_attendance.TotalAttended</p>
-                                    <p class="text-xs text-indigo-400">Attended</p>
-                                </div>
-                                <div class="bg-red-50 rounded-xl p-2 text-center">
-                                    <p class="text-lg font-bold text-red-700">@_attendance.TotalNoShow</p>
-                                    <p class="text-xs text-red-400">No Show</p>
-                                </div>
+                            <div class="mt-4 flex gap-2">
+                                <button @onclick='() => RespondToAssignment(a.Id, "confirm")'
+                                        class="flex-1 py-2 text-xs rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition">
+                                    ✓ Accept
+                                </button>
+                                <button @onclick='() => RespondToAssignment(a.Id, "decline")'
+                                        class="flex-1 py-2 text-xs rounded-xl bg-red-50 text-red-600 font-semibold hover:bg-red-100 border border-red-200 transition">
+                                    ✗ Decline
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Crew: attendance check-in/out for confirmed + in-progress events -->
+                        @if (_role == "Crew" && a.Status == "Confirmed")
+                        {
+                            <div class="mt-4 flex gap-2">
+                                <button @onclick='() => RecordAttendance(a.Id, "checkin")'
+                                        class="flex-1 py-2 text-xs rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">
+                                    📍 Check In
+                                </button>
+                                <button @onclick='() => RecordAttendance(a.Id, "checkout")'
+                                        class="flex-1 py-2 text-xs rounded-xl bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition">
+                                    🚪 Check Out
+                                </button>
                             </div>
                         }
                     </div>
                 }
-            }
-        </div>
-    </div>
-}
-
-<!-- ── Create/Edit Modal ──────────────────────────────────────────────────────── -->
-@if (_showEventModal)
-{
-    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
-            <h3 class="text-base font-bold text-gray-800">@(_editingEvent is null ? "Create Event" : "Edit Event")</h3>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div class="col-span-2">
-                    <label class="text-xs text-gray-500 font-medium">Title *</label>
-                    <input @bind="_form.Title" placeholder="Event title"
-                           class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-                <div class="col-span-2">
-                    <label class="text-xs text-gray-500 font-medium">Description</label>
-                    <textarea @bind="_form.Description" rows="2" placeholder="Optional description"
-                              class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
-                </div>
-                <div>
-                    <label class="text-xs text-gray-500 font-medium">Venue *</label>
-                    <input @bind="_form.Venue" placeholder="Venue name"
-                           class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-                <div>
-                    <label class="text-xs text-gray-500 font-medium">Max Crew (0 = unlimited)</label>
-                    <input @bind="_form.MaxCrew" type="number" min="0"
-                           class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-                <div>
-                    <label class="text-xs text-gray-500 font-medium">Address</label>
-                    <input @bind="_form.Address" placeholder="Full address"
-                           class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-                <div>
-                    <label class="text-xs text-gray-500 font-medium">Start Date/Time *</label>
-                    <input value="@_form.StartAtStr" @onchange="e => _form.StartAtStr = e.Value?.ToString() ?? string.Empty" type="datetime-local"
-                           class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-                <div>
-                    <label class="text-xs text-gray-500 font-medium">End Date/Time *</label>
-                    <input value="@_form.EndAtStr" @onchange="e => _form.EndAtStr = e.Value?.ToString() ?? string.Empty" type="datetime-local"
-                           class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
             </div>
 
-            @if (_formError is not null)
+            @if (_totalMyPages > 1)
             {
-                <p class="text-red-500 text-xs">⚠️ @_formError</p>
+                <div class="flex justify-center gap-2 pt-2">
+                    <button @onclick="PrevMyPage" disabled="@(_myPage == 1)"
+                            class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">← Prev</button>
+                    <span class="px-3 py-1.5 text-sm text-gray-500">Page @_myPage of @_totalMyPages</span>
+                    <button @onclick="NextMyPage" disabled="@(_myPage >= _totalMyPages)"
+                            class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next →</button>
+                </div>
             }
+        }
 
-            <div class="flex justify-end gap-3 pt-2">
-                <button @onclick="CloseEventModal"
-                        class="px-4 py-2 text-sm rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">
-                    Cancel
-                </button>
-                <button @onclick="SubmitEventForm" disabled="@_saving"
-                        class="px-4 py-2 text-sm rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 font-semibold">
-                    @(_saving ? "Saving…" : (_editingEvent is null ? "Create" : "Update"))
-                </button>
+        @* Toasts *@
+        @if (_error is not null)
+        {
+            <div class="fixed bottom-5 right-5 bg-red-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
+                ⚠️ @_error <button @onclick="() => _error = null" class="ml-3 font-bold">✕</button>
             </div>
-        </div>
-    </div>
-}
-
-<!-- ── Assign Crew Modal ──────────────────────────────────────────────────────── -->
-@if (_showAssignModal)
-{
-    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 class="text-base font-bold text-gray-800">Assign Crew Member</h3>
-
-            <div>
-                <label class="text-xs text-gray-500 font-medium">Vendor</label>
-                <select @bind="_assignVendorId"
-                        class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <option value="">Select vendor…</option>
-                    @foreach (var v in _vendors)
-                    {
-                        <option value="@v.Id">@v.FullName @(v.BusinessName != null ? $"({v.BusinessName})" : "")</option>
-                    }
-                </select>
+        }
+        @if (_success is not null)
+        {
+            <div class="fixed bottom-5 right-5 bg-green-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
+                ✅ @_success <button @onclick="() => _success = null" class="ml-3 font-bold">✕</button>
             </div>
-
-            <div>
-                <label class="text-xs text-gray-500 font-medium">Crew Member</label>
-                <select @bind="_assignCrewId"
-                        class="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <option value="">Select crew member…</option>
-                    @foreach (var c in _crewMembers)
-                    {
-                        <option value="@c.Id">@c.FullName (@c.Mobile)</option>
-                    }
-                </select>
-            </div>
-
-            @if (_assignError is not null)
-            {
-                <p class="text-red-500 text-xs">⚠️ @_assignError</p>
-            }
-
-            <div class="flex justify-end gap-3">
-                <button @onclick="() => _showAssignModal = false"
-                        class="px-4 py-2 text-sm rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">
-                    Cancel
-                </button>
-                <button @onclick="SubmitAssignment" disabled="@_saving"
-                        class="px-4 py-2 text-sm rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 font-semibold">
-                    @(_saving ? "Assigning…" : "Assign")
-                </button>
-            </div>
-        </div>
+        }
     </div>
 }
 
 @code {
-    private PagedEventResult?          _events;
-    private EventDetailDto?            _selectedEvent;
-    private PagedEventAssignmentResult? _assignments;
-    private AttendanceSummaryDto?      _attendance;
-    private IReadOnlyList<VendorListItemDto> _vendors = Array.Empty<VendorListItemDto>();
-    private IReadOnlyList<CrewMemberDto>    _crewMembers = Array.Empty<CrewMemberDto>();
-
+    // ── State ──────────────────────────────────────────────────────────────────
+    private string _role = "";
     private bool   _loading = true;
     private bool   _loadingAssignments;
     private bool   _saving;
-    private bool   _isAdminOrManager;
     private string? _search;
     private string? _statusFilter;
     private string? _error;
     private string? _success;
-    private int    _page = 1;
-    private int    _totalPages = 1;
 
-    // Modal state
-    private bool            _showEventModal;
-    private bool            _showAssignModal;
+    // Admin/Manager paging
+    private int _page = 1;
+    private int _totalPages = 1;
+    private PagedEventResult? _events;
+
+    // Detail panel
+    private EventDetailDto?          _selectedEvent;
+    private PagedEventAssignmentResult? _assignments;
+    private AttendanceSummaryDto?    _attendance;
+    private string?                  _assignVendorId;
+    private string?                  _assignCrewId;
+    private string?                  _assignError;
+
+    // Modal
+    private bool              _showEventModal;
     private EventListItemDto? _editingEvent;
-    private EventForm       _form = new();
-    private string?         _formError;
-    private string?         _assignError;
-    private string          _assignVendorId = "";
-    private string          _assignCrewId = "";
+    private EventForm         _form = new();
+    private string?           _formError;
 
+    // Crew/Vendor paging
+    private int _myPage = 1;
+    private int _totalMyPages = 1;
+    private PagedEventAssignmentResult? _myAssignments;
+
+    // ── Init ───────────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
         var authState = await Auth.GetAuthenticationStateAsync();
-        var role = authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
-                ?? authState.User.FindFirst("role")?.Value ?? "";
-        _isAdminOrManager = role is "Admin" or "Manager";
+        _role = authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+             ?? authState.User.FindFirst("role")?.Value ?? "";
 
-        await LoadEvents();
+        if (_role is "Admin" or "Manager")
+            await LoadEvents();
+        else
+            await LoadMyAssignments();
     }
 
+    // ── Admin/Manager ──────────────────────────────────────────────────────────
     private async Task LoadEvents()
     {
         _loading = true;
@@ -468,7 +516,7 @@
     private void OpenCreateModal()
     {
         _editingEvent = null;
-        _form = new EventForm();
+        _form = new EventForm { StartAt = DateTime.Now.AddDays(1), EndAt = DateTime.Now.AddDays(1).AddHours(4) };
         _formError = null;
         _showEventModal = true;
     }
@@ -478,122 +526,128 @@
         _editingEvent = ev;
         _form = new EventForm
         {
-            Title      = ev.Title,
-            Venue      = ev.Venue,
-            StartAtStr = ev.StartAt.ToString("yyyy-MM-ddTHH:mm"),
-            EndAtStr   = ev.EndAt.ToString("yyyy-MM-ddTHH:mm"),
+            Title       = ev.Title,
+            Venue       = ev.Venue,
+            StartAt     = ev.StartAt.ToLocalTime(),
+            EndAt       = ev.EndAt.ToLocalTime(),
+            MaxCrew     = ev.MaxCrew,
         };
         _formError = null;
         _showEventModal = true;
     }
 
-    private void CloseEventModal() { _showEventModal = false; _formError = null; }
+    private void CloseModal() => _showEventModal = false;
 
-    private async Task SubmitEventForm()
+    private async Task SaveEvent()
     {
-        _formError = null;
         if (string.IsNullOrWhiteSpace(_form.Title) || string.IsNullOrWhiteSpace(_form.Venue))
-        { _formError = "Title and Venue are required."; return; }
-        if (!DateTime.TryParse(_form.StartAtStr, out var start) || !DateTime.TryParse(_form.EndAtStr, out var end))
-        { _formError = "Invalid date/time format."; return; }
-        if (start >= end) { _formError = "Start must be before End."; return; }
-
+        {
+            _formError = "Title and Venue are required.";
+            return;
+        }
         _saving = true;
-        var req = new CreateEventRequest(_form.Title, _form.Description, _form.Venue, _form.Address,
-                                          start.ToUniversalTime(), end.ToUniversalTime(), _form.MaxCrew);
+        _formError = null;
+        var req = new CreateEventRequest(
+            _form.Title, _form.Description, _form.Venue, _form.Address,
+            _form.StartAt.ToUniversalTime(), _form.EndAt.ToUniversalTime(), _form.MaxCrew);
 
         if (_editingEvent is null)
         {
             var (ok, err, _) = await EventApi.CreateEventAsync(req);
-            if (!ok) { _formError = err; _saving = false; return; }
-            _success = "Event created!";
+            if (ok) { _success = "Event created!"; CloseModal(); await LoadEvents(); }
+            else    { _formError = err; }
         }
         else
         {
             var (ok, err) = await EventApi.UpdateEventAsync(_editingEvent.Id, req);
-            if (!ok) { _formError = err; _saving = false; return; }
-            _success = "Event updated!";
+            if (ok) { _success = "Event updated!"; CloseModal(); await LoadEvents(); }
+            else    { _formError = err; }
         }
-
         _saving = false;
-        CloseEventModal();
-        _page = 1;
-        await LoadEvents();
-        _ = Task.Delay(3000).ContinueWith(_ => { _success = null; InvokeAsync(StateHasChanged); });
     }
 
-    private async Task ChangeStatus(Guid eventId, string action)
+    private async Task ChangeStatus(Guid id, string action)
     {
-        var (ok, err) = await EventApi.ChangeEventStatusAsync(eventId, action);
-        if (!ok) { _error = err; return; }
-        _success = $"Event {action}ed successfully!";
-        await LoadEvents();
-        if (_selectedEvent?.Id == eventId)
-            _selectedEvent = await EventApi.GetEventAsync(eventId);
-        _ = Task.Delay(3000).ContinueWith(_ => { _success = null; InvokeAsync(StateHasChanged); });
+        var (ok, err) = await EventApi.ChangeEventStatusAsync(id, action);
+        if (ok) { _success = "Status updated!"; await LoadEvents(); }
+        else    { _error = err; }
     }
 
-    private async Task OpenAssignCrewModal()
-    {
-        _assignVendorId = "";
-        _assignCrewId   = "";
-        _assignError    = null;
-        // Load vendors & crew for dropdowns
-        var vendorResult = await VendorApi.GetVendorsAsync(1);
-        _vendors = vendorResult?.Items ?? Array.Empty<VendorListItemDto>();
-        var crewResult = await VendorApi.GetCrewAsync(1);
-        _crewMembers = crewResult?.Items ?? Array.Empty<CrewMemberDto>();
-        _showAssignModal = true;
-    }
-
-    private async Task SubmitAssignment()
+    private async Task AssignCrew()
     {
         _assignError = null;
-        if (!Guid.TryParse(_assignVendorId, out var vendorId)) { _assignError = "Select a vendor."; return; }
-        if (!Guid.TryParse(_assignCrewId,   out var crewId))   { _assignError = "Select a crew member."; return; }
         if (_selectedEvent is null) return;
-
-        _saving = true;
-        var (ok, err) = await EventApi.AssignCrewAsync(_selectedEvent.Id, crewId, vendorId);
-        _saving = false;
-        if (!ok) { _assignError = err; return; }
-
-        _showAssignModal = false;
-        _success = "Crew assigned!";
-        _assignments = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
-        _selectedEvent = await EventApi.GetEventAsync(_selectedEvent.Id);
-        await LoadEvents();
-        _ = Task.Delay(3000).ContinueWith(_ => { _success = null; InvokeAsync(StateHasChanged); });
+        if (!Guid.TryParse(_assignVendorId, out var vid) || !Guid.TryParse(_assignCrewId, out var cid))
+        {
+            _assignError = "Please enter valid Vendor ID and Crew ID (GUIDs).";
+            return;
+        }
+        var (ok, err) = await EventApi.AssignCrewAsync(_selectedEvent.Id, cid, vid);
+        if (ok)
+        {
+            _success = "Crew assigned!";
+            _assignVendorId = _assignCrewId = "";
+            _assignments = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
+        }
+        else { _assignError = err; }
     }
 
+    // ── Crew / Vendor ──────────────────────────────────────────────────────────
+    private async Task LoadMyAssignments()
+    {
+        _loading = true;
+        _myAssignments = await EventApi.GetMyAssignmentsAsync(_myPage);
+        if (_myAssignments is not null)
+            _totalMyPages = (int)Math.Ceiling((double)_myAssignments.TotalCount / 20);
+        _loading = false;
+    }
+
+    private async Task PrevMyPage() { if (_myPage > 1) { _myPage--; await LoadMyAssignments(); } }
+    private async Task NextMyPage() { if (_myPage < _totalMyPages) { _myPage++; await LoadMyAssignments(); } }
+
+    private async Task RespondToAssignment(Guid assignmentId, string response)
+    {
+        var (ok, err) = await EventApi.RespondAssignmentAsync(assignmentId, response);
+        if (ok) { _success = response == "confirm" ? "Assignment accepted!" : "Assignment declined."; await LoadMyAssignments(); }
+        else    { _error = err ?? "Failed to respond."; }
+    }
+
+    private async Task RecordAttendance(Guid assignmentId, string action)
+    {
+        var (ok, err) = await EventApi.RecordAttendanceAsync(assignmentId, action);
+        if (ok) { _success = action == "checkin" ? "Checked in! 📍" : "Checked out! 🚪"; await LoadMyAssignments(); }
+        else    { _error = err ?? "Failed to record attendance."; }
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
     private static string GetStatusClass(string status) => status switch
     {
         "Draft"      => "bg-gray-100 text-gray-600",
         "Published"  => "bg-blue-100 text-blue-700",
-        "InProgress" => "bg-green-100 text-green-700",
-        "Completed"  => "bg-purple-100 text-purple-700",
-        "Cancelled"  => "bg-red-100 text-red-600",
+        "InProgress" => "bg-yellow-100 text-yellow-700",
+        "Completed"  => "bg-green-100 text-green-700",
+        "Cancelled"  => "bg-red-100 text-red-700",
         _            => "bg-gray-100 text-gray-600"
     };
 
     private static string GetAssignmentStatusClass(string status) => status switch
     {
-        "Invited"   => "bg-yellow-100 text-yellow-700",
+        "Pending"   => "bg-yellow-100 text-yellow-700",
         "Confirmed" => "bg-green-100 text-green-700",
         "Declined"  => "bg-red-100 text-red-600",
-        "Attended"  => "bg-indigo-100 text-indigo-700",
-        "NoShow"    => "bg-orange-100 text-orange-600",
+        "Completed" => "bg-blue-100 text-blue-700",
         _           => "bg-gray-100 text-gray-600"
     };
 
-    private sealed class EventForm
+    // ── Form Model ─────────────────────────────────────────────────────────────
+    private class EventForm
     {
-        public string  Title       { get; set; } = "";
-        public string? Description { get; set; }
-        public string  Venue       { get; set; } = "";
-        public string? Address     { get; set; }
-        public int     MaxCrew     { get; set; } = 0;
-        public string  StartAtStr  { get; set; } = "";
-        public string  EndAtStr    { get; set; } = "";
+        public string    Title       { get; set; } = "";
+        public string?   Description { get; set; }
+        public string    Venue       { get; set; } = "";
+        public string?   Address     { get; set; }
+        public DateTime  StartAt     { get; set; } = DateTime.Now.AddDays(1);
+        public DateTime  EndAt       { get; set; } = DateTime.Now.AddDays(1).AddHours(4);
+        public int       MaxCrew     { get; set; } = 0;
     }
 }
