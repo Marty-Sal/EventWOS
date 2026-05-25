@@ -44,7 +44,7 @@ public sealed class Event : BaseEntity
     public string?     Notes           { get; private set; }
 
     // Navigation
-    public User                        CreatedBy   { get; private set; } = default!;
+    public User                        Creator     { get; private set; } = default!;
     public ICollection<EventAssignment> Assignments { get; private set; } = new List<EventAssignment>();
 
     // ── Behaviours ────────────────────────────────────────────────────────────

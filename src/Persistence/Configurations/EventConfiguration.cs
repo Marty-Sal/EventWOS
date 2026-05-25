@@ -27,7 +27,6 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
 
         // Audit
         builder.Property(e => e.CreatedAt) .HasColumnName("created_at");
-        builder.Property(e => e.CreatedBy) .HasColumnName("created_by");
         builder.Property(e => e.UpdatedAt) .HasColumnName("updated_at");
         builder.Property(e => e.UpdatedBy) .HasColumnName("updated_by");
         builder.Property(e => e.IsDeleted) .HasColumnName("is_deleted").HasDefaultValue(false);
@@ -35,7 +34,7 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(e => e.DeletedBy) .HasColumnName("deleted_by");
 
         // Relationships
-        builder.HasOne(e => e.CreatedBy)
+        builder.HasOne(e => e.Creator)
                .WithMany()
                .HasForeignKey(e => e.CreatedByUserId)
                .OnDelete(DeleteBehavior.Restrict);
