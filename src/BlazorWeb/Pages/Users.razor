@@ -1,5 +1,5 @@
 @page "/users"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin,Manager")]
 @inject IUserApiService UserApi
 
 <PageTitle>Users — EventWOS</PageTitle>

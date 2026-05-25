@@ -16,14 +16,26 @@
 
             <!-- Nav Items -->
             <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-                <NavItem Href="/dashboard"  Icon="🏠" Label="Dashboard" />
-                <NavItem Href="/users"      Icon="👥" Label="Users" />
-                <NavItem Href="/events"     Icon="📅" Label="Events" />
-                <NavItem Href="/vendors"    Icon="🏢" Label="Vendors" />
-                <NavItem Href="/crew"       Icon="👷" Label="Crew" />
-                <NavItem Href="/sessions"   Icon="🔌" Label="Sessions" />
-                <NavItem Href="/profile"    Icon="👤" Label="My Profile" />
+                @* Dashboard — everyone *@
+                <NavItem Href="/dashboard" Icon="🏠" Label="Dashboard" />
 
+                @* Admin & Manager only *@
+                <AuthorizeView Roles="Admin,Manager">
+                    <NavItem Href="/users"    Icon="👥" Label="Users" />
+                    <NavItem Href="/events"   Icon="📅" Label="Events" />
+                    <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" />
+                    <NavItem Href="/sessions" Icon="🔌" Label="Sessions" />
+                </AuthorizeView>
+
+                @* Admin, Manager & Vendor can see Crew *@
+                <AuthorizeView Roles="Admin,Manager,Vendor">
+                    <NavItem Href="/crew" Icon="👷" Label="Crew" />
+                </AuthorizeView>
+
+                @* Everyone *@
+                <NavItem Href="/profile" Icon="👤" Label="My Profile" />
+
+                @* Admin-only section *@
                 <AuthorizeView Roles="Admin">
                     <div class="pt-4 mt-4 border-t border-gray-700 space-y-1">
                         <p class="px-2 text-xs font-semibold uppercase tracking-widest text-gray-500">Admin</p>

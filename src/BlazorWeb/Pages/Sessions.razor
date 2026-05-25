@@ -1,5 +1,5 @@
 @page "/sessions"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin,Manager")]
 @inject ISessionApiService SessionApi
 
 <PageTitle>Sessions — EventWOS</PageTitle>

@@ -172,8 +172,10 @@
             {
                 RefreshSvc.Start();
                 // Force a full page reload so the auth state provider picks up
-                // the newly stored tokens from localStorage on fresh initialisation
-                var target = ReturnUrl is not null ? Uri.UnescapeDataString(ReturnUrl) : "/dashboard";
+                // the newly stored tokens from localStorage on fresh initialisation.
+                // Sanitize returnUrl — never redirect back to /login.
+                var raw = ReturnUrl is not null ? Uri.UnescapeDataString(ReturnUrl) : "/dashboard";
+                var target = raw.Contains("/login", StringComparison.OrdinalIgnoreCase) ? "/dashboard" : raw;
                 Nav.NavigateTo(target, forceLoad: true);
             }
             else

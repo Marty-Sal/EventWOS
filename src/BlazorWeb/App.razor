@@ -6,7 +6,27 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
                 <NotAuthorized>
-                    <RedirectToLogin />
+                    <CascadingAuthenticationState>
+                        <AuthorizeView>
+                            <Authorized>
+                                @* User is logged in but doesn't have the required role — show 403 *@
+                                <div class="flex h-screen flex-col items-center justify-center bg-gray-50 text-gray-500">
+                                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center max-w-sm">
+                                        <p class="text-5xl mb-4">🚫</p>
+                                        <h1 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h1>
+                                        <p class="text-sm text-gray-500 mb-6">You don't have permission to view this page.</p>
+                                        <a href="/dashboard" class="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">
+                                            ← Back to Dashboard
+                                        </a>
+                                    </div>
+                                </div>
+                            </Authorized>
+                            <NotAuthorized>
+                                @* User is not logged in — redirect to login *@
+                                <RedirectToLogin />
+                            </NotAuthorized>
+                        </AuthorizeView>
+                    </CascadingAuthenticationState>
                 </NotAuthorized>
                 <Authorizing>
                     <div class="flex h-screen items-center justify-center">

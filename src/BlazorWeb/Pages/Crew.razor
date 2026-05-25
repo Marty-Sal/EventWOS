@@ -10,10 +10,12 @@
             <h2 class="text-lg font-bold text-gray-800">Crew Members</h2>
             <p class="text-sm text-gray-500">Manage your workforce.</p>
         </div>
-        <button @onclick="() => _showCreate = true"
-                class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
-            + Add Crew
-        </button>
+        <AuthorizeView Roles="Admin,Manager,Vendor">
+            <button @onclick="() => _showCreate = true"
+                    class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
+                + Add Crew
+            </button>
+        </AuthorizeView>
     </div>
 
     <div class="relative max-w-sm">
