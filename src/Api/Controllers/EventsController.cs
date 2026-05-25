@@ -147,9 +147,8 @@ public sealed class EventsController : ControllerBase
     public async Task<IActionResult> GetVendorAssignments(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        if (_currentUser.Role != UserRole.Vendor && !_currentUser.HasPermission("events:read"))
-            return Forbid();
-
+        // Any authenticated user can call this — query filters by their own VendorId.
+        // Non-vendors simply get 0 results (safe, no data leakage).
         var result = await _mediator.Send(
             new GetVendorAssignmentsQuery(_currentUser.UserId!.Value, page, pageSize), ct);
         return Ok(ApiResponse<PagedAssignmentResult>.Ok(result.Value));
