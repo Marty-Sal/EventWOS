@@ -19,8 +19,13 @@ public sealed class EventAssignmentConfiguration : IEntityTypeConfiguration<Even
         builder.Property(a => a.AssignedByUserId).HasColumnName("assigned_by_user_id");
         builder.Property(a => a.Status)          .HasColumnName("status").HasConversion<int>();
         builder.Property(a => a.Notes)           .HasColumnName("notes").HasMaxLength(1000);
-        builder.Property(a => a.ConfirmedAt)     .HasColumnName("confirmed_at");
-        builder.Property(a => a.DeclinedAt)      .HasColumnName("declined_at");
+        builder.Property(a => a.ConfirmedAt)       .HasColumnName("confirmed_at");
+        builder.Property(a => a.DeclinedAt)        .HasColumnName("declined_at");
+        builder.Property(a => a.CrewRespondedAt)   .HasColumnName("crew_responded_at");
+        builder.Property(a => a.VendorReviewedAt)  .HasColumnName("vendor_reviewed_at");
+        builder.Property(a => a.ManagerReviewedAt) .HasColumnName("manager_reviewed_at");
+        builder.Property(a => a.RejectionReason)   .HasColumnName("rejection_reason").HasMaxLength(2000);
+        builder.Property(a => a.RejectedByUserId)  .HasColumnName("rejected_by_user_id");
 
         // Audit
         builder.Property(a => a.CreatedAt).HasColumnName("created_at");

@@ -1,0 +1,219 @@
+@page "/my-payments"
+@attribute [Authorize(Roles = "Crew")]
+@inject HttpClient Http
+
+<PageTitle>My Payments — EventWOS</PageTitle>
+
+<div class="space-y-6">
+    <div>
+        <h2 class="text-lg font-bold text-gray-800">My Payments</h2>
+        <p class="text-sm text-gray-500 mt-0.5">Track payment status for your completed events.</p>
+    </div>
+
+    @* Summary cards *@
+    @if (_summary is not null)
+    {
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <p class="text-xs text-gray-400 mb-1">Total Agreed</p>
+                <p class="text-2xl font-bold text-gray-800">₹@_summary.TotalAgreed.ToString("N0")</p>
+            </div>
+            <div class="bg-white rounded-2xl border border-green-100 shadow-sm p-5">
+                <p class="text-xs text-gray-400 mb-1">Paid</p>
+                <p class="text-2xl font-bold text-green-600">₹@_summary.TotalPaid.ToString("N0")</p>
+            </div>
+            <div class="bg-white rounded-2xl border border-amber-100 shadow-sm p-5">
+                <p class="text-xs text-gray-400 mb-1">Pending</p>
+                <p class="text-2xl font-bold text-amber-600">₹@_summary.TotalPending.ToString("N0")</p>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <p class="text-xs text-gray-400 mb-1">Records</p>
+                <p class="text-2xl font-bold text-gray-700">@_total</p>
+            </div>
+        </div>
+    }
+
+    @* Filters *@
+    <div class="flex gap-2 flex-wrap">
+        @foreach (var tab in _tabs)
+        {
+            <button @onclick="() => SetTab(tab)"
+                    class="px-4 py-1.5 rounded-full text-xs font-semibold transition
+                           @(_activeTab == tab ? "bg-indigo-600 text-white shadow" : "bg-white text-gray-500 border border-gray-200 hover:border-indigo-300")">
+                @tab
+            </button>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex justify-center py-20">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">⚠️ @_error</div>
+    }
+    else if (!_items.Any())
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+            <p class="text-4xl mb-3">💸</p>
+            <p class="font-semibold text-gray-700 text-sm">No payment records yet</p>
+            <p class="text-xs text-gray-400 mt-1">Payment records are created by your Vendor after your event is confirmed.</p>
+        </div>
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var p in _items)
+            {
+                <div class="bg-white rounded-2xl border @BorderColor(p.Status) shadow-sm p-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div class="space-y-1.5">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-bold text-gray-800 text-sm">@p.EventTitle</span>
+                                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold @StatusChip(p.Status)">
+                                    @StatusLabel(p.Status)
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-4 text-xs text-gray-500">
+                                <span>🏢 Vendor: <span class="font-medium text-gray-700">@p.VendorName</span></span>
+                                <span>📅 @p.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</span>
+                            </div>
+                            @if (p.PaidAt.HasValue)
+                            {
+                                <p class="text-xs text-green-600">✅ Paid on @p.PaidAt.Value.ToLocalTime().ToString("dd MMM yyyy")</p>
+                            }
+                            @if (!string.IsNullOrEmpty(p.Method))
+                            {
+                                <p class="text-xs text-gray-400">via @p.Method
+                                    @if (!string.IsNullOrEmpty(p.TransactionRef))
+                                    { <span>· Ref: @p.TransactionRef</span> }
+                                </p>
+                            }
+                        </div>
+
+                        <div class="text-right shrink-0 space-y-1">
+                            <p class="text-xs text-gray-400">Agreed Amount</p>
+                            <p class="text-xl font-bold @(p.Status == "Paid" ? "text-green-600" : "text-gray-800")">
+                                ₹@p.AgreedAmount.ToString("N0")
+                            </p>
+                            @if (p.PaidAmount.HasValue && p.PaidAmount != p.AgreedAmount)
+                            {
+                                <p class="text-xs text-gray-500">Paid: ₹@p.PaidAmount.Value.ToString("N0")</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* Pagination *@
+        @if (_totalPages > 1)
+        {
+            <div class="flex justify-center gap-3 pt-2">
+                <button disabled="@(_page == 1)" @onclick="PrevPage"
+                        class="px-4 py-2 rounded-xl border text-xs font-medium disabled:opacity-40 hover:border-indigo-400 transition">
+                    ← Prev
+                </button>
+                <span class="px-4 py-2 text-xs text-gray-500">Page @_page of @_totalPages</span>
+                <button disabled="@(_page == _totalPages)" @onclick="NextPage"
+                        class="px-4 py-2 rounded-xl border text-xs font-medium disabled:opacity-40 hover:border-indigo-400 transition">
+                    Next →
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private readonly string[] _tabs = { "All", "Pending", "Paid", "Processing" };
+    private string _activeTab = "All";
+
+    private List<PaymentDto> _items = new();
+    private PaymentSummary?  _summary;
+    private bool    _loading = true;
+    private string? _error;
+    private int     _page = 1, _totalPages = 1, _total;
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task SetTab(string tab) { _activeTab = tab; _page = 1; await Load(); }
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var status = _activeTab == "All" ? "" : _activeTab;
+            var url = $"api/v1/payments/my?page={_page}&pageSize=20{(string.IsNullOrEmpty(status) ? "" : $"&status={status}")}";
+            var resp = await Http.GetFromJsonAsync<ApiResult<PagedResult<PaymentDto>>>(url, JsonOpts);
+            _items  = resp?.Data?.Items?.ToList() ?? new();
+            _total  = resp?.Data?.TotalCount ?? 0;
+            _totalPages = (int)Math.Ceiling((double)_total / 20);
+            if (_totalPages < 1) _totalPages = 1;
+
+            // Build summary from all records (load once)
+            if (_summary is null)
+            {
+                var allResp = await Http.GetFromJsonAsync<ApiResult<PagedResult<PaymentDto>>>(
+                    "api/v1/payments/my?page=1&pageSize=500", JsonOpts);
+                var all = allResp?.Data?.Items?.ToList() ?? new();
+                _summary = new PaymentSummary(
+                    all.Sum(p => p.AgreedAmount),
+                    all.Where(p => p.Status == "Paid").Sum(p => p.PaidAmount ?? p.AgreedAmount),
+                    all.Where(p => p.Status == "Pending").Sum(p => p.AgreedAmount));
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await Load(); } }
+    private async Task NextPage() { if (_page < _totalPages) { _page++; await Load(); } }
+
+    private static string StatusChip(string s) => s switch
+    {
+        "Paid"       => "bg-green-50 text-green-700 border border-green-200",
+        "Pending"    => "bg-amber-50 text-amber-700 border border-amber-200",
+        "Processing" => "bg-blue-50 text-blue-700 border border-blue-200",
+        "Cancelled"  => "bg-red-50 text-red-600 border border-red-100",
+        _            => "bg-gray-100 text-gray-500"
+    };
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "Paid"       => "✅ Paid",
+        "Pending"    => "⏳ Pending",
+        "Processing" => "🔄 Processing",
+        "Cancelled"  => "❌ Cancelled",
+        _            => s
+    };
+
+    private static string BorderColor(string s) => s switch
+    {
+        "Paid"       => "border-green-100",
+        "Pending"    => "border-amber-100",
+        "Processing" => "border-blue-100",
+        _            => "border-gray-100"
+    };
+
+    private sealed record PaymentDto(
+        Guid Id, Guid EventId, string EventTitle, Guid AssignmentId,
+        Guid CrewId, string CrewName, string CrewMobile,
+        Guid VendorId, string VendorName,
+        decimal AgreedAmount, decimal? PaidAmount,
+        string Status, string? Method, string? TransactionRef, string? Notes,
+        DateTime? PaidAt, Guid? PayrollBatchId, DateTime CreatedAt);
+
+    private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
+    private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
+    private sealed record PaymentSummary(decimal TotalAgreed, decimal TotalPaid, decimal TotalPending);
+}

@@ -6,11 +6,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EventWOS.Application.Events.Commands;
 
-/// <summary>Crew confirms or declines their assignment.</summary>
+/// <summary>Crew confirms or declines their assignment invitation.</summary>
 public sealed record RespondAssignmentCommand(
-    Guid   AssignmentId,
-    Guid   CrewId,
-    string Response,   // "confirm" | "decline"
+    Guid    AssignmentId,
+    Guid    CrewId,
+    string  Response,    // "confirm" | "decline"
     string? Reason = null
 ) : IRequest<Result>;
 
@@ -31,9 +31,9 @@ public sealed class RespondAssignmentHandler : IRequestHandler<RespondAssignment
         try
         {
             if (req.Response.Equals("confirm", StringComparison.OrdinalIgnoreCase))
-                assignment.Confirm();
+                assignment.CrewAccept();
             else if (req.Response.Equals("decline", StringComparison.OrdinalIgnoreCase))
-                assignment.Decline(req.Reason);
+                assignment.CrewDecline(req.Reason);
             else
                 return Result.Failure(new Error("Assignment.InvalidResponse", "Response must be 'confirm' or 'decline'."));
         }

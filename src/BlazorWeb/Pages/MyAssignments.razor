@@ -71,9 +71,21 @@
                                 via <span class="font-medium text-gray-600">@a.VendorName</span>
                                 &nbsp;·&nbsp; Invited @TimeAgo(a.CreatedAt)
                             </p>
-                            @if (a.Status == "Confirmed" && a.ConfirmedAt.HasValue)
+                            @if (a.Status is "ManagerApproved" or "Confirmed")
                             {
-                                <p class="text-xs text-green-600">✅ Confirmed @a.ConfirmedAt.Value.ToLocalTime().ToString("dd MMM, hh:mm tt")</p>
+                                <p class="text-xs text-green-600">✅ Approved — you are confirmed for this event!</p>
+                            }
+                            @if (a.Status == "PendingManagerApproval")
+                            {
+                                <p class="text-xs text-blue-600">📋 Vendor approved you — waiting for Manager's final review.</p>
+                            }
+                            @if (a.Status == "VendorApproved")
+                            {
+                                <p class="text-xs text-orange-600">🔄 You accepted — waiting for Vendor review.</p>
+                            }
+                            @if (a.Status is "RejectedByVendor" or "RejectedByManager")
+                            {
+                                <p class="text-xs text-red-600 font-medium mt-1">Reason: @(a.RejectionReason ?? "No reason provided")</p>
                             }
                             @if (a.Status == "Declined" && a.DeclinedAt.HasValue)
                             {
@@ -166,7 +178,7 @@
 }
 
 @code {
-    private readonly string[] _tabs = { "All", "Invited", "Confirmed", "Attended", "Declined" };
+    private readonly string[] _tabs = { "All", "Invited", "In Review", "Confirmed", "Attended", "Declined" };
     private string _activeTab = "All";
 
     private PagedEventAssignmentResult? _data;
@@ -189,11 +201,18 @@
     private System.Threading.CancellationTokenSource? _toastCts;
 
     // ── Computed ──────────────────────────────────────────────────────────────
-    private IEnumerable<EventAssignmentDto> FilteredItems =>
-        _activeTab == "All"
-            ? (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
-            : (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
-              .Where(a => a.Status.Equals(_activeTab, StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<EventAssignmentDto> FilteredItems => _activeTab switch
+    {
+        "All"        => _data?.Items ?? Enumerable.Empty<EventAssignmentDto>(),
+        "In Review"  => (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
+                        .Where(a => a.Status is "VendorApproved" or "PendingManagerApproval"),
+        "Confirmed"  => (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
+                        .Where(a => a.Status is "ManagerApproved" or "Confirmed"),
+        "Declined"   => (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
+                        .Where(a => a.Status is "Declined" or "RejectedByVendor" or "RejectedByManager"),
+        _            => (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
+                        .Where(a => a.Status.Equals(_activeTab, StringComparison.OrdinalIgnoreCase))
+    };
 
     private string EmptyIcon => _activeTab switch
     {
@@ -276,31 +295,46 @@
     // ── Helpers ───────────────────────────────────────────────────────────────
     private static string StatusLabel(string s) => s switch
     {
-        "Invited"   => "⏳ Invited",
-        "Confirmed" => "✅ Confirmed",
-        "Declined"  => "❌ Declined",
-        "Attended"  => "🎯 Attended",
-        "NoShow"    => "🚫 No Show",
-        _           => s
+        "Invited"                => "⏳ Invited",
+        "VendorApproved"         => "🔄 Awaiting Vendor Review",
+        "PendingManagerApproval" => "📋 Pending Manager Approval",
+        "ManagerApproved"        => "✅ Approved",
+        "Confirmed"              => "✅ Confirmed",
+        "Declined"               => "❌ Declined",
+        "RejectedByVendor"       => "🚫 Rejected by Vendor",
+        "RejectedByManager"      => "🚫 Rejected by Manager",
+        "Attended"               => "🎯 Attended",
+        "NoShow"                 => "🚫 No Show",
+        _                        => s
     };
 
     private static string StatusChip(string s) => s switch
     {
-        "Invited"   => "bg-amber-100 text-amber-700",
-        "Confirmed" => "bg-green-100 text-green-700",
-        "Declined"  => "bg-red-100 text-red-600",
-        "Attended"  => "bg-indigo-100 text-indigo-700",
-        "NoShow"    => "bg-gray-100 text-gray-500",
-        _           => "bg-gray-100 text-gray-500"
+        "Invited"                => "bg-amber-100 text-amber-700",
+        "VendorApproved"         => "bg-orange-100 text-orange-700",
+        "PendingManagerApproval" => "bg-blue-100 text-blue-700",
+        "ManagerApproved"        => "bg-green-100 text-green-700",
+        "Confirmed"              => "bg-green-100 text-green-700",
+        "Declined"               => "bg-red-100 text-red-600",
+        "RejectedByVendor"       => "bg-red-100 text-red-700",
+        "RejectedByManager"      => "bg-red-200 text-red-800",
+        "Attended"               => "bg-indigo-100 text-indigo-700",
+        "NoShow"                 => "bg-gray-100 text-gray-500",
+        _                        => "bg-gray-100 text-gray-500"
     };
 
     private static string BorderColor(string s) => s switch
     {
-        "Invited"   => "border-amber-200",
-        "Confirmed" => "border-green-200",
-        "Declined"  => "border-red-100",
-        "Attended"  => "border-indigo-200",
-        _           => "border-gray-100"
+        "Invited"                => "border-amber-200",
+        "VendorApproved"         => "border-orange-200",
+        "PendingManagerApproval" => "border-blue-200",
+        "ManagerApproved"        => "border-green-200",
+        "Confirmed"              => "border-green-200",
+        "Declined"               => "border-red-100",
+        "RejectedByVendor"       => "border-red-200",
+        "RejectedByManager"      => "border-red-300",
+        "Attended"               => "border-indigo-200",
+        _                        => "border-gray-100"
     };
 
     private static string TimeAgo(DateTime dt)

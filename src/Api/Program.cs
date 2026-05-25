@@ -652,6 +652,23 @@ BEGIN
                 ALTER COLUMN created_by TYPE UUID USING NULLIF(created_by, '')::UUID;
         END IF;
     END IF;
+
+    -- ═══ event_assignments — 2-step approval columns ══════════════════════════
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='event_assignments' AND column_name='crew_responded_at') THEN
+        ALTER TABLE event_assignments ADD COLUMN crew_responded_at TIMESTAMPTZ; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='event_assignments' AND column_name='vendor_reviewed_at') THEN
+        ALTER TABLE event_assignments ADD COLUMN vendor_reviewed_at TIMESTAMPTZ; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='event_assignments' AND column_name='manager_reviewed_at') THEN
+        ALTER TABLE event_assignments ADD COLUMN manager_reviewed_at TIMESTAMPTZ; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='event_assignments' AND column_name='rejection_reason') THEN
+        ALTER TABLE event_assignments ADD COLUMN rejection_reason TEXT; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='event_assignments' AND column_name='rejected_by_user_id') THEN
+        ALTER TABLE event_assignments ADD COLUMN rejected_by_user_id UUID; END IF;
+
+    -- status index for manager queue
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename='event_assignments' AND indexname='ix_event_assignments_status') THEN
+        CREATE INDEX ix_event_assignments_status ON event_assignments(status); END IF;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");

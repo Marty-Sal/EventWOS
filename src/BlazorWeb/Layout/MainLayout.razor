@@ -4,6 +4,7 @@
 @inject IAuthApiService AuthApi
 @inject NotificationHubService Hub
 @inject IEventApiService EventApi
+@inject HttpClient Http
 
 <div class="flex h-screen bg-gray-50 overflow-hidden">
 
@@ -78,12 +79,27 @@
                         }
                     </div>
                     <NavItem Href="/my-attendance" Icon="📍" Label="My Attendance" />
+                    <NavItem Href="/my-payments"    Icon="💸" Label="My Payments" />
                 </AuthorizeView>
 
-                @* Vendor — My Crew + Crew Assignments *@
+                @* Vendor — My Crew + Crew Assignments + Report *@
                 <AuthorizeView Roles="Vendor">
                     <NavItem Href="/crew"               Icon="👷" Label="My Crew" />
                     <NavItem Href="/vendor-assignments"  Icon="📋" Label="Crew Assignments" />
+                    <NavItem Href="/vendor-report"       Icon="📊" Label="My Report" />
+                </AuthorizeView>
+
+                @* Manager / Admin — Approval queue with live badge *@
+                <AuthorizeView Roles="Admin,Manager">
+                    <div class="relative">
+                        <NavItem Href="/manager-approvals" Icon="✅" Label="Approval Queue" />
+                        @if (_approvalCount > 0)
+                        {
+                            <span class="absolute top-1 right-2 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold pointer-events-none">
+                                @_approvalCount
+                            </span>
+                        }
+                    </div>
                 </AuthorizeView>
 
                 @* Everyone *@
@@ -163,6 +179,9 @@
         "roles"       => "Roles",
         "permissions" => "Permissions",
         "audit"       => "Audit Log",
+        "manager-approvals" => "Approval Queue",
+        "my-payments"       => "My Payments",
+        "vendor-report"     => "My Performance Report",
         _             => "EventWOS"
     };
 
@@ -179,6 +198,7 @@
                       .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         await LoadPendingInvites();
+        await LoadApprovalCountAsync();
         try { await Hub.StartAsync(); }
         catch { }
         Hub.ConnectionStateChanged += StateHasChanged;
@@ -197,6 +217,7 @@
 
     // ── Pending invite badge (Crew role) ──────────────────────────────────────
     private int _pendingInvites;
+    private int _approvalCount;
 
     private async Task LoadPendingInvites()
     {
@@ -213,4 +234,26 @@
         }
         catch { }
     }
+
+    // ── Manager / Admin approval-queue badge ──────────────────────────────────
+    private async Task LoadApprovalCountAsync()
+    {
+        try
+        {
+            var authState = await AuthState.GetAuthenticationStateAsync();
+            var role      = authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                         ?? authState.User.FindFirst("role")?.Value;
+            if (role is not ("Admin" or "Manager")) return;
+
+            var resp = await Http.GetFromJsonAsync<ApprovalQueueResult>(
+                "api/v1/events/assignments/manager-queue?page=1&pageSize=1",
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            _approvalCount = resp?.Data?.TotalCount ?? 0;
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    private sealed record ApprovalQueueResult(bool Success, ApprovalQueueData? Data);
+    private sealed record ApprovalQueueData(int TotalCount);
 }

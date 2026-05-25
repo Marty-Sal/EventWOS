@@ -2,6 +2,7 @@ using EventWOS.Api.Authorization;
 using EventWOS.Domain.Enums;
 using Asp.Versioning;
 using EventWOS.Application.Vendors.Commands;
+using EventWOS.Application.Analytics.Queries;
 using EventWOS.Application.Vendors.DTOs;
 using EventWOS.Application.Vendors.Queries;
 using EventWOS.Domain.Interfaces;
@@ -100,6 +101,24 @@ public sealed class VendorsController : ControllerBase
         if (!_currentUser.HasPermission("vendors:write")) return Forbid();
         var result = await _mediator.Send(new ChangeVendorStatusCommand(id, req.Status, _currentUser.UserId!.Value), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
+    // ── Vendor Own Report ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Vendor views their own analytics report (crew stats, attendance, payments).
+    /// Profile:read is sufficient — Vendor always has it.
+    /// </summary>
+    [Permission("profile:read")]
+    [HttpGet("my/report")]
+    public async Task<IActionResult> GetMyReport(CancellationToken ct)
+    {
+        var vendorId = _currentUser.UserId;
+        if (vendorId is null) return Unauthorized();
+        var result = await _mediator.Send(new GetVendorReportQuery(vendorId.Value), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse<VendorReportDto>.Ok(result.Value))
+            : NotFound(ApiResponse<VendorReportDto>.Fail(result.Error.Message));
     }
 }
 

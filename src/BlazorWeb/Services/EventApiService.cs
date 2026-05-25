@@ -16,10 +16,24 @@ public sealed record EventDetailDto(
     Guid CreatedByUserId, string CreatedByName, DateTime CreatedAt);
 
 public sealed record EventAssignmentDto(
-    Guid Id, Guid EventId, string EventTitle,
-    Guid CrewId, string CrewName, string CrewMobile,
-    Guid VendorId, string VendorName,
-    string Status, DateTime? ConfirmedAt, DateTime? DeclinedAt, DateTime CreatedAt);
+    Guid      Id,
+    Guid      EventId,
+    string    EventTitle,
+    Guid      CrewId,
+    string    CrewName,
+    string    CrewMobile,
+    decimal   DisciplineScore,
+    int       EventsAttended,
+    Guid      VendorId,
+    string    VendorName,
+    string    Status,
+    string?   RejectionReason,
+    DateTime? CrewRespondedAt,
+    DateTime? VendorReviewedAt,
+    DateTime? ManagerReviewedAt,
+    DateTime? ConfirmedAt,
+    DateTime? DeclinedAt,
+    DateTime  CreatedAt);
 
 public sealed record AttendanceRecordDto(
     Guid Id, Guid AssignmentId, Guid EventId, Guid CrewId,

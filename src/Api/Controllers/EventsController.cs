@@ -181,6 +181,70 @@ public sealed class EventsController : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 
+    // ── 2-Step Approval Flow ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Manager approval queue — assignments waiting for final Manager decision.
+    /// </summary>
+    [Permission("crew:approve")]
+    [HttpGet("assignments/manager-queue")]
+    public async Task<IActionResult> GetManagerQueue(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new GetManagerApprovalQueueQuery(page, pageSize), ct);
+        return Ok(ApiResponse<PagedResult<ManagerApprovalItemDto>>.Ok(result.Value));
+    }
+
+    /// <summary>
+    /// Vendor approves a crew member → forwards to Manager queue.
+    /// </summary>
+    [Permission("crew:invite")]
+    [HttpPatch("assignments/{assignmentId:guid}/vendor-approve")]
+    public async Task<IActionResult> VendorApprove(Guid assignmentId, CancellationToken ct)
+    {
+        if (_currentUser.Role != UserRole.Vendor) return Forbid();
+        var result = await _mediator.Send(
+            new VendorApproveAssignmentCommand(assignmentId, _currentUser.UserId!.Value), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
+    /// <summary>
+    /// Vendor rejects a crew member — rejection reason is mandatory.
+    /// </summary>
+    [Permission("crew:invite")]
+    [HttpPatch("assignments/{assignmentId:guid}/vendor-reject")]
+    public async Task<IActionResult> VendorReject(Guid assignmentId, [FromBody] ReviewDecisionRequest req, CancellationToken ct)
+    {
+        if (_currentUser.Role != UserRole.Vendor) return Forbid();
+        var result = await _mediator.Send(
+            new VendorRejectAssignmentCommand(assignmentId, _currentUser.UserId!.Value, req.Reason ?? ""), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
+    /// <summary>
+    /// Manager gives final approval — crew is now fully confirmed.
+    /// </summary>
+    [Permission("crew:approve")]
+    [HttpPatch("assignments/{assignmentId:guid}/manager-approve")]
+    public async Task<IActionResult> ManagerApprove(Guid assignmentId, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new ManagerApproveAssignmentCommand(assignmentId, _currentUser.UserId!.Value), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
+    /// <summary>
+    /// Manager rejects in final review — rejection reason is mandatory.
+    /// </summary>
+    [Permission("crew:approve")]
+    [HttpPatch("assignments/{assignmentId:guid}/manager-reject")]
+    public async Task<IActionResult> ManagerReject(Guid assignmentId, [FromBody] ReviewDecisionRequest req, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new ManagerRejectAssignmentCommand(assignmentId, _currentUser.UserId!.Value, req.Reason ?? ""), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
     // ── Attendance ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -224,3 +288,4 @@ public sealed record ChangeEventStatusRequest(string Action, string? Reason = nu
 public sealed record AssignCrewRequest(Guid CrewId, Guid VendorId);
 public sealed record RespondAssignmentRequest(string Response, string? Reason = null);
 public sealed record RecordAttendanceRequest(string Action, string? Location = null);
+public sealed record ReviewDecisionRequest(string? Reason = null);

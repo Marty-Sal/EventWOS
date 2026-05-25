@@ -1,34 +1,29 @@
 @page "/vendor-assignments"
 @attribute [Authorize(Roles = "Vendor")]
-@inject IEventApiService EventApi
+@inject HttpClient Http
 
 <PageTitle>Crew Assignments — EventWOS</PageTitle>
 
-<div class="space-y-5">
+<div class="space-y-6">
+    <div>
+        <h2 class="text-lg font-bold text-gray-800">Crew Assignments</h2>
+        <p class="text-sm text-gray-500 mt-0.5">Review crew responses and approve or reject before forwarding to Manager.</p>
+    </div>
 
-    <!-- Header -->
-    <div class="flex items-center justify-between flex-wrap gap-3">
-        <div>
-            <h2 class="text-lg font-bold text-gray-800">Crew Assignments</h2>
-            <p class="text-sm text-gray-500 mt-0.5">Track all your crew's invitations and status across events.</p>
-        </div>
-        <!-- Status filter pills -->
-        <div class="flex gap-2 flex-wrap">
-            @foreach (var tab in _tabs)
-            {
-                <button @onclick="() => SetTab(tab)"
-                        class="px-3 py-1.5 rounded-full text-xs font-semibold transition
-                               @(_activeTab == tab
-                                   ? "bg-indigo-600 text-white shadow"
-                                   : "bg-white text-gray-500 border border-gray-200 hover:border-indigo-300")">
-                    @tab
-                    @if (_counts.TryGetValue(tab, out var cnt) && cnt > 0)
-                    {
-                        <span class="ml-1 text-[10px] opacity-70">(@cnt)</span>
-                    }
-                </button>
-            }
-        </div>
+    @* Tab filter *@
+    <div class="flex gap-2 flex-wrap">
+        @foreach (var tab in _tabs)
+        {
+            <button @onclick="() => SetTab(tab)"
+                    class="px-4 py-1.5 rounded-full text-xs font-semibold transition
+                           @(_activeTab == tab ? "bg-indigo-600 text-white shadow" : "bg-white text-gray-500 border border-gray-200 hover:border-indigo-300")">
+                @tab
+                @if (tab == "Awaiting Review" && _awaitingCount > 0)
+                {
+                    <span class="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-400 text-white text-[10px] font-bold">@_awaitingCount</span>
+                }
+            </button>
+        }
     </div>
 
     @if (_loading)
@@ -40,149 +35,251 @@
             </svg>
         </div>
     }
-    else if (!FilteredItems.Any())
+    else if (_error is not null)
+    {
+        <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">@_error</div>
+    }
+    else if (!Filtered.Any())
     {
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
-            <p class="text-4xl mb-3">📋</p>
-            <p class="font-semibold text-gray-700">No assignments found</p>
-            <p class="text-sm text-gray-400 mt-1">Assign crew members to events from the Events page.</p>
+            <p class="text-4xl mb-3">@TabIcon</p>
+            <p class="font-semibold text-gray-700 text-sm">No assignments in this category</p>
         </div>
     }
     else
     {
-        <!-- Group by event -->
-        @foreach (var group in GroupedByEvent)
-        {
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <!-- Event header -->
-                <div class="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                    <div>
-                        <p class="font-semibold text-gray-800 text-sm">@group.Key</p>
-                        <p class="text-xs text-gray-400">@group.Value.Count crew member(s)</p>
-                    </div>
-                    <div class="flex gap-1.5">
-                        @foreach (var s in group.Value.GroupBy(a => a.Status))
+        <div class="space-y-3">
+            @foreach (var a in Filtered)
+            {
+                <div class="bg-white rounded-2xl border @BorderColor(a.Status) shadow-sm p-5">
+                    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div class="flex-1 space-y-1.5">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-bold text-gray-800 text-sm">@a.CrewName</span>
+                                <span class="text-xs text-gray-400">@a.CrewMobile</span>
+                                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold @StatusChip(a.Status)">@StatusLabel(a.Status)</span>
+                            </div>
+                            <p class="text-xs text-gray-500">Event: <span class="font-medium text-gray-700">@a.EventTitle</span></p>
+                            <div class="flex items-center gap-4 text-xs text-gray-400">
+                                <span>🎯 Score: <span class="font-semibold @DisciplineColor(a.DisciplineScore)">@a.DisciplineScore.ToString("F0")</span></span>
+                                <span>📅 Events attended: <span class="font-semibold text-gray-600">@a.EventsAttended</span></span>
+                            </div>
+                            @if (a.RejectionReason is not null)
+                            {
+                                <p class="text-xs text-red-500 mt-1">Rejected: @a.RejectionReason</p>
+                            }
+                        </div>
+
+                        @* Actions — only for VendorApproved (crew accepted, awaiting vendor review) *@
+                        @if (a.Status == "VendorApproved")
                         {
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold @StatusChip(s.Key)">
-                                @s.Key (@s.Count())
-                            </span>
+                            <div class="flex gap-2 shrink-0">
+                                <button @onclick="() => OpenReject(a)"
+                                        disabled="@(_busy == a.Id)"
+                                        class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-200 text-red-600
+                                               hover:bg-red-50 disabled:opacity-50 transition">
+                                    ✕ Reject
+                                </button>
+                                <button @onclick="() => DoApprove(a.Id)"
+                                        disabled="@(_busy == a.Id)"
+                                        class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white
+                                               hover:bg-indigo-700 disabled:opacity-50 transition shadow">
+                                    @(_busy == a.Id ? "…" : "✓ Approve → Manager")
+                                </button>
+                            </div>
                         }
                     </div>
                 </div>
+            }
+        </div>
+    }
 
-                <!-- Crew rows -->
-                <div class="divide-y divide-gray-50">
-                    @foreach (var a in group.Value)
-                    {
-                        <div class="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/50 transition">
-                            <!-- Avatar -->
-                            <div class="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center
-                                        font-bold text-indigo-700 text-sm flex-shrink-0">
-                                @(a.CrewName.FirstOrDefault())
-                            </div>
-                            <!-- Info -->
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-semibold text-gray-800">@a.CrewName</p>
-                                <p class="text-xs text-gray-400 font-mono">@a.CrewMobile</p>
-                            </div>
-                            <!-- Status + timestamp -->
-                            <div class="text-right flex-shrink-0">
-                                <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold @StatusChip(a.Status)">
-                                    @StatusLabel(a.Status)
-                                </span>
-                                <p class="text-[10px] text-gray-400 mt-1">@TimeAgo(a.CreatedAt)</p>
-                            </div>
-                        </div>
-                    }
-                </div>
-            </div>
-        }
-
-        @if (_totalPages > 1)
-        {
-            <div class="flex justify-center gap-2 pt-2">
-                <button disabled="@(_page == 1)" @onclick="PrevPage"
-                        class="px-4 py-2 rounded-xl border text-xs font-medium disabled:opacity-40 hover:border-indigo-400 transition">
-                    ← Prev
-                </button>
-                <span class="px-4 py-2 text-xs text-gray-500">Page @_page of @_totalPages</span>
-                <button disabled="@(_page == _totalPages)" @onclick="NextPage"
-                        class="px-4 py-2 rounded-xl border text-xs font-medium disabled:opacity-40 hover:border-indigo-400 transition">
-                    Next →
-                </button>
-            </div>
-        }
+    @if (_toast is not null)
+    {
+        <div class="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium
+                    @(_toastError ? "bg-red-600 text-white" : "bg-green-600 text-white")">
+            @_toast
+        </div>
     }
 </div>
 
+@* Reject modal *@
+@if (_rejectTarget is not null)
+{
+    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 class="font-bold text-gray-800">Reject Crew Application</h3>
+            <p class="text-sm text-gray-500">
+                Rejecting <span class="font-semibold text-gray-700">@_rejectTarget.CrewName</span>
+                for <span class="font-semibold text-gray-700">@_rejectTarget.EventTitle</span>.
+            </p>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Rejection Reason <span class="text-red-500">*</span></label>
+                <textarea @bind="_rejectReason" rows="3"
+                          class="w-full px-3 py-2 text-sm rounded-xl border @(_reasonError ? "border-red-400" : "border-gray-200")
+                                 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                          placeholder="Describe why this crew member is not suitable…" />
+                @if (_reasonError)
+                {
+                    <p class="text-xs text-red-500 mt-1">Rejection reason is mandatory.</p>
+                }
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button @onclick="CancelReject"
+                        class="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition">
+                    Cancel
+                </button>
+                <button @onclick="ConfirmReject" disabled="@_busy.HasValue"
+                        class="flex-1 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold
+                               hover:bg-red-700 disabled:opacity-50 transition">
+                    @(_busy.HasValue ? "Rejecting…" : "Confirm Reject")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
-    private readonly string[] _tabs = { "All", "Invited", "Confirmed", "Attended", "Declined" };
+    private readonly string[] _tabs = { "All", "Awaiting Review", "Forwarded", "Rejected", "Confirmed" };
     private string _activeTab = "All";
-    private Dictionary<string, int> _counts = new();
 
-    private PagedEventAssignmentResult? _data;
-    private bool _loading = true;
-    private int  _page = 1, _totalPages = 1;
+    private List<AssignmentDto> _all = new();
+    private bool    _loading = true;
+    private string? _error;
+    private int     _awaitingCount;
+    private Guid?   _busy;
 
-    private IEnumerable<EventAssignmentDto> FilteredItems =>
-        _activeTab == "All"
-            ? (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
-            : (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
-              .Where(a => a.Status.Equals(_activeTab, StringComparison.OrdinalIgnoreCase));
+    private AssignmentDto? _rejectTarget;
+    private string  _rejectReason  = "";
+    private bool    _reasonError;
 
-    private Dictionary<string, List<EventAssignmentDto>> GroupedByEvent =>
-        FilteredItems
-            .GroupBy(a => a.EventTitle)
-            .ToDictionary(g => g.Key, g => g.ToList());
+    private string? _toast;
+    private bool    _toastError;
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
+
+    private IEnumerable<AssignmentDto> Filtered => _activeTab switch
+    {
+        "Awaiting Review" => _all.Where(a => a.Status == "VendorApproved"),
+        "Forwarded"       => _all.Where(a => a.Status is "PendingManagerApproval" or "ManagerApproved"),
+        "Rejected"        => _all.Where(a => a.Status is "RejectedByVendor" or "RejectedByManager" or "Declined"),
+        "Confirmed"       => _all.Where(a => a.Status is "ManagerApproved" or "Confirmed" or "Attended"),
+        _                 => _all
+    };
+
+    private string TabIcon => _activeTab switch
+    {
+        "Awaiting Review" => "⏳",
+        "Forwarded"       => "📤",
+        "Rejected"        => "❌",
+        "Confirmed"       => "✅",
+        _                 => "📋"
+    };
 
     protected override async Task OnInitializedAsync() => await Load();
 
     private async Task Load()
     {
-        _loading = true;
-        _data    = await EventApi.GetVendorAssignmentsAsync(_page);
-        _totalPages = _data is null ? 1
-            : (int)Math.Ceiling((double)_data.TotalCount / 20);
-
-        // Compute counts per status for filter pills
-        _counts = (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
-            .GroupBy(a => a.Status)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        _loading = false;
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ApiResult<PagedResult<AssignmentDto>>>(
+                "api/v1/events/vendor-assignments?page=1&pageSize=500", JsonOpts);
+            _all = resp?.Data?.Items?.ToList() ?? new();
+            _awaitingCount = _all.Count(a => a.Status == "VendorApproved");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
     }
 
-    private async Task SetTab(string tab) { _activeTab = tab; _page = 1; await Load(); }
-    private async Task PrevPage() { if (_page > 1) { _page--; await Load(); } }
-    private async Task NextPage() { if (_page < _totalPages) { _page++; await Load(); } }
+    private void SetTab(string tab) { _activeTab = tab; }
 
-    private static string StatusLabel(string s) => s switch
+    private async Task DoApprove(Guid id)
     {
-        "Invited"   => "⏳ Invited",
-        "Confirmed" => "✅ Confirmed",
-        "Declined"  => "❌ Declined",
-        "Attended"  => "🎯 Attended",
-        "NoShow"    => "🚫 No Show",
-        _           => s
-    };
-
-    private static string StatusChip(string s) => s switch
-    {
-        "Invited"   => "bg-amber-100 text-amber-700",
-        "Confirmed" => "bg-green-100 text-green-700",
-        "Declined"  => "bg-red-100 text-red-600",
-        "Attended"  => "bg-indigo-100 text-indigo-700",
-        "NoShow"    => "bg-gray-100 text-gray-500",
-        _           => "bg-gray-100 text-gray-500"
-    };
-
-    private static string TimeAgo(DateTime dt)
-    {
-        var diff = DateTime.UtcNow - dt;
-        if (diff.TotalMinutes < 1) return "just now";
-        if (diff.TotalHours   < 1) return $"{(int)diff.TotalMinutes}m ago";
-        if (diff.TotalDays    < 1) return $"{(int)diff.TotalHours}h ago";
-        if (diff.TotalDays    < 7) return $"{(int)diff.TotalDays}d ago";
-        return dt.ToLocalTime().ToString("dd MMM");
+        _busy = id; StateHasChanged();
+        var resp = await Http.PatchAsJsonAsync($"api/v1/events/assignments/{id}/vendor-approve", new { });
+        if (resp.IsSuccessStatusCode)
+        {
+            ShowToast("Crew forwarded to Manager queue ✓", false);
+            await Load();
+        }
+        else ShowToast("Error: " + await resp.Content.ReadAsStringAsync(), true);
+        _busy = null; StateHasChanged();
     }
+
+    private void OpenReject(AssignmentDto a) { _rejectTarget = a; _rejectReason = ""; _reasonError = false; }
+    private void CancelReject() { _rejectTarget = null; _reasonError = false; }
+
+    private async Task ConfirmReject()
+    {
+        if (string.IsNullOrWhiteSpace(_rejectReason)) { _reasonError = true; return; }
+        if (_rejectTarget is null) return;
+        _busy = _rejectTarget.Id; StateHasChanged();
+        var resp = await Http.PatchAsJsonAsync(
+            $"api/v1/events/assignments/{_rejectTarget.Id}/vendor-reject",
+            new { reason = _rejectReason });
+        if (resp.IsSuccessStatusCode)
+        {
+            ShowToast("Crew rejected and notified.", false);
+            _rejectTarget = null;
+            await Load();
+        }
+        else ShowToast("Error: " + await resp.Content.ReadAsStringAsync(), true);
+        _busy = null; StateHasChanged();
+    }
+
+    private void ShowToast(string msg, bool isError)
+    {
+        _toast = msg; _toastError = isError; StateHasChanged();
+        _ = Task.Delay(3500).ContinueWith(_ => { _toast = null; InvokeAsync(StateHasChanged); });
+    }
+
+    private static string BorderColor(string status) => status switch
+    {
+        "VendorApproved"         => "border-amber-200",
+        "PendingManagerApproval" => "border-blue-200",
+        "ManagerApproved"        => "border-green-200",
+        "RejectedByVendor" or "RejectedByManager" => "border-red-200",
+        _                        => "border-gray-100"
+    };
+
+    private static string StatusChip(string status) => status switch
+    {
+        "Invited"                => "bg-gray-50 text-gray-600 border border-gray-200",
+        "VendorApproved"         => "bg-amber-50 text-amber-700 border border-amber-200",
+        "PendingManagerApproval" => "bg-blue-50 text-blue-700 border border-blue-200",
+        "ManagerApproved"        => "bg-green-50 text-green-700 border border-green-200",
+        "RejectedByVendor" or "RejectedByManager" => "bg-red-50 text-red-700 border border-red-200",
+        "Attended"               => "bg-indigo-50 text-indigo-700 border border-indigo-200",
+        _                        => "bg-gray-50 text-gray-600 border border-gray-200"
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "Invited"                => "Invited",
+        "VendorApproved"         => "Awaiting Your Review",
+        "PendingManagerApproval" => "Forwarded to Manager",
+        "ManagerApproved"        => "Manager Approved ✓",
+        "RejectedByVendor"       => "Rejected by You",
+        "RejectedByManager"      => "Rejected by Manager",
+        "Attended"               => "Attended",
+        "Declined"               => "Declined by Crew",
+        _                        => status
+    };
+
+    private static string DisciplineColor(decimal score) =>
+        score >= 80 ? "text-green-600" : score >= 50 ? "text-amber-600" : "text-red-600";
+
+    private sealed record AssignmentDto(
+        Guid Id, Guid EventId, string EventTitle,
+        Guid CrewId, string CrewName, string CrewMobile,
+        decimal DisciplineScore, int EventsAttended,
+        Guid VendorId, string VendorName,
+        string Status, string? RejectionReason,
+        DateTime? CrewRespondedAt, DateTime? VendorReviewedAt, DateTime? ManagerReviewedAt,
+        DateTime? ConfirmedAt, DateTime? DeclinedAt, DateTime CreatedAt);
+
+    private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
+    private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
 }

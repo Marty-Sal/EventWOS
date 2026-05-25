@@ -124,6 +124,30 @@ public sealed class PaymentsController : ControllerBase
 
         return Ok(ApiResponse<bool>.Ok(true));
     }
+
+    // ── Crew: view their own payment records ──────────────────────────────────
+
+    /// <summary>
+    /// Returns the authenticated crew member's payment records.
+    /// Requires payments:self permission (auto-assigned to Crew role).
+    /// </summary>
+    [Permission("payments:self")]
+    [HttpGet("my")]
+    public async Task<IActionResult> GetMyPayments(
+        [FromQuery] Guid?   eventId  = null,
+        [FromQuery] string? status   = null,
+        [FromQuery] int     page     = 1,
+        [FromQuery] int     pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var crewId = _currentUser.UserId;
+        if (crewId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new GetPaymentsQuery(eventId, null, crewId, status, page, pageSize), ct);
+
+        return Ok(ApiResponse<PagedResult<CrewPaymentDto>>.Ok(result.Value));
+    }
 }
 
 // ── Request DTOs ─────────────────────────────────────────────────────────────

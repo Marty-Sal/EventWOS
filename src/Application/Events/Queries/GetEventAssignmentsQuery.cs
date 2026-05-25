@@ -38,8 +38,13 @@ public sealed class GetEventAssignmentsHandler : IRequestHandler<GetEventAssignm
             .Select(a => new EventAssignmentDto(
                 a.Id, a.EventId, a.Event.Title,
                 a.CrewId, a.Crew.FullName, a.Crew.Mobile,
+                a.Crew.DisciplineScore, a.Crew.EventsAttended,
                 a.VendorId, a.Vendor.FullName,
                 a.Status.ToString(),
+                a.RejectionReason,
+                a.CrewRespondedAt,
+                a.VendorReviewedAt,
+                a.ManagerReviewedAt,
                 a.ConfirmedAt, a.DeclinedAt, a.CreatedAt))
             .ToListAsync(ct);
 

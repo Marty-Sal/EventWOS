@@ -56,8 +56,13 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
         return Result.Success(new EventAssignmentDto(
             assignment.Id, ev.Id, ev.Title,
             crew.Id, crew.FullName, crew.Mobile,
+            crew.DisciplineScore, crew.EventsAttended,
             vendor.Id, vendor.FullName,
             assignment.Status.ToString(),
+            assignment.RejectionReason,
+            assignment.CrewRespondedAt,
+            assignment.VendorReviewedAt,
+            assignment.ManagerReviewedAt,
             assignment.ConfirmedAt, assignment.DeclinedAt,
             assignment.CreatedAt));
     }

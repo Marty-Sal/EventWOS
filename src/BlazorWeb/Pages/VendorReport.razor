@@ -1,0 +1,209 @@
+@page "/vendor-report"
+@attribute [Authorize(Roles = "Vendor")]
+@inject HttpClient Http
+
+<PageTitle>My Report — EventWOS</PageTitle>
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">My Performance Report</h2>
+            <p class="text-sm text-gray-500 mt-0.5">Overview of your crew assignments, attendance, and payments.</p>
+        </div>
+        <button @onclick="Load" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition">
+            🔄 Refresh
+        </button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex justify-center py-24">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">⚠️ @_error</div>
+    }
+    else if (_report is not null)
+    {
+        @* KPI Grid *@
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard Label="Total Crew" Value="@_report.TotalCrewInRoster.ToString()" Icon="👷" Color="indigo" />
+            <KpiCard Label="Total Assignments" Value="@_report.TotalAssignmentsMade.ToString()" Icon="📋" Color="gray" />
+            <KpiCard Label="Events Worked" Value="@_report.TotalEventsWorked.ToString()" Icon="📅" Color="blue" />
+            <KpiCard Label="Confirmation Rate" Value="@(_report.ConfirmationRate.ToString("F0") + "%")" Icon="✅" Color="green" />
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            @* Assignment Breakdown *@
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+                <h3 class="font-bold text-gray-800 text-sm">Assignment Breakdown</h3>
+                <div class="space-y-3">
+                    @RateBar("Confirmed / Approved", _report.AssignmentsConfirmed, _report.TotalAssignmentsMade, "bg-green-500")
+                    @RateBar("Attended", _report.AssignmentsAttended, _report.TotalAssignmentsMade, "bg-indigo-500")
+                    @RateBar("Pending Review", _report.AssignmentsPending, _report.TotalAssignmentsMade, "bg-amber-400")
+                    @RateBar("Rejected / Declined", _report.AssignmentsRejected, _report.TotalAssignmentsMade, "bg-red-400")
+                </div>
+                <div class="pt-2 border-t border-gray-50 text-xs text-gray-500 flex justify-between">
+                    <span>Attendance Rate</span>
+                    <span class="font-bold text-indigo-600">@_report.AttendanceRate.ToString("F1")%</span>
+                </div>
+            </div>
+
+            @* Payments Summary *@
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+                <h3 class="font-bold text-gray-800 text-sm">Payments Summary</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center py-2 border-b border-gray-50">
+                        <span class="text-sm text-gray-600">Total Agreed</span>
+                        <span class="font-bold text-gray-800">₹@_report.TotalAgreedAmount.ToString("N0")</span>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-gray-50">
+                        <span class="text-sm text-gray-600">Total Paid Out</span>
+                        <span class="font-bold text-green-600">₹@_report.TotalPaidAmount.ToString("N0")</span>
+                    </div>
+                    <div class="flex justify-between items-center py-2">
+                        <span class="text-sm text-gray-600">Pending Payment</span>
+                        <span class="font-bold text-amber-600">₹@_report.TotalPendingAmount.ToString("N0")</span>
+                    </div>
+                </div>
+                @if (_report.TotalAgreedAmount > 0)
+                {
+                    var paidPct = (int)(_report.TotalPaidAmount / _report.TotalAgreedAmount * 100);
+                    <div class="pt-2">
+                        <div class="flex justify-between text-xs text-gray-400 mb-1">
+                            <span>Payment completion</span>
+                            <span>@paidPct%</span>
+                        </div>
+                        <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-green-500 rounded-full transition-all" style="width:@paidPct%"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Top Crew Table *@
+        @if (_report.TopCrew.Any())
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-50">
+                    <h3 class="font-bold text-gray-800 text-sm">Your Crew Roster</h3>
+                    <p class="text-xs text-gray-400 mt-0.5">Top @_report.TopCrew.Count by discipline score</p>
+                </div>
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Crew</th>
+                            <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Score</th>
+                            <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Events</th>
+                            <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assignments</th>
+                            <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @foreach (var c in _report.TopCrew)
+                        {
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-5 py-3.5">
+                                    <p class="font-medium text-gray-800">@c.CrewName</p>
+                                    <p class="text-xs text-gray-400">@c.CrewMobile</p>
+                                </td>
+                                <td class="px-5 py-3.5">
+                                    <span class="font-bold @DisciplineColor(c.DisciplineScore)">@c.DisciplineScore.ToString("F0")</span>
+                                    <span class="text-xs text-gray-400">/100</span>
+                                </td>
+                                <td class="px-5 py-3.5 text-gray-700">@c.EventsAttended</td>
+                                <td class="px-5 py-3.5 text-gray-700">@c.AssignmentsForThisVendor</td>
+                                <td class="px-5 py-3.5">
+                                    <span class="px-2 py-0.5 rounded-full text-[11px] font-medium @StatusChip(c.LastStatus)">@c.LastStatus</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private VendorReportDto? _report;
+    private bool    _loading = true;
+    private string? _error;
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ApiResult<VendorReportDto>>(
+                "api/v1/vendors/my/report", JsonOpts);
+            _report = resp?.Data;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private static RenderFragment RateBar(string label, int count, int total, string barColor) => __builder =>
+    {
+        var pct = total > 0 ? (int)((double)count / total * 100) : 0;
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "class", "space-y-1");
+            __builder.OpenElement(2, "div");
+            __builder.AddAttribute(3, "class", "flex justify-between text-xs text-gray-500");
+                __builder.OpenElement(4, "span"); __builder.AddContent(5, label); __builder.CloseElement();
+                __builder.OpenElement(6, "span");
+                __builder.AddAttribute(7, "class", "font-semibold text-gray-700");
+                __builder.AddContent(8, $"{count} ({pct}%)");
+                __builder.CloseElement();
+            __builder.CloseElement();
+            __builder.OpenElement(9, "div");
+            __builder.AddAttribute(10, "class", "w-full h-1.5 bg-gray-100 rounded-full overflow-hidden");
+                __builder.OpenElement(11, "div");
+                __builder.AddAttribute(12, "class", $"h-full {barColor} rounded-full transition-all");
+                __builder.AddAttribute(13, "style", $"width:{pct}%");
+                __builder.CloseElement();
+            __builder.CloseElement();
+        __builder.CloseElement();
+    };
+
+    private static string DisciplineColor(decimal score) =>
+        score >= 80 ? "text-green-600" : score >= 50 ? "text-amber-600" : "text-red-600";
+
+    private static string StatusChip(string s) => s switch
+    {
+        "ManagerApproved" or "Confirmed" => "bg-green-50 text-green-700",
+        "Attended"                        => "bg-indigo-50 text-indigo-700",
+        "Invited"                         => "bg-amber-50 text-amber-700",
+        "PendingManagerApproval"          => "bg-blue-50 text-blue-700",
+        "Declined" or "RejectedByVendor" or "RejectedByManager" => "bg-red-50 text-red-600",
+        _                                 => "bg-gray-100 text-gray-500"
+    };
+
+    private sealed record VendorReportDto(
+        Guid VendorId, string VendorName,
+        int TotalCrewInRoster, int TotalAssignmentsMade,
+        int AssignmentsConfirmed, int AssignmentsAttended,
+        int AssignmentsPending, int AssignmentsRejected,
+        decimal ConfirmationRate, decimal AttendanceRate,
+        decimal TotalAgreedAmount, decimal TotalPaidAmount, decimal TotalPendingAmount,
+        int TotalEventsWorked,
+        IReadOnlyList<VendorCrewStatDto> TopCrew);
+
+    private sealed record VendorCrewStatDto(
+        Guid CrewId, string CrewName, string CrewMobile,
+        decimal DisciplineScore, int EventsAttended,
+        int AssignmentsForThisVendor, string LastStatus);
+
+    private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
+}

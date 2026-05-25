@@ -50,8 +50,44 @@ public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCo
         _db.AttendanceRecords.Add(record);
 
         // Auto-update assignment status on check-in
-        if (action == AttendanceAction.CheckIn && assignment.Status == AssignmentStatus.Confirmed)
+        if (action == AttendanceAction.CheckIn && assignment.IsEligibleForAttendance)
             assignment.MarkAttended();
+
+        // ── Check-OUT: update discipline score + events attended ──────────────
+        if (action == AttendanceAction.CheckOut)
+        {
+            var crewUser = assignment.Crew;
+
+            // Increment events attended (each completed checkout = 1 event)
+            crewUser.IncrementEventsAttended();
+
+            // Recalculate discipline score from attendance history for this crew
+            // Score formula: (attended checkouts / total confirmed assignments) * 100
+            // Weighted: existing score * 0.7 + new event contribution * 0.3
+            var totalAssignments = await _db.EventAssignments
+                .CountAsync(a => a.CrewId == crewUser.Id
+                              && !a.IsDeleted
+                              && a.Status != AssignmentStatus.Invited
+                              && a.Status != AssignmentStatus.Declined
+                              && a.Status != AssignmentStatus.RejectedByVendor
+                              && a.Status != AssignmentStatus.RejectedByManager, ct);
+
+            var attendedCount = await _db.EventAssignments
+                .CountAsync(a => a.CrewId == crewUser.Id
+                              && !a.IsDeleted
+                              && a.Status == AssignmentStatus.Attended, ct);
+
+            // +1 for the one being checked out right now
+            attendedCount++;
+
+            if (totalAssignments > 0)
+            {
+                var attendanceRate = (decimal)attendedCount / totalAssignments * 100m;
+                // Weighted blend: 70% existing, 30% latest rate
+                var newScore = crewUser.DisciplineScore * 0.7m + attendanceRate * 0.3m;
+                crewUser.UpdateDisciplineScore(Math.Round(newScore, 1));
+            }
+        }
 
         await _uow.SaveChangesAsync(ct);
 
