@@ -36,7 +36,7 @@ public sealed class GetPaymentsHandler : IRequestHandler<GetPaymentsQuery, Resul
         var total = await query.CountAsync(ct);
 
         var items = await query
-            .OrderByDescending(p => p.CreatedDate)
+            .OrderByDescending(p => p.CreatedAt)
             .Skip((q.Page - 1) * q.PageSize)
             .Take(q.PageSize)
             .Select(p => new CrewPaymentDto(
@@ -52,12 +52,12 @@ public sealed class GetPaymentsHandler : IRequestHandler<GetPaymentsQuery, Resul
                 p.AgreedAmount,
                 p.PaidAmount,
                 p.Status.ToString(),
-                p.Method.ToString(),
+                (p.Method == null ? null : p.Method.ToString()),
                 p.TransactionRef,
                 p.Notes,
                 p.PaidAt,
                 p.PayrollBatchId,
-                p.CreatedDate))
+                p.CreatedAt))
             .ToListAsync(ct);
 
         return Result.Success(PagedResult<CrewPaymentDto>.Create(items, total, q.Page, q.PageSize));

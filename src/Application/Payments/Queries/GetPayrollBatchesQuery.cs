@@ -37,7 +37,7 @@ public sealed class GetPayrollBatchesHandler
 
         // Count payments per batch separately to avoid nav-prop translation issues
         var batchIds = await query
-            .OrderByDescending(b => b.CreatedDate)
+            .OrderByDescending(b => b.CreatedAt)
             .Skip((q.Page - 1) * q.PageSize)
             .Take(q.PageSize)
             .Select(b => b.Id)
@@ -49,7 +49,7 @@ public sealed class GetPayrollBatchesHandler
             {
                 b.Id, b.VendorId, b.EventId, b.BatchRef,
                 b.Status, b.TotalAmount, b.Notes,
-                b.SubmittedAt, b.ApprovedAt, b.DisbursedAt, b.CreatedDate,
+                b.SubmittedAt, b.ApprovedAt, b.DisbursedAt, b.CreatedAt,
                 VendorName = b.Vendor.FullName,
                 EventTitle = b.Event.Title
             })
@@ -64,13 +64,13 @@ public sealed class GetPayrollBatchesHandler
         var countLookup = paymentCounts.ToDictionary(x => x.BatchId, x => x.Count);
 
         var items = batches
-            .OrderByDescending(b => b.CreatedDate)
+            .OrderByDescending(b => b.CreatedAt)
             .Select(b => new PayrollBatchDto(
                 b.Id, b.VendorId, b.VendorName,
                 b.EventId, b.EventTitle,
                 b.BatchRef, b.Status.ToString(), b.TotalAmount, b.Notes,
                 countLookup.GetValueOrDefault(b.Id, 0),
-                b.SubmittedAt, b.ApprovedAt, b.DisbursedAt, b.CreatedDate))
+                b.SubmittedAt, b.ApprovedAt, b.DisbursedAt, b.CreatedAt))
             .ToList();
 
         return Result.Success(PagedResult<PayrollBatchDto>.Create(items, total, q.Page, q.PageSize));
