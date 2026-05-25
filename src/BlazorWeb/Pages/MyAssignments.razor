@@ -1,0 +1,313 @@
+@page "/my-assignments"
+@attribute [Authorize(Roles = "Crew")]
+@inject IEventApiService EventApi
+@inject AuthenticationStateProvider Auth
+
+<PageTitle>My Assignments — EventWOS</PageTitle>
+
+<div class="space-y-5">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between flex-wrap gap-3">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">My Assignments</h2>
+            <p class="text-sm text-gray-500 mt-0.5">Event invitations and your current bookings.</p>
+        </div>
+        <div class="flex gap-2">
+            @foreach (var tab in _tabs)
+            {
+                <button @onclick="() => SetTab(tab)"
+                        class="px-4 py-1.5 rounded-full text-xs font-semibold transition
+                               @(_activeTab == tab
+                                   ? "bg-indigo-600 text-white shadow"
+                                   : "bg-white text-gray-500 border border-gray-200 hover:border-indigo-300")">
+                    @tab
+                    @if (tab == "Invited" && _pendingCount > 0)
+                    {
+                        <span class="ml-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                            @_pendingCount
+                        </span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Loading -->
+    @if (_loading)
+    {
+        <div class="flex justify-center py-20">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
+    }
+    else if (!FilteredItems.Any())
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+            <p class="text-4xl mb-3">@EmptyIcon</p>
+            <p class="font-semibold text-gray-700">@EmptyTitle</p>
+            <p class="text-sm text-gray-400 mt-1">@EmptySubtitle</p>
+        </div>
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var a in FilteredItems)
+            {
+                <div class="bg-white rounded-2xl border @BorderColor(a.Status) shadow-sm p-5">
+                    <div class="flex items-start justify-between gap-4 flex-wrap">
+
+                        <!-- Left: event info -->
+                        <div class="flex-1 min-w-0 space-y-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <p class="font-bold text-gray-800 text-sm">@a.EventTitle</p>
+                                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold @StatusChip(a.Status)">
+                                    @StatusLabel(a.Status)
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-400">
+                                via <span class="font-medium text-gray-600">@a.VendorName</span>
+                                &nbsp;·&nbsp; Invited @TimeAgo(a.CreatedAt)
+                            </p>
+                            @if (a.Status == "Confirmed" && a.ConfirmedAt.HasValue)
+                            {
+                                <p class="text-xs text-green-600">✅ Confirmed @a.ConfirmedAt.Value.ToLocalTime().ToString("dd MMM, hh:mm tt")</p>
+                            }
+                            @if (a.Status == "Declined" && a.DeclinedAt.HasValue)
+                            {
+                                <p class="text-xs text-red-500">❌ Declined @a.DeclinedAt.Value.ToLocalTime().ToString("dd MMM, hh:mm tt")</p>
+                            }
+                            @if (a.Status == "Attended")
+                            {
+                                <p class="text-xs text-indigo-600">🎯 Marked as Attended</p>
+                            }
+                        </div>
+
+                        <!-- Right: actions -->
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            @if (a.Status == "Invited")
+                            {
+                                <button @onclick="() => OpenDecline(a)"
+                                        disabled="@_responding"
+                                        class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-200 text-red-600
+                                               hover:bg-red-50 disabled:opacity-50 transition">
+                                    ✕ Decline
+                                </button>
+                                <button @onclick="() => Respond(a.Id, \"confirm\")"
+                                        disabled="@_responding"
+                                        class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white
+                                               hover:bg-indigo-700 disabled:opacity-50 transition shadow">
+                                    @(_responding && _respondingId == a.Id ? "…" : "✓ Accept")
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (_totalPages > 1)
+        {
+            <div class="flex justify-center gap-2 pt-2">
+                <button disabled="@(_page == 1)" @onclick="PrevPage"
+                        class="px-4 py-2 rounded-xl border text-xs font-medium disabled:opacity-40 hover:border-indigo-400 transition">
+                    ← Prev
+                </button>
+                <span class="px-4 py-2 text-xs text-gray-500">Page @_page of @_totalPages</span>
+                <button disabled="@(_page == _totalPages)" @onclick="NextPage"
+                        class="px-4 py-2 rounded-xl border text-xs font-medium disabled:opacity-40 hover:border-indigo-400 transition">
+                    Next →
+                </button>
+            </div>
+        }
+    }
+
+    <!-- Toast -->
+    @if (_toast is not null)
+    {
+        <div class="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium
+                    @(_toastError ? "bg-red-600 text-white" : "bg-green-600 text-white")">
+            @_toast
+        </div>
+    }
+</div>
+
+<!-- Decline modal -->
+@if (_declineTarget is not null)
+{
+    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 class="font-bold text-gray-800">Decline Invitation</h3>
+            <p class="text-sm text-gray-500">
+                You are declining <span class="font-semibold text-gray-700">@_declineTarget.EventTitle</span>.
+                Optionally leave a reason:
+            </p>
+            <textarea class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200
+                             focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                      rows="3" placeholder="Reason (optional)…"
+                      @bind="_declineReason" />
+            <div class="flex gap-2 pt-1">
+                <button @onclick="() => _declineTarget = null"
+                        class="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition">
+                    Cancel
+                </button>
+                <button @onclick="ConfirmDecline"
+                        disabled="@_responding"
+                        class="flex-1 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold
+                               hover:bg-red-700 disabled:opacity-50 transition">
+                    @(_responding ? "Declining…" : "Decline")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly string[] _tabs = { "All", "Invited", "Confirmed", "Attended", "Declined" };
+    private string _activeTab = "All";
+
+    private PagedEventAssignmentResult? _data;
+    private bool   _loading    = true;
+    private int    _page       = 1;
+    private int    _totalPages = 1;
+    private int    _pendingCount;
+
+    // Respond state
+    private bool   _responding;
+    private Guid?  _respondingId;
+
+    // Decline modal
+    private EventAssignmentDto? _declineTarget;
+    private string              _declineReason = "";
+
+    // Toast
+    private string? _toast;
+    private bool    _toastError;
+    private System.Threading.CancellationTokenSource? _toastCts;
+
+    // ── Computed ──────────────────────────────────────────────────────────────
+    private IEnumerable<EventAssignmentDto> FilteredItems =>
+        _activeTab == "All"
+            ? (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
+            : (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
+              .Where(a => a.Status.Equals(_activeTab, StringComparison.OrdinalIgnoreCase));
+
+    private string EmptyIcon => _activeTab switch
+    {
+        "Invited"   => "📬",
+        "Confirmed" => "✅",
+        "Attended"  => "🎯",
+        "Declined"  => "❌",
+        _           => "📋"
+    };
+    private string EmptyTitle => _activeTab == "Invited"
+        ? "No pending invitations"
+        : $"No {_activeTab.ToLower()} assignments";
+    private string EmptySubtitle => _activeTab == "Invited"
+        ? "You're all caught up! New invitations will appear here."
+        : "Nothing to show in this category yet.";
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _data    = await EventApi.GetMyAssignmentsAsync(_page);
+        _pendingCount = _data?.Items.Count(a => a.Status == "Invited") ?? 0;
+        _totalPages   = _data is null ? 1
+            : (int)Math.Ceiling((double)_data.TotalCount / 20);
+        _loading = false;
+    }
+
+    private async Task SetTab(string tab) { _activeTab = tab; _page = 1; await Load(); }
+    private async Task PrevPage() { if (_page > 1) { _page--; await Load(); } }
+    private async Task NextPage() { if (_page < _totalPages) { _page++; await Load(); } }
+
+    // ── Respond ───────────────────────────────────────────────────────────────
+    private async Task Respond(Guid assignmentId, string response, string? reason = null)
+    {
+        _responding    = true;
+        _respondingId  = assignmentId;
+        var (ok, err)  = await EventApi.RespondAssignmentAsync(assignmentId, response, reason);
+        _responding    = false;
+        _respondingId  = null;
+        _declineTarget = null;
+        _declineReason = "";
+
+        if (ok)
+        {
+            ShowToast(response == "confirm" ? "✅ Invitation accepted!" : "Invitation declined.", false);
+            await Load();
+        }
+        else ShowToast(err ?? "Something went wrong.", true);
+    }
+
+    private void OpenDecline(EventAssignmentDto a)
+    {
+        _declineTarget = a;
+        _declineReason = "";
+    }
+
+    private async Task ConfirmDecline()
+    {
+        if (_declineTarget is null) return;
+        await Respond(_declineTarget.Id, "decline", _declineReason);
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    private async void ShowToast(string msg, bool error)
+    {
+        _toastCts?.Cancel();
+        _toastCts  = new();
+        _toast     = msg;
+        _toastError = error;
+        StateHasChanged();
+        try { await Task.Delay(3000, _toastCts.Token); } catch { return; }
+        _toast = null;
+        StateHasChanged();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    private static string StatusLabel(string s) => s switch
+    {
+        "Invited"   => "⏳ Invited",
+        "Confirmed" => "✅ Confirmed",
+        "Declined"  => "❌ Declined",
+        "Attended"  => "🎯 Attended",
+        "NoShow"    => "🚫 No Show",
+        _           => s
+    };
+
+    private static string StatusChip(string s) => s switch
+    {
+        "Invited"   => "bg-amber-100 text-amber-700",
+        "Confirmed" => "bg-green-100 text-green-700",
+        "Declined"  => "bg-red-100 text-red-600",
+        "Attended"  => "bg-indigo-100 text-indigo-700",
+        "NoShow"    => "bg-gray-100 text-gray-500",
+        _           => "bg-gray-100 text-gray-500"
+    };
+
+    private static string BorderColor(string s) => s switch
+    {
+        "Invited"   => "border-amber-200",
+        "Confirmed" => "border-green-200",
+        "Declined"  => "border-red-100",
+        "Attended"  => "border-indigo-200",
+        _           => "border-gray-100"
+    };
+
+    private static string TimeAgo(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 1)  return "just now";
+        if (diff.TotalHours   < 1)  return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays    < 1)  return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays    < 7)  return $"{(int)diff.TotalDays}d ago";
+        return dt.ToLocalTime().ToString("dd MMM");
+    }
+}

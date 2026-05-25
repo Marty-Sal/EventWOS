@@ -1,0 +1,188 @@
+@page "/vendor-assignments"
+@attribute [Authorize(Roles = "Vendor")]
+@inject IEventApiService EventApi
+
+<PageTitle>Crew Assignments — EventWOS</PageTitle>
+
+<div class="space-y-5">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between flex-wrap gap-3">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">Crew Assignments</h2>
+            <p class="text-sm text-gray-500 mt-0.5">Track all your crew's invitations and status across events.</p>
+        </div>
+        <!-- Status filter pills -->
+        <div class="flex gap-2 flex-wrap">
+            @foreach (var tab in _tabs)
+            {
+                <button @onclick="() => SetTab(tab)"
+                        class="px-3 py-1.5 rounded-full text-xs font-semibold transition
+                               @(_activeTab == tab
+                                   ? "bg-indigo-600 text-white shadow"
+                                   : "bg-white text-gray-500 border border-gray-200 hover:border-indigo-300")">
+                    @tab
+                    @if (_counts.TryGetValue(tab, out var cnt) && cnt > 0)
+                    {
+                        <span class="ml-1 text-[10px] opacity-70">(@cnt)</span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex justify-center py-20">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
+    }
+    else if (!FilteredItems.Any())
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+            <p class="text-4xl mb-3">📋</p>
+            <p class="font-semibold text-gray-700">No assignments found</p>
+            <p class="text-sm text-gray-400 mt-1">Assign crew members to events from the Events page.</p>
+        </div>
+    }
+    else
+    {
+        <!-- Group by event -->
+        @foreach (var group in GroupedByEvent)
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <!-- Event header -->
+                <div class="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <p class="font-semibold text-gray-800 text-sm">@group.Key</p>
+                        <p class="text-xs text-gray-400">@group.Value.Count crew member(s)</p>
+                    </div>
+                    <div class="flex gap-1.5">
+                        @foreach (var s in group.Value.GroupBy(a => a.Status))
+                        {
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold @StatusChip(s.Key)">
+                                @s.Key (@s.Count())
+                            </span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Crew rows -->
+                <div class="divide-y divide-gray-50">
+                    @foreach (var a in group.Value)
+                    {
+                        <div class="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/50 transition">
+                            <!-- Avatar -->
+                            <div class="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center
+                                        font-bold text-indigo-700 text-sm flex-shrink-0">
+                                @(a.CrewName.FirstOrDefault())
+                            </div>
+                            <!-- Info -->
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-semibold text-gray-800">@a.CrewName</p>
+                                <p class="text-xs text-gray-400 font-mono">@a.CrewMobile</p>
+                            </div>
+                            <!-- Status + timestamp -->
+                            <div class="text-right flex-shrink-0">
+                                <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold @StatusChip(a.Status)">
+                                    @StatusLabel(a.Status)
+                                </span>
+                                <p class="text-[10px] text-gray-400 mt-1">@TimeAgo(a.CreatedAt)</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (_totalPages > 1)
+        {
+            <div class="flex justify-center gap-2 pt-2">
+                <button disabled="@(_page == 1)" @onclick="PrevPage"
+                        class="px-4 py-2 rounded-xl border text-xs font-medium disabled:opacity-40 hover:border-indigo-400 transition">
+                    ← Prev
+                </button>
+                <span class="px-4 py-2 text-xs text-gray-500">Page @_page of @_totalPages</span>
+                <button disabled="@(_page == _totalPages)" @onclick="NextPage"
+                        class="px-4 py-2 rounded-xl border text-xs font-medium disabled:opacity-40 hover:border-indigo-400 transition">
+                    Next →
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private readonly string[] _tabs = { "All", "Invited", "Confirmed", "Attended", "Declined" };
+    private string _activeTab = "All";
+    private Dictionary<string, int> _counts = new();
+
+    private PagedEventAssignmentResult? _data;
+    private bool _loading = true;
+    private int  _page = 1, _totalPages = 1;
+
+    private IEnumerable<EventAssignmentDto> FilteredItems =>
+        _activeTab == "All"
+            ? (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
+            : (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
+              .Where(a => a.Status.Equals(_activeTab, StringComparison.OrdinalIgnoreCase));
+
+    private Dictionary<string, List<EventAssignmentDto>> GroupedByEvent =>
+        FilteredItems
+            .GroupBy(a => a.EventTitle)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _data    = await EventApi.GetVendorAssignmentsAsync(_page);
+        _totalPages = _data is null ? 1
+            : (int)Math.Ceiling((double)_data.TotalCount / 20);
+
+        // Compute counts per status for filter pills
+        _counts = (_data?.Items ?? Enumerable.Empty<EventAssignmentDto>())
+            .GroupBy(a => a.Status)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        _loading = false;
+    }
+
+    private async Task SetTab(string tab) { _activeTab = tab; _page = 1; await Load(); }
+    private async Task PrevPage() { if (_page > 1) { _page--; await Load(); } }
+    private async Task NextPage() { if (_page < _totalPages) { _page++; await Load(); } }
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "Invited"   => "⏳ Invited",
+        "Confirmed" => "✅ Confirmed",
+        "Declined"  => "❌ Declined",
+        "Attended"  => "🎯 Attended",
+        "NoShow"    => "🚫 No Show",
+        _           => s
+    };
+
+    private static string StatusChip(string s) => s switch
+    {
+        "Invited"   => "bg-amber-100 text-amber-700",
+        "Confirmed" => "bg-green-100 text-green-700",
+        "Declined"  => "bg-red-100 text-red-600",
+        "Attended"  => "bg-indigo-100 text-indigo-700",
+        "NoShow"    => "bg-gray-100 text-gray-500",
+        _           => "bg-gray-100 text-gray-500"
+    };
+
+    private static string TimeAgo(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalHours   < 1) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays    < 1) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays    < 7) return $"{(int)diff.TotalDays}d ago";
+        return dt.ToLocalTime().ToString("dd MMM");
+    }
+}

@@ -3,6 +3,7 @@
 @inject AppAuthStateProvider AuthState
 @inject IAuthApiService AuthApi
 @inject NotificationHubService Hub
+@inject IEventApiService EventApi
 
 <div class="flex h-screen bg-gray-50 overflow-hidden">
 
@@ -32,9 +33,24 @@
                     <NavItem Href="/sessions" Icon="🔌" Label="Sessions" />
                 </AuthorizeView>
 
-                @* Vendor can see their own crew — but NOT the full Vendors list *@
+                @* Crew — My Assignments with pending badge *@
+                <AuthorizeView Roles="Crew">
+                    <div class="relative">
+                        <NavItem Href="/my-assignments" Icon="📬" Label="My Assignments" />
+                        @if (_pendingInvites > 0)
+                        {
+                            <span class="absolute top-1 right-2 w-4 h-4 rounded-full bg-red-500 text-white
+                                         text-[9px] font-bold flex items-center justify-center pointer-events-none">
+                                @_pendingInvites
+                            </span>
+                        }
+                    </div>
+                </AuthorizeView>
+
+                @* Vendor — My Crew + Crew Assignments *@
                 <AuthorizeView Roles="Vendor">
-                    <NavItem Href="/crew" Icon="👷" Label="My Crew" />
+                    <NavItem Href="/crew"               Icon="👷" Label="My Crew" />
+                    <NavItem Href="/vendor-assignments"  Icon="📋" Label="Crew Assignments" />
                 </AuthorizeView>
 
                 @* Everyone *@
@@ -118,6 +134,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadPendingInvites();
         try { await Hub.StartAsync(); }
         catch { }
         Hub.ConnectionStateChanged += StateHasChanged;
