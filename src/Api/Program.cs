@@ -310,128 +310,126 @@ try
 
         // ── Emergency schema patch ─────────────────────────────────────────
         // Runs BEFORE MigrateAsync. Fully idempotent — safe on every startup.
-        // Covers all tables that may have been created before columns were added.
+        // Uses '' (doubled single-quote) for SQL string literals inside C# @"..." verbatim strings.
         Log.Information("Applying emergency schema patch...");
         await db.Database.ExecuteSqlRawAsync(@"
 DO $$
 BEGIN
-    -- ═══ users ══════════════════════════════════════════════════════════════
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='manager_id') THEN
+    -- ═══ users ═══════════════════════════════════════════════════════════════
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''manager_id'') THEN
         ALTER TABLE users ADD COLUMN manager_id UUID; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='device_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''device_id'') THEN
         ALTER TABLE users ADD COLUMN device_id VARCHAR(255); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_known_ip') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''last_known_ip'') THEN
         ALTER TABLE users ADD COLUMN last_known_ip VARCHAR(45); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_login_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''last_login_at'') THEN
         ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='failed_otp_attempts') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''failed_otp_attempts'') THEN
         ALTER TABLE users ADD COLUMN failed_otp_attempts INT NOT NULL DEFAULT 0; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='locked_until') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''locked_until'') THEN
         ALTER TABLE users ADD COLUMN locked_until TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='business_name') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''business_name'') THEN
         ALTER TABLE users ADD COLUMN business_name VARCHAR(200); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='referral_code') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''referral_code'') THEN
         ALTER TABLE users ADD COLUMN referral_code VARCHAR(20); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='rating') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''rating'') THEN
         ALTER TABLE users ADD COLUMN rating NUMERIC(3,2); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='events_completed') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''events_completed'') THEN
         ALTER TABLE users ADD COLUMN events_completed INT NOT NULL DEFAULT 0; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='vendor_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''vendor_id'') THEN
         ALTER TABLE users ADD COLUMN vendor_id UUID; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='discipline_score') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''discipline_score'') THEN
         ALTER TABLE users ADD COLUMN discipline_score NUMERIC(5,2) NOT NULL DEFAULT 100.0; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='events_attended') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''events_attended'') THEN
         ALTER TABLE users ADD COLUMN events_attended INT NOT NULL DEFAULT 0; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='created_by') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''created_by'') THEN
         ALTER TABLE users ADD COLUMN created_by UUID; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='updated_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''updated_at'') THEN
         ALTER TABLE users ADD COLUMN updated_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='updated_by') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''updated_by'') THEN
         ALTER TABLE users ADD COLUMN updated_by UUID; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='deleted_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''deleted_at'') THEN
         ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='deleted_by') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''users'' AND column_name=''deleted_by'') THEN
         ALTER TABLE users ADD COLUMN deleted_by UUID; END IF;
-    -- users indexes
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='ix_users_referral_code') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname=''ix_users_referral_code'') THEN
         CREATE UNIQUE INDEX ix_users_referral_code ON users(referral_code) WHERE referral_code IS NOT NULL; END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='ix_users_vendor_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname=''ix_users_vendor_id'') THEN
         CREATE INDEX ix_users_vendor_id ON users(vendor_id); END IF;
 
-    -- otp_requests: rename hashed_otp -> otp_hash if old column name exists
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=\'otp_requests\' AND column_name=\'hashed_otp\')
-       AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=\'otp_requests\' AND column_name=\'otp_hash\') THEN
+    -- ═══ otp_requests ════════════════════════════════════════════════════════
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''hashed_otp'')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''otp_hash'') THEN
         ALTER TABLE otp_requests RENAME COLUMN hashed_otp TO otp_hash; END IF;
-    -- ═══ otp_requests ═══════════════════════════════════════════════════════
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='otp_hash') THEN
-        ALTER TABLE otp_requests ADD COLUMN otp_hash VARCHAR(255) NOT NULL DEFAULT ''; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='user_agent') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''otp_hash'') THEN
+        ALTER TABLE otp_requests ADD COLUMN otp_hash VARCHAR(255) NOT NULL DEFAULT '''' ; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''user_agent'') THEN
         ALTER TABLE otp_requests ADD COLUMN user_agent VARCHAR(500); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='ip_address') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''ip_address'') THEN
         ALTER TABLE otp_requests ADD COLUMN ip_address VARCHAR(45); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='attempts') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''attempts'') THEN
         ALTER TABLE otp_requests ADD COLUMN attempts INT NOT NULL DEFAULT 0; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='verified_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''verified_at'') THEN
         ALTER TABLE otp_requests ADD COLUMN verified_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='created_by') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''created_by'') THEN
         ALTER TABLE otp_requests ADD COLUMN created_by UUID; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='updated_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''updated_at'') THEN
         ALTER TABLE otp_requests ADD COLUMN updated_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='updated_by') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''updated_by'') THEN
         ALTER TABLE otp_requests ADD COLUMN updated_by UUID; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='deleted_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''deleted_at'') THEN
         ALTER TABLE otp_requests ADD COLUMN deleted_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_requests' AND column_name='deleted_by') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''otp_requests'' AND column_name=''deleted_by'') THEN
         ALTER TABLE otp_requests ADD COLUMN deleted_by UUID; END IF;
 
-    -- ═══ refresh_tokens ═════════════════════════════════════════════════════
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='device_id') THEN
+    -- ═══ refresh_tokens ══════════════════════════════════════════════════════
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''refresh_tokens'' AND column_name=''device_id'') THEN
         ALTER TABLE refresh_tokens ADD COLUMN device_id VARCHAR(255); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='ip_address') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''refresh_tokens'' AND column_name=''ip_address'') THEN
         ALTER TABLE refresh_tokens ADD COLUMN ip_address VARCHAR(45); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='is_revoked') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''refresh_tokens'' AND column_name=''is_revoked'') THEN
         ALTER TABLE refresh_tokens ADD COLUMN is_revoked BOOL NOT NULL DEFAULT false; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='revoked_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''refresh_tokens'' AND column_name=''revoked_at'') THEN
         ALTER TABLE refresh_tokens ADD COLUMN revoked_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='replaced_by_token_hash') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''refresh_tokens'' AND column_name=''replaced_by_token_hash'') THEN
         ALTER TABLE refresh_tokens ADD COLUMN replaced_by_token_hash VARCHAR(500); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refresh_tokens' AND column_name='revoke_reason') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''refresh_tokens'' AND column_name=''revoke_reason'') THEN
         ALTER TABLE refresh_tokens ADD COLUMN revoke_reason VARCHAR(100); END IF;
 
     -- ═══ user_sessions ═══════════════════════════════════════════════════════
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='device_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''user_sessions'' AND column_name=''device_id'') THEN
         ALTER TABLE user_sessions ADD COLUMN device_id VARCHAR(255); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='device_name') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''user_sessions'' AND column_name=''device_name'') THEN
         ALTER TABLE user_sessions ADD COLUMN device_name VARCHAR(200); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='ip_address') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''user_sessions'' AND column_name=''ip_address'') THEN
         ALTER TABLE user_sessions ADD COLUMN ip_address VARCHAR(45); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='user_agent') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''user_sessions'' AND column_name=''user_agent'') THEN
         ALTER TABLE user_sessions ADD COLUMN user_agent VARCHAR(500); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='last_activity_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''user_sessions'' AND column_name=''last_activity_at'') THEN
         ALTER TABLE user_sessions ADD COLUMN last_activity_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='terminated_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''user_sessions'' AND column_name=''terminated_at'') THEN
         ALTER TABLE user_sessions ADD COLUMN terminated_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_sessions' AND column_name='termination_reason') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''user_sessions'' AND column_name=''termination_reason'') THEN
         ALTER TABLE user_sessions ADD COLUMN termination_reason VARCHAR(100); END IF;
 
     -- ═══ vendor_crew_mappings ════════════════════════════════════════════════
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='approved_by_manager_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''vendor_crew_mappings'' AND column_name=''approved_by_manager_id'') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN approved_by_manager_id UUID; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='is_active') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''vendor_crew_mappings'' AND column_name=''is_active'') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN is_active BOOL NOT NULL DEFAULT true; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='removed_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''vendor_crew_mappings'' AND column_name=''removed_at'') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN removed_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='notes') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''vendor_crew_mappings'' AND column_name=''notes'') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN notes VARCHAR(500); END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='created_by') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''vendor_crew_mappings'' AND column_name=''created_by'') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN created_by UUID; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='updated_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''vendor_crew_mappings'' AND column_name=''updated_at'') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN updated_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='updated_by') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''vendor_crew_mappings'' AND column_name=''updated_by'') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN updated_by UUID; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='deleted_at') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''vendor_crew_mappings'' AND column_name=''deleted_at'') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN deleted_at TIMESTAMP; END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='deleted_by') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=''vendor_crew_mappings'' AND column_name=''deleted_by'') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN deleted_by UUID; END IF;
 END $$;
 ");
