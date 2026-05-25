@@ -1,18 +1,17 @@
 @page "/admin/audit"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize]
 @inject HttpClient Http
 @inject IUserApiService UserApi
 
-
-    @if (_accessDenied)
-    {
-        <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
-            <div class="text-5xl mb-4">🔒</div>
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
-            <p class="text-gray-500 text-sm">You don't have permission to view this page.<br/>Contact your Admin to request access.</p>
-        </div>
-        return;
-    }
+@if (_accessDenied)
+{
+    <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div class="text-5xl mb-4">🔒</div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+        <p class="text-gray-500 text-sm">You don't have permission to view this page.</p>
+    </div>
+    return;
+}
 
 <PageTitle>Audit Log — EventWOS</PageTitle>
 
@@ -28,6 +27,49 @@
         </button>
     </div>
 
+    <!-- Filters -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3 items-end">
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Action</label>
+            <select @bind="_filterAction"
+                    class="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                <option value="">All actions</option>
+                <option>Login</option>
+                <option>Logout</option>
+                <option>OtpRequested</option>
+                <option>OtpVerified</option>
+                <option>OtpFailed</option>
+                <option>UserCreated</option>
+                <option>UserUpdated</option>
+                <option>UserStatusChanged</option>
+                <option>RoleAssigned</option>
+                <option>PermissionGranted</option>
+                <option>PermissionRevoked</option>
+                <option>SessionRevoked</option>
+                <option>TokenRefreshed</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Entity Type</label>
+            <input @bind="_filterEntity" placeholder="e.g. User"
+                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">From</label>
+            <input type="date" @bind="_filterFrom"
+                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">To</label>
+            <input type="date" @bind="_filterTo"
+                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        </div>
+        <button @onclick="ApplyFilters"
+                class="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition">Apply</button>
+        <button @onclick="ClearFilters"
+                class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition">Clear</button>
+    </div>
+
     @if (_loading)
     {
         <div class="flex items-center justify-center py-16">
@@ -39,15 +81,13 @@
     }
     else if (_error is not null)
     {
-        <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">
-            ⚠️ @_error
-        </div>
+        <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">⚠️ @_error</div>
     }
     else if (_logs.Count == 0)
     {
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
             <p class="text-4xl mb-3">📋</p>
-            <p class="text-gray-500 text-sm">No audit entries yet.</p>
+            <p class="text-gray-500 text-sm">No audit entries found.</p>
         </div>
     }
     else
@@ -59,6 +99,7 @@
                         <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
                         <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
                         <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Entity</th>
+                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Entity ID</th>
                         <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actor</th>
                         <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">IP</th>
                     </tr>
@@ -67,72 +108,105 @@
                     @foreach (var log in _logs)
                     {
                         <tr class="hover:bg-gray-50 transition-colors">
-                            <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap text-xs">
-                                @log.CreatedAt.ToLocalTime().ToString("dd MMM HH:mm:ss")
-                            </td>
+                            <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap text-xs">@log.OccurredAt.ToLocalTime().ToString("dd MMM HH:mm:ss")</td>
                             <td class="px-5 py-3.5">
-                                <span class="px-2 py-0.5 rounded-full text-xs font-medium @GetActionColor(log.Action)">
-                                    @log.Action
-                                </span>
+                                <span class="px-2 py-0.5 rounded-full text-xs font-medium @GetActionColor(log.Action)">@log.Action</span>
                             </td>
-                            <td class="px-5 py-3.5 text-gray-700 font-mono text-xs">@log.EntityName</td>
-                            <td class="px-5 py-3.5 text-gray-600 text-xs">@log.ActorMobile</td>
-                            <td class="px-5 py-3.5 text-gray-400 text-xs font-mono">@(log.IpAddress ?? "—")</td>
+                            <td class="px-5 py-3.5 text-gray-700 font-mono text-xs">@log.EntityType</td>
+                            <td class="px-5 py-3.5 text-gray-400 font-mono text-xs">
+                                @(log.EntityId is { Length: > 8 } eid ? eid[..8] + "…" : (log.EntityId ?? "—"))
+                            </td>
+                            <td class="px-5 py-3.5 text-gray-600 text-xs">
+                                @(log.PerformedByUserId is { Length: > 8 } uid ? uid[..8] + "…" : (log.PerformedByUserId ?? "System"))
+                            </td>
+                            <td class="px-5 py-3.5 text-gray-400 text-xs font-mono">@(log.PerformedByIp ?? "—")</td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
+
+        <div class="flex items-center justify-between text-sm text-gray-500">
+            <span>Showing @_logs.Count of @_total entries</span>
+            <div class="flex gap-2">
+                <button @onclick="PrevPage" disabled="@(_page <= 1)"
+                        class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">← Prev</button>
+                <span class="px-3 py-1.5 text-gray-700 font-medium">Page @_page</span>
+                <button @onclick="NextPage" disabled="@(_logs.Count < _pageSize)"
+                        class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">Next →</button>
+            </div>
+        </div>
     }
 </div>
 
 @code {
-
     private bool _accessDenied;
     private List<AuditLogDto> _logs = new();
     private bool _loading = true;
     private string? _error;
+    private int _page = 1;
+    private const int _pageSize = 50;
+    private int _total;
+
+    private string _filterAction = "";
+    private string _filterEntity = "";
+    private DateTime? _filterFrom;
+    private DateTime? _filterTo;
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
 
     protected override async Task OnInitializedAsync()
     {
-        // ── Permission gate ──────────────────────────────────────────────────────
-        _accessDenied = !await PermGuard.CanAsync("audit:read");
+        var me = await UserApi.GetMeAsync();
+        _accessDenied = me is null || !me.Permissions.Contains("audit:read");
         if (_accessDenied) { StateHasChanged(); return; }
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
-        _loading = true; _error = null;
+        _loading = true; _error = null; StateHasChanged();
         try
         {
-            var result = await Http.GetFromJsonAsync<ApiResult<List<AuditLogDto>>>(
-                "api/v1/audit?page=1&pageSize=50",
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            _logs = result?.Data ?? new();
+            var qs = $"api/v1/audit-logs?page={_page}&pageSize={_pageSize}";
+            if (!string.IsNullOrWhiteSpace(_filterAction)) qs += $"&action={Uri.EscapeDataString(_filterAction)}";
+            if (!string.IsNullOrWhiteSpace(_filterEntity)) qs += $"&entityType={Uri.EscapeDataString(_filterEntity)}";
+            if (_filterFrom.HasValue) qs += $"&from={_filterFrom.Value:yyyy-MM-dd}";
+            if (_filterTo.HasValue)   qs += $"&to={_filterTo.Value:yyyy-MM-ddT23:59:59}";
+
+            var result = await Http.GetFromJsonAsync<ApiResult<PagedResult<AuditLogDto>>>(qs, JsonOpts);
+            _logs  = result?.Data?.Items?.ToList() ?? new();
+            _total = result?.Data?.TotalCount ?? 0;
         }
-        catch (Exception ex)
-        {
-            // If audit endpoint doesn't exist yet, show empty state gracefully
-            _logs = new();
-            if (!ex.Message.Contains("404"))
-                _error = "Could not load audit logs: " + ex.Message;
-        }
-        finally { _loading = false; }
+        catch (Exception ex) { _error = "Could not load audit logs: " + ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
     }
+
+    private async Task ApplyFilters() { _page = 1; await LoadAsync(); }
+    private async Task ClearFilters()
+    {
+        _filterAction = ""; _filterEntity = ""; _filterFrom = null; _filterTo = null;
+        _page = 1; await LoadAsync();
+    }
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { _page++; await LoadAsync(); }
 
     private static string GetActionColor(string action) => action switch
     {
-        "Login"         => "bg-green-50 text-green-700 border border-green-100",
-        "Logout"        => "bg-gray-100 text-gray-600",
-        "StatusChanged" => "bg-amber-50 text-amber-700 border border-amber-100",
-        "Deleted"       => "bg-red-50 text-red-600 border border-red-100",
-        _               => "bg-indigo-50 text-indigo-700 border border-indigo-100"
+        "Login"             => "bg-green-50 text-green-700 border border-green-100",
+        "Logout"            => "bg-gray-100 text-gray-600",
+        "OtpFailed"         => "bg-red-50 text-red-600 border border-red-100",
+        "PermissionGranted" => "bg-indigo-50 text-indigo-700 border border-indigo-100",
+        "PermissionRevoked" => "bg-orange-50 text-orange-700 border border-orange-100",
+        "SessionRevoked"    => "bg-amber-50 text-amber-700 border border-amber-100",
+        "UserStatusChanged" => "bg-yellow-50 text-yellow-700 border border-yellow-100",
+        _                   => "bg-gray-50 text-gray-700 border border-gray-100"
     };
 
-    private sealed record AuditLogDto(
-        Guid Id, string Action, string EntityName, string ActorMobile,
-        string? IpAddress, DateTime CreatedAt);
-
+    private sealed record AuditLogDto(Guid Id, string Action, string? PerformedByUserId, string? PerformedByIp,
+        string EntityType, string? EntityId, string? OldValues, string? NewValues,
+        string? AdditionalData, DateTime OccurredAt);
+    private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int PageNumber, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
 }

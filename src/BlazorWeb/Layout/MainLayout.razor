@@ -41,6 +41,7 @@
                     <NavItem Href="/managers" Icon="👔" Label="Managers" />
                     <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" />
                     <NavItem Href="/crew"     Icon="👷" Label="Crew" />
+                    <NavItem Href="/attendance" Icon="📍" Label="Attendance" />
                     <NavItem Href="/payments" Icon="💰" Label="Payments" />
                     <NavItem Href="/sessions" Icon="🔌" Label="Sessions" />
                 </AuthorizeView>
@@ -50,6 +51,7 @@
                     @if (_perms.Contains("users:read"))    { <NavItem Href="/users"    Icon="👥" Label="Users" /> }
                     @if (_perms.Contains("vendors:read"))  { <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" /> }
                     @if (_perms.Contains("crew:read"))     { <NavItem Href="/crew"     Icon="👷" Label="Crew" /> }
+                    @if (_perms.Contains("attendance:read")) { <NavItem Href="/attendance" Icon="📍" Label="Attendance" /> }
                     @if (_perms.Contains("payments:read")) { <NavItem Href="/payments" Icon="💰" Label="Payments" /> }
                     @if (_perms.Contains("sessions:read")) { <NavItem Href="/sessions" Icon="🔌" Label="Sessions" /> }
                     @if (_perms.Contains("audit:read"))

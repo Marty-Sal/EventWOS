@@ -1,0 +1,194 @@
+@page "/attendance"
+@attribute [Authorize]
+@inject HttpClient Http
+@inject IUserApiService UserApi
+
+@if (_accessDenied)
+{
+    <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div class="text-5xl mb-4">🔒</div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+        <p class="text-gray-500 text-sm">You need <strong>attendance:read</strong> permission to view this page.</p>
+    </div>
+    return;
+}
+
+<PageTitle>Attendance — EventWOS</PageTitle>
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between flex-wrap gap-3">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">Attendance</h2>
+            <p class="text-sm text-gray-500 mt-0.5">Check-in and check-out records for all events.</p>
+        </div>
+        <button @onclick="LoadAsync" disabled="@_loading"
+                class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50">
+            🔄 Refresh
+        </button>
+    </div>
+
+    @if (_summary is not null)
+    {
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <p class="text-xs font-medium text-gray-500 mb-1">Total Assigned</p>
+                <p class="text-2xl font-bold text-gray-800">@_summary.TotalAssigned</p>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <p class="text-xs font-medium text-gray-500 mb-1">Confirmed</p>
+                <p class="text-2xl font-bold text-indigo-600">@_summary.TotalConfirmed</p>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <p class="text-xs font-medium text-gray-500 mb-1">Attended</p>
+                <p class="text-2xl font-bold text-green-600">@_summary.TotalAttended</p>
+            </div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <p class="text-xs font-medium text-gray-500 mb-1">No Show</p>
+                <p class="text-2xl font-bold text-red-500">@_summary.TotalNoShow</p>
+            </div>
+        </div>
+    }
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3 items-end">
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Filter by Event ID</label>
+            <input @bind="_filterEventId" placeholder="Paste event UUID…"
+                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        </div>
+        <button @onclick="ApplyFilters"
+                class="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition">Load Event</button>
+        <button @onclick="ClearFilters"
+                class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition">Clear</button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex items-center justify-center py-16">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">⚠️ @_error</div>
+    }
+    else if (_records.Count == 0)
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+            <p class="text-4xl mb-3">📍</p>
+            <p class="text-gray-500 text-sm">No attendance records yet.</p>
+            <p class="text-gray-400 text-xs mt-1">Records appear when crew check in to InProgress events.</p>
+        </div>
+    }
+    else
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Crew</th>
+                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Event</th>
+                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
+                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Recorded By</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    @foreach (var r in _records)
+                    {
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-5 py-3.5 font-medium text-gray-800">@r.CrewName</td>
+                            <td class="px-5 py-3.5 text-gray-600 text-xs">@r.EventTitle</td>
+                            <td class="px-5 py-3.5">
+                                <span class="px-2 py-0.5 rounded-full text-xs font-medium @(r.Action == "CheckIn" ? "bg-green-50 text-green-700 border border-green-100" : "bg-amber-50 text-amber-700 border border-amber-100")">
+                                    @(r.Action == "CheckIn" ? "✅ Check In" : "🚪 Check Out")
+                                </span>
+                            </td>
+                            <td class="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">@r.RecordedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                            <td class="px-5 py-3.5 text-gray-400 text-xs">@(r.Location ?? "—")</td>
+                            <td class="px-5 py-3.5 text-gray-400 text-xs font-mono">
+                                @(r.RecordedBy is not null && r.RecordedBy.Length > 8 ? r.RecordedBy[..8] + "…" : (r.RecordedBy ?? "—"))
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="flex items-center justify-between text-sm text-gray-500">
+            <span>Showing @_records.Count of @_total records</span>
+            <div class="flex gap-2">
+                <button @onclick="PrevPage" disabled="@(_page <= 1)"
+                        class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">← Prev</button>
+                <span class="px-3 py-1.5 text-gray-700 font-medium">Page @_page</span>
+                <button @onclick="NextPage" disabled="@(_records.Count < _pageSize)"
+                        class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">Next →</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _accessDenied;
+    private List<AttendanceItemDto> _records = new();
+    private AttendanceSummaryDto? _summary;
+    private bool _loading = true;
+    private string? _error;
+    private int _page = 1;
+    private const int _pageSize = 20;
+    private int _total;
+    private string _filterEventId = "";
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var me = await UserApi.GetMeAsync();
+        _accessDenied = me is null || !me.Permissions.Contains("attendance:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var qs = $"api/v1/attendance?page={_page}&pageSize={_pageSize}";
+            if (Guid.TryParse(_filterEventId, out var eid))
+            {
+                qs += $"&eventId={eid}";
+                try
+                {
+                    var sumR = await Http.GetFromJsonAsync<ApiResult<AttendanceSummaryDto>>(
+                        $"api/v1/attendance/events/{eid}/summary", JsonOpts);
+                    _summary = sumR?.Data;
+                }
+                catch { _summary = null; }
+            }
+            else { _summary = null; }
+
+            var result = await Http.GetFromJsonAsync<ApiResult<PagedResult<AttendanceItemDto>>>(qs, JsonOpts);
+            _records = result?.Data?.Items?.ToList() ?? new();
+            _total   = result?.Data?.TotalCount ?? 0;
+        }
+        catch (Exception ex) { _error = "Could not load attendance: " + ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task ApplyFilters() { _page = 1; await LoadAsync(); }
+    private async Task ClearFilters() { _filterEventId = ""; _page = 1; _summary = null; await LoadAsync(); }
+    private async Task PrevPage()     { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage()     { _page++; await LoadAsync(); }
+
+    private sealed record AttendanceItemDto(Guid RecordId, Guid AssignmentId, Guid EventId, string EventTitle,
+        Guid CrewId, string CrewName, string Action, DateTime RecordedAt, string? Location, string? RecordedBy);
+    private sealed record AttendanceSummaryDto(Guid EventId, string EventTitle,
+        int TotalAssigned, int TotalConfirmed, int TotalAttended, int TotalNoShow);
+    private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int PageNumber, int PageSize);
+    private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
+}
