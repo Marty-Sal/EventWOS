@@ -89,19 +89,7 @@ public sealed class UserApiService : IUserApiService
         }
         catch { return false; }
     }
-}
 
-/// <summary>
-/// Converter that reads both numeric (0,1,2) and string ("Admin","Manager") enum values
-/// and stores them as their string name. Handles APIs that may send either format.
-/// </summary>
-public sealed class FlexibleEnumStringConverter : JsonConverter<string>
-{
-    public override bool CanConvert(Type typeToConvert) => false; // used only explicitly if needed
-    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.GetString();
-    public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value);
     public async Task<(bool Ok, string? Error)> CreateVendorAsync(
         string mobile, string fullName, string? businessName, string? email, CancellationToken ct = default)
     {
@@ -131,5 +119,17 @@ public sealed class FlexibleEnumStringConverter : JsonConverter<string>
         }
         catch (Exception ex) { return (false, ex.Message); }
     }
+}
 
+/// <summary>
+/// Converter that reads both numeric (0,1,2) and string ("Admin","Manager") enum values
+/// and stores them as their string name.
+/// </summary>
+public sealed class FlexibleEnumStringConverter : JsonConverter<string>
+{
+    public override bool CanConvert(Type typeToConvert) => false;
+    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => reader.GetString();
+    public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value);
 }
