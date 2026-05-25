@@ -28,11 +28,11 @@ public sealed class GetUsersHandler : IRequestHandler<GetUsersQuery, Result<Page
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
-            var pattern = $"%{request.Search.Trim()}%";
+            var searchLower = request.Search.Trim().ToLower();
             query = query.Where(u =>
-                EF.Functions.ILike(u.Mobile, pattern) ||
-                EF.Functions.ILike(u.FullName, pattern) ||
-                (u.Email != null && EF.Functions.ILike(u.Email, pattern)));
+                u.Mobile.ToLower().Contains(searchLower) ||
+                u.FullName.ToLower().Contains(searchLower) ||
+                (u.Email != null && u.Email.ToLower().Contains(searchLower)));
         }
 
         if (request.Role.HasValue)

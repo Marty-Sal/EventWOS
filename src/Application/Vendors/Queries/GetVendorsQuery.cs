@@ -25,11 +25,11 @@ public sealed class GetVendorsHandler : IRequestHandler<GetVendorsQuery, Result<
 
         if (!string.IsNullOrWhiteSpace(req.Search))
         {
-            var pattern = $"%{req.Search.Trim()}%";
+            var searchLower = req.Search.Trim().ToLower();
             query = query.Where(u =>
-                EF.Functions.ILike(u.FullName, pattern) ||
-                (u.BusinessName != null && EF.Functions.ILike(u.BusinessName, pattern)) ||
-                EF.Functions.ILike(u.Mobile, pattern));
+                u.FullName.ToLower().Contains(searchLower) ||
+                (u.BusinessName != null && u.BusinessName.ToLower().Contains(searchLower)) ||
+                u.Mobile.ToLower().Contains(searchLower));
         }
 
         var total = await query.CountAsync(ct);

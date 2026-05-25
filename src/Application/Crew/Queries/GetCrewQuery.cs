@@ -30,10 +30,10 @@ public sealed class GetCrewHandler : IRequestHandler<GetCrewQuery, Result<PagedC
 
         if (!string.IsNullOrWhiteSpace(req.Search))
         {
-            var pattern = $"%{req.Search.Trim()}%";
+            var searchLower = req.Search.Trim().ToLower();
             query = query.Where(u =>
-                EF.Functions.ILike(u.FullName, pattern) ||
-                EF.Functions.ILike(u.Mobile, pattern));
+                u.FullName.ToLower().Contains(searchLower) ||
+                u.Mobile.ToLower().Contains(searchLower));
         }
 
         var total = await query.CountAsync(ct);
