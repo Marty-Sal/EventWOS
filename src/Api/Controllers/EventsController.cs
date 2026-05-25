@@ -6,7 +6,6 @@ using EventWOS.Domain.Enums;
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Events.Queries;
 using EventWOS.Application.Attendance.DTOs;
-using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Common;
 using MediatR;
@@ -274,6 +273,16 @@ public sealed class EventsController : ControllerBase
             ? Ok(ApiResponse<AttendanceSummaryDto>.Ok(result.Value))
             : NotFound(ApiResponse<AttendanceSummaryDto>.Fail(result.Error.Message));
     }
+    // ── Rate Crew (Vendor) ────────────────────────────────────────────────────
+    [HttpPost("assignments/{assignmentId:guid}/rate-crew")]
+    [Authorize(Roles = "Vendor")]
+    public async Task<IActionResult> RateCrew(Guid assignmentId, [FromBody] RateCrewRequest body, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new RateCrewCommand(assignmentId, _currentUser.UserId!.Value, body.Rating), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok("Crew rated successfully."))
+                                : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
 }
 
 // ── Request DTOs ──────────────────────────────────────────────────────────────
@@ -291,3 +300,5 @@ public sealed record RespondAssignmentRequest(string Response, string? Reason = 
 public sealed record RecordAttendanceRequest(string Action, string? Location = null);
 public sealed record ReviewDecisionRequest(string? Reason = null);
 public sealed record RateCrewRequest(decimal Rating);
+
+
