@@ -4,6 +4,26 @@ using System.Text.Json.Serialization;
 
 namespace EventWOS.BlazorWeb.Services;
 
+// ── Form models (used by Payments.razor) ─────────────────────────────────────
+
+public sealed class NewPaymentForm
+{
+    public Guid     EventId      { get; set; }
+    public Guid     AssignmentId { get; set; }
+    public Guid     CrewId       { get; set; }
+    public Guid     VendorId     { get; set; }
+    public decimal  AgreedAmount { get; set; }
+    public string?  Notes        { get; set; }
+}
+
+public sealed class NewBatchForm
+{
+    public Guid         VendorId   { get; set; }
+    public Guid         EventId    { get; set; }
+    public List<Guid>   PaymentIds { get; set; } = new();
+    public string?      Notes      { get; set; }
+}
+
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
 public sealed record CrewPaymentDto(
@@ -62,12 +82,13 @@ public sealed record PagedPayrollResult(
 
 public interface IPaymentApiService
 {
-    Task<PagedPaymentResult?> GetPaymentsAsync(Guid? eventId = null, Guid? vendorId = null,
-        string? status = null, int page = 1, CancellationToken ct = default);
+    Task<PagedPaymentResult?> GetPaymentsAsync(
+        Guid? eventId = null, Guid? vendorId = null, Guid? crewId = null,
+        string? status = null, int page = 1, int pageSize = 20,
+        CancellationToken ct = default);
 
     Task<(bool Ok, string? Error)> CreatePaymentAsync(
-        Guid eventId, Guid assignmentId, Guid crewId, Guid vendorId,
-        decimal agreedAmount, string? notes, CancellationToken ct = default);
+        NewPaymentForm form, CancellationToken ct = default);
 
     Task<(bool Ok, string? Error)> UpdatePaymentStatusAsync(
         Guid paymentId, string action, decimal? paidAmount = null,
@@ -76,14 +97,15 @@ public interface IPaymentApiService
 
     Task<PagedPayrollResult?> GetPayrollBatchesAsync(
         Guid? vendorId = null, Guid? eventId = null,
-        string? status = null, int page = 1, CancellationToken ct = default);
+        string? status = null, int page = 1,
+        CancellationToken ct = default);
 
-    Task<(bool Ok, Guid? BatchId, string? Error)> CreatePayrollBatchAsync(
-        Guid vendorId, Guid eventId, string? notes,
-        IReadOnlyList<Guid> paymentIds, CancellationToken ct = default);
+    Task<(bool Ok, string? Error)> CreatePayrollBatchAsync(
+        NewBatchForm form, CancellationToken ct = default);
 
-    Task<(bool Ok, string? Error)> UpdatePayrollStatusAsync(
-        Guid batchId, string action, string? reason = null, CancellationToken ct = default);
+    Task<(bool Ok, string? Error)> UpdatePayrollBatchStatusAsync(
+        Guid batchId, string action, string? reason = null,
+        CancellationToken ct = default);
 }
 
 // ── Implementation ────────────────────────────────────────────────────────────
@@ -100,15 +122,17 @@ public sealed class PaymentApiService : IPaymentApiService
     public PaymentApiService(HttpClient http) => _http = http;
 
     public async Task<PagedPaymentResult?> GetPaymentsAsync(
-        Guid? eventId = null, Guid? vendorId = null,
-        string? status = null, int page = 1, CancellationToken ct = default)
+        Guid? eventId = null, Guid? vendorId = null, Guid? crewId = null,
+        string? status = null, int page = 1, int pageSize = 20,
+        CancellationToken ct = default)
     {
         try
         {
-            var url = $"api/v1/payments?page={page}&pageSize=20";
+            var url = $"api/v1/payments?page={page}&pageSize={pageSize}";
             if (eventId.HasValue)  url += $"&eventId={eventId}";
             if (vendorId.HasValue) url += $"&vendorId={vendorId}";
-            if (status != null)    url += $"&status={status}";
+            if (crewId.HasValue)   url += $"&crewId={crewId}";
+            if (status != null)    url += $"&status={Uri.EscapeDataString(status)}";
             var r = await _http.GetFromJsonAsync<ApiResult<PagedPaymentResult>>(url, _jsonOpts, ct);
             return r?.Data;
         }
@@ -116,12 +140,19 @@ public sealed class PaymentApiService : IPaymentApiService
     }
 
     public async Task<(bool Ok, string? Error)> CreatePaymentAsync(
-        Guid eventId, Guid assignmentId, Guid crewId, Guid vendorId,
-        decimal agreedAmount, string? notes, CancellationToken ct = default)
+        NewPaymentForm form, CancellationToken ct = default)
     {
         try
         {
-            var body = new { eventId, assignmentId, crewId, vendorId, agreedAmount, notes };
+            var body = new
+            {
+                eventId      = form.EventId,
+                assignmentId = form.AssignmentId,
+                crewId       = form.CrewId,
+                vendorId     = form.VendorId,
+                agreedAmount = form.AgreedAmount,
+                notes        = form.Notes
+            };
             var r = await _http.PostAsJsonAsync("api/v1/payments", body, ct);
             if (r.IsSuccessStatusCode) return (true, null);
             var err = await r.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
@@ -148,41 +179,44 @@ public sealed class PaymentApiService : IPaymentApiService
 
     public async Task<PagedPayrollResult?> GetPayrollBatchesAsync(
         Guid? vendorId = null, Guid? eventId = null,
-        string? status = null, int page = 1, CancellationToken ct = default)
+        string? status = null, int page = 1,
+        CancellationToken ct = default)
     {
         try
         {
             var url = $"api/v1/payments/payroll?page={page}&pageSize=20";
             if (vendorId.HasValue) url += $"&vendorId={vendorId}";
             if (eventId.HasValue)  url += $"&eventId={eventId}";
-            if (status != null)    url += $"&status={status}";
+            if (status != null)    url += $"&status={Uri.EscapeDataString(status)}";
             var r = await _http.GetFromJsonAsync<ApiResult<PagedPayrollResult>>(url, _jsonOpts, ct);
             return r?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<(bool Ok, Guid? BatchId, string? Error)> CreatePayrollBatchAsync(
-        Guid vendorId, Guid eventId, string? notes,
-        IReadOnlyList<Guid> paymentIds, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Error)> CreatePayrollBatchAsync(
+        NewBatchForm form, CancellationToken ct = default)
     {
         try
         {
-            var body = new { vendorId, eventId, notes, paymentIds };
-            var r = await _http.PostAsJsonAsync("api/v1/payments/payroll", body, ct);
-            if (r.IsSuccessStatusCode)
+            var body = new
             {
-                var res = await r.Content.ReadFromJsonAsync<ApiResult<Guid>>(_jsonOpts, ct);
-                return (true, res?.Data, null);
-            }
+                vendorId   = form.VendorId,
+                eventId    = form.EventId,
+                paymentIds = form.PaymentIds,
+                notes      = form.Notes
+            };
+            var r = await _http.PostAsJsonAsync("api/v1/payments/payroll", body, ct);
+            if (r.IsSuccessStatusCode) return (true, null);
             var err = await r.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
-            return (false, null, err?.Message ?? "Failed to create payroll batch.");
+            return (false, err?.Message ?? "Failed to create payroll batch.");
         }
-        catch (Exception ex) { return (false, null, ex.Message); }
+        catch (Exception ex) { return (false, ex.Message); }
     }
 
-    public async Task<(bool Ok, string? Error)> UpdatePayrollStatusAsync(
-        Guid batchId, string action, string? reason = null, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Error)> UpdatePayrollBatchStatusAsync(
+        Guid batchId, string action, string? reason = null,
+        CancellationToken ct = default)
     {
         try
         {
