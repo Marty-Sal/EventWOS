@@ -119,14 +119,6 @@
 }
 
 @code {
-    protected override async Task OnInitializedAsync()
-    {
-
-        // ── Permission gate ──────────────────────────────────────────────────────
-        _accessDenied = !await PermGuard.CanAsync("crew:read");
-        if (_accessDenied) { StateHasChanged(); return; }
-        _canWrite = await PermGuard.CanAsync("crew:write");
-    }
 
     private bool _accessDenied;
     private bool _canWrite;
@@ -143,7 +135,14 @@
     private string? _newEmail;
     private string? _referralCode;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("crew:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("crew:write");
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {

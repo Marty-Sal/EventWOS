@@ -187,14 +187,6 @@
 }
 
 @code {
-    protected override async Task OnInitializedAsync()
-    {
-
-        // ── Permission gate ──────────────────────────────────────────────────────
-        _accessDenied = !await PermGuard.CanAsync("vendors:read");
-        if (_accessDenied) { StateHasChanged(); return; }
-        _canWrite = await PermGuard.CanAsync("vendors:write");
-    }
 
     private bool _accessDenied;
     private bool _canWrite;
@@ -215,7 +207,14 @@
     private VendorListItemDto? _rateTarget;
     private decimal _newRating = 5.0m;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("vendors:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("vendors:write");
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {

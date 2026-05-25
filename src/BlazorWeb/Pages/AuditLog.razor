@@ -87,20 +87,19 @@
 </div>
 
 @code {
-    protected override async Task OnInitializedAsync()
-    {
-
-        // ── Permission gate ──────────────────────────────────────────────────────
-        _accessDenied = !await PermGuard.CanAsync("audit:read");
-        if (_accessDenied) { StateHasChanged(); return; }
-    }
 
     private bool _accessDenied;
     private List<AuditLogDto> _logs = new();
     private bool _loading = true;
     private string? _error;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("audit:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {

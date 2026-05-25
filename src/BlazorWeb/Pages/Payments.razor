@@ -590,14 +590,6 @@
 </style>
 
 @code {
-    protected override async Task OnInitializedAsync()
-    {
-
-        // ── Permission gate ──────────────────────────────────────────────────────
-        _accessDenied = !await PermGuard.CanAsync("payments:read");
-        if (_accessDenied) { StateHasChanged(); return; }
-        _canWrite = await PermGuard.CanAsync("payments:write");
-    }
 
     private bool _accessDenied;
     private bool _canWrite;
@@ -679,7 +671,14 @@
     // ══════════════════════════════════════════════════════════════════════════
     // LIFECYCLE
     // ══════════════════════════════════════════════════════════════════════════
-    protected override async Task OnInitializedAsync() => await LoadData();
+    protected override async Task OnInitializedAsync()
+    {
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("payments:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("payments:write");
+        await LoadData();
+    }
 
     private async Task SwitchTab(Tab tab)
     {

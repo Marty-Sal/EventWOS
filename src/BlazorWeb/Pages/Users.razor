@@ -198,14 +198,6 @@
 
 
 @code {
-    protected override async Task OnInitializedAsync()
-    {
-
-        // ── Permission gate ──────────────────────────────────────────────────────
-        _accessDenied = !await PermGuard.CanAsync("users:read");
-        if (_accessDenied) { StateHasChanged(); return; }
-        _canWrite = await PermGuard.CanAsync("users:write");
-    }
 
     private bool _accessDenied;
     private bool _canWrite;
@@ -230,7 +222,14 @@
     private string? _createBusiness;
     private string? _createReferral;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("users:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("users:write");
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
