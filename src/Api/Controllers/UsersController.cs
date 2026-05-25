@@ -21,17 +21,20 @@ namespace EventWOS.Api.Controllers;
 [Produces("application/json")]
 public sealed class UsersController : ControllerBase
 {
-    private readonly IMediator _mediator;
+    private readonly IMediator    _mediator;
     private readonly ICurrentUser _currentUser;
 
     public UsersController(IMediator mediator, ICurrentUser currentUser)
     {
-        _mediator = mediator;
+        _mediator    = mediator;
         _currentUser = currentUser;
     }
 
-    /// <summary>Get authenticated user's own profile.</summary>
-    [Permission("users:read")]
+    /// <summary>
+    /// Get authenticated user's own profile.
+    /// Requires profile:read — every role has this by default.
+    /// </summary>
+    [Permission("profile:read")]
     [HttpGet("me")]
     [ProducesResponseType(typeof(ApiResponse<UserProfileDto>), 200)]
     public async Task<IActionResult> GetMe(CancellationToken ct)
@@ -42,32 +45,35 @@ public sealed class UsersController : ControllerBase
             : NotFound(ApiResponse<UserProfileDto>.Fail(result.Error.Message));
     }
 
-    /// <summary>Update authenticated user's own profile.</summary>
-    [Permission("users:write")]
+    /// <summary>
+    /// Update authenticated user's own profile (name, email, avatar).
+    /// Requires profile:write — every role has this by default.
+    /// </summary>
+    [Permission("profile:write")]
     [HttpPut("me")]
     [ProducesResponseType(typeof(ApiResponse), 200)]
     public async Task<IActionResult> UpdateMe([FromBody] UpdateProfileRequest dto, CancellationToken ct)
     {
-        var command = new UpdateProfileCommand(_currentUser.UserId!.Value, dto.FullName, dto.Email, dto.AvatarUrl);
+        var command = new UpdateProfileCommand(
+            _currentUser.UserId!.Value, dto.FullName, dto.Email, dto.AvatarUrl);
         var result = await _mediator.Send(command, ct);
-        return result.IsSuccess ? Ok(ApiResponse.Ok("Profile updated.")) : BadRequest(ApiResponse.Fail(result.Error.Message));
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok("Profile updated."))
+            : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 
-    /// <summary>List all users. Admin/Manager only.</summary>
+    /// <summary>List all users. Requires users:read (Admin / Manager only).</summary>
     [Permission("users:read")]
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<PagedResult<UserDto>>), 200)]
     public async Task<IActionResult> GetUsers(
-        [FromQuery] int page = 1,
+        [FromQuery] int page     = 1,
         [FromQuery] int pageSize = 20,
-        [FromQuery] string? search = null,
-        [FromQuery] UserRole? role = null,
+        [FromQuery] string?     search = null,
+        [FromQuery] UserRole?   role   = null,
         [FromQuery] UserStatus? status = null,
-        CancellationToken ct = default)
+        CancellationToken ct           = default)
     {
-        if (!_currentUser.HasPermission("users:read"))
-            return Forbid();
-
         var result = await _mediator.Send(new GetUsersQuery(page, pageSize, search, role, status), ct);
         return Ok(ApiResponse<PagedResult<UserDto>>.Ok(result.Value));
     }
@@ -85,7 +91,9 @@ public sealed class UsersController : ControllerBase
             return Forbid();
 
         var command = new ChangeUserStatusCommand(id, dto.Status, _currentUser.UserId!.Value);
-        var result = await _mediator.Send(command, ct);
-        return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
+        var result  = await _mediator.Send(command, ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok())
+            : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 }
