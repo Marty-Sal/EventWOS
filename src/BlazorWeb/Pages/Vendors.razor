@@ -23,10 +23,13 @@
             <h2 class="text-lg font-bold text-gray-800">Vendors</h2>
             <p class="text-sm text-gray-500">Manage manpower suppliers.</p>
         </div>
-        @if (_canWrite) { <button @onclick="() => _showCreate = true"
-                class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
-            + Add Vendor
-        </button>
+        @if (_canWrite)
+        {
+            <button @onclick="() => _showCreate = true"
+                    class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
+                + Add Vendor
+            </button>
+        }
     </div>
 
     <!-- Search -->

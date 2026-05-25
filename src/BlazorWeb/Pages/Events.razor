@@ -29,10 +29,13 @@
                 <h2 class="text-lg font-bold text-gray-800">Events</h2>
                 <p class="text-sm text-gray-500">Manage workforce events end-to-end.</p>
             </div>
-            @if (_canWrite) { <button @onclick="() => OpenCreateModal()"
-                    class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
-                + Create Event
-            </button>
+            @if (_canWrite)
+            {
+                <button @onclick="() => OpenCreateModal()"
+                        class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
+                    + Create Event
+                </button>
+            }
         </div>
 
         <!-- Filters -->

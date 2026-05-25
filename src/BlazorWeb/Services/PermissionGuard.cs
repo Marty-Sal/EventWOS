@@ -38,7 +38,7 @@ public sealed class PermissionGuard
     public async Task<string?> GetRoleAsync()
     {
         var state = await _authState.GetAuthenticationStateAsync();
-        return state.User.FindFirstValue(ClaimTypes.Role);
+        return state.User.FindFirst(ClaimTypes.Role)?.Value;
     }
 
     /// <summary>
