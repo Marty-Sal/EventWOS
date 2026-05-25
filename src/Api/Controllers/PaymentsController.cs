@@ -53,7 +53,7 @@ public sealed class PaymentsController : ControllerBase
             req.AgreedAmount, req.Notes), ct);
 
         if (!result.IsSuccess)
-            return BadRequest(ApiResponse<object>.Fail(result.Error.Description));
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Message));
 
         return Ok(ApiResponse<Guid>.Ok(result.Value));
     }
@@ -67,7 +67,7 @@ public sealed class PaymentsController : ControllerBase
             id, req.Action, req.PaidAmount, req.Method, req.TransactionRef, req.Reason), ct);
 
         if (!result.IsSuccess)
-            return BadRequest(ApiResponse<object>.Fail(result.Error.Description));
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Message));
 
         return Ok(ApiResponse<bool>.Ok(true));
     }
@@ -98,7 +98,7 @@ public sealed class PaymentsController : ControllerBase
             req.VendorId, req.EventId, req.Notes, req.PaymentIds), ct);
 
         if (!result.IsSuccess)
-            return BadRequest(ApiResponse<object>.Fail(result.Error.Description));
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Message));
 
         return Ok(ApiResponse<Guid>.Ok(result.Value));
     }
@@ -113,7 +113,7 @@ public sealed class PaymentsController : ControllerBase
             id, req.Action, actorId, req.Reason), ct);
 
         if (!result.IsSuccess)
-            return BadRequest(ApiResponse<object>.Fail(result.Error.Description));
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Message));
 
         return Ok(ApiResponse<bool>.Ok(true));
     }
