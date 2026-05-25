@@ -78,6 +78,9 @@ public sealed class DatabaseSeeder
         ("payments:write",    "payments",    "write",   "Process payments"),
         ("reports:read",      "reports",     "read",    "View reports"),
         ("audit:read",        "audit",       "read",    "View audit logs"),
+        // Phase 2 — Events
+        ("events:read",       "events",      "read",    "View events"),
+        ("events:write",      "events",      "write",   "Create and manage events"),
         ("profile:read",      "profile",     "read",    "View own profile"),
         ("profile:write",     "profile",     "write",   "Update own profile"),
     };
@@ -129,7 +132,7 @@ public sealed class DatabaseSeeder
         {
             var vendorPerms = new[]
             {
-                "vendors:read", "crew:read", "crew:write", "crew:invite",
+                "vendors:read", "crew:read", "crew:write", "crew:invite", "events:read",
                 "crew:approve", "attendance:read", "profile:read", "profile:write"
             };
             foreach (var name in vendorPerms)
@@ -144,7 +147,7 @@ public sealed class DatabaseSeeder
         var crewRole = GetRole(UserRole.Crew);
         if (crewRole is not null)
         {
-            foreach (var name in new[] { "profile:read", "profile:write" })
+            foreach (var name in new[] { "profile:read", "profile:write", "events:read" })
             {
                 var perm = GetPerm(name);
                 if (perm is not null)

@@ -439,6 +439,68 @@ BEGIN
         ALTER TABLE vendor_crew_mappings ADD COLUMN deleted_at TIMESTAMP; END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vendor_crew_mappings' AND column_name='deleted_by') THEN
         ALTER TABLE vendor_crew_mappings ADD COLUMN deleted_by UUID; END IF;
+    -- ═══ events (Phase 2) ══════════════════════════════════════════════════════
+    -- These tables are created fresh by migration 20260529; this block is a safety net.
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='events') THEN
+        CREATE TABLE events (
+            id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            title               VARCHAR(200) NOT NULL,
+            description         VARCHAR(2000),
+            venue               VARCHAR(300) NOT NULL,
+            address             VARCHAR(500),
+            start_at            TIMESTAMP   NOT NULL,
+            end_at              TIMESTAMP   NOT NULL,
+            status              INT         NOT NULL DEFAULT 0,
+            max_crew            INT         NOT NULL DEFAULT 0,
+            created_by_user_id  UUID        NOT NULL REFERENCES users(id),
+            notes               VARCHAR(1000),
+            created_at          TIMESTAMP   NOT NULL DEFAULT NOW(),
+            created_by          UUID,
+            updated_at          TIMESTAMP,
+            updated_by          UUID,
+            is_deleted          BOOLEAN     NOT NULL DEFAULT false,
+            deleted_at          TIMESTAMP,
+            deleted_by          UUID
+        ); END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='event_assignments') THEN
+        CREATE TABLE event_assignments (
+            id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            event_id            UUID        NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            crew_id             UUID        NOT NULL REFERENCES users(id),
+            vendor_id           UUID        NOT NULL REFERENCES users(id),
+            assigned_by_user_id UUID        NOT NULL REFERENCES users(id),
+            status              INT         NOT NULL DEFAULT 0,
+            notes               VARCHAR(1000),
+            confirmed_at        TIMESTAMP,
+            declined_at         TIMESTAMP,
+            created_at          TIMESTAMP   NOT NULL DEFAULT NOW(),
+            created_by          UUID,
+            updated_at          TIMESTAMP,
+            updated_by          UUID,
+            is_deleted          BOOLEAN     NOT NULL DEFAULT false,
+            deleted_at          TIMESTAMP,
+            deleted_by          UUID
+        ); END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='attendance_records') THEN
+        CREATE TABLE attendance_records (
+            id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            assignment_id        UUID        NOT NULL REFERENCES event_assignments(id) ON DELETE CASCADE,
+            event_id             UUID        NOT NULL REFERENCES events(id),
+            crew_id              UUID        NOT NULL REFERENCES users(id),
+            action               INT         NOT NULL,
+            recorded_at          TIMESTAMP   NOT NULL DEFAULT NOW(),
+            location             VARCHAR(500),
+            recorded_by_user_id  VARCHAR(100),
+            created_at           TIMESTAMP   NOT NULL DEFAULT NOW(),
+            created_by           UUID,
+            updated_at           TIMESTAMP,
+            updated_by           UUID,
+            is_deleted           BOOLEAN     NOT NULL DEFAULT false,
+            deleted_at           TIMESTAMP,
+            deleted_by           UUID
+        ); END IF;
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");

@@ -26,6 +26,7 @@ builder.Services.AddScoped<IAuthApiService, AuthApiService>();
 builder.Services.AddScoped<IUserApiService, UserApiService>();
 builder.Services.AddScoped<ISessionApiService, SessionApiService>();
 builder.Services.AddScoped<IVendorApiService, VendorApiService>();
+builder.Services.AddScoped<IEventApiService, EventApiService>();
 builder.Services.AddScoped<TokenRefreshService>();
 builder.Services.AddScoped<NotificationHubService>();
 

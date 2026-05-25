@@ -39,6 +39,11 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<VendorCrewMapping> VendorCrewMappings => Set<VendorCrewMapping>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    // Phase 2 — Events Module
+    public DbSet<Event>            Events            => Set<Event>();
+    public DbSet<EventAssignment>  EventAssignments  => Set<EventAssignment>();
+    public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -54,6 +59,9 @@ public sealed class AppDbContext : DbContext, IAppDbContext
         modelBuilder.Entity<RefreshToken>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<UserSession>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<VendorCrewMapping>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<Event>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<EventAssignment>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<AttendanceRecord>().HasQueryFilter(e => !e.IsDeleted);
 
         // Join tables reference soft-deleted principals (User, Permission).
         // Add matching filters so EF never returns orphaned rows.
