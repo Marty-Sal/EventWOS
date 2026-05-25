@@ -32,6 +32,9 @@ public sealed class OtpService : IOtpService
     public bool VerifyOtp(string plaintext, string storedHash) =>
         BCrypt.Net.BCrypt.Verify(plaintext, storedHash);
 
+    /// <inheritdoc/>
+    public bool IsDevelopmentMode => _options.IsDevelopmentMode;
+
     public async Task<bool> SendOtpAsync(string mobile, string otp, CancellationToken cancellationToken = default)
     {
         if (_options.IsDevelopmentMode)
