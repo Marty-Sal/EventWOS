@@ -545,6 +545,9 @@ BEGIN
             ALTER TABLE payroll_batches ADD COLUMN deleted_at TIMESTAMPTZ; END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_batches' AND column_name='deleted_by') THEN
             ALTER TABLE payroll_batches ADD COLUMN deleted_by UUID; END IF;
+        -- Ensure updated_at is nullable (EF only sets it on Update, not Insert)
+        ALTER TABLE payroll_batches ALTER COLUMN updated_at DROP NOT NULL;
+        ALTER TABLE payroll_batches ALTER COLUMN updated_at DROP DEFAULT;
     END IF;
 
     -- ═══ crew_payments ═══════════════════════════════════════════════════════
@@ -593,6 +596,11 @@ BEGIN
             ALTER TABLE crew_payments ADD COLUMN deleted_at TIMESTAMPTZ; END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='crew_payments' AND column_name='deleted_by') THEN
             ALTER TABLE crew_payments ADD COLUMN deleted_by UUID; END IF;
+        -- Ensure updated_at is nullable (EF only sets it on Update, not Insert)
+        ALTER TABLE crew_payments ALTER COLUMN updated_at DROP NOT NULL;
+        ALTER TABLE crew_payments ALTER COLUMN updated_at DROP DEFAULT;
+        -- Ensure created_by is UUID type (may have been created as varchar)
+        -- (skip type change if already uuid — postgres will error if wrong type anyway)
     END IF;
 END $$;
 ");
