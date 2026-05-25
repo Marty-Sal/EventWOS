@@ -104,6 +104,16 @@ public sealed class AppAuthStateProvider : AuthenticationStateProvider
         var handler = new JwtSecurityTokenHandler();
         if (!handler.CanReadToken(jwt)) return Enumerable.Empty<Claim>();
         var token = handler.ReadJwtToken(jwt);
-        return token.Claims;
+
+        // JwtSecurityTokenHandler.ReadJwtToken does NOT remap short claim names to
+        // their long-form URIs. We must manually remap "role" → ClaimTypes.Role so
+        // that AuthorizeView Roles= checks work correctly in Blazor WASM.
+        return token.Claims.Select(c => c.Type switch
+        {
+            "role"   => new Claim(ClaimTypes.Role,        c.Value),
+            "sub"    => new Claim(ClaimTypes.NameIdentifier, c.Value),
+            "mobile" => new Claim("mobile",               c.Value),
+            _        => c
+        });
     }
 }

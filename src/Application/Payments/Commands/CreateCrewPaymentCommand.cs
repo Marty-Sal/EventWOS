@@ -47,7 +47,7 @@ public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPayment
             .AnyAsync(p => p.AssignmentId == cmd.AssignmentId, ct);
 
         if (exists)
-            return Result.Failure<Guid>(Error.Conflict("Payment.Duplicate",
+            return Result.Failure<Guid>(Error.Custom("Payment.Duplicate",
                 "A payment already exists for this assignment."));
 
         var payment = new CrewPayment(

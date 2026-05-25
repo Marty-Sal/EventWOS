@@ -136,8 +136,8 @@
                                         <div class="flex gap-1 flex-wrap">
                                             @if (p.Status == "Pending" || p.Status == "OnHold")
                                             {
-                                                <button class="act-btn blue" @onclick="() => QuickAction(p.Id, \"approve\")">Approve</button>
-                                                <button class="act-btn red"  @onclick="() => QuickAction(p.Id, \"reject\")">Reject</button>
+                                                <button class="act-btn blue" @onclick="() => ApprovePayment(p.Id)">Approve</button>
+                                                <button class="act-btn red"  @onclick="() => RejectPayment(p.Id)">Reject</button>
                                             }
                                             @if (p.Status == "Approved")
                                             {
@@ -145,7 +145,7 @@
                                             }
                                             @if (p.Status == "Pending")
                                             {
-                                                <button class="act-btn amber" @onclick="() => QuickAction(p.Id, \"hold\")">Hold</button>
+                                                <button class="act-btn amber" @onclick="() => HoldPayment(p.Id)">Hold</button>
                                             }
                                         </div>
                                     </td>
@@ -232,17 +232,17 @@
                                         <div class="flex gap-1 flex-wrap">
                                             @if (b.Status == "Draft")
                                             {
-                                                <button class="act-btn blue" @onclick="() => PayrollAction(b.Id, \"submit\")">Submit</button>
-                                                <button class="act-btn red"  @onclick="() => PayrollAction(b.Id, \"reject\")">Reject</button>
+                                                <button class="act-btn blue" @onclick="() => SubmitBatch(b.Id)">Submit</button>
+                                                <button class="act-btn red"  @onclick="() => RejectBatch(b.Id)">Reject</button>
                                             }
                                             @if (b.Status == "Submitted")
                                             {
-                                                <button class="act-btn green" @onclick="() => PayrollAction(b.Id, \"approve\")">Approve</button>
-                                                <button class="act-btn red"   @onclick="() => PayrollAction(b.Id, \"reject\")">Reject</button>
+                                                <button class="act-btn green" @onclick="() => ApproveBatch(b.Id)">Approve</button>
+                                                <button class="act-btn red"   @onclick="() => RejectBatch(b.Id)">Reject</button>
                                             }
                                             @if (b.Status == "Approved")
                                             {
-                                                <button class="act-btn purple" @onclick="() => PayrollAction(b.Id, \"disburse\")">Disburse</button>
+                                                <button class="act-btn purple" @onclick="() => DisburseBatch(b.Id)">Disburse</button>
                                             }
                                         </div>
                                     </td>
@@ -464,6 +464,11 @@
     private async Task PrevPage() { if (_page > 1) { _page--; await LoadData(); } }
     private async Task NextPage() { _page++; await LoadData(); }
 
+    // Wrapper methods — avoid escaped quotes in Razor @onclick lambdas
+    private Task ApprovePayment(Guid id) => QuickAction(id, "approve");
+    private Task RejectPayment(Guid id)  => QuickAction(id, "reject");
+    private Task HoldPayment(Guid id)    => QuickAction(id, "hold");
+
     private async Task QuickAction(Guid id, string action)
     {
         var (ok, err) = await PaymentApi.UpdatePaymentStatusAsync(id, action);
@@ -535,6 +540,12 @@
         }
         else _error = err;
     }
+
+    // Payroll action wrappers
+    private Task SubmitBatch(Guid id)   => PayrollAction(id, "submit");
+    private Task ApproveBatch(Guid id)  => PayrollAction(id, "approve");
+    private Task RejectBatch(Guid id)   => PayrollAction(id, "reject");
+    private Task DisburseBatch(Guid id) => PayrollAction(id, "disburse");
 
     private async Task PayrollAction(Guid id, string action)
     {

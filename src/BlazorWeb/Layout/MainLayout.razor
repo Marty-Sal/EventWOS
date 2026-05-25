@@ -65,7 +65,7 @@
                                     @context.User.FindFirst("mobile")?.Value
                                 </p>
                                 <p class="text-xs text-gray-400 truncate">
-                                    @context.User.FindFirst("role")?.Value
+                                    @(context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? context.User.FindFirst("role")?.Value)
                                 </p>
                             </div>
                             <button @onclick="LogoutAsync"

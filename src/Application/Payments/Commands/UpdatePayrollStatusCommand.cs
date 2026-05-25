@@ -27,7 +27,7 @@ public sealed class UpdatePayrollStatusHandler : IRequestHandler<UpdatePayrollSt
     {
         var batch = await _db.PayrollBatches.FindAsync([cmd.BatchId], ct);
         if (batch is null)
-            return Result.Failure(Error.NotFound("Payroll.NotFound", "Payroll batch not found."));
+            return Result.Failure(Error.Custom("Payroll.NotFound", "Payroll batch not found."));
 
         try
         {
@@ -38,13 +38,13 @@ public sealed class UpdatePayrollStatusHandler : IRequestHandler<UpdatePayrollSt
                 case "disburse": batch.Disburse();            break;
                 case "reject":   batch.Reject(cmd.Reason ?? "Rejected."); break;
                 default:
-                    return Result.Failure(Error.Validation("Payroll.InvalidAction",
+                    return Result.Failure(Error.Custom("Payroll.InvalidAction",
                         "Action must be: submit, approve, disburse, or reject."));
             }
         }
         catch (InvalidOperationException ex)
         {
-            return Result.Failure(Error.Validation("Payroll.InvalidTransition", ex.Message));
+            return Result.Failure(Error.Custom("Payroll.InvalidTransition", ex.Message));
         }
 
         await _uow.SaveChangesAsync(ct);

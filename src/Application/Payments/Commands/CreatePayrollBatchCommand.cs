@@ -47,7 +47,7 @@ public sealed class CreatePayrollBatchHandler : IRequestHandler<CreatePayrollBat
             .ToListAsync(ct);
 
         if (payments.Count == 0)
-            return Result.Failure<Guid>(Error.Validation("Payroll.NoPayments",
+            return Result.Failure<Guid>(Error.Custom("Payroll.NoPayments",
                 "No eligible unbatched payments found."));
 
         var batchRef = $"PAY-{cmd.EventId.ToString()[..8].ToUpper()}-{DateTime.UtcNow:yyyyMMddHHmm}";

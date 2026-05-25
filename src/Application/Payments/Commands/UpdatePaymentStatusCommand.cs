@@ -47,7 +47,7 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
     {
         var payment = await _db.CrewPayments.FindAsync([cmd.PaymentId], ct);
         if (payment is null)
-            return Result.Failure(Error.NotFound("Payment.NotFound", "Payment not found."));
+            return Result.Failure(Error.Custom("Payment.NotFound", "Payment not found."));
 
         try
         {
@@ -73,7 +73,7 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
         }
         catch (InvalidOperationException ex)
         {
-            return Result.Failure(Error.Validation("Payment.InvalidTransition", ex.Message));
+            return Result.Failure(Error.Custom("Payment.InvalidTransition", ex.Message));
         }
 
         await _uow.SaveChangesAsync(ct);
