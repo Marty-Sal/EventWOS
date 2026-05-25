@@ -2,6 +2,17 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject HttpClient Http
 
+
+    @if (_accessDenied)
+    {
+        <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+            <div class="text-5xl mb-4">🔒</div>
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+            <p class="text-gray-500 text-sm">You don't have permission to view this page.<br/>Contact your Admin to request access.</p>
+        </div>
+        return;
+    }
+
 <PageTitle>Roles — EventWOS</PageTitle>
 
 <div class="space-y-6">
@@ -39,6 +50,15 @@
 </div>
 
 @code {
+    protected override async Task OnInitializedAsync()
+    {
+
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("roles:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+    }
+
+    private bool _accessDenied;
     private readonly List<RoleViewModel> _roles = new()
     {
         new("Admin", "🛡️", "Full system access", new[]

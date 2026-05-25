@@ -110,10 +110,11 @@ public sealed class AppAuthStateProvider : AuthenticationStateProvider
         // that AuthorizeView Roles= checks work correctly in Blazor WASM.
         return token.Claims.Select(c => c.Type switch
         {
-            "role"   => new Claim(ClaimTypes.Role,        c.Value),
-            "sub"    => new Claim(ClaimTypes.NameIdentifier, c.Value),
-            "mobile" => new Claim("mobile",               c.Value),
-            _        => c
+            "role"       => new Claim(ClaimTypes.Role,             c.Value),
+            "sub"        => new Claim(ClaimTypes.NameIdentifier,   c.Value),
+            "mobile"     => new Claim("mobile",                    c.Value),
+            "permission" => new Claim(PermissionClaimTypes.Permission, c.Value),
+            _            => c
         });
     }
 }

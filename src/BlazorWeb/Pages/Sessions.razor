@@ -2,6 +2,17 @@
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject ISessionApiService SessionApi
 
+
+    @if (_accessDenied)
+    {
+        <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+            <div class="text-5xl mb-4">🔒</div>
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+            <p class="text-gray-500 text-sm">You don't have permission to view this page.<br/>Contact your Admin to request access.</p>
+        </div>
+        return;
+    }
+
 <PageTitle>Sessions — EventWOS</PageTitle>
 
 <div class="space-y-5">
@@ -57,11 +68,16 @@
 </div>
 
 @code {
+    private bool _accessDenied;
     private IReadOnlyList<SessionDto> _sessions = Array.Empty<SessionDto>();
     private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
     {
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("sessions:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+
         _sessions = await SessionApi.GetSessionsAsync();
         _loading = false;
     }

@@ -21,17 +21,43 @@
                 @* Dashboard — everyone *@
                 <NavItem Href="/dashboard" Icon="🏠" Label="Dashboard" />
 
-                @* Events — everyone can browse events *@
-                <NavItem Href="/events" Icon="📅" Label="Events" />
+                @* Events — permission-gated for Manager; always for Admin *@
+                <AuthorizeView Roles="Admin">
+                    <NavItem Href="/events" Icon="📅" Label="Events" />
+                </AuthorizeView>
+                <AuthorizeView Roles="Manager">
+                    @if (_perms.Contains("events:read"))
+                    {
+                        <NavItem Href="/events" Icon="📅" Label="Events" />
+                    }
+                </AuthorizeView>
+                <AuthorizeView Roles="Crew,Vendor">
+                    <NavItem Href="/events" Icon="📅" Label="Events" />
+                </AuthorizeView>
 
-                @* Admin & Manager only *@
-                <AuthorizeView Roles="Admin,Manager">
+                @* Admin always sees all nav *@
+                <AuthorizeView Roles="Admin">
                     <NavItem Href="/users"    Icon="👥" Label="Users" />
                     <NavItem Href="/managers" Icon="👔" Label="Managers" />
                     <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" />
                     <NavItem Href="/crew"     Icon="👷" Label="Crew" />
                     <NavItem Href="/payments" Icon="💰" Label="Payments" />
                     <NavItem Href="/sessions" Icon="🔌" Label="Sessions" />
+                </AuthorizeView>
+
+                @* Manager sees only links matching their permissions *@
+                <AuthorizeView Roles="Manager">
+                    @if (_perms.Contains("users:read"))    { <NavItem Href="/users"    Icon="👥" Label="Users" /> }
+                    @if (_perms.Contains("vendors:read"))  { <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" /> }
+                    @if (_perms.Contains("crew:read"))     { <NavItem Href="/crew"     Icon="👷" Label="Crew" /> }
+                    @if (_perms.Contains("payments:read")) { <NavItem Href="/payments" Icon="💰" Label="Payments" /> }
+                    @if (_perms.Contains("sessions:read")) { <NavItem Href="/sessions" Icon="🔌" Label="Sessions" /> }
+                    @if (_perms.Contains("audit:read"))
+                    {
+                        <div class="pt-4 mt-4 border-t border-gray-700 space-y-1">
+                            <NavItem Href="/admin/audit" Icon="📋" Label="Audit Log" />
+                        </div>
+                    }
                 </AuthorizeView>
 
                 @* Crew — My Assignments with pending badge *@
@@ -134,8 +160,18 @@
         _             => "EventWOS"
     };
 
+    // Current Manager's effective permissions (loaded from JWT claims)
+    private HashSet<string> _perms = new(StringComparer.OrdinalIgnoreCase);
+
     protected override async Task OnInitializedAsync()
     {
+        // Load permissions from JWT claims (already in auth state)
+        var state = await AuthState.GetAuthenticationStateAsync();
+        _perms = state.User
+                      .FindAll(PermissionClaimTypes.Permission)
+                      .Select(c => c.Value)
+                      .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         await LoadPendingInvites();
         try { await Hub.StartAsync(); }
         catch { }

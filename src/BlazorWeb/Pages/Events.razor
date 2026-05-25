@@ -4,6 +4,17 @@
 @inject IVendorApiService VendorApi
 @inject AuthenticationStateProvider Auth
 
+
+    @if (_accessDenied)
+    {
+        <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+            <div class="text-5xl mb-4">🔒</div>
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+            <p class="text-gray-500 text-sm">You don't have permission to view this page.<br/>Contact your Admin to request access.</p>
+        </div>
+        return;
+    }
+
 <PageTitle>Events — EventWOS</PageTitle>
 
 @if (_role is "Admin" or "Manager")
@@ -18,7 +29,7 @@
                 <h2 class="text-lg font-bold text-gray-800">Events</h2>
                 <p class="text-sm text-gray-500">Manage workforce events end-to-end.</p>
             </div>
-            <button @onclick="() => OpenCreateModal()"
+            @if (_canWrite) { <button @onclick="() => OpenCreateModal()"
                     class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
                 + Create Event
             </button>
@@ -535,6 +546,8 @@ else
 }
 
 @code {
+    private bool _accessDenied;
+    private bool _canWrite;
     // ── State ──────────────────────────────────────────────────────────────────
     private string _role = "";
     private bool   _loading = true;
@@ -583,6 +596,11 @@ else
     // ── Init ───────────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("events:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("events:write");
+
         var authState = await Auth.GetAuthenticationStateAsync();
         _role = authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
              ?? authState.User.FindFirst("role")?.Value ?? "";

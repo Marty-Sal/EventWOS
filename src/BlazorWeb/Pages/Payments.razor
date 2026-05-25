@@ -4,6 +4,17 @@
 @inject IEventApiService   EventApi
 @inject IVendorApiService  VendorApi
 
+
+    @if (_accessDenied)
+    {
+        <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+            <div class="text-5xl mb-4">🔒</div>
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+            <p class="text-gray-500 text-sm">You don't have permission to view this page.<br/>Contact your Admin to request access.</p>
+        </div>
+        return;
+    }
+
 <PageTitle>Payments & Payroll — EventWOS</PageTitle>
 
 <div class="space-y-6">
@@ -16,7 +27,7 @@
         </div>
         @if (_tab == Tab.Payments)
         {
-            <button class="btn-primary" @onclick="OpenCreatePayment">+ New Payment</button>
+            @if (_canWrite) { <button class="btn-primary" @onclick="OpenCreatePayment">+ New Payment</button> }
         }
         else
         {
@@ -579,6 +590,17 @@
 </style>
 
 @code {
+    protected override async Task OnInitializedAsync()
+    {
+
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("payments:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("payments:write");
+    }
+
+    private bool _accessDenied;
+    private bool _canWrite;
     private enum Tab { Payments, Payroll }
     private Tab _tab = Tab.Payments;
 

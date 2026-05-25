@@ -2,6 +2,17 @@
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject IUserApiService UserApi
 
+
+    @if (_accessDenied)
+    {
+        <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+            <div class="text-5xl mb-4">🔒</div>
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+            <p class="text-gray-500 text-sm">You don't have permission to view this page.<br/>Contact your Admin to request access.</p>
+        </div>
+        return;
+    }
+
 <PageTitle>Users — EventWOS</PageTitle>
 
 <div class="space-y-5">
@@ -16,10 +27,10 @@
                 <span class="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
             </div>
             <AuthorizeView Roles="Admin">
-                <button @onclick="() => _showCreate = true"
+                @if (_canWrite) { <button @onclick="() => _showCreate = true"
                         class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow whitespace-nowrap">
                     + Add User
-                </button>
+                </button> }
             </AuthorizeView>
         </div>
     </div>
@@ -187,6 +198,17 @@
 
 
 @code {
+    protected override async Task OnInitializedAsync()
+    {
+
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("users:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("users:write");
+    }
+
+    private bool _accessDenied;
+    private bool _canWrite;
     private const string StatusActive    = "Active";
     private const string StatusSuspended = "Suspended";
 

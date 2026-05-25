@@ -2,6 +2,17 @@
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject IVendorApiService VendorApi
 
+
+    @if (_accessDenied)
+    {
+        <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+            <div class="text-5xl mb-4">🔒</div>
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+            <p class="text-gray-500 text-sm">You don't have permission to view this page.<br/>Contact your Admin to request access.</p>
+        </div>
+        return;
+    }
+
 <PageTitle>Vendors — EventWOS</PageTitle>
 
 <div class="space-y-5">
@@ -12,7 +23,7 @@
             <h2 class="text-lg font-bold text-gray-800">Vendors</h2>
             <p class="text-sm text-gray-500">Manage manpower suppliers.</p>
         </div>
-        <button @onclick="() => _showCreate = true"
+        @if (_canWrite) { <button @onclick="() => _showCreate = true"
                 class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
             + Add Vendor
         </button>
@@ -176,6 +187,17 @@
 }
 
 @code {
+    protected override async Task OnInitializedAsync()
+    {
+
+        // ── Permission gate ──────────────────────────────────────────────────────
+        _accessDenied = !await PermGuard.CanAsync("vendors:read");
+        if (_accessDenied) { StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("vendors:write");
+    }
+
+    private bool _accessDenied;
+    private bool _canWrite;
     private PagedVendorResult? _vendors;
     private bool _loading = true;
     private int  _page    = 1;
