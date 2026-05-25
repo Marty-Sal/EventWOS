@@ -147,7 +147,10 @@ try
                 ValidateLifetime  = true,
                 IssuerSigningKey  = new RsaSecurityKey(rsaPublic),
                 ValidAlgorithms   = new[] { SecurityAlgorithms.RsaSha256 },
-                ClockSkew         = TimeSpan.Zero
+                ClockSkew         = TimeSpan.Zero,
+                // Prevent JwtSecurityTokenHandler from remapping "role" → ClaimTypes.Role URI
+                RoleClaimType     = "role",
+                NameClaimType     = "mobile"
             };
             opts.Events = new JwtBearerEvents
             {

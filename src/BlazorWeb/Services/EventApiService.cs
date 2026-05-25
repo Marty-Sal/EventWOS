@@ -218,7 +218,15 @@ public sealed class EventApiService : IEventApiService
                 $"api/v1/events/assignments/{assignmentId}/respond",
                 new { response, reason }, ct);
             if (resp.IsSuccessStatusCode) return (true, null);
-            var body = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+
+            // Safely read error body — may be empty on 401/403
+            var raw = await resp.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(raw))
+                return (false, resp.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "You do not have permission to perform this action."
+                    : $"Request failed ({(int)resp.StatusCode}).");
+
+            var body = System.Text.Json.JsonSerializer.Deserialize<ApiResult<object>>(raw, _jsonOpts);
             return (false, body?.Errors?.FirstOrDefault() ?? "Unknown error");
         }
         catch (Exception ex) { return (false, ex.Message); }

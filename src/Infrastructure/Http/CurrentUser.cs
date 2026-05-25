@@ -39,7 +39,9 @@ public sealed class CurrentUser : ICurrentUser
     {
         get
         {
-            var role = Principal?.FindFirstValue("role");
+            // "role" claim — check both the raw key and the remapped ClaimTypes.Role URI
+            var role = Principal?.FindFirstValue("role")
+                    ?? Principal?.FindFirstValue(ClaimTypes.Role);
             return Enum.TryParse<UserRole>(role, out var r) ? r : null;
         }
     }
