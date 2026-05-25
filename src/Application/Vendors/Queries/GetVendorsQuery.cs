@@ -24,9 +24,13 @@ public sealed class GetVendorsHandler : IRequestHandler<GetVendorsQuery, Result<
         var query = _db.Users.Where(u => u.Role == UserRole.Vendor && !u.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(req.Search))
-            query = query.Where(u => u.FullName.Contains(req.Search) ||
-                                     (u.BusinessName != null && u.BusinessName.Contains(req.Search)) ||
-                                     u.Mobile.Contains(req.Search));
+        {
+            var pattern = $"%{req.Search.Trim()}%";
+            query = query.Where(u =>
+                EF.Functions.ILike(u.FullName, pattern) ||
+                (u.BusinessName != null && EF.Functions.ILike(u.BusinessName, pattern)) ||
+                EF.Functions.ILike(u.Mobile, pattern));
+        }
 
         var total = await query.CountAsync(ct);
 

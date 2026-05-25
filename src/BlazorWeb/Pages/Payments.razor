@@ -263,17 +263,24 @@
                                @value="_pmtVendorSearch"
                                @onfocus="() => _pmtVendorDropOpen = true"
                                @oninput="OnPmtVendorSearch" />
-                        @if (_pmtVendorDropOpen && _pmtVendorResults.Count > 0)
+                        @if (_pmtVendorDropOpen)
                         {
-                            <div class="dropdown-list">
-                                @foreach (var v in _pmtVendorResults)
-                                {
-                                    <button class="dropdown-item" @onclick="() => SelectPmtVendor(v)">
-                                        <span class="font-semibold">@v.FullName</span>
-                                        <span class="text-xs text-gray-400 ml-2">@v.Mobile</span>
-                                    </button>
-                                }
-                            </div>
+                            @if (_pmtVendorResults.Count > 0)
+                            {
+                                <div class="dropdown-list">
+                                    @foreach (var v in _pmtVendorResults)
+                                    {
+                                        <button class="dropdown-item" @onclick="() => SelectPmtVendor(v)">
+                                            <span class="font-semibold">@v.FullName</span>
+                                            <span class="text-xs text-gray-400 ml-2">@v.Mobile</span>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else if (_pmtVendorSearch.Length >= 1)
+                            {
+                                <div class="dropdown-list px-3 py-2 text-xs text-gray-400 italic">No vendors found for "@_pmtVendorSearch"</div>
+                            }
                         }
                     }
                 </div>
@@ -297,17 +304,24 @@
                                @value="_pmtCrewSearch"
                                @onfocus="() => _pmtCrewDropOpen = true"
                                @oninput="OnPmtCrewSearch" />
-                        @if (_pmtCrewDropOpen && _pmtCrewResults.Count > 0)
+                        @if (_pmtCrewDropOpen)
                         {
-                            <div class="dropdown-list">
-                                @foreach (var c in _pmtCrewResults)
-                                {
-                                    <button class="dropdown-item" @onclick="() => SelectPmtCrew(c)">
-                                        <span class="font-semibold">@c.FullName</span>
-                                        <span class="text-xs text-gray-400 ml-2">@c.Mobile</span>
-                                    </button>
-                                }
-                            </div>
+                            @if (_pmtCrewResults.Count > 0)
+                            {
+                                <div class="dropdown-list">
+                                    @foreach (var c in _pmtCrewResults)
+                                    {
+                                        <button class="dropdown-item" @onclick="() => SelectPmtCrew(c)">
+                                            <span class="font-semibold">@c.FullName</span>
+                                            <span class="text-xs text-gray-400 ml-2">@c.Mobile</span>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else if (_pmtCrewSearch.Length >= 1)
+                            {
+                                <div class="dropdown-list px-3 py-2 text-xs text-gray-400 italic">No crew members found for "@_pmtCrewSearch"</div>
+                            }
                         }
                     }
                 </div>
@@ -424,17 +438,24 @@
                                @value="_batchVendorSearch"
                                @onfocus="() => _batchVendorDropOpen = true"
                                @oninput="OnBatchVendorSearch" />
-                        @if (_batchVendorDropOpen && _batchVendorResults.Count > 0)
+                        @if (_batchVendorDropOpen)
                         {
-                            <div class="dropdown-list">
-                                @foreach (var v in _batchVendorResults)
-                                {
-                                    <button class="dropdown-item" @onclick="() => SelectBatchVendor(v)">
-                                        <span class="font-semibold">@v.FullName</span>
-                                        <span class="text-xs text-gray-400 ml-2">@v.Mobile</span>
-                                    </button>
-                                }
-                            </div>
+                            @if (_batchVendorResults.Count > 0)
+                            {
+                                <div class="dropdown-list">
+                                    @foreach (var v in _batchVendorResults)
+                                    {
+                                        <button class="dropdown-item" @onclick="() => SelectBatchVendor(v)">
+                                            <span class="font-semibold">@v.FullName</span>
+                                            <span class="text-xs text-gray-400 ml-2">@v.Mobile</span>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else if (_batchVendorSearch.Length >= 1)
+                            {
+                                <div class="dropdown-list px-3 py-2 text-xs text-gray-400 italic">No vendors found for "@_batchVendorSearch"</div>
+                            }
                         }
                     }
                 </div>
@@ -693,7 +714,7 @@
     private async Task OnPmtVendorSearch(ChangeEventArgs e)
     {
         _pmtVendorSearch = e.Value?.ToString() ?? "";
-        if (_pmtVendorSearch.Length < 2) { _pmtVendorResults.Clear(); return; }
+        if (_pmtVendorSearch.Length < 1) { _pmtVendorResults.Clear(); _pmtVendorDropOpen = false; return; }
         var result = await VendorApi.GetVendorsAsync(search: _pmtVendorSearch, page: 1);
         _pmtVendorResults = result?.Items?.Take(8).ToList() ?? new();
         _pmtVendorDropOpen = true;
@@ -726,7 +747,7 @@
     private async Task OnPmtCrewSearch(ChangeEventArgs e)
     {
         _pmtCrewSearch = e.Value?.ToString() ?? "";
-        if (_pmtCrewSearch.Length < 2) { _pmtCrewResults.Clear(); return; }
+        if (_pmtCrewSearch.Length < 1) { _pmtCrewResults.Clear(); _pmtCrewDropOpen = false; return; }
         var vendorId = _pmtSelectedVendor?.Id;
         var result   = await VendorApi.GetCrewAsync(search: _pmtCrewSearch, vendorId: vendorId, page: 1);
         _pmtCrewResults  = result?.Items?.Take(8).ToList() ?? new();
@@ -778,7 +799,7 @@
     private async Task OnBatchVendorSearch(ChangeEventArgs e)
     {
         _batchVendorSearch = e.Value?.ToString() ?? "";
-        if (_batchVendorSearch.Length < 2) { _batchVendorResults.Clear(); return; }
+        if (_batchVendorSearch.Length < 1) { _batchVendorResults.Clear(); _batchVendorDropOpen = false; return; }
         var result = await VendorApi.GetVendorsAsync(search: _batchVendorSearch, page: 1);
         _batchVendorResults  = result?.Items?.Take(8).ToList() ?? new();
         _batchVendorDropOpen = true;

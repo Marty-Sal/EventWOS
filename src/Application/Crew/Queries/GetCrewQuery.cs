@@ -29,7 +29,12 @@ public sealed class GetCrewHandler : IRequestHandler<GetCrewQuery, Result<PagedC
             query = query.Where(u => u.VendorId == req.VendorId);
 
         if (!string.IsNullOrWhiteSpace(req.Search))
-            query = query.Where(u => u.FullName.Contains(req.Search) || u.Mobile.Contains(req.Search));
+        {
+            var pattern = $"%{req.Search.Trim()}%";
+            query = query.Where(u =>
+                EF.Functions.ILike(u.FullName, pattern) ||
+                EF.Functions.ILike(u.Mobile, pattern));
+        }
 
         var total = await query.CountAsync(ct);
 

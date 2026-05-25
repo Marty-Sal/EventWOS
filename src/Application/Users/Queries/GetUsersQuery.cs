@@ -27,10 +27,13 @@ public sealed class GetUsersHandler : IRequestHandler<GetUsersQuery, Result<Page
         var query = _db.Users.AsNoTracking().Where(u => !u.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var pattern = $"%{request.Search.Trim()}%";
             query = query.Where(u =>
-                u.Mobile.Contains(request.Search) ||
-                u.FullName.Contains(request.Search) ||
-                (u.Email != null && u.Email.Contains(request.Search)));
+                EF.Functions.ILike(u.Mobile, pattern) ||
+                EF.Functions.ILike(u.FullName, pattern) ||
+                (u.Email != null && EF.Functions.ILike(u.Email, pattern)));
+        }
 
         if (request.Role.HasValue)
             query = query.Where(u => u.Role == request.Role.Value);
