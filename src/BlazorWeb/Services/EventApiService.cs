@@ -50,7 +50,7 @@ public interface IEventApiService
     Task<(bool Ok, string? Error)> UpdateEventAsync(Guid id, CreateEventRequest req, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> ChangeEventStatusAsync(Guid id, string action, string? reason = null, CancellationToken ct = default);
     Task<PagedEventAssignmentResult?> GetAssignmentsAsync(Guid eventId, int page = 1, string? status = null, CancellationToken ct = default);
-    Task<(bool Ok, string? Error)> AssignCrewAsync(Guid eventId, Guid crewId, Guid vendorId, CancellationToken ct = default);
+    Task<(bool Ok, Guid? AssignmentId, string? Error)> AssignCrewAsync(Guid eventId, Guid crewId, Guid vendorId, CancellationToken ct = default);
     Task<AttendanceSummaryDto?> GetAttendanceSummaryAsync(Guid eventId, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> RecordAttendanceAsync(Guid assignmentId, string action, string? location = null, CancellationToken ct = default);
 
@@ -148,16 +148,20 @@ public sealed class EventApiService : IEventApiService
         catch { return null; }
     }
 
-    public async Task<(bool Ok, string? Error)> AssignCrewAsync(Guid eventId, Guid crewId, Guid vendorId, CancellationToken ct = default)
+    public async Task<(bool Ok, Guid? AssignmentId, string? Error)> AssignCrewAsync(Guid eventId, Guid crewId, Guid vendorId, CancellationToken ct = default)
     {
         try
         {
             var resp = await _http.PostAsJsonAsync($"api/v1/events/{eventId}/assignments", new { crewId, vendorId }, ct);
-            if (resp.IsSuccessStatusCode) return (true, null);
-            var body = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
-            return (false, body?.Errors?.FirstOrDefault() ?? "Unknown error");
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiResult<EventAssignmentDto>>(_jsonOpts, ct);
+                return (true, body?.Data?.Id, null);
+            }
+            var err = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+            return (false, null, err?.Errors?.FirstOrDefault() ?? "Unknown error");
         }
-        catch (Exception ex) { return (false, ex.Message); }
+        catch (Exception ex) { return (false, null, ex.Message); }
     }
 
     public async Task<AttendanceSummaryDto?> GetAttendanceSummaryAsync(Guid eventId, CancellationToken ct = default)

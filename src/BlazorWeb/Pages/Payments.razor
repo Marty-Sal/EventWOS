@@ -622,8 +622,9 @@
     private CrewMemberDto?    _pmtSelectedCrew;
 
     // Assignment auto-resolve
-    private bool  _pmtAssignmentLoading;
-    private Guid? _pmtResolvedAssignmentId;
+    private bool   _pmtAssignmentLoading;
+    private Guid?  _pmtResolvedAssignmentId;
+    private bool   _pmtAssignmentAutoCreated;   // true when we created it on-the-fly
     private string _pmtManualAssignmentId = "";
 
     // Form fields
@@ -703,9 +704,10 @@
 
     private void ClearPmtEvent()
     {
-        _pmtSelectedEvent         = null;
-        _pmtResolvedAssignmentId  = null;
-        _pmtManualAssignmentId    = "";
+        _pmtSelectedEvent            = null;
+        _pmtResolvedAssignmentId     = null;
+        _pmtAssignmentAutoCreated    = false;
+        _pmtManualAssignmentId       = "";
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -735,10 +737,11 @@
 
     private void ClearPmtVendor()
     {
-        _pmtSelectedVendor        = null;
-        _pmtSelectedCrew          = null;
-        _pmtResolvedAssignmentId  = null;
-        _pmtManualAssignmentId    = "";
+        _pmtSelectedVendor           = null;
+        _pmtSelectedCrew             = null;
+        _pmtResolvedAssignmentId     = null;
+        _pmtAssignmentAutoCreated    = false;
+        _pmtManualAssignmentId       = "";
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -765,27 +768,48 @@
 
     private void ClearPmtCrew()
     {
-        _pmtSelectedCrew          = null;
-        _pmtResolvedAssignmentId  = null;
-        _pmtManualAssignmentId    = "";
+        _pmtSelectedCrew             = null;
+        _pmtResolvedAssignmentId     = null;
+        _pmtAssignmentAutoCreated    = false;
+        _pmtManualAssignmentId       = "";
     }
 
     // ── Auto-resolve assignment when all 3 pickers are set ───────────────────
+    // If no existing assignment is found, auto-create one (Invited status).
     private async Task TryResolveAssignment()
     {
         if (_pmtSelectedEvent == null || _pmtSelectedCrew == null || _pmtSelectedVendor == null) return;
 
         _pmtAssignmentLoading    = true;
         _pmtResolvedAssignmentId = null;
+        _pmtAssignmentAutoCreated = false;
         StateHasChanged();
 
         try
         {
+            // First: look for an existing assignment (any non-declined status)
             var assignments = await EventApi.GetAssignmentsAsync(_pmtSelectedEvent.Id, page: 1);
             var match = assignments?.Items?.FirstOrDefault(a =>
-                a.CrewId == _pmtSelectedCrew.Id && a.VendorId == _pmtSelectedVendor.Id &&
-                (a.Status == "Confirmed" || a.Status == "Attended" || a.Status == "Invited"));
-            _pmtResolvedAssignmentId = match?.Id;
+                a.CrewId   == _pmtSelectedCrew.Id &&
+                a.VendorId == _pmtSelectedVendor.Id &&
+                a.Status   != "Declined");
+
+            if (match != null)
+            {
+                _pmtResolvedAssignmentId = match.Id;
+            }
+            else
+            {
+                // Auto-create the assignment so payment can proceed
+                var (ok, assignmentId, err) = await EventApi.AssignCrewAsync(
+                    _pmtSelectedEvent.Id, _pmtSelectedCrew.Id, _pmtSelectedVendor.Id);
+
+                if (ok && assignmentId.HasValue)
+                {
+                    _pmtResolvedAssignmentId  = assignmentId.Value;
+                    _pmtAssignmentAutoCreated = true;
+                }
+            }
         }
         catch { }
 
@@ -892,7 +916,7 @@
         _pmtSelectedEvent        = null; _pmtEventSearch    = ""; _pmtEventResults.Clear();
         _pmtSelectedVendor       = null; _pmtVendorSearch   = ""; _pmtVendorResults.Clear();
         _pmtSelectedCrew         = null; _pmtCrewSearch     = ""; _pmtCrewResults.Clear();
-        _pmtResolvedAssignmentId = null; _pmtManualAssignmentId = "";
+        _pmtResolvedAssignmentId = null; _pmtAssignmentAutoCreated = false; _pmtManualAssignmentId = "";
         _pmtAmount = 0; _pmtNotes = null;
         _showCreatePayment = true;
     }

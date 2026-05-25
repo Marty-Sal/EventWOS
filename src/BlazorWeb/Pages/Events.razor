@@ -229,19 +229,115 @@
                 <!-- Assign Crew (Admin/Manager) -->
                 <div class="border-t border-gray-100 pt-4 space-y-3">
                     <h4 class="font-semibold text-gray-700 text-sm">Assign Crew Member</h4>
-                    <div class="flex gap-2">
-                        <input @bind="_assignVendorId" placeholder="Vendor ID"
-                               class="flex-1 px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                        <input @bind="_assignCrewId" placeholder="Crew ID"
-                               class="flex-1 px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                        <button @onclick="AssignCrew"
-                                class="px-3 py-2 text-xs rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">
-                            Assign
-                        </button>
+
+                    @* ── Vendor picker ── *@
+                    <div class="relative">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Vendor <span class="text-red-400">*</span></label>
+                        @if (_assignSelectedVendor != null)
+                        {
+                            <div class="flex items-center justify-between px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-xs">
+                                <div>
+                                    <span class="font-semibold text-indigo-800">@_assignSelectedVendor.FullName</span>
+                                    <span class="text-gray-400 ml-2">@_assignSelectedVendor.Mobile</span>
+                                </div>
+                                <button class="text-gray-400 hover:text-red-500 ml-2" @onclick="ClearAssignVendor">✕</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <input class="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                   placeholder="Search vendor by name…"
+                                   @value="_assignVendorSearch"
+                                   @onfocus="() => _assignVendorDropOpen = true"
+                                   @oninput="OnAssignVendorSearch" />
+                            @if (_assignVendorDropOpen)
+                            {
+                                @if (_assignVendorResults.Count > 0)
+                                {
+                                    <div class="absolute left-0 right-0 top-full z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                        @foreach (var v in _assignVendorResults)
+                                        {
+                                            <button class="block w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 border-b border-gray-50 last:border-0"
+                                                    @onclick="() => SelectAssignVendor(v)">
+                                                <span class="font-semibold text-gray-800">@v.FullName</span>
+                                                <span class="text-gray-400 ml-2">@v.Mobile</span>
+                                                @if (!string.IsNullOrEmpty(v.BusinessName))
+                                                {
+                                                    <span class="text-gray-400 ml-1">· @v.BusinessName</span>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                                else if (_assignVendorSearch.Length >= 1)
+                                {
+                                    <div class="absolute left-0 right-0 top-full z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-sm px-3 py-2 text-xs text-gray-400 italic">
+                                        No vendors found for "@_assignVendorSearch"
+                                    </div>
+                                }
+                            }
+                        }
                     </div>
+
+                    @* ── Crew picker (filtered by vendor if selected) ── *@
+                    <div class="relative">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Crew Member <span class="text-red-400">*</span></label>
+                        @if (_assignSelectedCrew != null)
+                        {
+                            <div class="flex items-center justify-between px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-xs">
+                                <div>
+                                    <span class="font-semibold text-indigo-800">@_assignSelectedCrew.FullName</span>
+                                    <span class="text-gray-400 ml-2">@_assignSelectedCrew.Mobile</span>
+                                </div>
+                                <button class="text-gray-400 hover:text-red-500 ml-2" @onclick="ClearAssignCrew">✕</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <input class="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                   placeholder="@(_assignSelectedVendor != null ? "Search crew under this vendor…" : "Search crew by name…")"
+                                   @value="_assignCrewSearch"
+                                   @onfocus="() => _assignCrewDropOpen = true"
+                                   @oninput="OnAssignCrewSearch" />
+                            @if (_assignCrewDropOpen)
+                            {
+                                @if (_assignCrewResults.Count > 0)
+                                {
+                                    <div class="absolute left-0 right-0 top-full z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                        @foreach (var cr in _assignCrewResults)
+                                        {
+                                            <button class="block w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 border-b border-gray-50 last:border-0"
+                                                    @onclick="() => SelectAssignCrew(cr)">
+                                                <span class="font-semibold text-gray-800">@cr.FullName</span>
+                                                <span class="text-gray-400 ml-2">@cr.Mobile</span>
+                                                @if (!string.IsNullOrEmpty(cr.VendorName))
+                                                {
+                                                    <span class="text-gray-400 ml-1">· via @cr.VendorName</span>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                                else if (_assignCrewSearch.Length >= 1)
+                                {
+                                    <div class="absolute left-0 right-0 top-full z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-sm px-3 py-2 text-xs text-gray-400 italic">
+                                        No crew found for "@_assignCrewSearch"
+                                    </div>
+                                }
+                            }
+                        }
+                    </div>
+
+                    @* ── Assign button ── *@
+                    <button @onclick="AssignCrew"
+                            disabled="@(_assignSelectedVendor == null || _assignSelectedCrew == null || _assigning)"
+                            class="w-full py-2 text-xs rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                        @(_assigning ? "Assigning…" : "✚ Assign to Event")
+                    </button>
+
                     @if (_assignError is not null)
                     {
-                        <p class="text-xs text-red-600">@_assignError</p>
+                        <p class="text-xs text-red-600">⚠️ @_assignError</p>
                     }
                 </div>
             </div>
@@ -458,9 +554,20 @@ else
     private EventDetailDto?          _selectedEvent;
     private PagedEventAssignmentResult? _assignments;
     private AttendanceSummaryDto?    _attendance;
-    private string?                  _assignVendorId;
-    private string?                  _assignCrewId;
-    private string?                  _assignError;
+    // Assign crew — vendor picker
+    private string                    _assignVendorSearch  = "";
+    private bool                      _assignVendorDropOpen;
+    private List<VendorListItemDto>   _assignVendorResults = new();
+    private VendorListItemDto?        _assignSelectedVendor;
+
+    // Assign crew — crew picker
+    private string                    _assignCrewSearch    = "";
+    private bool                      _assignCrewDropOpen;
+    private List<CrewMemberDto>       _assignCrewResults   = new();
+    private CrewMemberDto?            _assignSelectedCrew;
+
+    private bool                      _assigning;
+    private string?                   _assignError;
 
     // Modal
     private bool              _showEventModal;
@@ -586,21 +693,80 @@ else
         else    { _error = err; }
     }
 
+    // ── Vendor search for assign section ─────────────────────────────────────
+    private async Task OnAssignVendorSearch(ChangeEventArgs e)
+    {
+        _assignVendorSearch = e.Value?.ToString() ?? "";
+        if (_assignVendorSearch.Length < 1) { _assignVendorResults.Clear(); _assignVendorDropOpen = false; return; }
+        var result = await VendorApi.GetVendorsAsync(search: _assignVendorSearch, page: 1);
+        _assignVendorResults = result?.Items?.Take(8).ToList() ?? new();
+        _assignVendorDropOpen = true;
+    }
+
+    private void SelectAssignVendor(VendorListItemDto v)
+    {
+        _assignSelectedVendor = v;
+        _assignVendorDropOpen = false;
+        _assignVendorSearch   = "";
+        _assignVendorResults.Clear();
+        // Reset crew when vendor changes
+        _assignSelectedCrew  = null;
+        _assignCrewResults.Clear();
+    }
+
+    private void ClearAssignVendor()
+    {
+        _assignSelectedVendor = null;
+        _assignSelectedCrew   = null;
+        _assignCrewResults.Clear();
+    }
+
+    // ── Crew search for assign section ───────────────────────────────────────
+    private async Task OnAssignCrewSearch(ChangeEventArgs e)
+    {
+        _assignCrewSearch = e.Value?.ToString() ?? "";
+        if (_assignCrewSearch.Length < 1) { _assignCrewResults.Clear(); _assignCrewDropOpen = false; return; }
+        var vendorId = _assignSelectedVendor?.Id;
+        var result   = await VendorApi.GetCrewAsync(search: _assignCrewSearch, vendorId: vendorId, page: 1);
+        _assignCrewResults  = result?.Items?.Take(8).ToList() ?? new();
+        _assignCrewDropOpen = true;
+    }
+
+    private void SelectAssignCrew(CrewMemberDto c)
+    {
+        _assignSelectedCrew = c;
+        _assignCrewDropOpen = false;
+        _assignCrewSearch   = "";
+        _assignCrewResults.Clear();
+    }
+
+    private void ClearAssignCrew()
+    {
+        _assignSelectedCrew = null;
+    }
+
+    // ── Assign button handler ─────────────────────────────────────────────────
     private async Task AssignCrew()
     {
         _assignError = null;
         if (_selectedEvent is null) return;
-        if (!Guid.TryParse(_assignVendorId, out var vid) || !Guid.TryParse(_assignCrewId, out var cid))
+        if (_assignSelectedVendor is null || _assignSelectedCrew is null)
         {
-            _assignError = "Please enter valid Vendor ID and Crew ID (GUIDs).";
+            _assignError = "Please select both a vendor and a crew member.";
             return;
         }
-        var (ok, err) = await EventApi.AssignCrewAsync(_selectedEvent.Id, cid, vid);
+
+        _assigning = true;
+        var (ok, _, err) = await EventApi.AssignCrewAsync(
+            _selectedEvent.Id, _assignSelectedCrew.Id, _assignSelectedVendor.Id);
+        _assigning = false;
+
         if (ok)
         {
-            _success = "Crew assigned!";
-            _assignVendorId = _assignCrewId = "";
-            _assignments = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
+            _success             = $"{_assignSelectedCrew.FullName} assigned to event ✅";
+            _assignSelectedVendor = null;
+            _assignSelectedCrew   = null;
+            _assignments          = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
         }
         else { _assignError = err; }
     }
