@@ -1,3 +1,4 @@
+using EventWOS.Domain.Enums;
 using Asp.Versioning;
 using EventWOS.Application.Vendors.Commands;
 using EventWOS.Application.Vendors.DTOs;
@@ -26,12 +27,29 @@ public sealed class VendorsController : ControllerBase
         _currentUser = currentUser;
     }
 
-    /// <summary>List all vendors. Admin/Manager only.</summary>
+    /// <summary>
+    /// List vendors.
+    /// Admin/Manager: full paginated list.
+    /// Vendor: returns only their own record as a single-item list.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetVendors(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
         CancellationToken ct = default)
     {
+        // Vendors can only see themselves — return their own record as single-item page
+        if (_currentUser.Role == EventWOS.Domain.Enums.UserRole.Vendor)
+        {
+            var selfResult = await _mediator.Send(new GetVendorByIdQuery(_currentUser.UserId!.Value), ct);
+            if (selfResult.IsFailure) return Forbid();
+            var v = selfResult.Value;
+            var item = new VendorListItemDto(
+                v.Id, v.Mobile, v.FullName, v.BusinessName,
+                v.Status, v.ReferralCode, v.Rating, v.EventsCompleted, v.CrewCount, v.CreatedAt);
+            var single = new PagedVendorResult(new[] { item }, 1, 1, 1);
+            return Ok(ApiResponse<PagedVendorResult>.Ok(single));
+        }
+
         if (!_currentUser.HasPermission("vendors:read")) return Forbid();
         var result = await _mediator.Send(new GetVendorsQuery(page, pageSize, search), ct);
         return Ok(ApiResponse<PagedVendorResult>.Ok(result.Value));

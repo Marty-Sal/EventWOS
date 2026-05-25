@@ -133,7 +133,7 @@ public sealed class DatabaseSeeder
         {
             var vendorPerms = new[]
             {
-                "vendors:read", "crew:read", "crew:write", "crew:invite", "events:read",
+                "crew:read", "crew:write", "crew:invite", "events:read",
                 "crew:approve", "attendance:read", "profile:read", "profile:write"
             };
             foreach (var name in vendorPerms)
