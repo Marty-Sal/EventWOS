@@ -1,5 +1,5 @@
-using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Events.DTOs;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
@@ -18,9 +18,15 @@ public sealed record AssignCrewCommand(
 
 public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Result<EventAssignmentDto>>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
-    public AssignCrewHandler(IAppDbContext db, IUnitOfWork uow) { _db = db; _uow = uow; }
+    private readonly IAppDbContext       _db;
+    private readonly IUnitOfWork         _uow;
+    private readonly INotificationPusher _push;
+    public AssignCrewHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    {
+        _db   = db;
+        _uow  = uow;
+        _push = push;
+    }
 
     public async Task<Result<EventAssignmentDto>> Handle(AssignCrewCommand req, CancellationToken ct)
     {
@@ -53,10 +59,20 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
         _db.EventAssignments.Add(assignment);
         await _uow.SaveChangesAsync(ct);
 
+        // Notify crew of their new invitation
+        await _push.PushToUserAsync(crew.Id, "AssignmentInvite", new
+        {
+            assignmentId = assignment.Id,
+            eventTitle   = ev.Title,
+            vendorName   = vendor.FullName,
+            eventStart   = ev.StartAt
+        }, ct);
+
         return Result.Success(new EventAssignmentDto(
             assignment.Id, ev.Id, ev.Title,
             crew.Id, crew.FullName, crew.Mobile,
             crew.DisciplineScore, crew.EventsAttended,
+            crew.CrewRating, crew.CrewRatingCount,
             vendor.Id, vendor.FullName,
             assignment.Status.ToString(),
             assignment.RejectionReason,
@@ -64,6 +80,7 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             assignment.VendorReviewedAt,
             assignment.ManagerReviewedAt,
             assignment.ConfirmedAt, assignment.DeclinedAt,
-            assignment.CreatedAt));
+            assignment.CreatedAt,
+            assignment.VendorRating, assignment.RatedAt));
     }
 }

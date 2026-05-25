@@ -1,10 +1,13 @@
 @page "/profile"
 @attribute [Authorize]
 @inject IUserApiService UserApi
+@inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>My Profile — EventWOS</PageTitle>
 
 <div class="max-w-2xl mx-auto space-y-6">
+
     @if (_loading)
     {
         <div class="flex items-center justify-center py-16">
@@ -19,14 +22,12 @@
         <div class="bg-red-50 border border-red-100 rounded-2xl p-6 text-red-600 text-sm">
             <p class="font-semibold mb-1">⚠️ Could not load profile</p>
             <p class="text-xs text-red-400">@_loadError</p>
-            <button @onclick="LoadAsync" class="mt-3 px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition">
-                Try again
-            </button>
+            <button @onclick="LoadAsync" class="mt-3 px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition">Try again</button>
         </div>
     }
     else if (_profile is not null)
     {
-        <!-- Profile header -->
+        @* ── Profile header ───────────────────────────────────────────────────── *@
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <div class="flex items-center gap-5">
                 <div class="w-16 h-16 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl font-bold shadow-md">
@@ -35,15 +36,118 @@
                 <div>
                     <h2 class="text-xl font-bold text-gray-800">@(_profile.FullName ?? "—")</h2>
                     <p class="text-sm text-gray-500">@_profile.Mobile</p>
-                    <div class="flex items-center gap-2 mt-1">
+                    <div class="flex items-center gap-2 mt-1 flex-wrap">
                         <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">@_profile.Role</span>
                         <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">@_profile.Status</span>
+                        @if (_profile.Role == "Vendor" && _profile.Rating.HasValue)
+                        {
+                            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">⭐ @_profile.Rating.Value.ToString("F1")</span>
+                        }
+                        @if (_profile.Role == "Crew" && _profile.DisciplineScore.HasValue)
+                        {
+                            <span class="px-2 py-0.5 rounded-full text-xs font-medium @DisciplineChip(_profile.DisciplineScore.Value)">
+                                🎯 Score: @_profile.DisciplineScore.Value.ToString("F0")
+                            </span>
+                        }
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Edit form -->
+        @* ── Role-specific info cards ──────────────────────────────────────────── *@
+        @if (_profile.Role == "Vendor")
+        {
+            <div class="bg-white rounded-2xl border border-indigo-100 shadow-sm p-6 space-y-4">
+                <h3 class="text-sm font-semibold text-gray-700">🏢 Vendor Information</h3>
+                @if (_profile.BusinessName is not null)
+                {
+                    <div class="flex justify-between items-center py-2 border-b border-gray-50">
+                        <span class="text-sm text-gray-500">Business Name</span>
+                        <span class="font-medium text-gray-800">@_profile.BusinessName</span>
+                    </div>
+                }
+                <div class="space-y-2">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Your Referral Code</p>
+                    <div class="flex items-center gap-3">
+                        <code class="flex-1 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl text-lg font-bold text-indigo-700 tracking-widest text-center">
+                            @(_profile.ReferralCode ?? "—")
+                        </code>
+                        @if (_profile.ReferralCode is not null)
+                        {
+                            <button @onclick="CopyReferralCode"
+                                    class="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition shadow-sm">
+                                @(_copied ? "✅ Copied!" : "📋 Copy")
+                            </button>
+                        }
+                    </div>
+                    <p class="text-xs text-gray-400">Share this code with crew members so they can join your roster.</p>
+                </div>
+            </div>
+        }
+
+        @if (_profile.Role == "Crew")
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+                <h3 class="text-sm font-semibold text-gray-700">👷 Crew Stats</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-indigo-50 rounded-xl p-4 border border-indigo-100 text-center">
+                        <p class="text-xs text-indigo-500 mb-1">Discipline Score</p>
+                        <p class="text-3xl font-bold @DisciplineChip(_profile.DisciplineScore ?? 100)">
+                            @((_profile.DisciplineScore ?? 100).ToString("F0"))
+                        </p>
+                        <p class="text-xs text-gray-400 mt-0.5">out of 100</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+                        <p class="text-xs text-gray-500 mb-1">Events Attended</p>
+                        <p class="text-3xl font-bold text-gray-800">@(_profile.EventsAttended ?? 0)</p>
+                        <p class="text-xs text-gray-400 mt-0.5">total completed</p>
+                    </div>
+                </div>
+
+                @* Vendor affiliation *@
+                @if (_profile.VendorId.HasValue)
+                {
+                    <div class="flex items-center gap-3 py-3 border-t border-gray-50 mt-2">
+                        <div class="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm shrink-0">
+                            🏢
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-400">Affiliated Vendor</p>
+                            <p class="font-semibold text-gray-800 text-sm">@(_profile.VendorName ?? "Unknown Vendor")</p>
+                        </div>
+                        <span class="ml-auto px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-50 text-green-700 border border-green-200">Active</span>
+                    </div>
+                }
+                else
+                {
+                    @* Join vendor section *@
+                    <div class="border-t border-gray-50 pt-4">
+                        <p class="text-sm font-semibold text-gray-700 mb-1">Not yet affiliated with a Vendor</p>
+                        <p class="text-xs text-gray-400 mb-3">Ask your Vendor for their referral code and enter it below to join their roster.</p>
+                        <div class="flex gap-2">
+                            <input @bind="_joinCode" placeholder="Enter vendor code…"
+                                   class="flex-1 px-4 py-2.5 rounded-xl border @(_joinError != null ? "border-red-400" : "border-gray-200") text-sm uppercase tracking-widest
+                                          focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                            <button @onclick="JoinVendorAsync" disabled="@_joining"
+                                    class="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold
+                                           hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm">
+                                @(_joining ? "Joining…" : "Join")
+                            </button>
+                        </div>
+                        @if (_joinError is not null)
+                        {
+                            <p class="text-xs text-red-500 mt-1">@_joinError</p>
+                        }
+                        @if (_joinSuccess)
+                        {
+                            <p class="text-xs text-green-600 mt-1">✅ Successfully joined! Reload to see your vendor.</p>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        @* ── Edit profile form ────────────────────────────────────────────────── *@
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
             <h3 class="text-sm font-semibold text-gray-700">Edit Profile</h3>
 
@@ -59,86 +163,151 @@
                        class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
 
-            @if (_success)
+            @if (_saveError is not null)
             {
-                <div class="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
-                    ✅ Profile updated successfully.
-                </div>
+                <div class="bg-red-50 border border-red-100 rounded-xl p-3 text-red-600 text-xs">@_saveError</div>
             }
-
-            @if (_error is not null)
+            @if (_saveSuccess)
             {
-                <div class="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-                    ⚠️ @_error
-                </div>
+                <div class="bg-green-50 border border-green-100 rounded-xl p-3 text-green-600 text-xs">✅ Profile updated successfully.</div>
             }
 
             <button @onclick="SaveAsync" disabled="@_saving"
-                    class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-all disabled:opacity-50 shadow-md hover:shadow-lg">
+                    class="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold
+                           hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm">
                 @(_saving ? "Saving…" : "Save Changes")
             </button>
         </div>
 
-        <!-- Info cards -->
-        <div class="grid grid-cols-2 gap-4">
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-                <p class="text-2xl font-bold text-indigo-600">@(_profile.Permissions?.Count ?? 0)</p>
-                <p class="text-xs text-gray-400 mt-1">Permissions</p>
+        @* ── Info stats ───────────────────────────────────────────────────────── *@
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <div class="grid grid-cols-2 gap-6 text-center">
+                <div>
+                    <p class="text-xs text-gray-400 mb-1">Permissions</p>
+                    <p class="text-2xl font-bold text-indigo-600">@(_profile.Permissions?.Count ?? 0)</p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-400 mb-1">Last Login</p>
+                    <p class="text-sm font-semibold text-gray-700">@(_profile.LastLoginAt?.ToLocalTime().ToString("dd MMM HH:mm") ?? "—")</p>
+                </div>
             </div>
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-                <p class="text-sm font-semibold text-gray-700">@(_profile.LastLoginAt?.ToLocalTime().ToString("dd MMM HH:mm") ?? "—")</p>
-                <p class="text-xs text-gray-400 mt-1">Last Login</p>
-            </div>
+        </div>
+    }
+
+    @if (_toast is not null)
+    {
+        <div class="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium
+                    @(_toastErr ? "bg-red-600 text-white" : "bg-green-600 text-white")">
+            @_toast
         </div>
     }
 </div>
 
 @code {
     private UserProfileDto? _profile;
-    private string _fullName = string.Empty;
+    private string? _fullName;
     private string? _email;
-    private bool _loading = true;
-    private bool _saving;
-    private bool _success;
-    private string? _error;
+    private bool    _loading  = true;
+    private bool    _saving;
     private string? _loadError;
+    private string? _saveError;
+    private bool    _saveSuccess;
+
+    // Vendor referral copy
+    private bool _copied;
+
+    // Crew join vendor
+    private string  _joinCode    = "";
+    private bool    _joining;
+    private string? _joinError;
+    private bool    _joinSuccess;
+
+    // Toast
+    private string? _toast;
+    private bool    _toastErr;
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
-        _loading = true; _loadError = null;
+        _loading = true; _loadError = null; StateHasChanged();
         try
         {
             _profile = await UserApi.GetMeAsync();
             if (_profile is not null)
             {
-                _fullName = _profile.FullName ?? string.Empty;
+                _fullName = _profile.FullName;
                 _email    = _profile.Email;
             }
-            else
-            {
-                _loadError = "Profile data unavailable. The API may be temporarily unreachable.";
-            }
         }
-        catch (Exception ex)
-        {
-            _loadError = ex.Message;
-        }
-        finally { _loading = false; }
+        catch (Exception ex) { _loadError = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
     }
 
     private async Task SaveAsync()
     {
-        _saving = true; _success = false; _error = null;
-        var ok = await UserApi.UpdateProfileAsync(_fullName, _email, _profile?.AvatarUrl);
+        _saving = true; _saveError = null; _saveSuccess = false; StateHasChanged();
+        var ok = await UserApi.UpdateProfileAsync(_fullName ?? "", _email, _profile?.AvatarUrl);
         if (ok)
         {
-            _success = true;
+            _saveSuccess = true;
             _profile = await UserApi.GetMeAsync();
-            if (_profile is not null) { _fullName = _profile.FullName ?? string.Empty; _email = _profile.Email; }
+            if (_profile is not null) { _fullName = _profile.FullName; _email = _profile.Email; }
         }
-        else { _error = "Failed to update profile. Please try again."; }
-        _saving = false;
+        else { _saveError = "Failed to update profile. Please try again."; }
+        _saving = false; StateHasChanged();
+        _ = Task.Delay(3000).ContinueWith(_ => { _saveSuccess = false; InvokeAsync(StateHasChanged); });
     }
+
+    private async Task JoinVendorAsync()
+    {
+        _joinError = null; _joinSuccess = false;
+        if (string.IsNullOrWhiteSpace(_joinCode)) { _joinError = "Please enter a referral code."; return; }
+        _joining = true; StateHasChanged();
+        try
+        {
+            var resp = await Http.PostAsJsonAsync(
+                "api/v1/crew/join-vendor", new { referralCode = _joinCode.Trim().ToUpper() });
+            if (resp.IsSuccessStatusCode)
+            {
+                _joinSuccess = true; _joinCode = "";
+                ShowToast("Joined vendor successfully! Reload the page to see your vendor.", false);
+                await LoadAsync();
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiError>(JsonOpts);
+                _joinError = body?.Message ?? "Invalid referral code.";
+            }
+        }
+        catch { _joinError = "Network error. Please try again."; }
+        finally { _joining = false; StateHasChanged(); }
+    }
+
+    private async Task CopyReferralCode()
+    {
+        if (_profile?.ReferralCode is null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _profile.ReferralCode);
+            _copied = true; StateHasChanged();
+            await Task.Delay(2000);
+            _copied = false; StateHasChanged();
+        }
+        catch { }
+    }
+
+    private void ShowToast(string msg, bool err)
+    {
+        _toast = msg; _toastErr = err; StateHasChanged();
+        _ = Task.Delay(4000).ContinueWith(_ => { _toast = null; InvokeAsync(StateHasChanged); });
+    }
+
+    private static string DisciplineChip(decimal score) =>
+        score >= 80 ? "text-green-600" : score >= 50 ? "text-amber-600" : "text-red-600";
+
+    private sealed record ApiError(bool Success, string? Message);
 }

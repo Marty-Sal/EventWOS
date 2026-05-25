@@ -71,5 +71,7 @@ public sealed class EventAssignmentConfiguration : IEntityTypeConfiguration<Even
         builder.HasIndex(a => a.EventId) .HasDatabaseName("ix_event_assignments_event_id");
         builder.HasIndex(a => a.CrewId)  .HasDatabaseName("ix_event_assignments_crew_id");
         builder.HasIndex(a => a.VendorId).HasDatabaseName("ix_event_assignments_vendor_id");
+        builder.Property(a => a.VendorRating).HasColumnName("vendor_rating").HasColumnType("numeric(3,1)");
+        builder.Property(a => a.RatedAt).HasColumnName("rated_at");
     }
 }

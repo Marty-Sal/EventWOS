@@ -17,13 +17,15 @@ public sealed record ManagerApproveAssignmentCommand(
 public sealed class ManagerApproveAssignmentHandler
     : IRequestHandler<ManagerApproveAssignmentCommand, Result>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
-    public ManagerApproveAssignmentHandler(IAppDbContext db, IUnitOfWork uow) { _db = db; _uow = uow; }
+    private readonly IAppDbContext     _db;
+    private readonly IUnitOfWork       _uow;
+    private readonly INotificationPusher _push;
+    public ManagerApproveAssignmentHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push) { _db = db; _uow = uow; _push = push; }
 
     public async Task<Result> Handle(ManagerApproveAssignmentCommand req, CancellationToken ct)
     {
         var assignment = await _db.EventAssignments
+            .Include(a => a.Crew)
             .FirstOrDefaultAsync(a => a.Id == req.AssignmentId, ct);
 
         if (assignment is null)
@@ -34,6 +36,20 @@ public sealed class ManagerApproveAssignmentHandler
         { return Result.Failure(new Error("Assignment.InvalidTransition", ex.Message)); }
 
         await _uow.SaveChangesAsync(ct);
+
+        // Notify crew of final approval
+        await _push.PushToUserAsync(assignment.CrewId, "ManagerApprovedYou", new
+        {
+            assignmentId = assignment.Id
+        }, ct);
+
+        // Notify vendor too
+        await _push.PushToUserAsync(assignment.VendorId, "ManagerApprovedYou_ForCrewMember", new
+        {
+            assignmentId = assignment.Id,
+            crewName     = assignment.Crew?.FullName ?? "Crew"
+        }, ct);
+
         return Result.Success();
     }
 }
@@ -50,9 +66,10 @@ public sealed record ManagerRejectAssignmentCommand(
 public sealed class ManagerRejectAssignmentHandler
     : IRequestHandler<ManagerRejectAssignmentCommand, Result>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
-    public ManagerRejectAssignmentHandler(IAppDbContext db, IUnitOfWork uow) { _db = db; _uow = uow; }
+    private readonly IAppDbContext     _db;
+    private readonly IUnitOfWork       _uow;
+    private readonly INotificationPusher _push;
+    public ManagerRejectAssignmentHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push) { _db = db; _uow = uow; _push = push; }
 
     public async Task<Result> Handle(ManagerRejectAssignmentCommand req, CancellationToken ct)
     {
@@ -60,6 +77,7 @@ public sealed class ManagerRejectAssignmentHandler
             return Result.Failure(new Error("Assignment.ReasonRequired", "Rejection reason is mandatory."));
 
         var assignment = await _db.EventAssignments
+            .Include(a => a.Crew)
             .FirstOrDefaultAsync(a => a.Id == req.AssignmentId, ct);
 
         if (assignment is null)
@@ -70,6 +88,22 @@ public sealed class ManagerRejectAssignmentHandler
         { return Result.Failure(new Error("Assignment.InvalidTransition", ex.Message)); }
 
         await _uow.SaveChangesAsync(ct);
+
+        // Notify crew of rejection
+        await _push.PushToUserAsync(assignment.CrewId, "ManagerRejectedYou", new
+        {
+            assignmentId = assignment.Id,
+            reason       = req.Reason
+        }, ct);
+
+        // Notify vendor too
+        await _push.PushToUserAsync(assignment.VendorId, "ManagerRejectedYou_ForCrewMember", new
+        {
+            assignmentId = assignment.Id,
+            crewName     = assignment.Crew?.FullName ?? "Crew",
+            reason       = req.Reason
+        }, ct);
+
         return Result.Success();
     }
 }

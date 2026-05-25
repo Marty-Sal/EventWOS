@@ -293,6 +293,9 @@ try
     });
 
     // ─── SignalR ──────────────────────────────────────────────────────────────
+    builder.Services.AddScoped<EventWOS.Application.Interfaces.INotificationPusher, 
+        EventWOS.Api.Hubs.SignalRNotificationPusher>();
+
     builder.Services.AddSignalR(opts =>
     {
         opts.EnableDetailedErrors = builder.Environment.IsDevelopment();
@@ -668,6 +671,18 @@ BEGIN
     -- status index for manager queue
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename='event_assignments' AND indexname='ix_event_assignments_status') THEN
         CREATE INDEX ix_event_assignments_status ON event_assignments(status); END IF;
+
+    -- ═══ crew rating fields ══════════════════════════════════════════════════
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='crew_rating') THEN
+        ALTER TABLE users ADD COLUMN crew_rating NUMERIC(4,2); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='crew_rating_count') THEN
+        ALTER TABLE users ADD COLUMN crew_rating_count INT NOT NULL DEFAULT 0; END IF;
+
+    -- ═══ per-assignment vendor rating ════════════════════════════════════════
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='event_assignments' AND column_name='vendor_rating') THEN
+        ALTER TABLE event_assignments ADD COLUMN vendor_rating NUMERIC(3,1); END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='event_assignments' AND column_name='rated_at') THEN
+        ALTER TABLE event_assignments ADD COLUMN rated_at TIMESTAMPTZ; END IF;
 
 END $$;
 ");

@@ -24,7 +24,16 @@ public sealed record UserProfileDto(
     UserRole Role,
     UserStatus Status,
     IReadOnlyList<string> Permissions,
-    DateTime? LastLoginAt
+    DateTime? LastLoginAt,
+    // Vendor-specific
+    string? ReferralCode,
+    string? BusinessName,
+    decimal? Rating,
+    // Crew-specific
+    decimal? DisciplineScore,
+    int? EventsAttended,
+    Guid? VendorId,
+    string? VendorName
 );
 
 public sealed record UpdateProfileRequest(

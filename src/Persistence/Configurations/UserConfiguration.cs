@@ -37,6 +37,8 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.VendorId).HasColumnName("vendor_id");
         builder.Property(u => u.DisciplineScore).HasColumnName("discipline_score").HasPrecision(5, 2).HasDefaultValue(100m);
         builder.Property(u => u.EventsAttended).HasColumnName("events_attended").HasDefaultValue(0);
+        builder.Property(u => u.CrewRating).HasColumnName("crew_rating").HasPrecision(4, 2);
+        builder.Property(u => u.CrewRatingCount).HasColumnName("crew_rating_count").HasDefaultValue(0);
 
         // Audit
         builder.Property(u => u.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");

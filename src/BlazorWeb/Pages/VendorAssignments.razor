@@ -88,6 +88,33 @@
                                 </button>
                             </div>
                         }
+                        @* Star rating — only for Attended, not yet rated *@
+                        @if (a.Status == "Attended" && !a.VendorRating.HasValue)
+                        {
+                            <div class="shrink-0 flex flex-col items-end gap-1">
+                                <p class="text-xs text-gray-400">Rate crew performance</p>
+                                <div class="flex gap-1">
+                                    @for (int s = 1; s <= 5; s++)
+                                    {
+                                        var star = s; // capture loop variable
+                                        <button @onclick="() => SubmitRating(a.Id, star)"
+                                                class="text-xl leading-none @(_hoverStar >= star && _hoverTarget == a.Id ? "text-amber-400" : "text-gray-300")
+                                                       hover:text-amber-400 transition-colors"
+                                                @onmouseover="() => SetHover(a.Id, star)"
+                                                @onmouseout="() => ClearHover()">
+                                            ★
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        @if (a.Status == "Attended" && a.VendorRating.HasValue)
+                        {
+                            <div class="shrink-0 text-right">
+                                <p class="text-xs text-gray-400">Your rating</p>
+                                <p class="text-amber-500 font-bold">@string.Concat(Enumerable.Repeat("★", (int)a.VendorRating.Value))@string.Concat(Enumerable.Repeat("☆", 5 - (int)a.VendorRating.Value))</p>
+                            </div>
+                        }
                     </div>
                 </div>
             }
@@ -278,7 +305,25 @@
         Guid VendorId, string VendorName,
         string Status, string? RejectionReason,
         DateTime? CrewRespondedAt, DateTime? VendorReviewedAt, DateTime? ManagerReviewedAt,
-        DateTime? ConfirmedAt, DateTime? DeclinedAt, DateTime CreatedAt);
+        DateTime? ConfirmedAt, DateTime? DeclinedAt, DateTime CreatedAt,
+        decimal? VendorRating);
+
+    // Star rating hover state
+    private Guid _hoverTarget;
+    private int  _hoverStar;
+    private void SetHover(Guid id, int star) { _hoverTarget = id; _hoverStar = star; }
+    private void ClearHover() { _hoverTarget = Guid.Empty; _hoverStar = 0; }
+
+    private async Task SubmitRating(Guid assignmentId, int stars)
+    {
+        _busy = assignmentId; StateHasChanged();
+        var resp = await Http.PostAsJsonAsync(
+            $"api/v1/events/assignments/{assignmentId}/rate-crew", new { rating = (decimal)stars });
+        if (resp.IsSuccessStatusCode) ShowToast($"{stars}★ rating submitted!", false);
+        else ShowToast("Could not submit rating.", true);
+        _busy = null;
+        await Load();
+    }
 
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);

@@ -37,6 +37,8 @@ public sealed record EventAssignmentDto(
     string    CrewMobile,
     decimal   DisciplineScore,
     int       EventsAttended,
+    decimal?  CrewRating,        // crew member's overall rolling rating by vendors
+    int       CrewRatingCount,
     Guid      VendorId,
     string    VendorName,
     string    Status,
@@ -46,7 +48,9 @@ public sealed record EventAssignmentDto(
     DateTime? ManagerReviewedAt,
     DateTime? ConfirmedAt,
     DateTime? DeclinedAt,
-    DateTime  CreatedAt
+    DateTime  CreatedAt,
+    decimal?  VendorRating,      // this vendor's rating for this assignment
+    DateTime? RatedAt
 );
 
 public sealed record AttendanceRecordDto(

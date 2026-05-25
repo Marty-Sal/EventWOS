@@ -41,6 +41,10 @@ public sealed class EventAssignment : BaseEntity
     public string?          RejectionReason   { get; private set; }
     public Guid?            RejectedByUserId  { get; private set; }
 
+    // Vendor crew rating (set after event attendance)
+    public decimal?  VendorRating  { get; private set; }  // 1–5 stars
+    public DateTime? RatedAt       { get; private set; }
+
     // Navigation
     public Event  Event       { get; private set; } = default!;
     public User   Crew        { get; private set; } = default!;
@@ -125,6 +129,20 @@ public sealed class EventAssignment : BaseEntity
     public void MarkAttended() => Status = AssignmentStatus.Attended;
     public void MarkNoShow()   => Status = AssignmentStatus.NoShow;
     public void SetNotes(string notes) => Notes = notes;
+
+    // ── Rating ────────────────────────────────────────────────────────────────
+    /// <summary>Vendor rates this crew member 1–5 stars. Can only be called once per assignment.</summary>
+    public void RateCrewMember(decimal stars)
+    {
+        if (Status != AssignmentStatus.Attended)
+            throw new InvalidOperationException("Can only rate crew after they have attended.");
+        if (VendorRating.HasValue)
+            throw new InvalidOperationException("This crew member has already been rated for this assignment.");
+        if (stars < 1 || stars > 5)
+            throw new ArgumentOutOfRangeException(nameof(stars), "Rating must be between 1 and 5.");
+        VendorRating = stars;
+        RatedAt      = DateTime.UtcNow;
+    }
 
     // ── Backward-compat helpers ──────────────────────────────────────────────
     /// <summary>True if this assignment is in a fully active/confirmed state (eligible for attendance).</summary>

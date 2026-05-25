@@ -1,0 +1,83 @@
+@inject NotificationHubService Hub
+@implements IDisposable
+
+@if (_toasts.Count > 0)
+{
+    <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm" style="pointer-events:none;">
+        @foreach (var t in _toasts)
+        {
+            <div class="flex items-start gap-3 px-4 py-3.5 rounded-2xl shadow-xl text-sm font-medium transition-all
+                        @ToastBg(t.Type)" style="pointer-events:auto;">
+                <span class="text-lg leading-none mt-0.5 shrink-0">@ToastIcon(t.Type)</span>
+                <div>
+                    <p class="font-semibold">@t.Title</p>
+                    @if (t.Body is not null)
+                    {
+                        <p class="text-xs opacity-80 mt-0.5">@t.Body</p>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private readonly List<ToastItem> _toasts = [];
+
+    protected override void OnInitialized()
+    {
+        Hub.AssignmentInviteReceived      += p => Push("📩 New Event Invite", $"{p.VendorName} invited you to {p.EventTitle}", ToastType.Info);
+        Hub.CrewAcceptedReceived          += p => Push("✅ Crew Accepted",     $"{p.CrewName} accepted the assignment.", ToastType.Success);
+        Hub.CrewDeclinedReceived          += p => Push("❌ Crew Declined",     $"{p.CrewName} declined. {p.Reason}", ToastType.Warning);
+        Hub.VendorApprovedReceived        += p => Push("✅ Vendor Approved You","Your assignment was approved by the vendor!", ToastType.Success);
+        Hub.VendorRejectedReceived        += p => Push("❌ Vendor Rejected",   $"Reason: {p.Reason ?? "No reason given."}", ToastType.Error);
+        Hub.PendingManagerApprovalReceived+= p => Push("📋 Approval Needed",  $"{p.CrewName} is pending your approval.", ToastType.Info);
+        Hub.ManagerApprovedReceived       += p => Push("🎉 Manager Approved!", "Your assignment is fully approved. Get ready!", ToastType.Success);
+        Hub.ManagerRejectedReceived       += p => Push("❌ Manager Rejected",  $"Reason: {p.Reason ?? "No reason given."}", ToastType.Error);
+        Hub.SystemNotificationReceived    += m => Push("📢 System", m, ToastType.Info);
+    }
+
+    private void Push(string title, string? body, ToastType type)
+    {
+        var item = new ToastItem(Guid.NewGuid(), title, body, type);
+        _toasts.Add(item);
+        InvokeAsync(StateHasChanged);
+        _ = Task.Delay(5000).ContinueWith(_ =>
+        {
+            _toasts.Remove(item);
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    public void Dispose()
+    {
+        Hub.AssignmentInviteReceived       -= p => Push("", null, ToastType.Info);
+        Hub.CrewAcceptedReceived           -= p => Push("", null, ToastType.Info);
+        Hub.CrewDeclinedReceived           -= p => Push("", null, ToastType.Info);
+        Hub.VendorApprovedReceived         -= p => Push("", null, ToastType.Info);
+        Hub.VendorRejectedReceived         -= p => Push("", null, ToastType.Info);
+        Hub.PendingManagerApprovalReceived -= p => Push("", null, ToastType.Info);
+        Hub.ManagerApprovedReceived        -= p => Push("", null, ToastType.Info);
+        Hub.ManagerRejectedReceived        -= p => Push("", null, ToastType.Info);
+        Hub.SystemNotificationReceived     -= m => Push("", null, ToastType.Info);
+    }
+
+    private static string ToastBg(ToastType t) => t switch
+    {
+        ToastType.Success => "bg-green-600  text-white",
+        ToastType.Warning => "bg-amber-500  text-white",
+        ToastType.Error   => "bg-red-600    text-white",
+        _                 => "bg-gray-800   text-white",
+    };
+
+    private static string ToastIcon(ToastType t) => t switch
+    {
+        ToastType.Success => "✅",
+        ToastType.Warning => "⚠️",
+        ToastType.Error   => "❌",
+        _                 => "ℹ️",
+    };
+
+    private enum ToastType { Info, Success, Warning, Error }
+    private sealed record ToastItem(Guid Id, string Title, string? Body, ToastType Type);
+}

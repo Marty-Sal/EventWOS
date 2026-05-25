@@ -61,6 +61,8 @@ public sealed class User : BaseEntity
     public Guid? VendorId           { get; private set; }
     /// <summary>Discipline score 0–100 (auto-updated by attendance records).</summary>
     public decimal DisciplineScore  { get; private set; } = 100m;
+    public decimal? CrewRating        { get; private set; }  // Average rating by Vendors (0–5)
+    public int      CrewRatingCount    { get; private set; }
     /// <summary>Total events attended as Crew.</summary>
     public int EventsAttended       { get; private set; }
 
@@ -155,6 +157,18 @@ public sealed class User : BaseEntity
     }
 
     public void IncrementEventsAttended() => EventsAttended++;
+
+    /// <summary>
+    /// Called when a Vendor rates this crew member (0–5 stars).
+    /// Uses a rolling average: ((existing * count) + new) / (count + 1).
+    /// </summary>
+    public void AddCrewRating(decimal rating)
+    {
+        rating = Math.Clamp(rating, 0m, 5m);
+        var total = (CrewRating ?? 0m) * CrewRatingCount + rating;
+        CrewRatingCount++;
+        CrewRating = Math.Round(total / CrewRatingCount, 2);
+    }
     public void IncrementEventsCompleted() => EventsCompleted++;
 
     private static string GenerateReferralCode()

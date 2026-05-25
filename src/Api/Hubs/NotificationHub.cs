@@ -56,15 +56,7 @@ public sealed class NotificationHub : Hub
     }
 }
 
-/// <summary>Service for pushing notifications from backend handlers.</summary>
-public interface INotificationPusher
-{
-    Task PushToUserAsync(Guid userId, string eventName, object payload, CancellationToken ct = default);
-    Task PushToRoleAsync(string role, string eventName, object payload, CancellationToken ct = default);
-    Task PushToAllAsync(string eventName, object payload, CancellationToken ct = default);
-}
-
-public sealed class SignalRNotificationPusher : INotificationPusher
+public sealed class SignalRNotificationPusher : EventWOS.Application.Interfaces.INotificationPusher
 {
     private readonly IHubContext<NotificationHub> _hub;
 

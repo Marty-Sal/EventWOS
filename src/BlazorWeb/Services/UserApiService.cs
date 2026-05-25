@@ -7,7 +7,11 @@ namespace EventWOS.BlazorWeb.Services;
 public sealed record UserProfileDto(
     Guid Id, string Mobile, string FullName, string? Email,
     string? AvatarUrl, string Role, string Status,
-    IReadOnlyList<string> Permissions, DateTime? LastLoginAt);
+    IReadOnlyList<string> Permissions, DateTime? LastLoginAt,
+    // Vendor fields
+    string? ReferralCode, string? BusinessName, decimal? Rating,
+    // Crew fields
+    decimal? DisciplineScore, int? EventsAttended, Guid? VendorId, string? VendorName);
 
 public sealed record UserListItemDto(
     Guid Id, string Mobile, string FullName, string? Email,

@@ -31,13 +31,15 @@ public sealed class GetMyAssignmentsHandler : IRequestHandler<GetMyAssignmentsQu
                 a.Id, a.EventId, a.Event.Title,
                 a.CrewId, a.Crew.FullName, a.Crew.Mobile,
                 a.Crew.DisciplineScore, a.Crew.EventsAttended,
+                a.Crew.CrewRating, a.Crew.CrewRatingCount,
                 a.VendorId, a.Vendor.FullName,
                 a.Status.ToString(),
                 a.RejectionReason,
                 a.CrewRespondedAt,
                 a.VendorReviewedAt,
                 a.ManagerReviewedAt,
-                a.ConfirmedAt, a.DeclinedAt, a.CreatedAt))
+                a.ConfirmedAt, a.DeclinedAt, a.CreatedAt,
+                a.VendorRating, a.RatedAt))
             .ToListAsync(ct);
 
         return Result.Success(new PagedAssignmentResult(items, total, req.Page, req.PageSize));

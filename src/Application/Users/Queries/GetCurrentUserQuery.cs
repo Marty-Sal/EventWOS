@@ -31,8 +31,28 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
 
         var permissions = await _permissionService.GetEffectivePermissionsAsync(user.Id, user.Role, ct);
 
+        // Load vendor name for crew members
+        string? vendorName = null;
+        if (user.Role == Domain.Enums.UserRole.Crew && user.VendorId.HasValue)
+        {
+            var vendor = await _db.Users.AsNoTracking()
+                .Where(u => u.Id == user.VendorId.Value)
+                .Select(u => new { u.FullName })
+                .FirstOrDefaultAsync(ct);
+            vendorName = vendor?.FullName;
+        }
+
         return Result.Success(new UserProfileDto(
             user.Id, user.Mobile, user.FullName, user.Email,
-            user.AvatarUrl, user.Role, user.Status, permissions, user.LastLoginAt));
+            user.AvatarUrl, user.Role, user.Status, permissions, user.LastLoginAt,
+            // Vendor-specific
+            user.ReferralCode,
+            user.BusinessName,
+            user.Role == Domain.Enums.UserRole.Vendor ? user.Rating : null,
+            // Crew-specific
+            user.Role == Domain.Enums.UserRole.Crew ? user.DisciplineScore : null,
+            user.Role == Domain.Enums.UserRole.Crew ? user.EventsAttended : null,
+            user.VendorId,
+            vendorName));
     }
 }
