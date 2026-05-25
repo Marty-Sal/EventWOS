@@ -501,6 +501,59 @@ BEGIN
             deleted_at           TIMESTAMP,
             deleted_by           UUID
         ); END IF;
+
+    -- ═══ payroll_batches ════════════════════════════════════════════════════
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'payroll_batches') THEN
+        CREATE TABLE payroll_batches (
+            id                  UUID         NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            vendor_id           UUID         NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+            event_id            UUID         NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
+            batch_ref           VARCHAR(100) NOT NULL,
+            status              VARCHAR(50)  NOT NULL DEFAULT 'Draft',
+            total_amount        NUMERIC(14,2) NOT NULL DEFAULT 0,
+            notes               TEXT,
+            submitted_at        TIMESTAMPTZ,
+            approved_at         TIMESTAMPTZ,
+            disbursed_at        TIMESTAMPTZ,
+            approved_by_user_id UUID,
+            created_date        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            updated_date        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            created_by          VARCHAR(100),
+            is_deleted          BOOLEAN      NOT NULL DEFAULT false
+        );
+        CREATE UNIQUE INDEX ix_payroll_batches_batch_ref ON payroll_batches(batch_ref);
+        CREATE INDEX ix_payroll_batches_vendor_id ON payroll_batches(vendor_id);
+        CREATE INDEX ix_payroll_batches_event_id  ON payroll_batches(event_id);
+        CREATE INDEX ix_payroll_batches_status    ON payroll_batches(status);
+    END IF;
+
+    -- ═══ crew_payments ═══════════════════════════════════════════════════════
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'crew_payments') THEN
+        CREATE TABLE crew_payments (
+            id               UUID         NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            event_id         UUID         NOT NULL REFERENCES events(id)            ON DELETE RESTRICT,
+            assignment_id    UUID         NOT NULL REFERENCES event_assignments(id)  ON DELETE RESTRICT,
+            crew_id          UUID         NOT NULL REFERENCES users(id)             ON DELETE RESTRICT,
+            vendor_id        UUID         NOT NULL REFERENCES users(id)             ON DELETE RESTRICT,
+            agreed_amount    NUMERIC(12,2) NOT NULL,
+            paid_amount      NUMERIC(12,2),
+            status           VARCHAR(50)  NOT NULL DEFAULT 'Pending',
+            method           VARCHAR(50),
+            transaction_ref  VARCHAR(200),
+            notes            TEXT,
+            paid_at          TIMESTAMPTZ,
+            payroll_batch_id UUID REFERENCES payroll_batches(id) ON DELETE SET NULL,
+            created_date     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            updated_date     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            created_by       VARCHAR(100),
+            is_deleted       BOOLEAN      NOT NULL DEFAULT false
+        );
+        CREATE INDEX ix_crew_payments_event_id         ON crew_payments(event_id);
+        CREATE INDEX ix_crew_payments_crew_id          ON crew_payments(crew_id);
+        CREATE INDEX ix_crew_payments_vendor_id        ON crew_payments(vendor_id);
+        CREATE INDEX ix_crew_payments_status           ON crew_payments(status);
+        CREATE INDEX ix_crew_payments_payroll_batch_id ON crew_payments(payroll_batch_id);
+    END IF;
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");
