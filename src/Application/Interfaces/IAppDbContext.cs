@@ -21,6 +21,8 @@ public interface IAppDbContext
     DbSet<Event>            Events            { get; }
     DbSet<EventAssignment>  EventAssignments  { get; }
     DbSet<AttendanceRecord> AttendanceRecords { get; }
+    DbSet<CrewPayment>      CrewPayments      { get; }
+    DbSet<PayrollBatch>     PayrollBatches    { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

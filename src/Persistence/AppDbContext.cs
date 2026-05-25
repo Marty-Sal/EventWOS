@@ -43,6 +43,8 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<Event>            Events            => Set<Event>();
     public DbSet<EventAssignment>  EventAssignments  => Set<EventAssignment>();
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+    public DbSet<CrewPayment>      CrewPayments      => Set<CrewPayment>();
+    public DbSet<PayrollBatch>     PayrollBatches    => Set<PayrollBatch>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

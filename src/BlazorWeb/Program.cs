@@ -28,6 +28,7 @@ builder.Services.AddScoped<ISessionApiService, SessionApiService>();
 builder.Services.AddScoped<IVendorApiService, VendorApiService>();
 builder.Services.AddScoped<IEventApiService, EventApiService>();
 builder.Services.AddScoped<IAnalyticsApiService, AnalyticsApiService>();
+builder.Services.AddScoped<IPaymentApiService, PaymentApiService>();
 builder.Services.AddScoped<TokenRefreshService>();
 builder.Services.AddScoped<NotificationHubService>();
 

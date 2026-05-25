@@ -1,0 +1,148 @@
+using Asp.Versioning;
+using EventWOS.Application.Payments.Commands;
+using EventWOS.Application.Payments.DTOs;
+using EventWOS.Application.Payments.Queries;
+using EventWOS.Domain.Interfaces;
+using EventWOS.Shared.Common;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace EventWOS.Api.Controllers;
+
+[ApiController]
+[Route("api/v{version:apiVersion}/payments")]
+[ApiVersion("1.0")]
+[Authorize]
+public sealed class PaymentsController : ControllerBase
+{
+    private readonly IMediator    _mediator;
+    private readonly ICurrentUser _currentUser;
+
+    public PaymentsController(IMediator mediator, ICurrentUser currentUser)
+    {
+        _mediator    = mediator;
+        _currentUser = currentUser;
+    }
+
+    // ── Crew Payments ────────────────────────────────────────────────────────
+
+    /// <summary>List crew payments (filterable by event/vendor/crew/status).</summary>
+    [HttpGet]
+    public async Task<IActionResult> GetPayments(
+        [FromQuery] Guid?   eventId,
+        [FromQuery] Guid?   vendorId,
+        [FromQuery] Guid?   crewId,
+        [FromQuery] string? status,
+        [FromQuery] int     page     = 1,
+        [FromQuery] int     pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new GetPaymentsQuery(eventId, vendorId, crewId, status, page, pageSize), ct);
+        return Ok(ApiResponse<PagedResult<CrewPaymentDto>>.Ok(result.Value));
+    }
+
+    /// <summary>Create a crew payment record for an assignment.</summary>
+    [HttpPost]
+    public async Task<IActionResult> CreatePayment(
+        [FromBody] CreatePaymentRequest req, CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new CreateCrewPaymentCommand(
+            req.EventId, req.AssignmentId, req.CrewId, req.VendorId,
+            req.AgreedAmount, req.Notes), ct);
+
+        if (!result.IsSuccess)
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Description));
+
+        return Ok(ApiResponse<Guid>.Ok(result.Value));
+    }
+
+    /// <summary>Update payment status: approve | pay | reject | hold.</summary>
+    [HttpPatch("{id:guid}/status")]
+    public async Task<IActionResult> UpdatePaymentStatus(
+        Guid id, [FromBody] UpdatePaymentStatusRequest req, CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new UpdatePaymentStatusCommand(
+            id, req.Action, req.PaidAmount, req.Method, req.TransactionRef, req.Reason), ct);
+
+        if (!result.IsSuccess)
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Description));
+
+        return Ok(ApiResponse<bool>.Ok(true));
+    }
+
+    // ── Payroll Batches ──────────────────────────────────────────────────────
+
+    /// <summary>List payroll batches.</summary>
+    [HttpGet("payroll")]
+    public async Task<IActionResult> GetPayrollBatches(
+        [FromQuery] Guid?   vendorId,
+        [FromQuery] Guid?   eventId,
+        [FromQuery] string? status,
+        [FromQuery] int     page     = 1,
+        [FromQuery] int     pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new GetPayrollBatchesQuery(vendorId, eventId, status, page, pageSize), ct);
+        return Ok(ApiResponse<PagedResult<PayrollBatchDto>>.Ok(result.Value));
+    }
+
+    /// <summary>Create a payroll batch grouping multiple payments.</summary>
+    [HttpPost("payroll")]
+    public async Task<IActionResult> CreatePayrollBatch(
+        [FromBody] CreatePayrollBatchRequest req, CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new CreatePayrollBatchCommand(
+            req.VendorId, req.EventId, req.Notes, req.PaymentIds), ct);
+
+        if (!result.IsSuccess)
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Description));
+
+        return Ok(ApiResponse<Guid>.Ok(result.Value));
+    }
+
+    /// <summary>Update payroll batch status: submit | approve | disburse | reject.</summary>
+    [HttpPatch("payroll/{id:guid}/status")]
+    public async Task<IActionResult> UpdatePayrollStatus(
+        Guid id, [FromBody] UpdatePayrollStatusRequest req, CancellationToken ct = default)
+    {
+        var actorId = _currentUser.UserId ?? Guid.Empty;
+        var result  = await _mediator.Send(new UpdatePayrollStatusCommand(
+            id, req.Action, actorId, req.Reason), ct);
+
+        if (!result.IsSuccess)
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Description));
+
+        return Ok(ApiResponse<bool>.Ok(true));
+    }
+}
+
+// ── Request DTOs ─────────────────────────────────────────────────────────────
+
+public sealed record CreatePaymentRequest(
+    Guid    EventId,
+    Guid    AssignmentId,
+    Guid    CrewId,
+    Guid    VendorId,
+    decimal AgreedAmount,
+    string? Notes
+);
+
+public sealed record UpdatePaymentStatusRequest(
+    string   Action,
+    decimal? PaidAmount,
+    string?  Method,
+    string?  TransactionRef,
+    string?  Reason
+);
+
+public sealed record CreatePayrollBatchRequest(
+    Guid   VendorId,
+    Guid   EventId,
+    string? Notes,
+    IReadOnlyList<Guid> PaymentIds
+);
+
+public sealed record UpdatePayrollStatusRequest(string Action, string? Reason);

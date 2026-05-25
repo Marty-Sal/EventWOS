@@ -51,7 +51,7 @@ public sealed class AppAuthStateProvider : AuthenticationStateProvider
             _http.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-            var identity = new ClaimsIdentity(claims, "jwt", JwtRegisteredClaimNames.Sub, "role");
+            var identity = new ClaimsIdentity(claims, "jwt", JwtRegisteredClaimNames.Sub, ClaimTypes.Role);
             return new AuthenticationState(new ClaimsPrincipal(identity));
         }
         catch

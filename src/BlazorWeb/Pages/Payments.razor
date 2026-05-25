@@ -1,0 +1,573 @@
+@page "/payments"
+@attribute [Authorize(Roles = "Admin,Manager")]
+@inject IPaymentApiService PaymentApi
+@inject IEventApiService   EventApi
+@inject IVendorApiService  VendorApi
+
+<PageTitle>Payments & Payroll — EventWOS</PageTitle>
+
+<div class="space-y-6">
+
+    @* ── Header ─────────────────────────────────────────────────────────── *@
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h1 class="text-xl font-bold text-gray-900">Payments & Payroll</h1>
+            <p class="text-sm text-gray-400 mt-0.5">Manage crew payments and vendor payroll batches</p>
+        </div>
+        @if (_tab == Tab.Payments)
+        {
+            <button class="btn-primary" @onclick="() => _showCreatePayment = true">+ New Payment</button>
+        }
+        else
+        {
+            <button class="btn-primary" @onclick="() => _showCreateBatch = true">+ New Payroll Batch</button>
+        }
+    </div>
+
+    @* ── Tabs ────────────────────────────────────────────────────────────── *@
+    <div class="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+        <button class="tab-btn @(_tab == Tab.Payments ? "tab-active" : "")"
+                @onclick="() => SwitchTab(Tab.Payments)">
+            💰 Crew Payments
+        </button>
+        <button class="tab-btn @(_tab == Tab.Payroll ? "tab-active" : "")"
+                @onclick="() => SwitchTab(Tab.Payroll)">
+            📦 Payroll Batches
+        </button>
+    </div>
+
+    @* ── Filters ─────────────────────────────────────────────────────────── *@
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3">
+        <select class="input-sm" @bind="_filterStatus" @bind:after="LoadData">
+            <option value="">All Statuses</option>
+            @if (_tab == Tab.Payments)
+            {
+                <option>Pending</option>
+                <option>Approved</option>
+                <option>Paid</option>
+                <option>Rejected</option>
+                <option>OnHold</option>
+            }
+            else
+            {
+                <option>Draft</option>
+                <option>Submitted</option>
+                <option>Approved</option>
+                <option>Disbursed</option>
+                <option>Rejected</option>
+            }
+        </select>
+    </div>
+
+    @* ── Error banner ────────────────────────────────────────────────────── *@
+    @if (_error != null)
+    {
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 flex items-center gap-2">
+            ⚠️ @_error
+            <button class="ml-auto text-red-400 hover:text-red-600" @onclick="() => _error = null">✕</button>
+        </div>
+    }
+    @if (_success != null)
+    {
+        <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-700 flex items-center gap-2">
+            ✅ @_success
+            <button class="ml-auto text-green-400 hover:text-green-600" @onclick="() => _success = null">✕</button>
+        </div>
+    }
+
+    @* ── PAYMENTS TABLE ──────────────────────────────────────────────────── *@
+    @if (_tab == Tab.Payments)
+    {
+        @if (_loading)
+        {
+            <LoadingSpinner />
+        }
+        else if (_payments?.Items.Count == 0)
+        {
+            <EmptyState Icon="💰" Message="No payments found. Create one to get started." />
+        }
+        else if (_payments != null)
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-50 border-b border-gray-100">
+                                <th class="th-cell">Crew Member</th>
+                                <th class="th-cell">Vendor</th>
+                                <th class="th-cell">Event</th>
+                                <th class="th-cell text-right">Agreed</th>
+                                <th class="th-cell text-right">Paid</th>
+                                <th class="th-cell">Method</th>
+                                <th class="th-cell">Status</th>
+                                <th class="th-cell">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _payments.Items)
+                            {
+                                <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                                    <td class="td-cell">
+                                        <p class="font-semibold text-gray-800">@p.CrewName</p>
+                                        <p class="text-xs text-gray-400">@p.CrewMobile</p>
+                                    </td>
+                                    <td class="td-cell text-gray-600">@p.VendorName</td>
+                                    <td class="td-cell">
+                                        <p class="truncate max-w-[140px] text-gray-700">@p.EventTitle</p>
+                                    </td>
+                                    <td class="td-cell text-right font-mono font-semibold text-gray-800">
+                                        ₹@p.AgreedAmount.ToString("N0")
+                                    </td>
+                                    <td class="td-cell text-right font-mono text-gray-600">
+                                        @(p.PaidAmount.HasValue ? $"₹{p.PaidAmount.Value:N0}" : "—")
+                                    </td>
+                                    <td class="td-cell text-gray-500 text-xs">@(p.Method ?? "—")</td>
+                                    <td class="td-cell">
+                                        <span class="badge @PaymentStatusBadge(p.Status)">@p.Status</span>
+                                    </td>
+                                    <td class="td-cell">
+                                        <div class="flex gap-1 flex-wrap">
+                                            @if (p.Status == "Pending" || p.Status == "OnHold")
+                                            {
+                                                <button class="action-btn bg-blue-50 text-blue-700"
+                                                        @onclick="() => QuickAction(p.Id, \"approve\")">Approve</button>
+                                                <button class="action-btn bg-red-50 text-red-700"
+                                                        @onclick="() => QuickAction(p.Id, \"reject\")">Reject</button>
+                                            }
+                                            @if (p.Status == "Approved")
+                                            {
+                                                <button class="action-btn bg-green-50 text-green-700"
+                                                        @onclick="() => OpenMarkPaid(p)">Mark Paid</button>
+                                            }
+                                            @if (p.Status == "Pending")
+                                            {
+                                                <button class="action-btn bg-amber-50 text-amber-700"
+                                                        @onclick="() => QuickAction(p.Id, \"hold\")">Hold</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @* Pagination *@
+                @if (_payments.TotalCount > 20)
+                {
+                    <div class="px-6 py-3 border-t border-gray-50 flex items-center justify-between text-sm text-gray-500">
+                        <span>@_payments.TotalCount total payments</span>
+                        <div class="flex gap-2">
+                            <button class="px-3 py-1 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+                                    disabled="@(_page <= 1)"
+                                    @onclick="PrevPage">← Prev</button>
+                            <span class="px-3 py-1">Page @_page</span>
+                            <button class="px-3 py-1 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+                                    disabled="@(_payments.Items.Count < 20)"
+                                    @onclick="NextPage">Next →</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+
+    @* ── PAYROLL TABLE ───────────────────────────────────────────────────── *@
+    @if (_tab == Tab.Payroll)
+    {
+        @if (_loading)
+        {
+            <LoadingSpinner />
+        }
+        else if (_payroll?.Items.Count == 0)
+        {
+            <EmptyState Icon="📦" Message="No payroll batches yet. Create one by grouping crew payments." />
+        }
+        else if (_payroll != null)
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-50 border-b border-gray-100">
+                                <th class="th-cell">Batch Ref</th>
+                                <th class="th-cell">Vendor</th>
+                                <th class="th-cell">Event</th>
+                                <th class="th-cell text-center">Payments</th>
+                                <th class="th-cell text-right">Total Amount</th>
+                                <th class="th-cell">Status</th>
+                                <th class="th-cell">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var b in _payroll.Items)
+                            {
+                                <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                                    <td class="td-cell">
+                                        <p class="font-mono text-xs font-semibold text-indigo-700">@b.BatchRef</p>
+                                        <p class="text-xs text-gray-400">@b.CreatedDate.ToString("dd MMM yyyy")</p>
+                                    </td>
+                                    <td class="td-cell font-medium text-gray-700">@b.VendorName</td>
+                                    <td class="td-cell">
+                                        <p class="truncate max-w-[140px] text-gray-600">@b.EventTitle</p>
+                                    </td>
+                                    <td class="td-cell text-center">
+                                        <span class="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">
+                                            @b.PaymentCount
+                                        </span>
+                                    </td>
+                                    <td class="td-cell text-right font-mono font-bold text-gray-800">
+                                        ₹@b.TotalAmount.ToString("N0")
+                                    </td>
+                                    <td class="td-cell">
+                                        <span class="badge @PayrollStatusBadge(b.Status)">@b.Status</span>
+                                    </td>
+                                    <td class="td-cell">
+                                        <div class="flex gap-1 flex-wrap">
+                                            @if (b.Status == "Draft")
+                                            {
+                                                <button class="action-btn bg-blue-50 text-blue-700"
+                                                        @onclick="() => PayrollAction(b.Id, \"submit\")">Submit</button>
+                                                <button class="action-btn bg-red-50 text-red-700"
+                                                        @onclick="() => PayrollAction(b.Id, \"reject\")">Reject</button>
+                                            }
+                                            @if (b.Status == "Submitted")
+                                            {
+                                                <button class="action-btn bg-green-50 text-green-700"
+                                                        @onclick="() => PayrollAction(b.Id, \"approve\")">Approve</button>
+                                                <button class="action-btn bg-red-50 text-red-700"
+                                                        @onclick="() => PayrollAction(b.Id, \"reject\")">Reject</button>
+                                            }
+                                            @if (b.Status == "Approved")
+                                            {
+                                                <button class="action-btn bg-purple-50 text-purple-700"
+                                                        @onclick="() => PayrollAction(b.Id, \"disburse\")">Disburse</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_payroll.TotalCount > 20)
+                {
+                    <div class="px-6 py-3 border-t border-gray-50 flex items-center justify-between text-sm text-gray-500">
+                        <span>@_payroll.TotalCount total batches</span>
+                        <div class="flex gap-2">
+                            <button class="px-3 py-1 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+                                    disabled="@(_page <= 1)" @onclick="PrevPage">← Prev</button>
+                            <span class="px-3 py-1">Page @_page</span>
+                            <button class="px-3 py-1 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+                                    disabled="@(_payroll.Items.Count < 20)" @onclick="NextPage">Next →</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@* ══ MODAL: Create Payment ════════════════════════════════════════════════ *@
+@if (_showCreatePayment)
+{
+    <div class="modal-backdrop" @onclick="() => _showCreatePayment = false">
+        <div class="modal-box" @onclick:stopPropagation="true">
+            <h3 class="text-lg font-bold text-gray-900 mb-5">New Crew Payment</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="label">Event ID</label>
+                    <input class="input" placeholder="Event GUID" @bind="_newPayment.EventId" />
+                </div>
+                <div>
+                    <label class="label">Assignment ID</label>
+                    <input class="input" placeholder="Assignment GUID" @bind="_newPayment.AssignmentId" />
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">Crew ID</label>
+                        <input class="input" placeholder="Crew GUID" @bind="_newPayment.CrewId" />
+                    </div>
+                    <div>
+                        <label class="label">Vendor ID</label>
+                        <input class="input" placeholder="Vendor GUID" @bind="_newPayment.VendorId" />
+                    </div>
+                </div>
+                <div>
+                    <label class="label">Agreed Amount (₹)</label>
+                    <input class="input" type="number" min="1" step="1" @bind="_newPayment.AgreedAmount" />
+                </div>
+                <div>
+                    <label class="label">Notes</label>
+                    <textarea class="input h-20 resize-none" placeholder="Optional notes..." @bind="_newPayment.Notes"></textarea>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button class="btn-secondary" @onclick="() => _showCreatePayment = false">Cancel</button>
+                <button class="btn-primary" @onclick="CreatePayment" disabled="@_saving">
+                    @(_saving ? "Creating..." : "Create Payment")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ══ MODAL: Mark Paid ════════════════════════════════════════════════════ *@
+@if (_markPaidPayment != null)
+{
+    <div class="modal-backdrop" @onclick="() => _markPaidPayment = null">
+        <div class="modal-box" @onclick:stopPropagation="true">
+            <h3 class="text-lg font-bold text-gray-900 mb-1">Mark as Paid</h3>
+            <p class="text-sm text-gray-500 mb-5">
+                Crew: <strong>@_markPaidPayment.CrewName</strong> · Agreed: ₹@_markPaidPayment.AgreedAmount.ToString("N0")
+            </p>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="label">Paid Amount (₹)</label>
+                    <input class="input" type="number" min="1" step="1" @bind="_paidAmount" />
+                </div>
+                <div>
+                    <label class="label">Payment Method</label>
+                    <select class="input" @bind="_paidMethod">
+                        <option value="">Select method...</option>
+                        <option value="BankTransfer">Bank Transfer</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Cheque">Cheque</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="label">Transaction Reference</label>
+                    <input class="input" placeholder="UTR / Transaction ID (optional)" @bind="_transactionRef" />
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button class="btn-secondary" @onclick="() => _markPaidPayment = null">Cancel</button>
+                <button class="btn-primary" @onclick="ConfirmMarkPaid" disabled="@_saving">
+                    @(_saving ? "Saving..." : "Confirm Payment")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ══ MODAL: Create Payroll Batch ═════════════════════════════════════════ *@
+@if (_showCreateBatch)
+{
+    <div class="modal-backdrop" @onclick="() => _showCreateBatch = false">
+        <div class="modal-box" @onclick:stopPropagation="true">
+            <h3 class="text-lg font-bold text-gray-900 mb-5">New Payroll Batch</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="label">Vendor ID</label>
+                    <input class="input" placeholder="Vendor GUID" @bind="_newBatch.VendorId" />
+                </div>
+                <div>
+                    <label class="label">Event ID</label>
+                    <input class="input" placeholder="Event GUID" @bind="_newBatch.EventId" />
+                </div>
+                <div>
+                    <label class="label">Payment IDs to include</label>
+                    <textarea class="input h-24 resize-none font-mono text-xs"
+                              placeholder="Paste one Payment GUID per line..."
+                              @bind="_batchPaymentIdsText"></textarea>
+                    <p class="text-xs text-gray-400 mt-1">One GUID per line. Only unbatched Pending/Approved payments will be included.</p>
+                </div>
+                <div>
+                    <label class="label">Notes</label>
+                    <textarea class="input h-16 resize-none" @bind="_newBatch.Notes"></textarea>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button class="btn-secondary" @onclick="() => _showCreateBatch = false">Cancel</button>
+                <button class="btn-primary" @onclick="CreatePayrollBatch" disabled="@_saving">
+                    @(_saving ? "Creating..." : "Create Batch")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .tab-btn  { @("padding: .4rem 1rem; border-radius: .75rem; font-size: .85rem; font-weight: 600; color: #6b7280; cursor: pointer; transition: all .15s;") }
+    .tab-active { @("background: white; color: #4f46e5; box-shadow: 0 1px 4px rgba(0,0,0,.1);") }
+    .input-sm { @("border:1px solid #e5e7eb; border-radius:.75rem; padding:.35rem .85rem; font-size:.82rem; background:white; color:#111827; outline:none;") }
+    .input-sm:focus { @("border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.12);") }
+    .th-cell  { @("padding:.75rem 1rem; text-align:left; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#6b7280;") }
+    .td-cell  { @("padding:.85rem 1rem; vertical-align:middle;") }
+    .badge    { @("display:inline-block; padding:.2rem .65rem; border-radius:9999px; font-size:.72rem; font-weight:700;") }
+    .action-btn { @("px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer; padding:.25rem .6rem; border-radius:.5rem; font-size:.72rem; font-weight:600;") }
+    .modal-backdrop { @("position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:blur(4px);z-index:50;display:flex;align-items:center;justify-content:center;padding:1rem;") }
+    .modal-box { @("background:white;border-radius:1.25rem;padding:1.75rem;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto;") }
+    .label    { @("display:block;font-size:.78rem;font-weight:600;color:#374151;margin-bottom:.35rem;") }
+    .input    { @("width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.55rem .85rem;font-size:.85rem;outline:none;color:#111827;") }
+    .input:focus { @("border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12);") }
+    .btn-primary   { @("background:#4f46e5;color:white;font-weight:700;padding:.55rem 1.25rem;border-radius:.75rem;font-size:.85rem;cursor:pointer;transition:background .15s;") }
+    .btn-primary:hover   { @("background:#4338ca;") }
+    .btn-primary:disabled { @("opacity:.5;cursor:not-allowed;") }
+    .btn-secondary { @("background:#f3f4f6;color:#374151;font-weight:600;padding:.55rem 1.25rem;border-radius:.75rem;font-size:.85rem;cursor:pointer;") }
+</style>
+
+@code {
+    private enum Tab { Payments, Payroll }
+    private Tab _tab = Tab.Payments;
+
+    private PagedPaymentResult? _payments;
+    private PagedPayrollResult? _payroll;
+    private bool    _loading;
+    private bool    _saving;
+    private string? _error;
+    private string? _success;
+    private string  _filterStatus = "";
+    private int     _page = 1;
+
+    // Create Payment form
+    private bool            _showCreatePayment;
+    private NewPaymentForm  _newPayment = new();
+
+    // Mark Paid modal
+    private CrewPaymentDto? _markPaidPayment;
+    private decimal         _paidAmount;
+    private string          _paidMethod = "";
+    private string?         _transactionRef;
+
+    // Payroll Batch form
+    private bool            _showCreateBatch;
+    private NewBatchForm    _newBatch = new();
+    private string          _batchPaymentIdsText = "";
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task SwitchTab(Tab tab)
+    {
+        _tab = tab; _page = 1; _filterStatus = "";
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        if (_tab == Tab.Payments)
+            _payments = await PaymentApi.GetPaymentsAsync(status: string.IsNullOrEmpty(_filterStatus) ? null : _filterStatus, page: _page);
+        else
+            _payroll = await PaymentApi.GetPayrollBatchesAsync(status: string.IsNullOrEmpty(_filterStatus) ? null : _filterStatus, page: _page);
+        _loading = false;
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadData(); } }
+    private async Task NextPage() { _page++; await LoadData(); }
+
+    private async Task QuickAction(Guid id, string action)
+    {
+        var (ok, err) = await PaymentApi.UpdatePaymentStatusAsync(id, action);
+        if (ok) { _success = $"Payment {action}d."; await LoadData(); }
+        else _error = err;
+    }
+
+    private void OpenMarkPaid(CrewPaymentDto p)
+    {
+        _markPaidPayment = p;
+        _paidAmount      = p.AgreedAmount;
+        _paidMethod      = "";
+        _transactionRef  = null;
+    }
+
+    private async Task ConfirmMarkPaid()
+    {
+        if (_markPaidPayment is null) return;
+        _saving = true;
+        var (ok, err) = await PaymentApi.UpdatePaymentStatusAsync(
+            _markPaidPayment.Id, "pay", _paidAmount, _paidMethod, _transactionRef);
+        _saving = false;
+        if (ok) { _success = "Payment marked as paid."; _markPaidPayment = null; await LoadData(); }
+        else _error = err;
+    }
+
+    private async Task CreatePayment()
+    {
+        _saving = true;
+        if (!Guid.TryParse(_newPayment.EventId, out var eid)   ||
+            !Guid.TryParse(_newPayment.AssignmentId, out var aid) ||
+            !Guid.TryParse(_newPayment.CrewId, out var cid)    ||
+            !Guid.TryParse(_newPayment.VendorId, out var vid))
+        {
+            _error = "All IDs must be valid GUIDs."; _saving = false; return;
+        }
+        var (ok, err) = await PaymentApi.CreatePaymentAsync(eid, aid, cid, vid, _newPayment.AgreedAmount, _newPayment.Notes);
+        _saving = false;
+        if (ok) { _success = "Payment created."; _showCreatePayment = false; _newPayment = new(); await LoadData(); }
+        else _error = err;
+    }
+
+    private async Task CreatePayrollBatch()
+    {
+        _saving = true;
+        if (!Guid.TryParse(_newBatch.VendorId, out var vid) ||
+            !Guid.TryParse(_newBatch.EventId, out var eid))
+        {
+            _error = "Vendor ID and Event ID must be valid GUIDs."; _saving = false; return;
+        }
+        var paymentIds = _batchPaymentIdsText
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .Where(l => Guid.TryParse(l, out _))
+            .Select(Guid.Parse)
+            .ToList();
+
+        if (paymentIds.Count == 0) { _error = "Enter at least one valid Payment ID."; _saving = false; return; }
+
+        var (ok, _, err) = await PaymentApi.CreatePayrollBatchAsync(vid, eid, _newBatch.Notes, paymentIds);
+        _saving = false;
+        if (ok) { _success = "Payroll batch created."; _showCreateBatch = false; _newBatch = new(); _batchPaymentIdsText = ""; SwitchTab(Tab.Payroll); }
+        else _error = err;
+    }
+
+    private async Task PayrollAction(Guid id, string action)
+    {
+        var (ok, err) = await PaymentApi.UpdatePayrollStatusAsync(id, action);
+        if (ok) { _success = $"Batch {action}d."; await LoadData(); }
+        else _error = err;
+    }
+
+    private static string PaymentStatusBadge(string status) => status switch
+    {
+        "Pending"  => "bg-amber-100 text-amber-700",
+        "Approved" => "bg-blue-100 text-blue-700",
+        "Paid"     => "bg-green-100 text-green-700",
+        "Rejected" => "bg-red-100 text-red-700",
+        "OnHold"   => "bg-gray-100 text-gray-600",
+        _          => "bg-gray-100 text-gray-500"
+    };
+
+    private static string PayrollStatusBadge(string status) => status switch
+    {
+        "Draft"     => "bg-gray-100 text-gray-600",
+        "Submitted" => "bg-amber-100 text-amber-700",
+        "Approved"  => "bg-blue-100 text-blue-700",
+        "Disbursed" => "bg-green-100 text-green-700",
+        "Rejected"  => "bg-red-100 text-red-700",
+        _           => "bg-gray-100 text-gray-500"
+    };
+
+    private sealed class NewPaymentForm
+    {
+        public string  EventId      { get; set; } = "";
+        public string  AssignmentId { get; set; } = "";
+        public string  CrewId       { get; set; } = "";
+        public string  VendorId     { get; set; } = "";
+        public decimal AgreedAmount { get; set; }
+        public string? Notes        { get; set; }
+    }
+
+    private sealed class NewBatchForm
+    {
+        public string  VendorId { get; set; } = "";
+        public string  EventId  { get; set; } = "";
+        public string? Notes    { get; set; }
+    }
+}
