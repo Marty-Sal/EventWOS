@@ -181,6 +181,7 @@ try
         options.AddPolicy("perm:events:write",      policy => policy.Requirements.Add(new PermissionRequirement("events:write")));
         options.AddPolicy("perm:payments:read",     policy => policy.Requirements.Add(new PermissionRequirement("payments:read")));
         options.AddPolicy("perm:payments:write",    policy => policy.Requirements.Add(new PermissionRequirement("payments:write")));
+        options.AddPolicy("perm:payments:self",     policy => policy.Requirements.Add(new PermissionRequirement("payments:self")));
         options.AddPolicy("perm:permissions:read",  policy => policy.Requirements.Add(new PermissionRequirement("permissions:read")));
         options.AddPolicy("perm:permissions:write", policy => policy.Requirements.Add(new PermissionRequirement("permissions:write")));
         options.AddPolicy("perm:profile:read",      policy => policy.Requirements.Add(new PermissionRequirement("profile:read")));
