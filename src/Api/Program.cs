@@ -685,6 +685,18 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='event_assignments' AND column_name='rated_at') THEN
         ALTER TABLE event_assignments ADD COLUMN rated_at TIMESTAMPTZ; END IF;
 
+    -- ═══ 3-mode assignments: vendor_id AND crew_id both nullable ═════════════
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name='event_assignments' AND column_name='vendor_id' AND is_nullable='NO') THEN
+        ALTER TABLE event_assignments ALTER COLUMN vendor_id DROP NOT NULL;
+        RAISE NOTICE 'event_assignments.vendor_id is now nullable';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name='event_assignments' AND column_name='crew_id' AND is_nullable='NO') THEN
+        ALTER TABLE event_assignments ALTER COLUMN crew_id DROP NOT NULL;
+        RAISE NOTICE 'event_assignments.crew_id is now nullable';
+    END IF;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");
