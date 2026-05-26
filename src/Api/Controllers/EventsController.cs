@@ -166,6 +166,24 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Vendor self-service: attach a crew member from the vendor's roster to an
+    /// event the vendor has been directly assigned to. Vendor-only mode follow-up.
+    /// </summary>
+    [Permission("profile:write")]
+    [HttpPost("{id:guid}/vendor-assign-crew")]
+    public async Task<IActionResult> VendorAssignCrew(Guid id, [FromBody] VendorAssignCrewRequest req, CancellationToken ct)
+    {
+        if (_currentUser.Role != UserRole.Vendor) return Forbid();
+
+        var result = await _mediator.Send(new VendorAssignCrewCommand(
+            id, req.CrewId, _currentUser.UserId!.Value), ct);
+
+        return result.IsSuccess
+            ? Created(string.Empty, ApiResponse<EventAssignmentDto>.Ok(result.Value))
+            : BadRequest(ApiResponse<EventAssignmentDto>.Fail(result.Error.Message));
+    }
+
+    /// <summary>
     /// Crew responds to an assignment invitation (confirm / decline).
     /// Uses profile:write — Crew always has this permission.
     /// </summary>
@@ -310,6 +328,7 @@ public sealed record UpdateEventRequest(
 
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
 public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId);
+public sealed record VendorAssignCrewRequest(Guid CrewId);
 public sealed record RespondAssignmentRequest(string Response, string? Reason = null);
 public sealed record RecordAttendanceRequest(string Action, string? Location = null);
 public sealed record ReviewDecisionRequest(string? Reason = null);

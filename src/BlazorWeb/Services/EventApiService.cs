@@ -72,6 +72,7 @@ public interface IEventApiService
     Task<PagedEventAssignmentResult?> GetMyAssignmentsAsync(int page = 1, CancellationToken ct = default);
     Task<PagedEventAssignmentResult?> GetVendorAssignmentsAsync(int page = 1, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> RespondAssignmentAsync(Guid assignmentId, string response, string? reason = null, CancellationToken ct = default);
+    Task<(bool Ok, Guid? AssignmentId, string? Error)> VendorAssignCrewAsync(Guid eventId, Guid crewId, CancellationToken ct = default);
 }
 
 public sealed record CreateEventRequest(
@@ -167,6 +168,22 @@ public sealed class EventApiService : IEventApiService
         try
         {
             var resp = await _http.PostAsJsonAsync($"api/v1/events/{eventId}/assignments", new { crewId, vendorId }, ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiResult<EventAssignmentDto>>(_jsonOpts, ct);
+                return (true, body?.Data?.Id, null);
+            }
+            var err = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+            return (false, null, err?.Errors?.FirstOrDefault() ?? "Unknown error");
+        }
+        catch (Exception ex) { return (false, null, ex.Message); }
+    }
+
+    public async Task<(bool Ok, Guid? AssignmentId, string? Error)> VendorAssignCrewAsync(Guid eventId, Guid crewId, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync($"api/v1/events/{eventId}/vendor-assign-crew", new { crewId }, ct);
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<ApiResult<EventAssignmentDto>>(_jsonOpts, ct);
