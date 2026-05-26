@@ -162,30 +162,33 @@
     private async Task SetTab(string tab) { _activeTab = tab; _page = 1; await Load(); }
 
     private bool _needsRefresh;
+    // Guard: prevent Load() from being called re-entrantly (e.g. after auth state change)
+    private bool _loadInProgress;
 
     private async Task Load()
     {
-        _loading = true; _error = null; _needsRefresh = false; StateHasChanged();
+        if (_loadInProgress) return;
+        _loadInProgress = true;
+        _loading = true; _error = null; _needsRefresh = false;
         try
         {
             var status = _activeTab == "All" ? "" : _activeTab;
             var url = $"api/v1/payments/my?page={_page}&pageSize=20{(string.IsNullOrEmpty(status) ? "" : $"&status={status}")}";
 
             var httpResp = await Http.GetAsync(url);
+
+            // On 403: do ONE silent refresh (don't notify auth state — that triggers re-render loop)
             if (httpResp.StatusCode == System.Net.HttpStatusCode.Forbidden)
             {
-                // Permission missing from current JWT — try silent token refresh
-                var refreshed = await TryRefreshTokenAsync();
+                var refreshed = await TryRefreshTokenSilentlyAsync();
                 if (refreshed)
-                {
                     httpResp = await Http.GetAsync(url);
-                }
             }
+
             if (!httpResp.IsSuccessStatusCode)
             {
-                if (httpResp.StatusCode == System.Net.HttpStatusCode.Forbidden)
-                    _needsRefresh = true;
-                else
+                _needsRefresh = httpResp.StatusCode == System.Net.HttpStatusCode.Forbidden;
+                if (!_needsRefresh)
                     _error = $"Error {(int)httpResp.StatusCode}: {httpResp.ReasonPhrase}";
                 return;
             }
@@ -196,7 +199,6 @@
             _totalPages = (int)Math.Ceiling((double)_total / 20);
             if (_totalPages < 1) _totalPages = 1;
 
-            // Build summary from all records (load once)
             if (_summary is null)
             {
                 var allResp2 = await Http.GetAsync("api/v1/payments/my?page=1&pageSize=500");
@@ -212,10 +214,14 @@
             }
         }
         catch (Exception ex) { _error = ex.Message; }
-        finally { _loading = false; StateHasChanged(); }
+        finally { _loading = false; _loadInProgress = false; }
     }
 
-    private async Task<bool> TryRefreshTokenAsync()
+    /// <summary>
+    /// Silently refreshes the JWT by updating local storage directly —
+    /// does NOT call NotifyAuthenticationStateChanged() to avoid triggering a re-render loop.
+    /// </summary>
+    private async Task<bool> TryRefreshTokenSilentlyAsync()
     {
         try
         {
@@ -223,7 +229,8 @@
             if (string.IsNullOrEmpty(refreshToken)) return false;
             var result = await AuthApi.RefreshTokenAsync(refreshToken);
             if (result?.Data is null) return false;
-            await Auth.UpdateAccessTokenAsync(result.Data.AccessToken, result.Data.RefreshToken);
+            // Store tokens silently — bypasses Blazor auth state notification
+            await Auth.StoreTokensSilentlyAsync(result.Data.AccessToken, result.Data.RefreshToken);
             return true;
         }
         catch { return false; }

@@ -94,6 +94,20 @@ public sealed class AppAuthStateProvider : AuthenticationStateProvider
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
     }
 
+    /// <summary>
+    /// Stores new tokens and updates the HTTP header WITHOUT notifying Blazor's
+    /// auth state changed event. Use this for silent background refreshes where
+    /// triggering a component re-render loop must be avoided.
+    /// </summary>
+    public async Task StoreTokensSilentlyAsync(string accessToken, string refreshToken)
+    {
+        await _storage.SetItemAsStringAsync(AccessTokenKey, accessToken);
+        await _storage.SetItemAsStringAsync(RefreshTokenKey, refreshToken);
+        _http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        // Intentionally NOT calling NotifyAuthenticationStateChanged
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private static AuthenticationState Anonymous() =>
