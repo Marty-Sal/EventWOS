@@ -1,6 +1,9 @@
 @page "/my-payments"
 @attribute [Authorize(Roles = "Crew")]
 @inject HttpClient Http
+@inject AppAuthStateProvider Auth
+@inject IAuthApiService AuthApi
+@inject NavigationManager Nav
 
 <PageTitle>My Payments — EventWOS</PageTitle>
 
@@ -52,6 +55,17 @@
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
             </svg>
+        </div>
+    }
+    else if (_needsRefresh)
+    {
+        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-5 text-sm space-y-3">
+            <p class="text-amber-700 font-semibold">⚠️ Your session needs refreshing to access payments.</p>
+            <p class="text-amber-600 text-xs">A new permission was added to your account. Please log out and log back in.</p>
+            <button @onclick="ForceLogout"
+                    class="px-4 py-2 rounded-xl bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition">
+                Log out & refresh session
+            </button>
         </div>
     }
     else if (_error is not null)
@@ -147,14 +161,36 @@
 
     private async Task SetTab(string tab) { _activeTab = tab; _page = 1; await Load(); }
 
+    private bool _needsRefresh;
+
     private async Task Load()
     {
-        _loading = true; _error = null; StateHasChanged();
+        _loading = true; _error = null; _needsRefresh = false; StateHasChanged();
         try
         {
             var status = _activeTab == "All" ? "" : _activeTab;
             var url = $"api/v1/payments/my?page={_page}&pageSize=20{(string.IsNullOrEmpty(status) ? "" : $"&status={status}")}";
-            var resp = await Http.GetFromJsonAsync<ApiResult<PagedResult<PaymentDto>>>(url, JsonOpts);
+
+            var httpResp = await Http.GetAsync(url);
+            if (httpResp.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                // Permission missing from current JWT — try silent token refresh
+                var refreshed = await TryRefreshTokenAsync();
+                if (refreshed)
+                {
+                    httpResp = await Http.GetAsync(url);
+                }
+            }
+            if (!httpResp.IsSuccessStatusCode)
+            {
+                if (httpResp.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                    _needsRefresh = true;
+                else
+                    _error = $"Error {(int)httpResp.StatusCode}: {httpResp.ReasonPhrase}";
+                return;
+            }
+
+            var resp = await httpResp.Content.ReadFromJsonAsync<ApiResult<PagedResult<PaymentDto>>>(JsonOpts);
             _items  = resp?.Data?.Items?.ToList() ?? new();
             _total  = resp?.Data?.TotalCount ?? 0;
             _totalPages = (int)Math.Ceiling((double)_total / 20);
@@ -163,21 +199,51 @@
             // Build summary from all records (load once)
             if (_summary is null)
             {
-                var allResp = await Http.GetFromJsonAsync<ApiResult<PagedResult<PaymentDto>>>(
-                    "api/v1/payments/my?page=1&pageSize=500", JsonOpts);
-                var all = allResp?.Data?.Items?.ToList() ?? new();
-                _summary = new PaymentSummary(
-                    all.Sum(p => p.AgreedAmount),
-                    all.Where(p => p.Status == "Paid").Sum(p => p.PaidAmount ?? p.AgreedAmount),
-                    all.Where(p => p.Status == "Pending").Sum(p => p.AgreedAmount));
+                var allResp2 = await Http.GetAsync("api/v1/payments/my?page=1&pageSize=500");
+                if (allResp2.IsSuccessStatusCode)
+                {
+                    var allResp = await allResp2.Content.ReadFromJsonAsync<ApiResult<PagedResult<PaymentDto>>>(JsonOpts);
+                    var all = allResp?.Data?.Items?.ToList() ?? new();
+                    _summary = new PaymentSummary(
+                        all.Sum(p => p.AgreedAmount),
+                        all.Where(p => p.Status == "Paid").Sum(p => p.PaidAmount ?? p.AgreedAmount),
+                        all.Where(p => p.Status == "Pending").Sum(p => p.AgreedAmount));
+                }
             }
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; StateHasChanged(); }
     }
 
+    private async Task<bool> TryRefreshTokenAsync()
+    {
+        try
+        {
+            var refreshToken = await Auth.GetRefreshTokenAsync();
+            if (string.IsNullOrEmpty(refreshToken)) return false;
+            var result = await AuthApi.RefreshTokenAsync(refreshToken);
+            if (result?.Data is null) return false;
+            await Auth.UpdateAccessTokenAsync(result.Data.AccessToken, result.Data.RefreshToken);
+            return true;
+        }
+        catch { return false; }
+    }
+
     private async Task PrevPage() { if (_page > 1) { _page--; await Load(); } }
     private async Task NextPage() { if (_page < _totalPages) { _page++; await Load(); } }
+
+    private async Task ForceLogout()
+    {
+        try
+        {
+            var rt = await Auth.GetRefreshTokenAsync();
+            if (!string.IsNullOrEmpty(rt))
+                await AuthApi.LogoutAsync(rt);
+        }
+        catch { }
+        await Auth.MarkLoggedOutAsync();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
 
     private static string StatusChip(string s) => s switch
     {

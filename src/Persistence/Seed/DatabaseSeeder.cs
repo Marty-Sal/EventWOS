@@ -106,9 +106,7 @@ public sealed class DatabaseSeeder
     // ─── Role ↔ Permission mappings ─────────────────────────────────────────
     private async Task SeedRolePermissionsAsync(CancellationToken ct)
     {
-        if (await _db.RolePermissions.AnyAsync(ct)) return;
-
-        // Always reload from DB after SaveChangesAsync above
+        // ADDITIVE upsert — never skips so new permissions are always backfilled.
         var roles = await _db.Roles.ToListAsync(ct);
         var perms = await _db.Permissions.ToListAsync(ct);
 
@@ -118,54 +116,70 @@ public sealed class DatabaseSeeder
             return;
         }
 
-        Role? GetRole(UserRole r) => roles.FirstOrDefault(x => x.RoleType == r);
-        Permission? GetPerm(string n) => perms.FirstOrDefault(x => x.Name == n);
+        // Load existing mappings as a fast-lookup set (roleId, permId)
+        var existing = (await _db.RolePermissions.ToListAsync(ct))
+                           .Select(rp => (rp.RoleId, rp.PermissionId))
+                           .ToHashSet();
 
-        var mappings = new List<RolePermission>();
+        Role?       GetRole(UserRole r) => roles.FirstOrDefault(x => x.RoleType == r);
+        Permission? GetPerm(string n)   => perms.FirstOrDefault(x => x.Name == n);
+
+        var toAdd = new List<RolePermission>();
+
+        void TryAdd(Guid roleId, Guid permId, bool isSysOverride = false)
+        {
+            if (!existing.Contains((roleId, permId)))
+                toAdd.Add(new RolePermission(roleId, permId, isSysOverride));
+        }
 
         // Admin gets every permission
         var adminRole = GetRole(UserRole.Admin);
         if (adminRole is not null)
-            mappings.AddRange(perms.Select(p => new RolePermission(adminRole.Id, p.Id, true)));
+            foreach (var p in perms)
+                TryAdd(adminRole.Id, p.Id, true);
 
         // Vendor permissions
         var vendorRole = GetRole(UserRole.Vendor);
         if (vendorRole is not null)
         {
-            var vendorPerms = new[]
+            foreach (var name in new[]
             {
                 "crew:read", "crew:write", "crew:invite", "events:read",
                 "crew:approve", "attendance:read", "profile:read", "profile:write"
-            };
-            foreach (var name in vendorPerms)
+            })
             {
                 var perm = GetPerm(name);
-                if (perm is not null)
-                    mappings.Add(new RolePermission(vendorRole.Id, perm.Id));
+                if (perm is not null) TryAdd(vendorRole.Id, perm.Id);
             }
         }
 
-        // Crew permissions
+        // Crew permissions — additive so new permissions (e.g. payments:self) are always backfilled
         var crewRole = GetRole(UserRole.Crew);
         if (crewRole is not null)
         {
-            foreach (var name in new[] { "profile:read", "profile:write", "events:read", "payments:self" })
+            foreach (var name in new[]
+            {
+                "profile:read", "profile:write", "events:read",
+                "attendance:read", "payments:self"
+            })
             {
                 var perm = GetPerm(name);
-                if (perm is not null)
-                    mappings.Add(new RolePermission(crewRole.Id, perm.Id));
+                if (perm is not null) TryAdd(crewRole.Id, perm.Id);
             }
         }
 
         // Manager — no default permissions (assigned dynamically by Admin)
 
-        if (mappings.Count > 0)
+        if (toAdd.Count > 0)
         {
-            _db.RolePermissions.AddRange(mappings);
+            _db.RolePermissions.AddRange(toAdd);
             await _db.SaveChangesAsync(ct);
+            _logger.LogInformation("Backfilled {Count} missing role-permission mappings", toAdd.Count);
         }
-
-        _logger.LogInformation("Seeded {Count} role-permission mappings", mappings.Count);
+        else
+        {
+            _logger.LogInformation("Role-permission mappings already up to date.");
+        }
     }
 
     // ─── Default Admin User ──────────────────────────────────────────────────
