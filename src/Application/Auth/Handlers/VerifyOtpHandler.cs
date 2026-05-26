@@ -113,7 +113,10 @@ public sealed class VerifyOtpHandler : IRequestHandler<VerifyOtpCommand, Result<
         user.UpdateLoginMetadata(request.IpAddress ?? string.Empty, request.DeviceId);
         user.ResetFailedAttempts();
 
-        // 6. Get effective permissions
+        // 6. Invalidate any stale Redis permission cache, then read fresh from DB.
+        // This ensures newly seeded/updated permissions are always reflected on login —
+        // even if the user re-logs within the 5-minute cache window.
+        await _permissionService.InvalidateCacheForUserAsync(user.Id, cancellationToken);
         var permissions = await _permissionService.GetEffectivePermissionsAsync(
             user.Id, user.Role, cancellationToken);
 

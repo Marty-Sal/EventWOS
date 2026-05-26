@@ -85,6 +85,12 @@ public sealed class PermissionService : IPermissionService
         return permissions;
     }
 
+    public async Task InvalidateCacheForUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        var cacheKey = $"perms:{userId}";
+        await _cache.RemoveAsync(cacheKey, ct);
+    }
+
     private async Task<IReadOnlyList<string>> GetAllPermissionNamesAsync(CancellationToken ct)
     {
         const string key = "perms:all";

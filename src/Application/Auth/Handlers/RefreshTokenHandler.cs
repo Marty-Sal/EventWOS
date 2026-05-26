@@ -69,6 +69,9 @@ public sealed class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, R
         var newExpiry = DateTime.UtcNow.AddDays(30);
         var sessionId = Guid.NewGuid();
 
+        // Always bust cache on token refresh — ensures any new permissions added since
+        // the last login are embedded in the freshly issued access token.
+        await _permissionService.InvalidateCacheForUserAsync(user.Id, cancellationToken);
         var permissions = await _permissionService.GetEffectivePermissionsAsync(
             user.Id, user.Role, cancellationToken);
 
