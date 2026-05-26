@@ -23,9 +23,10 @@ public sealed record DashboardStatsDto(
     int DeclinedAssignments,
     int    TotalCheckIns,
     double AttendanceRate,
-    IReadOnlyList<RecentActivityDto> RecentActivity,
-    IReadOnlyList<UpcomingEventDto>  UpcomingEvents,
-    IReadOnlyList<TopVendorDto>      TopVendors
+    IReadOnlyList<RecentActivityDto>   RecentActivity,
+    IReadOnlyList<UpcomingEventDto>    UpcomingEvents,
+    IReadOnlyList<TopVendorDto>        TopVendors,
+    IReadOnlyList<NeedsStaffingDto>    NeedsStaffing
 );
 
 public sealed record RecentActivityDto(string Action, string Actor, string Target, DateTime At);
@@ -38,6 +39,17 @@ public sealed record UpcomingEventDto(
     int      AssignedCrew,
     int      MaxCrew,
     string   Status
+);
+
+public sealed record NeedsStaffingDto(
+    Guid     EventId,
+    string   EventTitle,
+    string   Venue,
+    DateTime StartAt,
+    Guid     VendorId,
+    string   VendorName,
+    int      MaxCrew,
+    int      AssignedSoFar
 );
 
 public sealed record TopVendorDto(
@@ -188,6 +200,61 @@ public sealed class GetDashboardStatsHandler
                 : 0
         )).ToList();
 
+
+        // ── 8. Needs-Staffing — vendor-only placeholder rows (CrewId is null) ─
+        // A vendor was assigned to an event but hasn't added crew yet.
+        var needsStaffingRaw = await _db.EventAssignments
+            .Where(a => a.CrewId == null
+                     && a.VendorId != null
+                     && a.Status != AssignmentStatus.Declined
+                     && a.Status != AssignmentStatus.RejectedByManager
+                     && a.Status != AssignmentStatus.RejectedByVendor)
+            .Select(a => new { a.EventId, a.VendorId })
+            .ToListAsync(ct);
+
+        var nsEventIds  = needsStaffingRaw.Select(x => x.EventId).Distinct().ToList();
+        var nsVendorIds = needsStaffingRaw.Select(x => x.VendorId!.Value).Distinct().ToList();
+
+        var nsEvents = await _db.Events
+            .Where(e => nsEventIds.Contains(e.Id)
+                     && e.Status != EventStatus.Completed
+                     && e.Status != EventStatus.Cancelled)
+            .Select(e => new { e.Id, e.Title, e.Venue, e.StartAt, e.MaxCrew })
+            .ToListAsync(ct);
+        var nsEventLookup = nsEvents.ToDictionary(e => e.Id);
+
+        var nsVendorNames = await _db.Users
+            .Where(u => nsVendorIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.FullName })
+            .ToListAsync(ct);
+        var nsVendorLookup = nsVendorNames.ToDictionary(v => v.Id, v => v.FullName);
+
+        // How many real crew the vendor has already added per (event, vendor)
+        var realCrewCounts = await _db.EventAssignments
+            .Where(a => nsEventIds.Contains(a.EventId)
+                     && a.CrewId != null
+                     && a.Status != AssignmentStatus.Declined)
+            .GroupBy(a => new { a.EventId, a.VendorId })
+            .Select(g => new { g.Key.EventId, g.Key.VendorId, Count = g.Count() })
+            .ToListAsync(ct);
+
+        var needsStaffing = needsStaffingRaw
+            .Where(r => nsEventLookup.ContainsKey(r.EventId))
+            .Select(r =>
+            {
+                var ev = nsEventLookup[r.EventId];
+                var vendorId = r.VendorId!.Value;
+                var assignedSoFar = realCrewCounts
+                    .FirstOrDefault(rc => rc.EventId == r.EventId && rc.VendorId == vendorId)?.Count ?? 0;
+                return new NeedsStaffingDto(
+                    ev.Id, ev.Title, ev.Venue, ev.StartAt,
+                    vendorId, nsVendorLookup.GetValueOrDefault(vendorId, "Unknown"),
+                    ev.MaxCrew, assignedSoFar);
+            })
+            .OrderBy(n => n.StartAt)
+            .Take(10)
+            .ToList();
+
         return Result.Success(new DashboardStatsDto(
             totalEvents,
             EC(EventStatus.Draft), EC(EventStatus.Published),
@@ -195,6 +262,6 @@ public sealed class GetDashboardStatsHandler
             totalCrew, totalVendors,
             totalAssignments, confirmedAssignments, pendingAssignments, declinedAssignments,
             totalCheckIns, attendanceRate,
-            recentActivity, upcoming, topVendors));
+            recentActivity, upcoming, topVendors, needsStaffing));
     }
 }

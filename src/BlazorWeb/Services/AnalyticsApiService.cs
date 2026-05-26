@@ -26,7 +26,8 @@ public sealed record DashboardStatsDto(
 
     IReadOnlyList<RecentActivityDto> RecentActivity,
     IReadOnlyList<UpcomingEventDto>  UpcomingEvents,
-    IReadOnlyList<TopVendorDto>      TopVendors
+    IReadOnlyList<TopVendorDto>      TopVendors,
+    IReadOnlyList<NeedsStaffingDto>  NeedsStaffing
 );
 
 public sealed record RecentActivityDto(string Action, string Actor, string Target, DateTime At);
@@ -46,6 +47,17 @@ public sealed record TopVendorDto(
     int    CrewCount,
     int    AssignmentsCount,
     double ConfirmationRate
+);
+
+public sealed record NeedsStaffingDto(
+    Guid     EventId,
+    string   EventTitle,
+    string   Venue,
+    DateTime StartAt,
+    Guid     VendorId,
+    string   VendorName,
+    int      MaxCrew,
+    int      AssignedSoFar
 );
 
 // ── Interface ─────────────────────────────────────────────────────────────────
