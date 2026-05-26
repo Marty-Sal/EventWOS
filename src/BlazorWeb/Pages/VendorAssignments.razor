@@ -269,7 +269,7 @@
             if (resp.IsSuccessStatusCode)
             {
                 ShowToast("Forwarded to Manager approval queue!", false);
-                await LoadAsync();
+                await Load();
             }
             else
             {
