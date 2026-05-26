@@ -27,6 +27,35 @@ public sealed record PagedCrewResult(
     IReadOnlyList<CrewMemberDto> Items, int TotalCount, int Page, int PageSize);
 
 // ── Interface ─────────────────────────────────────────────────────────────────
+
+// ── Vendor Report DTOs ────────────────────────────────────────────────────────
+
+public sealed record VendorReportDto(
+    Guid    VendorId,
+    string  VendorName,
+    int     TotalCrewInRoster,
+    int     TotalAssignmentsMade,
+    int     AssignmentsConfirmed,
+    int     AssignmentsAttended,
+    int     AssignmentsPending,
+    int     AssignmentsRejected,
+    decimal ConfirmationRate,
+    decimal AttendanceRate,
+    decimal TotalAgreedAmount,
+    decimal TotalPaidAmount,
+    decimal TotalPendingAmount,
+    int     TotalEventsWorked,
+    IReadOnlyList<VendorCrewStatDto>? TopCrew);
+
+public sealed record VendorCrewStatDto(
+    Guid    CrewId,
+    string  CrewName,
+    string  CrewMobile,
+    decimal DisciplineScore,
+    int     EventsAttended,
+    int     AssignmentsForThisVendor,
+    string  LastStatus);
+
 public interface IVendorApiService
 {
     Task<PagedVendorResult?> GetVendorsAsync(int page = 1, string? search = null, CancellationToken ct = default);
@@ -36,6 +65,7 @@ public interface IVendorApiService
     Task<bool> ChangeVendorStatusAsync(Guid id, string status, CancellationToken ct = default);
     Task<PagedCrewResult?> GetCrewAsync(int page = 1, string? search = null, Guid? vendorId = null, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateCrewAsync(string mobile, string fullName, string? email, string? referralCode, CancellationToken ct = default);
+    Task<VendorReportDto?> GetMyReportAsync(CancellationToken ct = default);
 }
 
 // ── Implementation ────────────────────────────────────────────────────────────
@@ -129,5 +159,16 @@ public sealed class VendorApiService : IVendorApiService
             return (false, body?.Errors?.FirstOrDefault() ?? "Failed to create crew member.");
         }
         catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    public async Task<VendorReportDto?> GetMyReportAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await _http.GetFromJsonAsync<ApiResult<VendorReportDto>>(
+                "api/v1/vendors/my/report", _jsonOpts, ct);
+            return r?.Data;
+        }
+        catch { return null; }
     }
 }

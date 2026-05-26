@@ -203,7 +203,7 @@
         await LoadApprovalCountAsync();
         try { await Hub.StartAsync(); }
         catch { }
-        Hub.ConnectionStateChanged += StateHasChanged;
+        Hub.ConnectionStateChanged += () => InvokeAsync(StateHasChanged);
     }
 
     private async Task LogoutAsync()

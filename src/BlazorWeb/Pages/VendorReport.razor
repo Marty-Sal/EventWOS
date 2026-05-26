@@ -1,6 +1,6 @@
 @page "/vendor-report"
 @attribute [Authorize(Roles = "Vendor")]
-@inject HttpClient Http
+@inject IVendorApiService VendorApi
 
 <PageTitle>My Report — EventWOS</PageTitle>
 
@@ -32,10 +32,10 @@
     {
         @* KPI Grid *@
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard Label="Total Crew" Value="@_report.TotalCrewInRoster.ToString()" Icon="👷" Color="indigo" />
-            <KpiCard Label="Total Assignments" Value="@_report.TotalAssignmentsMade.ToString()" Icon="📋" Color="gray" />
-            <KpiCard Label="Events Worked" Value="@_report.TotalEventsWorked.ToString()" Icon="📅" Color="blue" />
-            <KpiCard Label="Confirmation Rate" Value="@(_report.ConfirmationRate.ToString("F0") + "%")" Icon="✅" Color="green" />
+            <KpiCard Title="Total Crew" Value="@_report.TotalCrewInRoster.ToString()" Icon="👷" Color="indigo" />
+            <KpiCard Title="Total Assignments" Value="@_report.TotalAssignmentsMade.ToString()" Icon="📋" Color="gray" />
+            <KpiCard Title="Events Worked" Value="@_report.TotalEventsWorked.ToString()" Icon="📅" Color="blue" />
+            <KpiCard Title="Confirmation Rate" Value="@(_report.ConfirmationRate.ToString("F0") + "%")" Icon="✅" Color="green" />
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -88,12 +88,12 @@
         </div>
 
         @* Top Crew Table *@
-        @if (_report.TopCrew.Any())
+        @if (_report.TopCrew?.Any() == true)
         {
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div class="px-5 py-4 border-b border-gray-50">
                     <h3 class="font-bold text-gray-800 text-sm">Your Crew Roster</h3>
-                    <p class="text-xs text-gray-400 mt-0.5">Top @_report.TopCrew.Count by discipline score</p>
+                    <p class="text-xs text-gray-400 mt-0.5">Top @(_report.TopCrew?.Count ?? 0) by discipline score</p>
                 </div>
                 <table class="w-full text-sm">
                     <thead class="bg-gray-50">
@@ -106,7 +106,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50">
-                        @foreach (var c in _report.TopCrew)
+                        @foreach (var c in _report.TopCrew ?? new List<VendorCrewStatDto>())
                         {
                             <tr class="hover:bg-gray-50 transition-colors">
                                 <td class="px-5 py-3.5">
@@ -136,9 +136,6 @@
     private bool    _loading = true;
     private string? _error;
 
-    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
-        new() { PropertyNameCaseInsensitive = true };
-
     protected override async Task OnInitializedAsync() => await Load();
 
     private async Task Load()
@@ -146,36 +143,26 @@
         _loading = true; _error = null; StateHasChanged();
         try
         {
-            var resp = await Http.GetFromJsonAsync<ApiResult<VendorReportDto>>(
-                "api/v1/vendors/my/report", JsonOpts);
-            _report = resp?.Data;
+            _report = await VendorApi.GetMyReportAsync();
+            if (_report is null) _error = "Could not load your report. Please try again.";
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; StateHasChanged(); }
     }
 
-    private static RenderFragment RateBar(string label, int count, int total, string barColor) => __builder =>
+    private static MarkupString RateBar(string label, int count, int total, string barColor)
     {
         var pct = total > 0 ? (int)((double)count / total * 100) : 0;
-        __builder.OpenElement(0, "div");
-        __builder.AddAttribute(1, "class", "space-y-1");
-            __builder.OpenElement(2, "div");
-            __builder.AddAttribute(3, "class", "flex justify-between text-xs text-gray-500");
-                __builder.OpenElement(4, "span"); __builder.AddContent(5, label); __builder.CloseElement();
-                __builder.OpenElement(6, "span");
-                __builder.AddAttribute(7, "class", "font-semibold text-gray-700");
-                __builder.AddContent(8, $"{count} ({pct}%)");
-                __builder.CloseElement();
-            __builder.CloseElement();
-            __builder.OpenElement(9, "div");
-            __builder.AddAttribute(10, "class", "w-full h-1.5 bg-gray-100 rounded-full overflow-hidden");
-                __builder.OpenElement(11, "div");
-                __builder.AddAttribute(12, "class", $"h-full {barColor} rounded-full transition-all");
-                __builder.AddAttribute(13, "style", $"width:{pct}%");
-                __builder.CloseElement();
-            __builder.CloseElement();
-        __builder.CloseElement();
-    };
+        var html = $"<div class=\"space-y-1\">"
+            + $"<div class=\"flex justify-between text-xs text-gray-500\">"
+            + $"<span>{label}</span>"
+            + $"<span class=\"font-semibold text-gray-700\">{count} ({pct}%)</span>"
+            + "</div>"
+            + $"<div class=\"w-full h-1.5 bg-gray-100 rounded-full overflow-hidden\">"
+            + $"<div class=\"h-full {barColor} rounded-full transition-all\" style=\"width:{pct}%\"></div>"
+            + "</div></div>";
+        return new MarkupString(html);
+    }
 
     private static string DisciplineColor(decimal score) =>
         score >= 80 ? "text-green-600" : score >= 50 ? "text-amber-600" : "text-red-600";
@@ -189,21 +176,4 @@
         "Declined" or "RejectedByVendor" or "RejectedByManager" => "bg-red-50 text-red-600",
         _                                 => "bg-gray-100 text-gray-500"
     };
-
-    private sealed record VendorReportDto(
-        Guid VendorId, string VendorName,
-        int TotalCrewInRoster, int TotalAssignmentsMade,
-        int AssignmentsConfirmed, int AssignmentsAttended,
-        int AssignmentsPending, int AssignmentsRejected,
-        decimal ConfirmationRate, decimal AttendanceRate,
-        decimal TotalAgreedAmount, decimal TotalPaidAmount, decimal TotalPendingAmount,
-        int TotalEventsWorked,
-        IReadOnlyList<VendorCrewStatDto> TopCrew);
-
-    private sealed record VendorCrewStatDto(
-        Guid CrewId, string CrewName, string CrewMobile,
-        decimal DisciplineScore, int EventsAttended,
-        int AssignmentsForThisVendor, string LastStatus);
-
-    private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
 }

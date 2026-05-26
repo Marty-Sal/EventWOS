@@ -147,7 +147,7 @@ public sealed class EventsController : ControllerBase
     public async Task<IActionResult> GetMyEvents(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        var result = await _mediator.Send(new GetMyEventsQuery(_currentUser.UserId!.Value, page, pageSize), ct);
+        var result = await _mediator.Send(new GetMyEventsQuery(_currentUser.UserId!.Value, _currentUser.Role ?? EventWOS.Domain.Enums.UserRole.Crew, page, pageSize), ct);
         return Ok(ApiResponse<PagedEventResult>.Ok(result.Value));
     }
 

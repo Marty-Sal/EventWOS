@@ -1,5 +1,6 @@
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Interfaces;
+using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -7,10 +8,12 @@ using Microsoft.EntityFrameworkCore;
 namespace EventWOS.Application.Events.Queries;
 
 /// <summary>
-/// Returns all events the authenticated crew member is assigned to.
-/// Does NOT require events:read — Crew can call this with profile:read.
+/// Returns all events the authenticated user is associated with.
+/// - Crew: events they are assigned to (by CrewId in EventAssignments)
+/// - Vendor: events they have assigned crew to (by VendorId in EventAssignments)
+/// Does NOT require events:read — works with profile:read for both roles.
 /// </summary>
-public sealed record GetMyEventsQuery(Guid CrewId, int Page = 1, int PageSize = 20)
+public sealed record GetMyEventsQuery(Guid UserId, UserRole Role, int Page = 1, int PageSize = 20)
     : IRequest<Result<PagedEventResult>>;
 
 public sealed class GetMyEventsHandler : IRequestHandler<GetMyEventsQuery, Result<PagedEventResult>>
@@ -20,13 +23,30 @@ public sealed class GetMyEventsHandler : IRequestHandler<GetMyEventsQuery, Resul
 
     public async Task<Result<PagedEventResult>> Handle(GetMyEventsQuery req, CancellationToken ct)
     {
-        // Distinct event IDs the crew member is assigned to
-        var assignedEventIds = await _db.EventAssignments
-            .AsNoTracking()
-            .Where(a => a.CrewId == req.CrewId)
-            .Select(a => a.EventId)
-            .Distinct()
-            .ToListAsync(ct);
+        IQueryable<int> eventIdQuery;
+
+        List<Guid> assignedEventIds;
+
+        if (req.Role == UserRole.Vendor)
+        {
+            // Vendor sees events where they have crew assignments
+            assignedEventIds = await _db.EventAssignments
+                .AsNoTracking()
+                .Where(a => a.VendorId == req.UserId && !a.IsDeleted)
+                .Select(a => a.EventId)
+                .Distinct()
+                .ToListAsync(ct);
+        }
+        else
+        {
+            // Crew sees events they are personally assigned to
+            assignedEventIds = await _db.EventAssignments
+                .AsNoTracking()
+                .Where(a => a.CrewId == req.UserId && !a.IsDeleted)
+                .Select(a => a.EventId)
+                .Distinct()
+                .ToListAsync(ct);
+        }
 
         var total = assignedEventIds.Count;
 
@@ -41,7 +61,7 @@ public sealed class GetMyEventsHandler : IRequestHandler<GetMyEventsQuery, Resul
                 e.StartAt, e.EndAt,
                 e.Status.ToString(),
                 e.MaxCrew,
-                _db.EventAssignments.Count(a => a.EventId == e.Id),
+                _db.EventAssignments.Count(a => a.EventId == e.Id && !a.IsDeleted),
                 e.CreatedAt))
             .ToListAsync(ct);
 
