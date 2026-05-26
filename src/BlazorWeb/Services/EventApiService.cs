@@ -64,7 +64,7 @@ public interface IEventApiService
     Task<(bool Ok, string? Error)> UpdateEventAsync(Guid id, CreateEventRequest req, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> ChangeEventStatusAsync(Guid id, string action, string? reason = null, CancellationToken ct = default);
     Task<PagedEventAssignmentResult?> GetAssignmentsAsync(Guid eventId, int page = 1, string? status = null, CancellationToken ct = default);
-    Task<(bool Ok, Guid? AssignmentId, string? Error)> AssignCrewAsync(Guid eventId, Guid crewId, Guid vendorId, CancellationToken ct = default);
+    Task<(bool Ok, Guid? AssignmentId, string? Error)> AssignCrewAsync(Guid eventId, Guid? crewId, Guid? vendorId, CancellationToken ct = default);
     Task<AttendanceSummaryDto?> GetAttendanceSummaryAsync(Guid eventId, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> RecordAttendanceAsync(Guid assignmentId, string action, string? location = null, CancellationToken ct = default);
 
@@ -162,7 +162,7 @@ public sealed class EventApiService : IEventApiService
         catch { return null; }
     }
 
-    public async Task<(bool Ok, Guid? AssignmentId, string? Error)> AssignCrewAsync(Guid eventId, Guid crewId, Guid vendorId, CancellationToken ct = default)
+    public async Task<(bool Ok, Guid? AssignmentId, string? Error)> AssignCrewAsync(Guid eventId, Guid? crewId, Guid? vendorId, CancellationToken ct = default)
     {
         try
         {

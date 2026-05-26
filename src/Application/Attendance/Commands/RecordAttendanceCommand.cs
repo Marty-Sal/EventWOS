@@ -43,8 +43,11 @@ public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCo
         else
             return Result.Failure<AttendanceRecordDto>(new Error("Attendance.InvalidAction", "Action must be 'checkin' or 'checkout'."));
 
+        if (assignment.CrewId is null)
+            return Result.Failure<AttendanceRecordDto>(new Error("Attendance.NoCrew", "Cannot record attendance — this assignment has no crew member yet."));
+
         var record = new AttendanceRecord(
-            assignment.Id, assignment.EventId, assignment.CrewId,
+            assignment.Id, assignment.EventId, assignment.CrewId.Value,
             action, req.Location, req.RecordedByUserId);
 
         _db.AttendanceRecords.Add(record);

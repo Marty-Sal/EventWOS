@@ -59,14 +59,17 @@ public sealed class RespondAssignmentHandler : IRequestHandler<RespondAssignment
 
         await _uow.SaveChangesAsync(ct);
 
-        // Notify vendor of crew response
-        var notifEvent = accepted ? "CrewAccepted" : "CrewDeclined";
-        await _push.PushToUserAsync(assignment.VendorId, notifEvent, new
+        // Notify vendor of crew response (skip for direct-assigned crew — no vendor in the loop)
+        if (assignment.VendorId.HasValue)
         {
-            assignmentId = assignment.Id,
-            crewName     = assignment.Crew?.FullName ?? "Crew member",
-            reason       = req.Reason
-        }, ct);
+            var notifEvent = accepted ? "CrewAccepted" : "CrewDeclined";
+            await _push.PushToUserAsync(assignment.VendorId.Value, notifEvent, new
+            {
+                assignmentId = assignment.Id,
+                crewName     = assignment.Crew?.FullName ?? "Crew member",
+                reason       = req.Reason
+            }, ct);
+        }
 
         return Result.Success();
     }

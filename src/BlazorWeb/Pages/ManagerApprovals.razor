@@ -51,7 +51,7 @@
                         <div class="flex-1 space-y-3">
                             <div class="flex items-center gap-3 flex-wrap">
                                 <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm shrink-0">
-                                    @item.CrewName[0]
+                                    @(string.IsNullOrEmpty(item.CrewName) ? '?' : item.CrewName[0])
                                 </div>
                                 <div>
                                     <p class="font-bold text-gray-800">@item.CrewName</p>

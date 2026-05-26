@@ -37,10 +37,14 @@ public sealed class GetEventAssignmentsHandler : IRequestHandler<GetEventAssignm
             .Take(req.PageSize)
             .Select(a => new EventAssignmentDto(
                 a.Id, a.EventId, a.Event.Title,
-                a.CrewId, a.Crew.FullName, a.Crew.Mobile,
-                a.Crew.DisciplineScore, a.Crew.EventsAttended,
-                a.Crew.CrewRating, a.Crew.CrewRatingCount,
-                a.VendorId, a.Vendor.FullName,
+                a.CrewId,
+                a.Crew != null ? a.Crew.FullName : null,
+                a.Crew != null ? a.Crew.Mobile   : null,
+                a.Crew != null ? a.Crew.DisciplineScore : 0,
+                a.Crew != null ? a.Crew.EventsAttended  : 0,
+                a.Crew != null ? a.Crew.CrewRating      : null,
+                a.Crew != null ? a.Crew.CrewRatingCount : 0,
+                a.VendorId, a.Vendor != null ? a.Vendor.FullName : null,
                 a.Status.ToString(),
                 a.RejectionReason,
                 a.CrewRespondedAt,

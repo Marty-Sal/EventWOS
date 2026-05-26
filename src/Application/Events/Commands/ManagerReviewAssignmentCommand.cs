@@ -38,17 +38,23 @@ public sealed class ManagerApproveAssignmentHandler
         await _uow.SaveChangesAsync(ct);
 
         // Notify crew of final approval
-        await _push.PushToUserAsync(assignment.CrewId, "ManagerApprovedYou", new
+        if (assignment.CrewId.HasValue)
+        {
+            await _push.PushToUserAsync(assignment.CrewId.Value, "ManagerApprovedYou", new
         {
             assignmentId = assignment.Id
         }, ct);
+        }
 
         // Notify vendor too
-        await _push.PushToUserAsync(assignment.VendorId, "ManagerApprovedYou_ForCrewMember", new
+        if (assignment.VendorId.HasValue)
+        {
+            await _push.PushToUserAsync(assignment.VendorId.Value, "ManagerApprovedYou_ForCrewMember", new
         {
             assignmentId = assignment.Id,
             crewName     = assignment.Crew?.FullName ?? "Crew"
         }, ct);
+        }
 
         return Result.Success();
     }
@@ -90,19 +96,25 @@ public sealed class ManagerRejectAssignmentHandler
         await _uow.SaveChangesAsync(ct);
 
         // Notify crew of rejection
-        await _push.PushToUserAsync(assignment.CrewId, "ManagerRejectedYou", new
+        if (assignment.CrewId.HasValue)
+        {
+            await _push.PushToUserAsync(assignment.CrewId.Value, "ManagerRejectedYou", new
         {
             assignmentId = assignment.Id,
             reason       = req.Reason
         }, ct);
+        }
 
         // Notify vendor too
-        await _push.PushToUserAsync(assignment.VendorId, "ManagerRejectedYou_ForCrewMember", new
+        if (assignment.VendorId.HasValue)
+        {
+            await _push.PushToUserAsync(assignment.VendorId.Value, "ManagerRejectedYou_ForCrewMember", new
         {
             assignmentId = assignment.Id,
             crewName     = assignment.Crew?.FullName ?? "Crew",
             reason       = req.Reason
         }, ct);
+        }
 
         return Result.Success();
     }

@@ -12,7 +12,7 @@ public sealed class EventAssignment : BaseEntity
 {
     private EventAssignment() { }
 
-    public EventAssignment(Guid eventId, Guid crewId, Guid vendorId, Guid assignedByUserId)
+    public EventAssignment(Guid eventId, Guid? crewId, Guid? vendorId, Guid assignedByUserId)
     {
         EventId          = eventId;
         CrewId           = crewId;
@@ -22,8 +22,8 @@ public sealed class EventAssignment : BaseEntity
     }
 
     public Guid             EventId           { get; private set; }
-    public Guid             CrewId            { get; private set; }
-    public Guid             VendorId          { get; private set; }
+    public Guid?            CrewId            { get; private set; }
+    public Guid?            VendorId          { get; private set; }
     public Guid             AssignedByUserId  { get; private set; }
     public AssignmentStatus Status            { get; private set; }
     public string?          Notes             { get; private set; }
@@ -47,19 +47,33 @@ public sealed class EventAssignment : BaseEntity
 
     // Navigation
     public Event  Event       { get; private set; } = default!;
-    public User   Crew        { get; private set; } = default!;
-    public User   Vendor      { get; private set; } = default!;
+    public User?  Crew        { get; private set; }
+    public User?  Vendor      { get; private set; }
     public User   AssignedBy  { get; private set; } = default!;
     public ICollection<AttendanceRecord> AttendanceRecords { get; private set; } = new List<AttendanceRecord>();
 
     // ── Step 1: Crew responds to invitation ──────────────────────────────────
 
-    /// <summary>Crew accepts the invitation → moves to VendorApproved queue.</summary>
+    /// <summary>
+    /// Crew accepts the invitation.
+    /// - If assignment has a vendor: → VendorApproved (waiting for vendor to forward to manager).
+    /// - If assignment is direct (no vendor): → PendingManagerApproval (skip vendor step entirely).
+    /// </summary>
     public void CrewAccept()
     {
         if (Status != AssignmentStatus.Invited)
             throw new InvalidOperationException("Only Invited assignments can be accepted by crew.");
-        Status           = AssignmentStatus.VendorApproved;
+
+        if (VendorId is null)
+        {
+            // Direct-assignment flow — skip vendor, straight to manager queue
+            Status              = AssignmentStatus.PendingManagerApproval;
+            VendorReviewedAt    = DateTime.UtcNow; // mark vendor step as "auto-passed"
+        }
+        else
+        {
+            Status              = AssignmentStatus.VendorApproved;
+        }
         CrewRespondedAt  = DateTime.UtcNow;
         ConfirmedAt      = DateTime.UtcNow; // legacy compat
     }

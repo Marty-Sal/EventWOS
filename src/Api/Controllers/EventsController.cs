@@ -309,7 +309,7 @@ public sealed record UpdateEventRequest(
     DateTime StartAt, DateTime EndAt, int MaxCrew = 0);
 
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
-public sealed record AssignCrewRequest(Guid CrewId, Guid VendorId);
+public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId);
 public sealed record RespondAssignmentRequest(string Response, string? Reason = null);
 public sealed record RecordAttendanceRequest(string Action, string? Location = null);
 public sealed record ReviewDecisionRequest(string? Reason = null);

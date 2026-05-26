@@ -157,7 +157,8 @@ public sealed class GetDashboardStatsHandler
 
         // Group in memory (safe — no nav prop translation needed)
         var vendorGroups = vendorAssignRaw
-            .GroupBy(a => a.VendorId)
+            .Where(a => a.VendorId != null)
+            .GroupBy(a => a.VendorId!.Value)
             .Select(g => new
             {
                 VendorId         = g.Key,

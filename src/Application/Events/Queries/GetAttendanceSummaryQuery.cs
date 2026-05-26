@@ -34,13 +34,15 @@ public sealed class GetAttendanceSummaryHandler : IRequestHandler<GetAttendanceS
         var recordsByAssignment = records.GroupBy(r => r.AssignmentId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        var crewDetails = assignments.Select(a =>
-        {
-            var aRecords = recordsByAssignment.GetValueOrDefault(a.Id, new());
-            var checkIn  = aRecords.FirstOrDefault(r => r.Action == AttendanceAction.CheckIn)?.RecordedAt;
-            var checkOut = aRecords.LastOrDefault (r => r.Action == AttendanceAction.CheckOut)?.RecordedAt;
-            return new CrewAttendanceDto(a.CrewId, a.Crew.FullName, a.Status.ToString(), checkIn, checkOut);
-        }).ToList();
+        var crewDetails = assignments
+            .Where(a => a.CrewId.HasValue && a.Crew != null)   // skip vendor-only placeholders
+            .Select(a =>
+            {
+                var aRecords = recordsByAssignment.GetValueOrDefault(a.Id, new());
+                var checkIn  = aRecords.FirstOrDefault(r => r.Action == AttendanceAction.CheckIn)?.RecordedAt;
+                var checkOut = aRecords.LastOrDefault (r => r.Action == AttendanceAction.CheckOut)?.RecordedAt;
+                return new CrewAttendanceDto(a.CrewId!.Value, a.Crew!.FullName, a.Status.ToString(), checkIn, checkOut);
+            }).ToList();
 
         return Result.Success(new AttendanceSummaryDto(
             ev.Id, ev.Title,

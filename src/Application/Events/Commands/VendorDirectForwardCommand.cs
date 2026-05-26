@@ -52,11 +52,14 @@ public sealed class VendorDirectForwardHandler : IRequestHandler<VendorDirectFor
         await _uow.SaveChangesAsync(ct);
 
         // Notify crew that vendor forwarded them (they were bypassed)
-        await _push.PushToUserAsync(assignment.CrewId, "VendorApprovedYou", new
+        if (assignment.CrewId.HasValue)
+        {
+            await _push.PushToUserAsync(assignment.CrewId.Value, "VendorApprovedYou", new
         {
             assignmentId = assignment.Id,
             crewName     = assignment.Crew?.FullName ?? "Crew"
         }, ct);
+        }
 
         // Notify all managers about new item in approval queue
         await _push.PushToRoleAsync("manager", "PendingManagerApproval", new

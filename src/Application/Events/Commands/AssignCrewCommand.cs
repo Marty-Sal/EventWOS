@@ -11,8 +11,8 @@ namespace EventWOS.Application.Events.Commands;
 
 public sealed record AssignCrewCommand(
     Guid EventId,
-    Guid CrewId,
-    Guid VendorId,
+    Guid? CrewId,
+    Guid? VendorId,
     Guid AssignedByUserId
 ) : IRequest<Result<EventAssignmentDto>>;
 
@@ -30,21 +30,36 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
 
     public async Task<Result<EventAssignmentDto>> Handle(AssignCrewCommand req, CancellationToken ct)
     {
+        // Validate at least one of crew/vendor is set
+        if (req.CrewId is null && req.VendorId is null)
+            return Result.Failure<EventAssignmentDto>(new Error("Assignment.Empty", "Provide a vendor, a crew member, or both."));
+
         var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == req.EventId, ct);
         if (ev is null) return Result.Failure<EventAssignmentDto>(new Error("Event.NotFound", "Event not found."));
         if (ev.Status == EventStatus.Completed || ev.Status == EventStatus.Cancelled)
             return Result.Failure<EventAssignmentDto>(new Error("Event.InvalidStatus", "Cannot assign crew to completed/cancelled events."));
 
-        var crew = await _db.Users.FirstOrDefaultAsync(u => u.Id == req.CrewId && u.Role == UserRole.Crew, ct);
-        if (crew is null) return Result.Failure<EventAssignmentDto>(new Error("Crew.NotFound", "Crew member not found."));
+        User? crew = null;
+        if (req.CrewId.HasValue)
+        {
+            crew = await _db.Users.FirstOrDefaultAsync(u => u.Id == req.CrewId.Value && u.Role == UserRole.Crew, ct);
+            if (crew is null) return Result.Failure<EventAssignmentDto>(new Error("Crew.NotFound", "Crew member not found."));
+        }
 
-        var vendor = await _db.Users.FirstOrDefaultAsync(u => u.Id == req.VendorId && u.Role == UserRole.Vendor, ct);
-        if (vendor is null) return Result.Failure<EventAssignmentDto>(new Error("Vendor.NotFound", "Vendor not found."));
+        User? vendor = null;
+        if (req.VendorId.HasValue)
+        {
+            vendor = await _db.Users.FirstOrDefaultAsync(u => u.Id == req.VendorId.Value && u.Role == UserRole.Vendor, ct);
+            if (vendor is null) return Result.Failure<EventAssignmentDto>(new Error("Vendor.NotFound", "Vendor not found."));
+        }
 
-        // Check duplicate
-        var exists = await _db.EventAssignments.AnyAsync(
-            a => a.EventId == req.EventId && a.CrewId == req.CrewId, ct);
-        if (exists) return Result.Failure<EventAssignmentDto>(new Error("Assignment.Duplicate", "Crew already assigned to this event."));
+        // Duplicate check (only meaningful when a crew member is specified)
+        if (req.CrewId.HasValue)
+        {
+            var exists = await _db.EventAssignments.AnyAsync(
+                a => a.EventId == req.EventId && a.CrewId == req.CrewId, ct);
+            if (exists) return Result.Failure<EventAssignmentDto>(new Error("Assignment.Duplicate", "Crew already assigned to this event."));
+        }
 
         // Check max crew
         if (ev.MaxCrew > 0)
@@ -59,21 +74,39 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
         _db.EventAssignments.Add(assignment);
         await _uow.SaveChangesAsync(ct);
 
-        // Notify crew of their new invitation
-        await _push.PushToUserAsync(crew.Id, "AssignmentInvite", new
+        // Push notifications
+        if (crew is not null)
         {
-            assignmentId = assignment.Id,
-            eventTitle   = ev.Title,
-            vendorName   = vendor.FullName,
-            eventStart   = ev.StartAt
-        }, ct);
+            // Crew gets invited
+            await _push.PushToUserAsync(crew.Id, "AssignmentInvite", new
+            {
+                assignmentId = assignment.Id,
+                eventTitle   = ev.Title,
+                vendorName   = vendor?.FullName ?? "Manager (direct)",
+                eventStart   = ev.StartAt
+            }, ct);
+        }
+        else if (vendor is not null)
+        {
+            // Vendor-only: notify vendor that they need to staff this event
+            await _push.PushToUserAsync(vendor.Id, "VendorEventAssigned", new
+            {
+                assignmentId = assignment.Id,
+                eventTitle   = ev.Title,
+                eventStart   = ev.StartAt
+            }, ct);
+        }
 
         return Result.Success(new EventAssignmentDto(
             assignment.Id, ev.Id, ev.Title,
-            crew.Id, crew.FullName, crew.Mobile,
-            crew.DisciplineScore, crew.EventsAttended,
-            crew.CrewRating, crew.CrewRatingCount,
-            vendor.Id, vendor.FullName,
+            crew?.Id ?? Guid.Empty,
+            crew?.FullName ?? "(vendor to fill)",
+            crew?.Mobile   ?? "",
+            crew?.DisciplineScore ?? 0,
+            crew?.EventsAttended  ?? 0,
+            crew?.CrewRating,
+            crew?.CrewRatingCount ?? 0,
+            vendor?.Id, vendor?.FullName,
             assignment.Status.ToString(),
             assignment.RejectionReason,
             assignment.CrewRespondedAt,

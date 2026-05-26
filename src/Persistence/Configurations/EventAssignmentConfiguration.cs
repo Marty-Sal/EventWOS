@@ -14,8 +14,8 @@ public sealed class EventAssignmentConfiguration : IEntityTypeConfiguration<Even
         builder.Property(a => a.Id).HasColumnName("id");
 
         builder.Property(a => a.EventId)         .HasColumnName("event_id");
-        builder.Property(a => a.CrewId)          .HasColumnName("crew_id");
-        builder.Property(a => a.VendorId)        .HasColumnName("vendor_id");
+        builder.Property(a => a.CrewId)          .HasColumnName("crew_id").IsRequired(false);
+        builder.Property(a => a.VendorId)        .HasColumnName("vendor_id").IsRequired(false);
         builder.Property(a => a.AssignedByUserId).HasColumnName("assigned_by_user_id");
         builder.Property(a => a.Status)          .HasColumnName("status").HasConversion<int>();
         builder.Property(a => a.Notes)           .HasColumnName("notes").HasMaxLength(1000);
@@ -51,11 +51,13 @@ public sealed class EventAssignmentConfiguration : IEntityTypeConfiguration<Even
         builder.HasOne(a => a.Crew)
                .WithMany()
                .HasForeignKey(a => a.CrewId)
+               .IsRequired(false)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(a => a.Vendor)
                .WithMany()
                .HasForeignKey(a => a.VendorId)
+               .IsRequired(false)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(a => a.AssignedBy)

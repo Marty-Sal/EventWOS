@@ -38,10 +38,13 @@ public sealed class VendorApproveAssignmentHandler
         await _uow.SaveChangesAsync(ct);
 
         // Notify crew of vendor approval
-        await _push.PushToUserAsync(assignment.CrewId, "VendorApprovedYou", new
+        if (assignment.CrewId.HasValue)
+        {
+            await _push.PushToUserAsync(assignment.CrewId.Value, "VendorApprovedYou", new
         {
             assignmentId = assignment.Id
         }, ct);
+        }
 
         // Notify all managers about pending approval
         await _push.PushToRoleAsync("manager", "PendingManagerApproval", new
@@ -90,11 +93,14 @@ public sealed class VendorRejectAssignmentHandler
         await _uow.SaveChangesAsync(ct);
 
         // Notify crew of rejection
-        await _push.PushToUserAsync(assignment.CrewId, "VendorRejectedYou", new
+        if (assignment.CrewId.HasValue)
+        {
+            await _push.PushToUserAsync(assignment.CrewId.Value, "VendorRejectedYou", new
         {
             assignmentId = assignment.Id,
             reason       = req.Reason
         }, ct);
+        }
 
         return Result.Success();
     }
