@@ -106,6 +106,24 @@ public sealed class DatabaseSeeder
     // ─── Role ↔ Permission mappings ─────────────────────────────────────────
     private async Task SeedRolePermissionsAsync(CancellationToken ct)
     {
+        // ── One-time data fix: repair RolePermissions accidentally inserted with IsGranted=false ──
+        // Prior to commit 6e8b2f1, TryAdd() passed isSysOverride into the isGranted constructor
+        // parameter — leaving non-admin role grants stored as IsGranted=false. Those rows are then
+        // filtered out by PermissionService and never appear in the JWT. Flip them back to true.
+        var broken = await _db.RolePermissions
+            .Where(rp => !rp.IsGranted)
+            .ToListAsync(ct);
+        if (broken.Count > 0)
+        {
+            foreach (var rp in broken)
+            {
+                // RolePermission has no public setter for IsGranted — use EF property API
+                _db.Entry(rp).Property("IsGranted").CurrentValue = true;
+            }
+            await _db.SaveChangesAsync(ct);
+            _logger.LogWarning("Repaired {Count} RolePermissions that were stored as IsGranted=false", broken.Count);
+        }
+
         // ADDITIVE upsert — never skips so new permissions are always backfilled.
         var roles = await _db.Roles.ToListAsync(ct);
         var perms = await _db.Permissions.ToListAsync(ct);
@@ -126,10 +144,15 @@ public sealed class DatabaseSeeder
 
         var toAdd = new List<RolePermission>();
 
-        void TryAdd(Guid roleId, Guid permId, bool isSysOverride = false)
+        // Seeded role-permissions are ALWAYS granted (isGranted = true).
+        // The IsGranted column exists to support deny-overrides at the user level, NOT role-level seeds.
+        // The previous version mistakenly passed `isSysOverride` into the `isGranted` constructor
+        // parameter — which caused all non-admin role-permissions to be inserted with IsGranted=false,
+        // and they were then filtered out at JWT issuance time (rp.IsGranted filter in PermissionService).
+        void TryAdd(Guid roleId, Guid permId, bool _unusedIsSysOverride = false)
         {
             if (!existing.Contains((roleId, permId)))
-                toAdd.Add(new RolePermission(roleId, permId, isSysOverride));
+                toAdd.Add(new RolePermission(roleId, permId, isGranted: true));
         }
 
         // Admin gets every permission
