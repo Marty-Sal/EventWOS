@@ -86,6 +86,20 @@ public sealed class EventAssignment : BaseEntity
         VendorReviewedAt    = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Vendor directly forwards an Invited crew member to Manager approval,
+    /// skipping the crew acceptance step. Used when crew confirmation happened offline.
+    /// </summary>
+    public void VendorDirectForward()
+    {
+        if (Status != AssignmentStatus.Invited && Status != AssignmentStatus.VendorApproved)
+            throw new InvalidOperationException("Only Invited or VendorApproved assignments can be directly forwarded.");
+        Status           = AssignmentStatus.PendingManagerApproval;
+        CrewRespondedAt  ??= DateTime.UtcNow; // mark as responded if not already
+        VendorReviewedAt = DateTime.UtcNow;
+        ConfirmedAt      ??= DateTime.UtcNow;
+    }
+
     /// <summary>Vendor rejects crew — rejection reason is mandatory.</summary>
     public void VendorReject(Guid rejectedByUserId, string reason)
     {

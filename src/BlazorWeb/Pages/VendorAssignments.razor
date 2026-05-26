@@ -70,7 +70,7 @@
                             }
                         </div>
 
-                        @* Actions — only for VendorApproved (crew accepted, awaiting vendor review) *@
+                        @* Actions — for VendorApproved (crew accepted) OR Invited (vendor can bypass) *@
                         @if (a.Status == "VendorApproved")
                         {
                             <div class="flex gap-2 shrink-0">
@@ -84,8 +84,29 @@
                                         disabled="@(_busy == a.Id)"
                                         class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white
                                                hover:bg-indigo-700 disabled:opacity-50 transition shadow">
-                                    @(_busy == a.Id ? "…" : "✓ Approve → Manager")
+                                    @(_busy == a.Id ? "…" : "✓ Send to Manager")
                                 </button>
+                            </div>
+                        }
+                        @if (a.Status == "Invited")
+                        {
+                            <div class="flex flex-col items-end gap-1.5 shrink-0">
+                                <p class="text-[10px] text-gray-400 text-right">Crew hasn't responded yet</p>
+                                <div class="flex gap-2">
+                                    <button @onclick="() => OpenReject(a)"
+                                            disabled="@(_busy == a.Id)"
+                                            class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-200 text-red-600
+                                                   hover:bg-red-50 disabled:opacity-50 transition">
+                                        ✕ Cancel
+                                    </button>
+                                    <button @onclick="() => DoDirectForward(a.Id)"
+                                            disabled="@(_busy == a.Id)"
+                                            class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 text-white
+                                                   hover:bg-amber-600 disabled:opacity-50 transition shadow"
+                                            title="Forward to Manager without waiting for crew to accept (offline confirmation)">
+                                        @(_busy == a.Id ? "…" : "⚡ Force Forward")
+                                    </button>
+                                </div>
                             </div>
                         }
                         @* Star rating — only for Attended, not yet rated *@
@@ -188,7 +209,7 @@
 
     private IEnumerable<AssignmentDto> Filtered => _activeTab switch
     {
-        "Awaiting Review" => _all.Where(a => a.Status == "VendorApproved"),
+        "Awaiting Review" => _all.Where(a => a.Status is "Invited" or "VendorApproved"),
         "Forwarded"       => _all.Where(a => a.Status is "PendingManagerApproval" or "ManagerApproved"),
         "Rejected"        => _all.Where(a => a.Status is "RejectedByVendor" or "RejectedByManager" or "Declined"),
         "Confirmed"       => _all.Where(a => a.Status is "ManagerApproved" or "Confirmed" or "Attended"),
@@ -214,7 +235,7 @@
             var resp = await Http.GetFromJsonAsync<ApiResult<PagedResult<AssignmentDto>>>(
                 "api/v1/events/vendor-assignments?page=1&pageSize=500", JsonOpts);
             _all = resp?.Data?.Items?.ToList() ?? new();
-            _awaitingCount = _all.Count(a => a.Status == "VendorApproved");
+            _awaitingCount = _all.Count(a => a.Status is "Invited" or "VendorApproved");
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; StateHasChanged(); }
@@ -237,6 +258,28 @@
 
     private void OpenReject(AssignmentDto a) { _rejectTarget = a; _rejectReason = ""; _reasonError = false; }
     private void CancelReject() { _rejectTarget = null; _reasonError = false; }
+
+    private async Task DoDirectForward(Guid id)
+    {
+        _busy = id; StateHasChanged();
+        try
+        {
+            var resp = await Http.PatchAsJsonAsync(
+                $"api/v1/events/assignments/{id}/vendor-direct-forward", new { });
+            if (resp.IsSuccessStatusCode)
+            {
+                ShowToast("Forwarded to Manager approval queue!", false);
+                await LoadAsync();
+            }
+            else
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                ShowToast("Failed: " + body, true);
+            }
+        }
+        catch (Exception ex) { ShowToast("Error: " + ex.Message, true); }
+        finally { _busy = null; StateHasChanged(); }
+    }
 
     private async Task ConfirmReject()
     {
@@ -264,6 +307,7 @@
 
     private static string BorderColor(string status) => status switch
     {
+        "Invited"                => "border-blue-100",
         "VendorApproved"         => "border-amber-200",
         "PendingManagerApproval" => "border-blue-200",
         "ManagerApproved"        => "border-green-200",

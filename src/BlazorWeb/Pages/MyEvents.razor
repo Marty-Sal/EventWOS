@@ -124,12 +124,30 @@
 
             var asgResult = await Http.GetFromJsonAsync<ApiResult<PagedResult<EventAssignmentDto>>>(
                 assignmentEndpoint, JsonOpts);
+            // For Vendor, multiple crew per event → same EventId repeated → GroupBy to deduplicate
             _myStatuses = (asgResult?.Data?.Items ?? new List<EventAssignmentDto>())
-                .ToDictionary(a => a.EventId, a => a.Status);
+                .GroupBy(a => a.EventId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(a => StatusRank(a.Status)).First().Status);
         }
         catch (Exception ex) { _error = "Could not load your events: " + ex.Message; }
         finally { _loading = false; StateHasChanged(); }
     }
+
+    // Higher = more advanced in the workflow → shown as event badge
+    private static int StatusRank(string s) => s switch
+    {
+        "ManagerApproved"          => 6,
+        "PendingManagerApproval"   => 5,
+        "VendorApproved"           => 4,
+        "Invited"                  => 3,
+        "Attended"                 => 7,
+        "Declined"                 => 1,
+        "RejectedByVendor"         => 1,
+        "RejectedByManager"        => 1,
+        _                          => 2
+    };
 
     private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
     private async Task NextPage() { _page++; await LoadAsync(); }

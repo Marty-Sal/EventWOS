@@ -209,6 +209,20 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Vendor directly forwards an Invited crew member to Manager queue,
+    /// bypassing the crew acceptance step (for offline-confirmed crew).
+    /// </summary>
+    [Permission("crew:invite")]
+    [HttpPatch("assignments/{assignmentId:guid}/vendor-direct-forward")]
+    public async Task<IActionResult> VendorDirectForward(Guid assignmentId, CancellationToken ct)
+    {
+        if (_currentUser.Role != UserRole.Vendor) return Forbid();
+        var result = await _mediator.Send(
+            new VendorDirectForwardCommand(assignmentId, _currentUser.UserId!.Value), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
+    /// <summary>
     /// Vendor rejects a crew member — rejection reason is mandatory.
     /// </summary>
     [Permission("crew:invite")]
