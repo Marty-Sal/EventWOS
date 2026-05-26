@@ -1,0 +1,209 @@
+@page "/vendor-payments"
+@attribute [Authorize(Roles = "Vendor")]
+@inject IPaymentApiService PaymentApi
+
+<PageTitle>My Crew Payments — EventWOS</PageTitle>
+
+<div class="space-y-6">
+    <div>
+        <h2 class="text-lg font-bold text-gray-800">My Crew Payments</h2>
+        <p class="text-sm text-gray-500 mt-0.5">Track what your crew has earned across events.</p>
+    </div>
+
+    @* Summary cards *@
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Total Agreed</p>
+            <p class="mt-1 text-xl font-bold text-gray-800">₹@FormatMoney(_totalAgreed)</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Paid</p>
+            <p class="mt-1 text-xl font-bold text-emerald-600">₹@FormatMoney(_totalPaid)</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Pending</p>
+            <p class="mt-1 text-xl font-bold text-amber-600">₹@FormatMoney(_totalPending)</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Records</p>
+            <p class="mt-1 text-xl font-bold text-indigo-600">@_total</p>
+        </div>
+    </div>
+
+    @* Status filter pills *@
+    <div class="flex gap-2 flex-wrap">
+        @foreach (var f in _filters)
+        {
+            <button @onclick="() => SetFilter(f.Key)"
+                    class="px-4 py-1.5 rounded-full text-xs font-semibold transition
+                           @(_status == f.Key ? "bg-indigo-600 text-white shadow" : "bg-white text-gray-500 border border-gray-200 hover:border-indigo-300")">
+                @f.Label
+            </button>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex justify-center py-20">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">⚠️ @_error</div>
+    }
+    else if (!_items.Any())
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+            <p class="text-5xl mb-3">💸</p>
+            <p class="font-semibold text-gray-700 text-sm">No payment records yet</p>
+            <p class="text-xs text-gray-400 mt-1">
+                Manager creates these once crew is confirmed for an event.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 text-[11px] uppercase tracking-widest text-gray-500">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-semibold">Crew</th>
+                        <th class="text-left px-4 py-3 font-semibold">Event</th>
+                        <th class="text-right px-4 py-3 font-semibold">Agreed</th>
+                        <th class="text-right px-4 py-3 font-semibold">Paid</th>
+                        <th class="text-center px-4 py-3 font-semibold">Status</th>
+                        <th class="text-left px-4 py-3 font-semibold">Paid On</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @foreach (var p in _items)
+                    {
+                        <tr class="hover:bg-gray-50/60">
+                            <td class="px-4 py-3">
+                                <p class="font-semibold text-gray-800">@p.CrewName</p>
+                                <p class="text-[11px] text-gray-400">@p.CrewMobile</p>
+                            </td>
+                            <td class="px-4 py-3 text-gray-700">@p.EventTitle</td>
+                            <td class="px-4 py-3 text-right font-mono text-gray-800">₹@FormatMoney(p.AgreedAmount)</td>
+                            <td class="px-4 py-3 text-right font-mono">
+                                @if (p.PaidAmount.HasValue) {
+                                    <span class="text-emerald-600 font-semibold">₹@FormatMoney(p.PaidAmount.Value)</span>
+                                } else {
+                                    <span class="text-gray-300">—</span>
+                                }
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="@StatusPillClass(p.Status)">@p.Status</span>
+                            </td>
+                            <td class="px-4 py-3 text-[11px] text-gray-500">
+                                @(p.PaidAt?.ToLocalTime().ToString("dd MMM yyyy") ?? "—")
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (_total > _pageSize)
+        {
+            <div class="flex justify-center gap-2 pt-2">
+                <button @onclick="PrevPage" disabled="@(_page <= 1)"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 hover:border-indigo-300 disabled:opacity-40">
+                    ← Prev
+                </button>
+                <span class="px-3 py-1.5 text-xs text-gray-500">Page @_page of @_pages</span>
+                <button @onclick="NextPage" disabled="@(_page >= _pages)"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 hover:border-indigo-300 disabled:opacity-40">
+                    Next →
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<CrewPaymentDto>     _items   = new();
+    private bool                     _loading = true;
+    private string?                  _error;
+    private int                      _page = 1;
+    private const int                _pageSize = 20;
+    private int                      _total;
+    private int                      _pages => Math.Max(1, (int)Math.Ceiling(_total / (double)_pageSize));
+    private string?                  _status; // null = all
+
+    private decimal _totalAgreed;
+    private decimal _totalPaid;
+    private decimal _totalPending;
+
+    private readonly List<(string? Key, string Label)> _filters = new()
+    {
+        (null,       "All"),
+        ("pending",  "Pending"),
+        ("approved", "Approved"),
+        ("paid",     "Paid"),
+        ("hold",     "On Hold"),
+        ("rejected", "Rejected"),
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error   = null;
+        StateHasChanged();
+        try
+        {
+            var result = await PaymentApi.GetPaymentsAsync(
+                status: _status, page: _page, pageSize: _pageSize);
+
+            if (result is null) { _error = "Couldn't load payments."; _items = new(); _total = 0; }
+            else
+            {
+                _items = result.Items.ToList();
+                _total = result.TotalCount;
+
+                // Roll-up totals — when filtered, totals reflect the filter
+                _totalAgreed  = _items.Sum(p => p.AgreedAmount);
+                _totalPaid    = _items.Where(p => p.Status.Equals("paid", StringComparison.OrdinalIgnoreCase))
+                                      .Sum(p => p.PaidAmount ?? 0m);
+                _totalPending = _items.Where(p => !p.Status.Equals("paid", StringComparison.OrdinalIgnoreCase)
+                                              && !p.Status.Equals("rejected", StringComparison.OrdinalIgnoreCase))
+                                      .Sum(p => p.AgreedAmount - (p.PaidAmount ?? 0m));
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task SetFilter(string? key)
+    {
+        if (_status == key) return;
+        _status = key;
+        _page   = 1;
+        await LoadAsync();
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { if (_page < _pages) { _page++; await LoadAsync(); } }
+
+    private static string FormatMoney(decimal v) => v.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string StatusPillClass(string status) => status.ToLowerInvariant() switch
+    {
+        "paid"     => "px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200",
+        "approved" => "px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200",
+        "pending"  => "px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200",
+        "hold"     => "px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200",
+        "rejected" => "px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200",
+        _          => "px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-600 border border-gray-200",
+    };
+}

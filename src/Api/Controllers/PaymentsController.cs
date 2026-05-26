@@ -40,6 +40,11 @@ public sealed class PaymentsController : ControllerBase
         [FromQuery] int     pageSize = 20,
         CancellationToken ct = default)
     {
+        // Vendor scoping: vendors can only see payments for their own crew.
+        // Force vendorId = their own userId regardless of what the client sent.
+        if (_currentUser.Role == EventWOS.Domain.Enums.UserRole.Vendor)
+            vendorId = _currentUser.UserId;
+
         var result = await _mediator.Send(
             new GetPaymentsQuery(eventId, vendorId, crewId, status, page, pageSize), ct);
         return Ok(ApiResponse<PagedResult<CrewPaymentDto>>.Ok(result.Value));

@@ -7,7 +7,6 @@ namespace EventWOS.Api.Middleware;
 /// <summary>
 /// Global unhandled exception handler. Catches all exceptions and returns
 /// a structured ApiResponse with appropriate HTTP status codes.
-/// Prevents stack traces leaking to clients in production.
 /// </summary>
 public sealed class GlobalExceptionMiddleware
 {
@@ -46,7 +45,6 @@ public sealed class GlobalExceptionMiddleware
         }
         catch (Exception ex)
         {
-            // Always log full exception detail to structured logs (visible in Railway)
             _logger.LogError(ex,
                 "Unhandled exception [{ExType}] for {Method} {Path} — {Message}",
                 ex.GetType().Name,
@@ -54,10 +52,12 @@ public sealed class GlobalExceptionMiddleware
                 context.Request.Path,
                 ex.Message);
 
-            // Return detail to client in dev; generic message in prod
-            var message = _env.IsDevelopment()
-                ? $"{ex.GetType().Name}: {ex.Message}"
-                : "An unexpected error occurred.";
+            // Surface exception type + message in the response (no stack trace).
+            // Helps diagnose prod issues without exposing internals.
+            var inner = ex.InnerException is not null
+                ? $" → {ex.InnerException.GetType().Name}: {ex.InnerException.Message}"
+                : "";
+            var message = $"{ex.GetType().Name}: {ex.Message}{inner}";
 
             await WriteErrorResponseAsync(context, 500, new[] { message }, context.TraceIdentifier);
         }

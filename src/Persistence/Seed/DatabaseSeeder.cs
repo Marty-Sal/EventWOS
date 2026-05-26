@@ -168,7 +168,8 @@ public sealed class DatabaseSeeder
             foreach (var name in new[]
             {
                 "crew:read", "crew:write", "crew:invite", "events:read",
-                "crew:approve", "attendance:read", "profile:read", "profile:write"
+                "crew:approve", "attendance:read", "profile:read", "profile:write",
+                "payments:read"
             })
             {
                 var perm = GetPerm(name);

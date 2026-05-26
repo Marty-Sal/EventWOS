@@ -1,6 +1,11 @@
 @page "/manager-approvals"
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject HttpClient Http
+@inject EventWOS.BlazorWeb.Auth.AppAuthStateProvider Auth
+@inject IAuthApiService AuthApi
+@inject NavigationManager Nav
+@using System.Net.Http
+@using System.Net.Http.Json
 
 <PageTitle>Manager Approval Queue — EventWOS</PageTitle>
 
@@ -200,10 +205,29 @@
         _loading = true; _error = null; StateHasChanged();
         try
         {
-            var resp = await Http.GetFromJsonAsync<ApiResult<PagedResult<ManagerApprovalItemDto>>>(
-                $"api/v1/events/assignments/manager-queue?page={_page}&pageSize=20", JsonOpts);
-            _items       = resp?.Data?.Items?.ToList() ?? new();
-            _pendingCount = resp?.Data?.TotalCount ?? 0;
+            var resp = await GetWithAuthRetryAsync(
+                $"api/v1/events/assignments/manager-queue?page={_page}&pageSize=20");
+
+            if (resp is null)
+            {
+                _error = "Session expired. Redirecting to login…";
+                await Auth.MarkLoggedOutAsync();
+                Nav.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = resp.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "You do not have permission to view the approval queue. Ask an Admin to grant the \u0022crew:approve\u0022 permission."
+                    : $"Could not load queue ({(int)resp.StatusCode} {resp.ReasonPhrase}).";
+                _items = new();
+                return;
+            }
+
+            var body = await resp.Content.ReadFromJsonAsync<ApiResult<PagedResult<ManagerApprovalItemDto>>>(JsonOpts);
+            _items        = body?.Data?.Items?.ToList() ?? new();
+            _pendingCount = body?.Data?.TotalCount ?? 0;
             _totalPages   = (int)Math.Ceiling((double)_pendingCount / 20);
             if (_totalPages < 1) _totalPages = 1;
         }
@@ -211,17 +235,58 @@
         finally { _loading = false; StateHasChanged(); }
     }
 
+    /// <summary>
+    /// GET helper that transparently refreshes the access token on 401 and retries once.
+    /// Returns null if both attempts fail with 401 (caller should force re-login).
+    /// </summary>
+    private async Task<HttpResponseMessage?> GetWithAuthRetryAsync(string url)
+    {
+        var resp = await Http.GetAsync(url);
+        if (resp.StatusCode != System.Net.HttpStatusCode.Unauthorized) return resp;
+
+        var refreshToken = await Auth.GetRefreshTokenAsync();
+        if (string.IsNullOrEmpty(refreshToken)) return null;
+        var refreshed = await AuthApi.RefreshTokenAsync(refreshToken);
+        if (refreshed?.Success != true || refreshed.Data is null) return null;
+        await Auth.UpdateAccessTokenAsync(refreshed.Data.AccessToken, refreshed.Data.RefreshToken);
+
+        var retry = await Http.GetAsync(url);
+        return retry.StatusCode == System.Net.HttpStatusCode.Unauthorized ? null : retry;
+    }
+
     private async Task DoApprove(Guid id)
     {
         _busy = id; _busyAction = "approve"; StateHasChanged();
-        var resp = await Http.PatchAsJsonAsync($"api/v1/events/assignments/{id}/manager-approve", new { });
-        if (resp.IsSuccessStatusCode)
+        var resp = await PatchWithAuthRetryAsync(
+            $"api/v1/events/assignments/{id}/manager-approve", new { });
+        if (resp is not null && resp.IsSuccessStatusCode)
         {
             ShowToast("Crew approved! Assignment is now fully confirmed. ✓", false);
             await Load();
         }
-        else ShowToast("Error: " + await resp.Content.ReadAsStringAsync(), true);
+        else
+        {
+            var msg = resp is null
+                ? "Session expired. Please log in again."
+                : await resp.Content.ReadAsStringAsync();
+            ShowToast("Error: " + msg, true);
+        }
         _busy = null; _busyAction = null; StateHasChanged();
+    }
+
+    private async Task<HttpResponseMessage?> PatchWithAuthRetryAsync(string url, object body)
+    {
+        var resp = await Http.PatchAsJsonAsync(url, body);
+        if (resp.StatusCode != System.Net.HttpStatusCode.Unauthorized) return resp;
+
+        var refreshToken = await Auth.GetRefreshTokenAsync();
+        if (string.IsNullOrEmpty(refreshToken)) return null;
+        var refreshed = await AuthApi.RefreshTokenAsync(refreshToken);
+        if (refreshed?.Success != true || refreshed.Data is null) return null;
+        await Auth.UpdateAccessTokenAsync(refreshed.Data.AccessToken, refreshed.Data.RefreshToken);
+
+        var retry = await Http.PatchAsJsonAsync(url, body);
+        return retry.StatusCode == System.Net.HttpStatusCode.Unauthorized ? null : retry;
     }
 
     private void OpenReject(ManagerApprovalItemDto item)
@@ -235,16 +300,22 @@
         if (string.IsNullOrWhiteSpace(_rejectReason)) { _reasonError = true; return; }
         if (_rejectTarget is null) return;
         _busy = _rejectTarget.AssignmentId; _busyAction = "reject"; StateHasChanged();
-        var resp = await Http.PatchAsJsonAsync(
+        var resp = await PatchWithAuthRetryAsync(
             $"api/v1/events/assignments/{_rejectTarget.AssignmentId}/manager-reject",
             new { reason = _rejectReason });
-        if (resp.IsSuccessStatusCode)
+        if (resp is not null && resp.IsSuccessStatusCode)
         {
             ShowToast("Crew rejected. Vendor and Crew will be notified.", false);
             _rejectTarget = null;
             await Load();
         }
-        else ShowToast("Error: " + await resp.Content.ReadAsStringAsync(), true);
+        else
+        {
+            var msg = resp is null
+                ? "Session expired. Please log in again."
+                : await resp.Content.ReadAsStringAsync();
+            ShowToast("Error: " + msg, true);
+        }
         _busy = null; _busyAction = null; StateHasChanged();
     }
 
