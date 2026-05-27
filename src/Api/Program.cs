@@ -30,6 +30,15 @@ Log.Information("EventWOS API bootstrap starting...");
 
 try
 {
+    // ─── Npgsql legacy timestamp behavior ─────────────────────────────────────
+    // Our schema uses `timestamp` (without time zone) but EF Core property mapping
+    // sometimes infers `timestamptz`, causing
+    // "Cannot write DateTime with Kind=Unspecified to PostgreSQL type 'timestamp
+    //  with time zone', only UTC is supported."
+    // Restore .NET 5-era behavior so Kind is not enforced. All our code uses
+    // DateTime.UtcNow anyway — this is purely a read-back safety net.
+    AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
     var builder = WebApplication.CreateBuilder(args);
 
     // ─── Serilog (console only — no file sink in containers) ─────────────────
