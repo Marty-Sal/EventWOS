@@ -251,6 +251,16 @@ public sealed class GetDashboardStatsHandler
                     vendorId, nsVendorLookup.GetValueOrDefault(vendorId, "Unknown"),
                     ev.MaxCrew, assignedSoFar);
             })
+            // Hide rows where the vendor has already finished staffing.
+            // Placeholders are kept permanently as the vendor's anchor row,
+            // so we use the assigned-vs-capacity ratio to decide visibility.
+            .Where(n => n.MaxCrew == 0
+                         ? n.AssignedSoFar == 0
+                         : n.AssignedSoFar < n.MaxCrew)
+            // De-dupe by (event, vendor) since placeholders may appear once we
+            // keep them around indefinitely.
+            .GroupBy(n => new { n.EventId, n.VendorId })
+            .Select(g => g.First())
             .OrderBy(n => n.StartAt)
             .Take(10)
             .ToList();

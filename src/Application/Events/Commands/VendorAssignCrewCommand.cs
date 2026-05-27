@@ -94,14 +94,13 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
         var assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorUserId, req.VendorUserId);
         _db.EventAssignments.Add(assignment);
 
-        // Clean up the vendor-only placeholder row once the vendor adds real crew
-        var placeholders = await _db.EventAssignments
-            .Where(a => a.EventId  == req.EventId
-                     && a.VendorId == req.VendorUserId
-                     && a.CrewId   == null)
-            .ToListAsync(ct);
-        if (placeholders.Count > 0)
-            _db.EventAssignments.RemoveRange(placeholders);
+        // NOTE: We intentionally DO NOT delete the vendor-only placeholder row.
+        // The placeholder is the anchor that says "this vendor is assigned to
+        // this event" — independent of whether any specific crew got
+        // rejected, declined, or removed. Removing it caused events to vanish
+        // from the vendor's My Events when all their staffed crew were
+        // rejected. CrewId == null is correctly excluded everywhere it
+        // matters (capacity count, attendance, payments, rating).
 
         await _uow.SaveChangesAsync(ct);
 
