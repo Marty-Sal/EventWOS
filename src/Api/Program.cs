@@ -715,6 +715,76 @@ END $$;
         var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
         await seeder.SeedAsync();
         Log.Information("Seeding complete.");
+
+        // ─── One-time data repair: restore vendor anchor placeholders ─────────
+        // History: earlier code deleted a vendor's placeholder row
+        // (CrewId=null) once they staffed their first crew. If all that crew
+        // was later rejected/declined, the vendor ended up with zero active
+        // rows and the event vanished from their My Events.
+        //
+        // This restores the anchor for any (event, vendor) pair where the
+        // vendor was historically attached but has no current placeholder
+        // and the event is still active. Idempotent: skips pairs that already
+        // have a placeholder row.
+        try
+        {
+            var activeEventStatuses = new[]
+            {
+                EventWOS.Domain.Enums.EventStatus.Draft,
+                EventWOS.Domain.Enums.EventStatus.Published,
+                EventWOS.Domain.Enums.EventStatus.InProgress
+            };
+
+            // (eventId, vendorId) pairs that have EVER had a vendor attribution
+            var historicalPairs = await db.EventAssignments
+                .Where(a => a.VendorId != null)
+                .Select(a => new { a.EventId, VendorId = a.VendorId!.Value })
+                .Distinct()
+                .ToListAsync();
+
+            // (eventId, vendorId) pairs that already have a CrewId==null placeholder
+            var existingPlaceholders = await db.EventAssignments
+                .Where(a => a.CrewId == null && a.VendorId != null)
+                .Select(a => new { a.EventId, VendorId = a.VendorId!.Value })
+                .ToListAsync();
+            var existingSet = new HashSet<(Guid, Guid)>(
+                existingPlaceholders.Select(p => (p.EventId, p.VendorId)));
+
+            // Only active events qualify
+            var activeEventIds = await db.Events
+                .Where(e => activeEventStatuses.Contains(e.Status))
+                .Select(e => e.Id)
+                .ToListAsync();
+            var activeSet = new HashSet<Guid>(activeEventIds);
+
+            var toRestore = historicalPairs
+                .Where(p => activeSet.Contains(p.EventId)
+                         && !existingSet.Contains((p.EventId, p.VendorId)))
+                .ToList();
+
+            if (toRestore.Count > 0)
+            {
+                foreach (var p in toRestore)
+                {
+                    db.EventAssignments.Add(new EventWOS.Domain.Entities.EventAssignment(
+                        eventId:          p.EventId,
+                        crewId:           null,
+                        vendorId:         p.VendorId,
+                        assignedByUserId: p.VendorId));
+                }
+                await db.SaveChangesAsync();
+                Log.Information("Anchor repair: restored {Count} vendor placeholder row(s).", toRestore.Count);
+            }
+            else
+            {
+                Log.Information("Anchor repair: no placeholders needed restoration.");
+            }
+        }
+        catch (Exception repairEx)
+        {
+            // Repair must never crash startup.
+            Log.Warning(repairEx, "Anchor repair encountered an error and was skipped.");
+        }
     }
 
     // ─── Middleware pipeline ──────────────────────────────────────────────────
