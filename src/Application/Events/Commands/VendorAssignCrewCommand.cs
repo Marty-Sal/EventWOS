@@ -39,15 +39,29 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
         if (ev.Status == EventStatus.Completed || ev.Status == EventStatus.Cancelled)
             return Result.Failure<EventAssignmentDto>(new Error("Event.InvalidStatus", "Event is closed."));
 
-        // Vendor must already be assigned to this event
-        var vendorIsOnEvent = await _db.EventAssignments.AnyAsync(
-            a => a.EventId  == req.EventId
-              && a.VendorId == req.VendorUserId
-              && a.Status   != AssignmentStatus.Declined
-              && a.Status   != AssignmentStatus.RejectedByManager
-              && a.Status   != AssignmentStatus.RejectedByVendor, ct);
-        if (!vendorIsOnEvent)
-            return Result.Failure<EventAssignmentDto>(new Error("Vendor.NotOnEvent", "You are not assigned to this event."));
+        // Vendor must already be assigned to this event with an active relationship.
+        // We look at *any* row that has them as VendorId so that once they've
+        // attached real crew (and the placeholder is removed), they can keep
+        // attaching more without getting locked out.
+        var anyVendorRow = await _db.EventAssignments
+            .Where(a => a.EventId == req.EventId && a.VendorId == req.VendorUserId)
+            .Select(a => new { a.Status })
+            .ToListAsync(ct);
+
+        if (anyVendorRow.Count == 0)
+            return Result.Failure<EventAssignmentDto>(new Error(
+                "Vendor.NotOnEvent",
+                "You are not assigned to this event. Ask the event manager to add you first."));
+
+        var hasActive = anyVendorRow.Any(r =>
+            r.Status != AssignmentStatus.Declined
+         && r.Status != AssignmentStatus.RejectedByManager
+         && r.Status != AssignmentStatus.RejectedByVendor);
+
+        if (!hasActive)
+            return Result.Failure<EventAssignmentDto>(new Error(
+                "Vendor.NoActiveAssignment",
+                "Your assignment to this event was declined or rejected. Contact the event manager."));
 
         // Crew must belong to this vendor
         var crew = await _db.Users.FirstOrDefaultAsync(
