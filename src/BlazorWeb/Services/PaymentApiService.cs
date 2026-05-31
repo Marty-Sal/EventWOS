@@ -113,6 +113,41 @@ public interface IPaymentApiService
 public sealed class PaymentApiService : IPaymentApiService
 {
     private readonly HttpClient _http;
+
+    /// <summary>
+    /// Safely extracts a human-readable error from a non-success HTTP response.
+    /// Handles 401/403 (permission/auth) with friendly messages, and tolerates
+    /// empty or non-JSON error bodies that would otherwise crash JSON parsing.
+    /// </summary>
+    private async Task<string> ExtractErrorAsync(
+        HttpResponseMessage r, string fallback, CancellationToken ct)
+    {
+        // Permission / auth errors get a friendly message regardless of body
+        if (r.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            return "You do not have permission to perform this action. Please contact your administrator.";
+        if (r.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            return "Your session has expired. Please sign in again.";
+
+        // Try to parse a structured ApiResult, but degrade gracefully
+        try
+        {
+            var raw = await r.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(raw)) return fallback;
+
+            // Body might be plain text (e.g. ASP.NET default 500 page)
+            if (!raw.TrimStart().StartsWith("{") && !raw.TrimStart().StartsWith("["))
+                return raw.Length > 200 ? raw[..200] : raw;
+
+            var err = System.Text.Json.JsonSerializer
+                .Deserialize<ApiResult<object>>(raw, _jsonOpts);
+            return err?.Message ?? fallback;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
     private static readonly JsonSerializerOptions _jsonOpts = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -155,8 +190,7 @@ public sealed class PaymentApiService : IPaymentApiService
             };
             var r = await _http.PostAsJsonAsync("api/v1/payments", body, ct);
             if (r.IsSuccessStatusCode) return (true, null);
-            var err = await r.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
-            return (false, err?.Message ?? "Failed to create payment.");
+            return (false, await ExtractErrorAsync(r, "Failed to create payment.", ct));
         }
         catch (Exception ex) { return (false, ex.Message); }
     }
@@ -171,8 +205,7 @@ public sealed class PaymentApiService : IPaymentApiService
             var body = new { action, paidAmount, method, transactionRef, reason };
             var r = await _http.PatchAsJsonAsync($"api/v1/payments/{paymentId}/status", body, ct);
             if (r.IsSuccessStatusCode) return (true, null);
-            var err = await r.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
-            return (false, err?.Message ?? "Status update failed.");
+            return (false, await ExtractErrorAsync(r, "Status update failed.", ct));
         }
         catch (Exception ex) { return (false, ex.Message); }
     }
@@ -208,8 +241,7 @@ public sealed class PaymentApiService : IPaymentApiService
             };
             var r = await _http.PostAsJsonAsync("api/v1/payments/payroll", body, ct);
             if (r.IsSuccessStatusCode) return (true, null);
-            var err = await r.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
-            return (false, err?.Message ?? "Failed to create payroll batch.");
+            return (false, await ExtractErrorAsync(r, "Failed to create payroll batch.", ct));
         }
         catch (Exception ex) { return (false, ex.Message); }
     }
@@ -223,8 +255,7 @@ public sealed class PaymentApiService : IPaymentApiService
             var body = new { action, reason };
             var r = await _http.PatchAsJsonAsync($"api/v1/payments/payroll/{batchId}/status", body, ct);
             if (r.IsSuccessStatusCode) return (true, null);
-            var err = await r.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
-            return (false, err?.Message ?? "Status update failed.");
+            return (false, await ExtractErrorAsync(r, "Status update failed.", ct));
         }
         catch (Exception ex) { return (false, ex.Message); }
     }
