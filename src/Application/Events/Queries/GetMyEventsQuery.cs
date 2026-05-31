@@ -4,6 +4,7 @@ using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using EventWOS.Domain.Rules;
 
 namespace EventWOS.Application.Events.Queries;
 
@@ -69,7 +70,13 @@ public sealed class GetMyEventsHandler : IRequestHandler<GetMyEventsQuery, Resul
                 e.StartAt, e.EndAt,
                 e.Status.ToString(),
                 e.MaxCrew,
-                _db.EventAssignments.Count(a => a.EventId == e.Id && !a.IsDeleted),
+                _db.EventAssignments.Count(a => a.EventId == e.Id
+                                              && !a.IsDeleted
+                                              && a.CrewId != null
+                                              && a.Status != AssignmentStatus.Declined
+                                              && a.Status != AssignmentStatus.RejectedByVendor
+                                              && a.Status != AssignmentStatus.RejectedByManager
+                                              && a.Status != AssignmentStatus.NoShow),
                 e.CreatedAt))
             .ToListAsync(ct);
 

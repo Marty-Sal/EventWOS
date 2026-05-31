@@ -5,6 +5,7 @@ using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using EventWOS.Domain.Rules;
 
 namespace EventWOS.Application.Events.Queries;
 
@@ -25,7 +26,9 @@ public sealed class GetEventByIdHandler : IRequestHandler<GetEventByIdQuery, Res
             return Result.Failure<EventDto>(new Error("Event.NotFound", "Event not found."));
 
         var assignedCrew = await _db.EventAssignments
-            .CountAsync(a => a.EventId == req.Id && a.Status != AssignmentStatus.Declined, ct);
+            .Where(a => a.EventId == req.Id)
+            .Where(AssignmentCapacityRules.OccupiesSeat)
+            .CountAsync(ct);
 
         return Result.Success(CreateEventHandler.MapToDto(ev, assignedCrew, ev.Creator.FullName));
     }

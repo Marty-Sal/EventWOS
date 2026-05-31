@@ -4,6 +4,7 @@ using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using EventWOS.Domain.Rules;
 
 namespace EventWOS.Application.Events.Queries;
 
@@ -43,7 +44,8 @@ public sealed class GetEventsHandler : IRequestHandler<GetEventsQuery, Result<Pa
 
         var eventIds = events.Select(e => e.Id).ToList();
         var crewCounts = await _db.EventAssignments
-            .Where(a => eventIds.Contains(a.EventId) && a.Status != AssignmentStatus.Declined)
+            .Where(a => eventIds.Contains(a.EventId))
+            .Where(AssignmentCapacityRules.OccupiesSeat)
             .GroupBy(a => a.EventId)
             .Select(g => new { EventId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.EventId, x => x.Count, ct);

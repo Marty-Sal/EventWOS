@@ -6,6 +6,7 @@ using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using EventWOS.Domain.Rules;
 
 namespace EventWOS.Application.Events.Commands;
 
@@ -61,11 +62,14 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             if (exists) return Result.Failure<EventAssignmentDto>(new Error("Assignment.Duplicate", "Crew already assigned to this event."));
         }
 
-        // Check max crew
+        // Check max crew — only count rows that genuinely occupy a seat
+        // (real crew, not declined/rejected/no-show, not placeholder).
         if (ev.MaxCrew > 0)
         {
-            var current = await _db.EventAssignments.CountAsync(
-                a => a.EventId == req.EventId && a.Status != AssignmentStatus.Declined, ct);
+            var current = await _db.EventAssignments
+                .Where(a => a.EventId == req.EventId)
+                .Where(AssignmentCapacityRules.OccupiesSeat)
+                .CountAsync(ct);
             if (current >= ev.MaxCrew)
                 return Result.Failure<EventAssignmentDto>(new Error("Assignment.MaxReached", $"Event is fully staffed (max {ev.MaxCrew})."));
         }
