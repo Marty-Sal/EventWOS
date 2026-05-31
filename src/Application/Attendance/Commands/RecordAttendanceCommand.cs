@@ -46,6 +46,30 @@ public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCo
         if (assignment.CrewId is null)
             return Result.Failure<AttendanceRecordDto>(new Error("Attendance.NoCrew", "Cannot record attendance — this assignment has no crew member yet."));
 
+        // ── Guard against duplicate / out-of-order attendance actions ────────
+        var existingActions = await _db.AttendanceRecords
+            .Where(r => r.AssignmentId == assignment.Id)
+            .Select(r => r.Action)
+            .ToListAsync(ct);
+
+        var alreadyCheckedIn  = existingActions.Contains(AttendanceAction.CheckIn);
+        var alreadyCheckedOut = existingActions.Contains(AttendanceAction.CheckOut);
+
+        if (action == AttendanceAction.CheckIn && alreadyCheckedIn)
+            return Result.Failure<AttendanceRecordDto>(new Error(
+                "Attendance.AlreadyCheckedIn",
+                "You have already checked in for this event."));
+
+        if (action == AttendanceAction.CheckOut && !alreadyCheckedIn)
+            return Result.Failure<AttendanceRecordDto>(new Error(
+                "Attendance.NotCheckedIn",
+                "You must check in before you can check out."));
+
+        if (action == AttendanceAction.CheckOut && alreadyCheckedOut)
+            return Result.Failure<AttendanceRecordDto>(new Error(
+                "Attendance.AlreadyCheckedOut",
+                "You have already checked out for this event."));
+
         var record = new AttendanceRecord(
             assignment.Id, assignment.EventId, assignment.CrewId.Value,
             action, req.Location, req.RecordedByUserId);

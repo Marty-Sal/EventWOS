@@ -45,31 +45,46 @@
                             <p class="font-semibold text-gray-800">@a.EventTitle</p>
                             <p class="text-xs text-gray-400 mt-0.5">@a.Venue - @a.EventStartAt.ToLocalTime().ToString("dd MMM HH:mm")</p>
                         </div>
-                        <div class="flex gap-2 shrink-0">
-                            <button @onclick="() => RecordAttendance(a.Id, CheckIn)"
-                                    disabled="@(_actionId == a.Id)"
-                                    class="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition disabled:opacity-50">
-                                @if (_actionId == a.Id && _actionType == CheckIn)
-                                {
-                                    <span>Checking in...</span>
-                                }
-                                else
-                                {
-                                    <span>Check In</span>
-                                }
-                            </button>
-                            <button @onclick="() => RecordAttendance(a.Id, CheckOut)"
-                                    disabled="@(_actionId == a.Id)"
-                                    class="px-4 py-2 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50">
-                                @if (_actionId == a.Id && _actionType == CheckOut)
-                                {
-                                    <span>Checking out...</span>
-                                }
-                                else
-                                {
-                                    <span>Check Out</span>
-                                }
-                            </button>
+                        <div class="flex gap-2 shrink-0 items-center">
+                            @{
+                                var alreadyIn  = _checkedInAssignmentIds.Contains(a.Id) || a.Status == "Attended";
+                                var alreadyOut = _checkedOutAssignmentIds.Contains(a.Id);
+                            }
+                            @if (!alreadyIn)
+                            {
+                                <button @onclick="() => RecordAttendance(a.Id, CheckIn)"
+                                        disabled="@(_actionId == a.Id)"
+                                        class="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition disabled:opacity-50">
+                                    @if (_actionId == a.Id && _actionType == CheckIn)
+                                    {
+                                        <span>Checking in...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Check In</span>
+                                    }
+                                </button>
+                            }
+                            else if (!alreadyOut)
+                            {
+                                <span class="px-3 py-1.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">✓ Checked in</span>
+                                <button @onclick="() => RecordAttendance(a.Id, CheckOut)"
+                                        disabled="@(_actionId == a.Id)"
+                                        class="px-4 py-2 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50">
+                                    @if (_actionId == a.Id && _actionType == CheckOut)
+                                    {
+                                        <span>Checking out...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Check Out</span>
+                                    }
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">✓ Completed</span>
+                            }
                         </div>
                     </div>
                 }
@@ -142,6 +157,8 @@
     private string? _error;
     private Guid?  _actionId;
     private string? _actionType;
+    private HashSet<Guid> _checkedInAssignmentIds  = new();
+    private HashSet<Guid> _checkedOutAssignmentIds = new();
     private string? _toast;
     private bool   _toastError;
     private System.Threading.CancellationTokenSource? _toastCts;
@@ -167,9 +184,19 @@
             var evDict = (evResp?.Data?.Items ?? Enumerable.Empty<EventItemDto>())
                 .ToDictionary(e => e.Id);
 
-            // Active = Confirmed on an InProgress event
+            // 3. Attendance history (fetched first so we know who's already checked in)
+            var histResp = await Http.GetFromJsonAsync<ApiResult<PagedResult<AttendanceItemDto>>>(
+                "api/v1/attendance/my?page=1&pageSize=50", JsonOpts);
+
+            // Active = approved/confirmed on an InProgress event.
+            // We include the full set of post-approval statuses that the
+            // backend treats as eligible for attendance (see
+            // EventAssignment.IsEligibleForAttendance + MarkAttended path).
             _activeAssignments = assignments
-                .Where(a => (a.Status == "Confirmed" || a.Status == "Attended"))
+                .Where(a => a.Status is "Confirmed"
+                                     or "Approved"            // legacy display label
+                                     or "ManagerApproved"     // post-approval state
+                                     or "Attended")
                 .Where(a => evDict.TryGetValue(a.EventId, out var ev) && ev.Status == "InProgress")
                 .Select(a => new MyAssignmentWithEvent(
                     a.Id, a.EventId, a.EventTitle, a.Status,
@@ -178,9 +205,18 @@
                     evDict.TryGetValue(a.EventId, out var ev4) ? ev4.StartAt : DateTime.MinValue))
                 .ToList();
 
-            // 3. Attendance history
-            var histResp = await Http.GetFromJsonAsync<ApiResult<PagedResult<AttendanceItemDto>>>(
-                "api/v1/attendance/my?page=1&pageSize=50", JsonOpts);
+            // Determine which assignments have already been checked in
+            // (so we can hide / disable the Check-In button accordingly).
+            _checkedInAssignmentIds = new HashSet<Guid>(
+                (histResp?.Data?.Items ?? Enumerable.Empty<AttendanceItemDto>())
+                    .Where(r => r.Action.Equals("CheckIn", StringComparison.OrdinalIgnoreCase))
+                    .Select(r => r.AssignmentId));
+
+            _checkedOutAssignmentIds = new HashSet<Guid>(
+                (histResp?.Data?.Items ?? Enumerable.Empty<AttendanceItemDto>())
+                    .Where(r => r.Action.Equals("CheckOut", StringComparison.OrdinalIgnoreCase))
+                    .Select(r => r.AssignmentId));
+
             _history = (histResp?.Data?.Items ?? Enumerable.Empty<AttendanceItemDto>())
                 .Select(r => new MyAttendanceRecord(r.EventTitle, r.Action, r.RecordedAt, r.Location))
                 .ToList();
