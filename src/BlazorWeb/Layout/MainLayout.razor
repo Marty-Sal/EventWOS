@@ -205,6 +205,24 @@
         try { await Hub.StartAsync(); }
         catch { }
         Hub.ConnectionStateChanged += () => InvokeAsync(StateHasChanged);
+
+        // Keep sidebar counters live so the badge bumps without a refresh.
+        Hub.AssignmentInviteReceived     += OnInviteCountChanged; // crew: new invite
+        Hub.VendorApprovedReceived       += OnInviteCountChanged; // crew: state moved
+        Hub.VendorRejectedReceived       += OnInviteCountChanged;
+        Hub.ManagerApprovedReceived      += OnInviteCountChanged;
+        Hub.ManagerRejectedReceived      += OnInviteCountChanged;
+        Hub.PendingManagerApprovalReceived += OnApprovalCountChanged; // manager: queue grew
+    }
+
+    private void OnInviteCountChanged(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () => { await LoadPendingInvites(); StateHasChanged(); });
+    }
+
+    private void OnApprovalCountChanged(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () => { await LoadApprovalCountAsync(); StateHasChanged(); });
     }
 
     private async Task LogoutAsync()

@@ -1,6 +1,8 @@
 @page "/vendor-assignments"
 @attribute [Authorize(Roles = "Vendor")]
 @inject HttpClient Http
+@inject NotificationHubService Hub
+@implements IAsyncDisposable
 
 <PageTitle>Crew Assignments — EventWOS</PageTitle>
 
@@ -225,7 +227,34 @@
         _                 => "📋"
     };
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        // Live-refresh when any crew responds to one of this vendor's invites,
+        // or when a manager finalises one of the vendor's referred crew.
+        Hub.CrewAcceptedReceived     += OnAssignmentChanged;
+        Hub.CrewDeclinedReceived     += OnAssignmentChanged;
+        Hub.ManagerApprovedReceived  += OnAssignmentChanged;
+        Hub.ManagerRejectedReceived  += OnAssignmentChanged;
+        Hub.AssignmentInviteReceived += OnAssignmentChanged; // own invites just sent
+
+        try { await Hub.StartAsync(); } catch { }
+        await Load();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.CrewAcceptedReceived     -= OnAssignmentChanged;
+        Hub.CrewDeclinedReceived     -= OnAssignmentChanged;
+        Hub.ManagerApprovedReceived  -= OnAssignmentChanged;
+        Hub.ManagerRejectedReceived  -= OnAssignmentChanged;
+        Hub.AssignmentInviteReceived -= OnAssignmentChanged;
+        await ValueTask.CompletedTask;
+    }
+
+    private void OnAssignmentChanged(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
+    }
 
     private async Task Load()
     {

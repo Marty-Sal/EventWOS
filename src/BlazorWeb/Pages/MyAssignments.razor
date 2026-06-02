@@ -2,6 +2,8 @@
 @attribute [Authorize(Roles = "Crew")]
 @inject IEventApiService EventApi
 @inject AuthenticationStateProvider Auth
+@inject NotificationHubService Hub
+@implements IAsyncDisposable
 
 <PageTitle>My Assignments — EventWOS</PageTitle>
 
@@ -230,7 +232,43 @@
         : "Nothing to show in this category yet.";
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        // Subscribe to live notification events that change this list.
+        Hub.AssignmentInviteReceived  += OnAssignmentChanged;   // new invite from vendor
+        Hub.VendorApprovedReceived    += OnAssignmentChanged;   // vendor accepted my response
+        Hub.VendorRejectedReceived    += OnAssignmentChanged;   // vendor rejected me
+        Hub.ManagerApprovedReceived   += OnAssignmentChanged;   // manager confirmed
+        Hub.ManagerRejectedReceived   += OnAssignmentChanged;   // manager rejected
+
+        // Ensure the hub is running (MainLayout starts it, but this guards
+        // against a page being navigated to before the layout's OnInitialized
+        // has completed, or after a transient reconnect).
+        try { await Hub.StartAsync(); } catch { }
+
+        await Load();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.AssignmentInviteReceived  -= OnAssignmentChanged;
+        Hub.VendorApprovedReceived    -= OnAssignmentChanged;
+        Hub.VendorRejectedReceived    -= OnAssignmentChanged;
+        Hub.ManagerApprovedReceived   -= OnAssignmentChanged;
+        Hub.ManagerRejectedReceived   -= OnAssignmentChanged;
+        await ValueTask.CompletedTask;
+    }
+
+    // SignalR callbacks fire on a background thread — marshal back to the UI
+    // thread before touching component state.
+    private void OnAssignmentChanged(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await Load();
+            StateHasChanged();
+        });
+    }
 
     private async Task Load()
     {
