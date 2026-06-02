@@ -34,13 +34,15 @@ public sealed class UpdatePaymentStatusValidator : AbstractValidator<UpdatePayme
 
 public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentStatusCommand, Result>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
+    private readonly IAppDbContext       _db;
+    private readonly IUnitOfWork         _uow;
+    private readonly INotificationPusher _push;
 
-    public UpdatePaymentStatusHandler(IAppDbContext db, IUnitOfWork uow)
+    public UpdatePaymentStatusHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
     {
-        _db  = db;
-        _uow = uow;
+        _db   = db;
+        _uow  = uow;
+        _push = push;
     }
 
     public async Task<Result> Handle(UpdatePaymentStatusCommand cmd, CancellationToken ct)
@@ -77,6 +79,32 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
         }
 
         await _uow.SaveChangesAsync(ct);
+
+        // Real-time fan-out so payment screens refresh without a page reload.
+        var evt = cmd.Action.ToLower() switch
+        {
+            "approve" => "PaymentApproved",
+            "pay"     => "PaymentPaid",
+            "reject"  => "PaymentRejected",
+            "hold"    => "PaymentOnHold",
+            _         => "PaymentUpdated"
+        };
+        var payload = new
+        {
+            paymentId = payment.Id,
+            crewId    = payment.CrewId,
+            vendorId  = payment.VendorId,
+            status    = payment.Status.ToString(),
+            action    = cmd.Action.ToLower()
+        };
+        // Crew owner sees update on /my-payments
+        await _push.PushToUserAsync(payment.CrewId,   evt, payload, ct);
+        // Vendor sees update on /vendor-payments
+        await _push.PushToUserAsync(payment.VendorId, evt, payload, ct);
+        // Admins/Managers see the master /payments list refresh
+        await _push.PushToRoleAsync("Admin",   evt, payload, ct);
+        await _push.PushToRoleAsync("Manager", evt, payload, ct);
+
         return Result.Success();
     }
 }

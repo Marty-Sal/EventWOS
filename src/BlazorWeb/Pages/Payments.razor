@@ -3,6 +3,8 @@
 @inject IPaymentApiService PaymentApi
 @inject IEventApiService   EventApi
 @inject IVendorApiService  VendorApi
+@inject NotificationHubService Hub
+@implements IAsyncDisposable
 
 
     @if (_accessDenied)
@@ -677,7 +679,25 @@
         _accessDenied = !await PermGuard.CanAsync("payments:read");
         if (_accessDenied) { StateHasChanged(); return; }
         _canWrite = await PermGuard.CanAsync("payments:write");
+
+        // Live: refresh master payments list on any payment / payroll state change.
+        Hub.PaymentChangedReceived += OnPaymentMoved;
+        Hub.PayrollChangedReceived += OnPaymentMoved;
+        try { await Hub.StartAsync(); } catch { }
+
         await LoadData();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.PaymentChangedReceived -= OnPaymentMoved;
+        Hub.PayrollChangedReceived -= OnPaymentMoved;
+        await ValueTask.CompletedTask;
+    }
+
+    private void OnPaymentMoved(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () => { await LoadData(); StateHasChanged(); });
     }
 
     private async Task SwitchTab(Tab tab)

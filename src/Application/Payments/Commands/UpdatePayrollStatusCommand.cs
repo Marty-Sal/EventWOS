@@ -14,13 +14,15 @@ public sealed record UpdatePayrollStatusCommand(
 
 public sealed class UpdatePayrollStatusHandler : IRequestHandler<UpdatePayrollStatusCommand, Result>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
+    private readonly IAppDbContext       _db;
+    private readonly IUnitOfWork         _uow;
+    private readonly INotificationPusher _push;
 
-    public UpdatePayrollStatusHandler(IAppDbContext db, IUnitOfWork uow)
+    public UpdatePayrollStatusHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
     {
-        _db  = db;
-        _uow = uow;
+        _db   = db;
+        _uow  = uow;
+        _push = push;
     }
 
     public async Task<Result> Handle(UpdatePayrollStatusCommand cmd, CancellationToken ct)
@@ -48,6 +50,17 @@ public sealed class UpdatePayrollStatusHandler : IRequestHandler<UpdatePayrollSt
         }
 
         await _uow.SaveChangesAsync(ct);
+
+        // Notify Admins and Managers so their /payments view refreshes.
+        var payload = new
+        {
+            batchId = batch.Id,
+            status  = batch.Status.ToString(),
+            action  = cmd.Action.ToLower()
+        };
+        await _push.PushToRoleAsync("Admin",   "PayrollUpdated", payload, ct);
+        await _push.PushToRoleAsync("Manager", "PayrollUpdated", payload, ct);
+
         return Result.Success();
     }
 }

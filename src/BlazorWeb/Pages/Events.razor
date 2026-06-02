@@ -3,6 +3,8 @@
 @inject IEventApiService EventApi
 @inject IVendorApiService VendorApi
 @inject AuthenticationStateProvider Auth
+@inject NotificationHubService Hub
+@implements IAsyncDisposable
 
 
     @if (_accessDenied)
@@ -672,6 +674,39 @@ else
             await LoadVendorAssignments();
         else
             await LoadMyAssignments(); // Crew
+
+        // Live refresh whenever any assignment in the system moves.
+        Hub.AssignmentInviteReceived  += OnAssignmentMoved;
+        Hub.CrewAcceptedReceived      += OnAssignmentMoved;
+        Hub.CrewDeclinedReceived      += OnAssignmentMoved;
+        Hub.VendorApprovedReceived    += OnAssignmentMoved;
+        Hub.VendorRejectedReceived    += OnAssignmentMoved;
+        Hub.ManagerApprovedReceived   += OnAssignmentMoved;
+        Hub.ManagerRejectedReceived   += OnAssignmentMoved;
+        try { await Hub.StartAsync(); } catch { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.AssignmentInviteReceived  -= OnAssignmentMoved;
+        Hub.CrewAcceptedReceived      -= OnAssignmentMoved;
+        Hub.CrewDeclinedReceived      -= OnAssignmentMoved;
+        Hub.VendorApprovedReceived    -= OnAssignmentMoved;
+        Hub.VendorRejectedReceived    -= OnAssignmentMoved;
+        Hub.ManagerApprovedReceived   -= OnAssignmentMoved;
+        Hub.ManagerRejectedReceived   -= OnAssignmentMoved;
+        await ValueTask.CompletedTask;
+    }
+
+    private void OnAssignmentMoved(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (_role is "Admin" or "Manager")      await LoadEvents();
+            else if (_role == "Vendor")             await LoadVendorAssignments();
+            else                                    await LoadMyAssignments();
+            StateHasChanged();
+        });
     }
 
     // ── Admin/Manager ──────────────────────────────────────────────────────────

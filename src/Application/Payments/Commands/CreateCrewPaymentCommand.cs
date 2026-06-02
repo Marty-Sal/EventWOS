@@ -31,13 +31,15 @@ public sealed class CreateCrewPaymentValidator : AbstractValidator<CreateCrewPay
 
 public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPaymentCommand, Result<Guid>>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
+    private readonly IAppDbContext       _db;
+    private readonly IUnitOfWork         _uow;
+    private readonly INotificationPusher _push;
 
-    public CreateCrewPaymentHandler(IAppDbContext db, IUnitOfWork uow)
+    public CreateCrewPaymentHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
     {
-        _db  = db;
-        _uow = uow;
+        _db   = db;
+        _uow  = uow;
+        _push = push;
     }
 
     public async Task<Result<Guid>> Handle(CreateCrewPaymentCommand cmd, CancellationToken ct)
@@ -56,6 +58,20 @@ public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPayment
 
         await _db.CrewPayments.AddAsync(payment, ct);
         await _uow.SaveChangesAsync(ct);
+
+        // Fan out so each role's payment screen surfaces the new row live.
+        var payload = new
+        {
+            paymentId = payment.Id,
+            crewId    = payment.CrewId,
+            vendorId  = payment.VendorId,
+            status    = payment.Status.ToString(),
+            action    = "created"
+        };
+        await _push.PushToUserAsync(payment.CrewId,   "PaymentCreated", payload, ct);
+        await _push.PushToUserAsync(payment.VendorId, "PaymentCreated", payload, ct);
+        await _push.PushToRoleAsync("Admin",          "PaymentCreated", payload, ct);
+        await _push.PushToRoleAsync("Manager",        "PaymentCreated", payload, ct);
 
         return Result.Success(payment.Id);
     }

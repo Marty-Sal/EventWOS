@@ -4,6 +4,8 @@
 @inject AuthenticationStateProvider Auth
 @inject IEventApiService EventApi
 @inject IVendorApiService VendorApi
+@inject NotificationHubService Hub
+@implements IAsyncDisposable
 
 <PageTitle>My Events — EventWOS</PageTitle>
 
@@ -206,7 +208,35 @@
         var sub = authState.User.FindFirst("sub")?.Value
                ?? authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (Guid.TryParse(sub, out var uid)) _userId = uid;
+
+        // Per-event "X / Y assigned" counters change whenever any assignment moves.
+        Hub.AssignmentInviteReceived  += OnAnyAssignmentChange;
+        Hub.CrewAcceptedReceived      += OnAnyAssignmentChange;
+        Hub.CrewDeclinedReceived      += OnAnyAssignmentChange;
+        Hub.VendorApprovedReceived    += OnAnyAssignmentChange;
+        Hub.VendorRejectedReceived    += OnAnyAssignmentChange;
+        Hub.ManagerApprovedReceived   += OnAnyAssignmentChange;
+        Hub.ManagerRejectedReceived   += OnAnyAssignmentChange;
+        try { await Hub.StartAsync(); } catch { }
+
         await LoadAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.AssignmentInviteReceived  -= OnAnyAssignmentChange;
+        Hub.CrewAcceptedReceived      -= OnAnyAssignmentChange;
+        Hub.CrewDeclinedReceived      -= OnAnyAssignmentChange;
+        Hub.VendorApprovedReceived    -= OnAnyAssignmentChange;
+        Hub.VendorRejectedReceived    -= OnAnyAssignmentChange;
+        Hub.ManagerApprovedReceived   -= OnAnyAssignmentChange;
+        Hub.ManagerRejectedReceived   -= OnAnyAssignmentChange;
+        await ValueTask.CompletedTask;
+    }
+
+    private void OnAnyAssignmentChange(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
     }
 
     private async Task LoadAsync()

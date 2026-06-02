@@ -1,6 +1,8 @@
 @page "/vendor-payments"
 @attribute [Authorize(Roles = "Vendor")]
 @inject IPaymentApiService PaymentApi
+@inject NotificationHubService Hub
+@implements IAsyncDisposable
 
 <PageTitle>My Crew Payments — EventWOS</PageTitle>
 
@@ -149,7 +151,23 @@
         ("rejected", "Rejected"),
     };
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        Hub.PaymentChangedReceived += OnPaymentMoved;
+        try { await Hub.StartAsync(); } catch { }
+        await LoadAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.PaymentChangedReceived -= OnPaymentMoved;
+        await ValueTask.CompletedTask;
+    }
+
+    private void OnPaymentMoved(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+    }
 
     private async Task LoadAsync()
     {

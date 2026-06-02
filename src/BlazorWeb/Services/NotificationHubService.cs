@@ -23,6 +23,9 @@ public sealed class NotificationHubService : IAsyncDisposable
     public event Action<NotificationPayload>?  PendingManagerApprovalReceived;// → managers
     public event Action<NotificationPayload>?  ManagerApprovedReceived;       // → crew
     public event Action<NotificationPayload>?  ManagerRejectedReceived;       // → crew
+    // Payments
+    public event Action<NotificationPayload>?  PaymentChangedReceived;        // payment created / approved / paid / rejected / hold
+    public event Action<NotificationPayload>?  PayrollChangedReceived;        // batch submitted / approved / disbursed / rejected
     public event Action?                       ConnectionStateChanged;
 
     public HubConnectionState State      => _connection?.State ?? HubConnectionState.Disconnected;
@@ -79,6 +82,17 @@ public sealed class NotificationHubService : IAsyncDisposable
             payload => ManagerApprovedReceived?.Invoke(payload));
         _connection.On<NotificationPayload>("ManagerRejectedYou",
             payload => ManagerRejectedReceived?.Invoke(payload));
+
+        // Payments — all payment-lifecycle events fold into a single subscription
+        // so consumers just refetch the list. (crew owner + vendor + admins/managers)
+        foreach (var name in new[] { "PaymentCreated", "PaymentApproved", "PaymentPaid",
+                                     "PaymentRejected", "PaymentOnHold", "PaymentUpdated" })
+        {
+            _connection.On<NotificationPayload>(name,
+                payload => PaymentChangedReceived?.Invoke(payload));
+        }
+        _connection.On<NotificationPayload>("PayrollUpdated",
+            payload => PayrollChangedReceived?.Invoke(payload));
 
         _connection.Reconnected += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };
         _connection.Closed      += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };

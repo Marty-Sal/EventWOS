@@ -4,6 +4,8 @@
 @inject EventWOS.BlazorWeb.Auth.AppAuthStateProvider Auth
 @inject IAuthApiService AuthApi
 @inject NavigationManager Nav
+@inject NotificationHubService Hub
+@implements IAsyncDisposable
 @using System.Net.Http
 @using System.Net.Http.Json
 
@@ -198,7 +200,23 @@
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
         new() { PropertyNameCaseInsensitive = true };
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        Hub.PendingManagerApprovalReceived += OnQueueChanged;
+        try { await Hub.StartAsync(); } catch { }
+        await Load();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.PendingManagerApprovalReceived -= OnQueueChanged;
+        await ValueTask.CompletedTask;
+    }
+
+    private void OnQueueChanged(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
+    }
 
     private async Task Load()
     {
