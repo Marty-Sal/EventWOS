@@ -95,6 +95,7 @@
                             <th class="th-cell">Agreed</th>
                             <th class="th-cell">Paid</th>
                             <th class="th-cell">Status</th>
+                            <th class="th-cell">Crew Ack</th>
                             <th class="th-cell">Method</th>
                             <th class="th-cell">Actions</th>
                         </tr>
@@ -112,6 +113,24 @@
                                 <td class="td-cell text-sm font-semibold text-gray-900">@(p.AgreedAmount == 0 ? "—" : "₹" + p.AgreedAmount.ToString("N0"))</td>
                                 <td class="td-cell text-sm text-gray-600">@(p.PaidAmount.HasValue ? "₹" + p.PaidAmount.Value.ToString("N0") : "—")</td>
                                 <td class="td-cell"><span class="badge @PayBadge(p.Status)">@p.Status</span></td>
+                                <td class="td-cell text-xs">
+                                    @if (p.CrewAcknowledgment == "Received")
+                                    {
+                                        <span class="text-emerald-600 font-semibold" title="@(p.AcknowledgedAt?.ToLocalTime().ToString("dd MMM yyyy"))">✓ Received</span>
+                                    }
+                                    else if (p.CrewAcknowledgment == "Pending")
+                                    {
+                                        <span class="text-amber-600 font-semibold" title="@p.AcknowledgmentNote">⚠ Reported Pending</span>
+                                    }
+                                    else if (p.Status == "Paid")
+                                    {
+                                        <span class="text-gray-400 italic">Awaiting</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-gray-300">—</span>
+                                    }
+                                </td>
                                 <td class="td-cell text-xs text-gray-500">@(p.Method ?? "—")</td>
                                 <td class="td-cell">
                                     <div class="flex flex-wrap gap-1">

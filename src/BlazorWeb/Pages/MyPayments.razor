@@ -266,6 +266,7 @@
         DateTime? PaidAt, Guid? PayrollBatchId,
         string CrewAcknowledgment, DateTime? AcknowledgedAt, string? AcknowledgmentNote,
         string? BatchStatus,
+        decimal? BatchTotal,
         DateTime CreatedAt);
 
     private sealed record LocalPagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);

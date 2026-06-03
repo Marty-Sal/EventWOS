@@ -22,6 +22,7 @@ public sealed record CrewPaymentDto(
     DateTime? AcknowledgedAt,
     string?  AcknowledgmentNote,
     string?  BatchStatus,            // "Draft" | "Submitted" | "Approved" | "Disbursed" — null if no batch
+    decimal? BatchTotal,             // Parent batch's total — vendor-level amount sent by the organiser
     DateTime CreatedDate
 );
 

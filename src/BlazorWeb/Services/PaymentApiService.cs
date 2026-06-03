@@ -91,6 +91,7 @@ public sealed record CrewPaymentDto(
     DateTime? AcknowledgedAt,
     string?  AcknowledgmentNote,
     string?  BatchStatus,
+    decimal? BatchTotal,
     DateTime CreatedDate
 );
 

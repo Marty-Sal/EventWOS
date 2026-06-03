@@ -15,15 +15,15 @@
     @* Summary cards *@
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Total Agreed</p>
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">From Organiser</p>
             <p class="mt-1 text-xl font-bold text-gray-800">₹@FormatMoney(_totalAgreed)</p>
         </div>
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Paid</p>
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Paid to Crew</p>
             <p class="mt-1 text-xl font-bold text-emerald-600">₹@FormatMoney(_totalPaid)</p>
         </div>
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Pending</p>
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Yet to Pay Out</p>
             <p class="mt-1 text-xl font-bold text-amber-600">₹@FormatMoney(_totalPending)</p>
         </div>
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
@@ -75,8 +75,8 @@
                     <tr>
                         <th class="text-left px-4 py-3 font-semibold">Crew</th>
                         <th class="text-left px-4 py-3 font-semibold">Event</th>
-                        <th class="text-right px-4 py-3 font-semibold">Agreed</th>
-                        <th class="text-right px-4 py-3 font-semibold">Paid</th>
+                        <th class="text-right px-4 py-3 font-semibold">From Organiser</th>
+                        <th class="text-right px-4 py-3 font-semibold">Paid to Crew</th>
                         <th class="text-center px-4 py-3 font-semibold">Status</th>
                         <th class="text-left px-4 py-3 font-semibold">Paid On</th>
                         <th class="text-center px-4 py-3 font-semibold">Action</th>
@@ -92,7 +92,11 @@
                             </td>
                             <td class="px-4 py-3 text-gray-700">@p.EventTitle</td>
                             <td class="px-4 py-3 text-right font-mono text-gray-800">
-                                @(p.AgreedAmount == 0 ? "—" : "₹" + FormatMoney(p.AgreedAmount))
+                                @if (p.BatchTotal.HasValue && p.BatchTotal.Value > 0) {
+                                    <span class="text-slate-700">₹@FormatMoney(p.BatchTotal.Value)</span>
+                                } else {
+                                    <span class="text-gray-300">—</span>
+                                }
                             </td>
                             <td class="px-4 py-3 text-right font-mono">
                                 @if (p.PaidAmount.HasValue) {
@@ -301,12 +305,13 @@
                 _total = result.TotalCount;
 
                 // Roll-up totals — when filtered, totals reflect the filter
-                _totalAgreed  = _items.Sum(p => p.AgreedAmount);
+                // From Organiser = sum of DISTINCT batch totals (one batch can have multiple crew rows)
+                _totalAgreed  = _items.Where(p => p.PayrollBatchId.HasValue && p.BatchTotal.HasValue)
+                                      .GroupBy(p => p.PayrollBatchId!.Value)
+                                      .Sum(g => g.First().BatchTotal ?? 0m);
                 _totalPaid    = _items.Where(p => p.Status.Equals("paid", StringComparison.OrdinalIgnoreCase))
                                       .Sum(p => p.PaidAmount ?? 0m);
-                _totalPending = _items.Where(p => !p.Status.Equals("paid", StringComparison.OrdinalIgnoreCase)
-                                              && !p.Status.Equals("rejected", StringComparison.OrdinalIgnoreCase))
-                                      .Sum(p => p.AgreedAmount - (p.PaidAmount ?? 0m));
+                _totalPending = Math.Max(0m, _totalAgreed - _totalPaid);
             }
         }
         catch (Exception ex)

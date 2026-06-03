@@ -61,6 +61,7 @@ public sealed class GetPaymentsHandler : IRequestHandler<GetPaymentsQuery, Resul
                 p.AcknowledgedAt,
                 p.AcknowledgmentNote,
                 p.PayrollBatch == null ? null : p.PayrollBatch.Status.ToString(),
+                p.PayrollBatch == null ? null : (decimal?)p.PayrollBatch.TotalAmount,
                 p.CreatedAt))
             .ToListAsync(ct);
 
