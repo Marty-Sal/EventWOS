@@ -738,6 +738,32 @@ BEGIN
         RAISE NOTICE 'payroll_batches.vendor_id is now nullable';
     END IF;
 
+    -- ═══ One-time data fix (2026-06-04) ══════════════════════════════════════
+    -- Old vendor-batch logic split the vendor total evenly across crew, exposing
+    -- per-crew amounts the vendor hadn't actually decided yet. Zero those rows
+    -- back out so the vendor can set the real cut on the Vendor Payments page.
+    --
+    -- Safe & idempotent — only touches rows that still match the buggy signature
+    -- (approved, vendor-mediated, has agreed amount, not paid). Real paid rows
+    -- and the batch-level totals are left untouched.
+    IF EXISTS (
+        SELECT 1 FROM crew_payments
+        WHERE status         = 1                  -- Approved
+          AND vendor_id      IS NOT NULL
+          AND agreed_amount  > 0
+          AND paid_amount    IS NULL
+          AND paid_at        IS NULL
+    ) THEN
+        UPDATE crew_payments
+        SET agreed_amount = 0
+        WHERE status         = 1
+          AND vendor_id      IS NOT NULL
+          AND agreed_amount  > 0
+          AND paid_amount    IS NULL
+          AND paid_at        IS NULL;
+        RAISE NOTICE 'Zeroed stale vendor-split agreed_amount on unpaid vendor rows';
+    END IF;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");
