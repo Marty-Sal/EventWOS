@@ -66,49 +66,64 @@
         <div class="space-y-3">
             @foreach (var p in _items)
             {
-                <div class="bg-white rounded-2xl shadow-sm border p-5 @BorderColor(p.Status)">
+                var stage         = StageOf(p);
+                var showAmount    = stage is "Paid";
+                var stageLabel    = StageLabel(stage);
+                var stageChip     = StageChipClass(stage);
+                var showPendingCta = stage is "VendorPaid" or "Paid";
+                <div class="bg-white rounded-2xl shadow-sm border p-5 @StageBorder(stage)">
                     <div class="flex items-start justify-between gap-4">
                         <div class="flex-1 min-w-0">
                             <p class="font-semibold text-gray-900 truncate">@p.EventTitle</p>
-                            <p class="text-xs text-gray-400 mt-0.5">Vendor: @p.VendorName</p>
+                            @if (!string.IsNullOrEmpty(p.VendorName))
+                            {
+                                <p class="text-xs text-gray-400 mt-0.5">Via vendor: @p.VendorName</p>
+                            }
+                            else
+                            {
+                                <p class="text-xs text-gray-400 mt-0.5">Direct from organiser</p>
+                            }
                         </div>
-                        <span class="shrink-0 px-3 py-1 rounded-full text-xs font-semibold @StatusChip(p.Status)">
-                            @StatusLabel(p.Status)
+                        <span class="shrink-0 px-3 py-1 rounded-full text-xs font-semibold @stageChip">
+                            @stageLabel
                         </span>
                     </div>
-                    <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                        <div>
-                            <p class="text-xs text-gray-400">Agreed</p>
-                            <p class="font-semibold text-gray-800">@string.Format("₹{0:N0}", p.AgreedAmount)</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-400">Paid</p>
-                            <p class="font-semibold text-green-700">
-                                @(p.PaidAmount.HasValue ? string.Format("₹{0:N0}", p.PaidAmount.Value) : "—")
-                            </p>
-                        </div>
-                        @if (!string.IsNullOrEmpty(p.Method))
-                        {
+
+                    @if (showAmount)
+                    {
+                        <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                             <div>
-                                <p class="text-xs text-gray-400">Method</p>
-                                <p class="font-medium text-gray-700">@p.Method</p>
+                                <p class="text-xs text-gray-400">Amount Paid</p>
+                                <p class="font-semibold text-emerald-700">@string.Format("₹{0:N0}", p.PaidAmount ?? p.AgreedAmount)</p>
                             </div>
-                        }
-                        @if (p.PaidAt.HasValue)
-                        {
-                            <div>
-                                <p class="text-xs text-gray-400">Paid On</p>
-                                <p class="font-medium text-gray-700">@p.PaidAt.Value.ToString("dd MMM yyyy")</p>
-                            </div>
-                        }
-                    </div>
+                            @if (!string.IsNullOrEmpty(p.Method))
+                            {
+                                <div>
+                                    <p class="text-xs text-gray-400">Method</p>
+                                    <p class="font-medium text-gray-700">@p.Method</p>
+                                </div>
+                            }
+                            @if (p.PaidAt.HasValue)
+                            {
+                                <div>
+                                    <p class="text-xs text-gray-400">Paid On</p>
+                                    <p class="font-medium text-gray-700">@p.PaidAt.Value.ToLocalTime().ToString("dd MMM yyyy")</p>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="mt-3 text-xs text-gray-500">@StageHelp(stage)</p>
+                    }
+
                     @if (!string.IsNullOrEmpty(p.Notes))
                     {
                         <p class="mt-3 text-xs text-gray-400 italic">@p.Notes</p>
                     }
 
                     @* ── Crew acknowledgment ──────────────────────────────── *@
-                    @if (p.Status == "Paid")
+                    @if (showPendingCta)
                     {
                         <div class="mt-4 pt-4 border-t border-gray-100">
                             @if (p.CrewAcknowledgment == "Received")
@@ -250,6 +265,7 @@
         string Status, string? Method, string? TransactionRef, string? Notes,
         DateTime? PaidAt, Guid? PayrollBatchId,
         string CrewAcknowledgment, DateTime? AcknowledgedAt, string? AcknowledgmentNote,
+        string? BatchStatus,
         DateTime CreatedAt);
 
     private sealed record LocalPagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
@@ -345,5 +361,77 @@
         "Pending"    => "border-amber-100",
         "Processing" => "border-blue-100",
         _            => "border-gray-100"
+    };
+
+
+    // ── Stage-aware UI helpers ─────────────────────────────────────────────────
+    // Stage values:
+    //   DraftingForVendor  — vendor row, batch is Draft/Submitted/Approved (manager hasn't paid vendor yet)
+    //   VendorPaid         — vendor row, batch is Disbursed but crew row still Approved (vendor hasn't paid out)
+    //   Drafting           — direct row, batch not Disbursed yet
+    //   AwaitingPayout     — direct row, batch Disbursed but not yet Paid
+    //   Paid               — payment row Status == Paid
+    //   Pending            — payment row Status == Pending (no batch yet)
+    //   Rejected / OnHold  — terminal/edge
+    private static string StageOf(PaymentDto p)
+    {
+        if (p.Status == "Paid")     return "Paid";
+        if (p.Status == "Rejected") return "Rejected";
+        if (p.Status == "OnHold")   return "OnHold";
+        if (p.Status == "Pending")  return "Pending";
+
+        // Status == Approved → drill into batch state
+        var batchDisbursed = p.BatchStatus == "Disbursed";
+        if (p.VendorId is not null)
+            return batchDisbursed ? "VendorPaid" : "DraftingForVendor";
+        return batchDisbursed ? "AwaitingPayout" : "Drafting";
+    }
+
+    private static string StageLabel(string stage) => stage switch
+    {
+        "Paid"              => "Paid",
+        "Pending"           => "Pending",
+        "Rejected"          => "Rejected",
+        "OnHold"            => "On Hold",
+        "DraftingForVendor" => "Drafting payment to vendor",
+        "VendorPaid"        => "Vendor paid — awaiting your payout",
+        "Drafting"          => "Drafting",
+        "AwaitingPayout"    => "Payout being processed",
+        _                   => stage
+    };
+
+    private static string StageChipClass(string stage) => stage switch
+    {
+        "Paid"              => "bg-emerald-50 text-emerald-700 border border-emerald-200",
+        "VendorPaid"        => "bg-blue-50 text-blue-700 border border-blue-200",
+        "DraftingForVendor" => "bg-slate-50 text-slate-600 border border-slate-200",
+        "Drafting"          => "bg-slate-50 text-slate-600 border border-slate-200",
+        "AwaitingPayout"    => "bg-blue-50 text-blue-700 border border-blue-200",
+        "Pending"           => "bg-amber-50 text-amber-700 border border-amber-200",
+        "Rejected"          => "bg-red-50 text-red-600 border border-red-100",
+        "OnHold"            => "bg-orange-50 text-orange-700 border border-orange-200",
+        _                   => "bg-gray-100 text-gray-500"
+    };
+
+    private static string StageBorder(string stage) => stage switch
+    {
+        "Paid"              => "border-emerald-100",
+        "VendorPaid"        => "border-blue-100",
+        "AwaitingPayout"    => "border-blue-100",
+        "DraftingForVendor" => "border-slate-100",
+        "Drafting"          => "border-slate-100",
+        _                   => "border-gray-100"
+    };
+
+    private static string StageHelp(string stage) => stage switch
+    {
+        "DraftingForVendor" => "Organiser is drafting payment to the vendor. Your individual amount will appear here once the vendor finalises it.",
+        "VendorPaid"        => "Organiser has paid the vendor. Awaiting the vendor to pay you out.",
+        "Drafting"          => "Organiser is drafting your payment.",
+        "AwaitingPayout"    => "Your payment has been approved and is being processed.",
+        "Pending"           => "Payment record was just created — pending approval.",
+        "Rejected"          => "This payment was rejected. Contact the organiser if you have questions.",
+        "OnHold"            => "This payment is on hold. Contact the organiser for details.",
+        _                   => ""
     };
 }

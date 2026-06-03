@@ -21,6 +21,7 @@ public sealed record CrewPaymentDto(
     string   CrewAcknowledgment,    // "None" | "Received" | "Pending"
     DateTime? AcknowledgedAt,
     string?  AcknowledgmentNote,
+    string?  BatchStatus,            // "Draft" | "Submitted" | "Approved" | "Disbursed" — null if no batch
     DateTime CreatedDate
 );
 

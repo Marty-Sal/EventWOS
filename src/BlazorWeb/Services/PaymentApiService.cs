@@ -90,6 +90,7 @@ public sealed record CrewPaymentDto(
     string   CrewAcknowledgment,
     DateTime? AcknowledgedAt,
     string?  AcknowledgmentNote,
+    string?  BatchStatus,
     DateTime CreatedDate
 );
 

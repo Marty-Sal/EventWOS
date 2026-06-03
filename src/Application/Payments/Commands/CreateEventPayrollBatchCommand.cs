@@ -148,31 +148,32 @@ public sealed class CreateEventPayrollBatchHandler
             if (lineAssignments.Count == 0)
                 continue;   // nothing left to pay for this line — silently skip
 
-            // Per-crew amount = line amount split evenly across the attended crew of this line.
-            // For direct crew there's always exactly one assignment, so amount == line.Amount.
-            // For vendor lines the manager types the vendor-level total; each crew gets an
-            // even share. Vendor can still nudge individual amounts later via per-payment edit.
-            var perCrew = Math.Round(line.Amount / lineAssignments.Count, 2);
+            // Two flows:
+            //   • Vendor line  → the line.Amount is the total paid to the VENDOR.
+            //                    The vendor will later decide each crew's individual cut,
+            //                    so we create per-crew placeholder rows with AgreedAmount=0.
+            //   • Direct crew  → the line.Amount is paid straight to the crew member.
+            var isVendorLine = line.Kind == "Vendor";
 
-            // Create the batch
-            var batchRef = $"PAY-{cmd.EventId.ToString()[..6].ToUpper()}-{(line.Kind == "Vendor" ? "V" : "C")}-{line.PartyId.ToString()[..6].ToUpper()}-{DateTime.UtcNow:HHmmss}";
+            var batchRef = $"PAY-{cmd.EventId.ToString()[..6].ToUpper()}-{(isVendorLine ? "V" : "C")}-{line.PartyId.ToString()[..6].ToUpper()}-{DateTime.UtcNow:HHmmss}";
             var batch = new PayrollBatch(
-                vendorId: line.Kind == "Vendor" ? line.PartyId : (Guid?)null,
+                vendorId: isVendorLine ? line.PartyId : (Guid?)null,
                 eventId:  cmd.EventId,
                 batchRef: batchRef,
                 notes:    cmd.Notes);
             await _db.PayrollBatches.AddAsync(batch, ct);
             await _uow.SaveChangesAsync(ct);
 
-            // Create one payment per assignment, attach to the batch, approve immediately.
+            // Create one CrewPayment per attended crew on this line.
             foreach (var a in lineAssignments)
             {
+                var pmtAmount = isVendorLine ? 0m : line.Amount;
                 var pmt = new CrewPayment(
                     eventId:      cmd.EventId,
                     assignmentId: a.Id,
                     crewId:       a.CrewId,
-                    vendorId:     a.VendorId,            // may be null for direct crew
-                    agreedAmount: perCrew,
+                    vendorId:     a.VendorId,
+                    agreedAmount: pmtAmount,
                     notes:        cmd.Notes);
                 pmt.Approve();
                 pmt.AttachToPayroll(batch.Id);
@@ -180,7 +181,10 @@ public sealed class CreateEventPayrollBatchHandler
                 allCreatedPmt.Add(pmt);
             }
 
-            batch.SetTotal(perCrew * lineAssignments.Count);
+            // Batch total = the amount the manager actually pays out:
+            //   vendor line  → the vendor-level total
+            //   direct crew  → line.Amount × 1 (always one row)
+            batch.SetTotal(line.Amount);
             allBatchIds.Add(batch.Id);
         }
 

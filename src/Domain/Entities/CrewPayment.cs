@@ -92,6 +92,22 @@ public sealed class CrewPayment : BaseEntity
     }
 
     /// <summary>
+    /// Vendor sets each crew's individual cut after the manager has paid the
+    /// vendor-level total. Only legal on vendor-mediated rows where the
+    /// amount was created as 0 (placeholder).
+    /// </summary>
+    public void SetAgreedAmountByVendor(decimal newAmount)
+    {
+        if (VendorId is null)
+            throw new InvalidOperationException("Direct-crew payment amounts are set by the manager.");
+        if (Status != PaymentStatus.Approved)
+            throw new InvalidOperationException("Vendor can only adjust amount on Approved rows.");
+        if (newAmount <= 0)
+            throw new InvalidOperationException("Amount must be greater than zero.");
+        AgreedAmount = newAmount;
+    }
+
+    /// <summary>
     /// Crew confirms they received the money. Only legal once Vendor has marked
     /// the payment Paid.
     /// </summary>
@@ -105,14 +121,18 @@ public sealed class CrewPayment : BaseEntity
     }
 
     /// <summary>
-    /// Crew flags the payment as not actually received yet (dispute). The payment
-    /// stays Paid for accounting, but the acknowledgment flips so Admin/Manager
-    /// can see the discrepancy.
+    /// Crew flags the payment as not actually received yet (dispute). Allowed once
+    /// either: (a) the payment is Paid (vendor said they paid but crew didn't get it),
+    /// or (b) the payment is Approved AND vendor-mediated (so the manager has paid
+    /// the vendor but the vendor hasn't paid the crew out yet). The status is left
+    /// untouched; only the acknowledgement flag flips so Admin/Manager see the dispute.
     /// </summary>
     public void AcknowledgePending(string? note = null)
     {
-        if (Status != PaymentStatus.Paid)
-            throw new InvalidOperationException("Only a Paid payment can be flagged as Pending by crew.");
+        var ok = Status == PaymentStatus.Paid
+              || (Status == PaymentStatus.Approved && VendorId is not null);
+        if (!ok)
+            throw new InvalidOperationException("Payment must be Paid before crew can flag it Pending.");
         CrewAcknowledgment = PaymentAcknowledgment.Pending;
         AcknowledgedAt     = DateTime.UtcNow;
         AcknowledgmentNote = note;

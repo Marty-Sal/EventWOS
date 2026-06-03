@@ -108,8 +108,8 @@
                                     <div class="text-xs text-gray-400">@p.CrewMobile</div>
                                 </td>
                                 <td class="td-cell text-sm text-gray-700">@p.EventTitle</td>
-                                <td class="td-cell text-sm text-gray-700">@p.VendorName</td>
-                                <td class="td-cell text-sm font-semibold text-gray-900">₹@p.AgreedAmount.ToString("N0")</td>
+                                <td class="td-cell text-sm text-gray-700">@(string.IsNullOrEmpty(p.VendorName) ? "Direct" : p.VendorName)</td>
+                                <td class="td-cell text-sm font-semibold text-gray-900">@(p.AgreedAmount == 0 ? "—" : "₹" + p.AgreedAmount.ToString("N0"))</td>
                                 <td class="td-cell text-sm text-gray-600">@(p.PaidAmount.HasValue ? "₹" + p.PaidAmount.Value.ToString("N0") : "—")</td>
                                 <td class="td-cell"><span class="badge @PayBadge(p.Status)">@p.Status</span></td>
                                 <td class="td-cell text-xs text-gray-500">@(p.Method ?? "—")</td>
@@ -124,9 +124,15 @@
                                         {
                                             <button class="act-btn amber" @onclick="() => HoldPayment(p.Id)">Hold</button>
                                         }
-                                        @if (p.Status == "Approved")
+                                        @if (p.Status == "Approved" && p.VendorId == null)
                                         {
+                                            @* Direct-crew payments are marked Paid by the manager.
+                                               Vendor-mediated payments are marked Paid by the vendor. *@
                                             <button class="act-btn blue"   @onclick="() => OpenMarkPaid(p)">Mark Paid</button>
+                                        }
+                                        else if (p.Status == "Approved" && p.VendorId != null)
+                                        {
+                                            <span class="text-[11px] text-slate-500 italic">Vendor will mark paid</span>
                                         }
                                     </div>
                                 </td>

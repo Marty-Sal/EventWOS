@@ -81,6 +81,20 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
 
                 case "pay":
                     var method = Enum.Parse<PaymentMethod>(cmd.Method!, ignoreCase: true);
+                    // Vendor flow: amount was 0 placeholder until vendor sets it now.
+                    if (payment.VendorId is not null && payment.AgreedAmount == 0m)
+                    {
+                        // Require the parent batch to be Disbursed (manager has paid vendor)
+                        // before the vendor can pay crew out.
+                        if (payment.PayrollBatchId is { } pbId)
+                        {
+                            var batch = await _db.PayrollBatches.FindAsync(new object[] { pbId }, ct);
+                            if (batch is null || batch.Status != Domain.Enums.PayrollStatus.Disbursed)
+                                return Result.Failure(Error.Custom("Payment.VendorNotPaidYet",
+                                    "You can pay crew out only after the manager has disbursed the vendor batch."));
+                        }
+                        payment.SetAgreedAmountByVendor(cmd.PaidAmount!.Value);
+                    }
                     payment.MarkPaid(cmd.PaidAmount!.Value, method, cmd.TransactionRef);
                     break;
 

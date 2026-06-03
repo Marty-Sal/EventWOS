@@ -91,7 +91,9 @@
                                 <p class="text-[11px] text-gray-400">@p.CrewMobile</p>
                             </td>
                             <td class="px-4 py-3 text-gray-700">@p.EventTitle</td>
-                            <td class="px-4 py-3 text-right font-mono text-gray-800">₹@FormatMoney(p.AgreedAmount)</td>
+                            <td class="px-4 py-3 text-right font-mono text-gray-800">
+                                @(p.AgreedAmount == 0 ? "—" : "₹" + FormatMoney(p.AgreedAmount))
+                            </td>
                             <td class="px-4 py-3 text-right font-mono">
                                 @if (p.PaidAmount.HasValue) {
                                     <span class="text-emerald-600 font-semibold">₹@FormatMoney(p.PaidAmount.Value)</span>
@@ -106,10 +108,16 @@
                                 @(p.PaidAt?.ToLocalTime().ToString("dd MMM yyyy") ?? "—")
                             </td>
                             <td class="px-4 py-3 text-center">
-                                @if (p.Status == "Approved")
+                                @if (p.Status == "Approved" && p.BatchStatus != "Disbursed")
+                                {
+                                    <span class="text-[11px] text-slate-500 italic">Awaiting organiser disbursement</span>
+                                }
+                                else if (p.Status == "Approved")
                                 {
                                     <button class="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-                                            @onclick="() => OpenMarkPaid(p)">Mark Paid</button>
+                                            @onclick="() => OpenMarkPaid(p)">
+                                        @(p.AgreedAmount == 0 ? "Set Amount & Mark Paid" : "Mark Paid")
+                                    </button>
                                 }
                                 else if (p.Status == "Paid")
                                 {
@@ -214,7 +222,7 @@
     private void OpenMarkPaid(CrewPaymentDto p)
     {
         _markPaid    = p;
-        _paidAmount  = p.AgreedAmount;
+        _paidAmount  = p.AgreedAmount;   // 0 for vendor flow → vendor types crew's cut
         _paidMethod  = null;
         _paidRef     = null;
         _payError    = null;
