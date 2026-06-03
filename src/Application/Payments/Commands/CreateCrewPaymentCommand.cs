@@ -1,5 +1,6 @@
 using EventWOS.Application.Interfaces;
 using EventWOS.Domain.Entities;
+using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Result;
 using FluentValidation;
@@ -44,6 +45,15 @@ public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPayment
 
     public async Task<Result<Guid>> Handle(CreateCrewPaymentCommand cmd, CancellationToken ct)
     {
+        // Payments are only valid once the event has wrapped up. Block here so
+        // the rule is enforced regardless of how the request reached the API.
+        var ev = await _db.Events.FindAsync([cmd.EventId], ct);
+        if (ev is null)
+            return Result.Failure<Guid>(Error.Custom("Payment.EventNotFound", "Event not found."));
+        if (ev.Status != EventStatus.Completed)
+            return Result.Failure<Guid>(Error.Custom("Payment.EventNotCompleted",
+                $"Payments can only be created after the event is Completed. Current status: {ev.Status}."));
+
         // Prevent duplicate payment for same assignment
         var exists = await _db.CrewPayments
             .AnyAsync(p => p.AssignmentId == cmd.AssignmentId, ct);

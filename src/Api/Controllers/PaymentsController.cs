@@ -106,7 +106,9 @@ public sealed class PaymentsController : ControllerBase
         [FromBody] CreatePayrollBatchRequest req, CancellationToken ct = default)
     {
         var result = await _mediator.Send(new CreatePayrollBatchCommand(
-            req.VendorId, req.EventId, req.Notes, req.PaymentIds), ct);
+            req.VendorId, req.EventId, req.Notes,
+            req.PaymentIds ?? Array.Empty<Guid>(),
+            req.DefaultAmountPerCrew), ct);
 
         if (!result.IsSuccess)
             return BadRequest(ApiResponse<object>.Fail(result.Error.Message));
@@ -175,10 +177,11 @@ public sealed record UpdatePaymentStatusRequest(
 );
 
 public sealed record CreatePayrollBatchRequest(
-    Guid   VendorId,
-    Guid   EventId,
-    string? Notes,
-    IReadOnlyList<Guid> PaymentIds
+    Guid     VendorId,
+    Guid     EventId,
+    string?  Notes,
+    IReadOnlyList<Guid> PaymentIds,
+    decimal? DefaultAmountPerCrew = null
 );
 
 public sealed record UpdatePayrollStatusRequest(string Action, string? Reason);

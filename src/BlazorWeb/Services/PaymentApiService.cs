@@ -18,10 +18,16 @@ public sealed class NewPaymentForm
 
 public sealed class NewBatchForm
 {
-    public Guid         VendorId   { get; set; }
-    public Guid         EventId    { get; set; }
-    public List<Guid>   PaymentIds { get; set; } = new();
-    public string?      Notes      { get; set; }
+    public Guid         VendorId             { get; set; }
+    public Guid         EventId              { get; set; }
+    public List<Guid>   PaymentIds           { get; set; } = new();
+    public string?      Notes                { get; set; }
+    /// <summary>
+    /// When set and PaymentIds is empty, the server will auto-create payments
+    /// at this rate for every attended crew member that does not yet have one,
+    /// then fold them into the new batch.
+    /// </summary>
+    public decimal?     DefaultAmountPerCrew { get; set; }
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
@@ -234,10 +240,11 @@ public sealed class PaymentApiService : IPaymentApiService
         {
             var body = new
             {
-                vendorId   = form.VendorId,
-                eventId    = form.EventId,
-                paymentIds = form.PaymentIds,
-                notes      = form.Notes
+                vendorId             = form.VendorId,
+                eventId              = form.EventId,
+                paymentIds           = form.PaymentIds,
+                notes                = form.Notes,
+                defaultAmountPerCrew = form.DefaultAmountPerCrew
             };
             var r = await _http.PostAsJsonAsync("api/v1/payments/payroll", body, ct);
             if (r.IsSuccessStatusCode) return (true, null);

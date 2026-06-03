@@ -232,9 +232,17 @@
                             <div>
                                 <span class="font-semibold text-indigo-800 text-sm">@_pmtSelectedEvent.Title</span>
                                 <span class="text-xs text-gray-500 ml-2">@_pmtSelectedEvent.Venue</span>
+                                <span class="badge bg-gray-100 text-gray-700 ml-2">@_pmtSelectedEvent.Status</span>
                             </div>
                             <button class="text-gray-400 hover:text-red-500 ml-2" @onclick="ClearPmtEvent">✕</button>
                         </div>
+                        @if (_pmtSelectedEvent.Status != "Completed")
+                        {
+                            <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mt-2">
+                                ⚠ Payments can only be created once the event is <strong>Completed</strong>.
+                                This event is currently <strong>@_pmtSelectedEvent.Status</strong>.
+                            </div>
+                        }
                     }
                     else
                     {
@@ -377,7 +385,8 @@
             </div>
             <div class="flex justify-end gap-3 mt-6">
                 <button class="btn-sec" @onclick="() => _showCreatePayment = false">Cancel</button>
-                <button class="btn-primary" @onclick="CreatePayment" disabled="@_saving">
+                <button class="btn-primary" @onclick="CreatePayment"
+                        disabled="@(_saving || _pmtSelectedEvent is null || _pmtSelectedEvent.Status != "Completed")">
                     @(_saving ? "Creating…" : "Create Payment")
                 </button>
             </div>
@@ -507,8 +516,18 @@
                     }
                 </div>
 
-                @* ── Unbatched payments preview ───────────────────────────────── *@
-                @if (_batchSelectedVendor != null && _batchSelectedEvent != null)
+                @* ── Event status warning ─────────────────────────────────────── *@
+                @if (_batchSelectedEvent != null && _batchSelectedEvent.Status != "Completed")
+                {
+                    <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                        ⚠ Payroll can only be created after the event is <strong>Completed</strong>.
+                        This event is currently <strong>@_batchSelectedEvent.Status</strong>.
+                    </div>
+                }
+
+                @* ── Existing eligible payments OR auto-create from attendance ──── *@
+                @if (_batchSelectedVendor != null && _batchSelectedEvent != null
+                     && _batchSelectedEvent.Status == "Completed")
                 {
                     @if (_batchPaymentsLoading)
                     {
@@ -518,7 +537,7 @@
                     {
                         <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
                             <p class="text-xs font-semibold text-gray-700 mb-2">
-                                @_batchEligiblePayments.Count eligible crew payment(s) — total ₹@_batchEligiblePayments.Sum(p => p.AgreedAmount).ToString("N0")
+                                @_batchEligiblePayments.Count existing approved payment(s) — total ₹@_batchEligiblePayments.Sum(p => p.AgreedAmount).ToString("N0")
                             </p>
                             <div class="space-y-1 max-h-40 overflow-y-auto">
                                 @foreach (var p in _batchEligiblePayments)
@@ -536,13 +555,28 @@
                                 Selected: @_batchSelectedPaymentIds.Count — ₹@_batchEligiblePayments.Where(p => _batchSelectedPaymentIds.Contains(p.Id)).Sum(p => p.AgreedAmount).ToString("N0")
                             </p>
                         </div>
+                        <div class="text-[11px] text-gray-400 italic -mt-1">
+                            Or auto-create payments for crew that don't have one yet using the field below.
+                        </div>
                     }
                     else
                     {
-                        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
-                            No unbatched Approved payments found for this vendor & event.
+                        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800">
+                            No payments exist for this vendor &amp; event yet.
+                            Enter a default amount below and we'll auto-create one for every attended crew member.
                         </div>
                     }
+
+                    @* Auto-create amount ─────────────────────────────────────── *@
+                    <div>
+                        <label class="lbl">Default amount per attended crew (₹)</label>
+                        <input class="inp" type="number" min="0" step="1"
+                               placeholder="e.g. 1000 — leave blank to skip auto-create"
+                               @bind="_batchDefaultAmount" />
+                        <div class="text-[11px] text-gray-500 mt-1">
+                            Only attended crew (with at least one check-in) and without an existing payment will be created.
+                        </div>
+                    </div>
                 }
 
                 <div>
@@ -552,8 +586,17 @@
             </div>
             <div class="flex justify-end gap-3 mt-6">
                 <button class="btn-sec" @onclick="() => _showCreateBatch = false">Cancel</button>
-                <button class="btn-primary" @onclick="CreatePayrollBatch" disabled="@(_saving || _batchSelectedPaymentIds.Count == 0)">
-                    @(_saving ? "Creating…" : $"Create Batch ({_batchSelectedPaymentIds.Count})")
+                <button class="btn-primary" @onclick="CreatePayrollBatch"
+                        disabled="@(_saving || _batchSelectedVendor is null || _batchSelectedEvent is null
+                                    || _batchSelectedEvent.Status != "Completed"
+                                    || (_batchSelectedPaymentIds.Count == 0 && !(_batchDefaultAmount > 0)))">
+                    @(_saving
+                        ? "Creating…"
+                        : _batchSelectedPaymentIds.Count > 0
+                            ? $"Create Batch ({_batchSelectedPaymentIds.Count})"
+                            : _batchDefaultAmount > 0
+                                ? "Auto-Create Batch"
+                                : "Create Batch")
                 </button>
             </div>
         </div>
@@ -669,6 +712,7 @@
     private List<CrewPaymentDto>  _batchEligiblePayments   = new();
     private HashSet<Guid>         _batchSelectedPaymentIds = new();
     private string?               _batchNotes;
+    private decimal?              _batchDefaultAmount;
 
     // ══════════════════════════════════════════════════════════════════════════
     // LIFECYCLE
@@ -968,6 +1012,7 @@
         _batchSelectedEvent  = null; _batchEventSearch  = ""; _batchEventResults.Clear();
         _batchEligiblePayments.Clear(); _batchSelectedPaymentIds.Clear();
         _batchNotes = null;
+        _batchDefaultAmount = null;
         _showCreateBatch = true;
     }
 
@@ -1008,15 +1053,29 @@
     {
         if (_batchSelectedVendor == null) { _error = "Please select a vendor."; return; }
         if (_batchSelectedEvent  == null) { _error = "Please select an event.";  return; }
-        if (_batchSelectedPaymentIds.Count == 0) { _error = "Select at least one payment."; return; }
+        if (_batchSelectedEvent.Status != "Completed")
+        {
+            _error = "Payroll can only be created once the event is Completed.";
+            return;
+        }
+
+        // Need EITHER an explicit selection OR a default amount to auto-create.
+        var hasSelection = _batchSelectedPaymentIds.Count > 0;
+        var hasAuto      = _batchDefaultAmount is decimal d && d > 0;
+        if (!hasSelection && !hasAuto)
+        {
+            _error = "Select payments to bundle, or enter a default amount to auto-create.";
+            return;
+        }
 
         _saving = true;
         var (ok, err) = await PaymentApi.CreatePayrollBatchAsync(new NewBatchForm
         {
-            VendorId   = _batchSelectedVendor.Id,
-            EventId    = _batchSelectedEvent.Id,
-            PaymentIds = _batchSelectedPaymentIds.ToList(),
-            Notes      = _batchNotes
+            VendorId             = _batchSelectedVendor.Id,
+            EventId              = _batchSelectedEvent.Id,
+            PaymentIds           = hasSelection ? _batchSelectedPaymentIds.ToList() : new(),
+            Notes                = _batchNotes,
+            DefaultAmountPerCrew = hasSelection ? null : _batchDefaultAmount
         });
         _saving = false;
 
