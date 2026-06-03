@@ -748,7 +748,7 @@ BEGIN
     -- and the batch-level totals are left untouched.
     IF EXISTS (
         SELECT 1 FROM crew_payments
-        WHERE status         = 1                  -- Approved
+        WHERE status         = 'Approved'         -- enum stored as varchar
           AND vendor_id      IS NOT NULL
           AND agreed_amount  > 0
           AND paid_amount    IS NULL
@@ -756,7 +756,7 @@ BEGIN
     ) THEN
         UPDATE crew_payments
         SET agreed_amount = 0
-        WHERE status         = 1
+        WHERE status         = 'Approved'
           AND vendor_id      IS NOT NULL
           AND agreed_amount  > 0
           AND paid_amount    IS NULL
