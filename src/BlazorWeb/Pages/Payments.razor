@@ -85,6 +85,38 @@
         else if (_payments?.Items.Count == 0) { <div class="text-center py-12 text-gray-400">No payments found.</div> }
         else if (_payments != null)
         {
+            @* Quick-filter chips for crew acknowledgment states (client-side) *@
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+                <span class="text-xs text-gray-500 mr-1">Quick filter:</span>
+                <button class="chip @(_ackFilter == AckFilter.All ? "chip-active" : "")"
+                        @onclick="() => SetAckFilter(AckFilter.All)">All</button>
+                <button class="chip @(_ackFilter == AckFilter.ReportedPending ? "chip-active-amber" : "")"
+                        @onclick="() => SetAckFilter(AckFilter.ReportedPending)">
+                    ⚠ Reported Pending
+                    @if (_ackReportedCount > 0) { <span class="ml-1 text-[10px] font-bold">@_ackReportedCount</span> }
+                </button>
+                <button class="chip @(_ackFilter == AckFilter.AwaitingAck ? "chip-active-slate" : "")"
+                        @onclick="() => SetAckFilter(AckFilter.AwaitingAck)">Awaiting Ack</button>
+                <button class="chip @(_ackFilter == AckFilter.Received ? "chip-active-green" : "")"
+                        @onclick="() => SetAckFilter(AckFilter.Received)">✓ Received</button>
+            </div>
+
+            var _filtered = _ackFilter switch
+            {
+                AckFilter.ReportedPending => _payments.Items.Where(p => p.CrewAcknowledgment == "Pending").ToList(),
+                AckFilter.Received        => _payments.Items.Where(p => p.CrewAcknowledgment == "Received").ToList(),
+                AckFilter.AwaitingAck     => _payments.Items.Where(p => p.Status == "Paid" && p.CrewAcknowledgment == "None").ToList(),
+                _                         => _payments.Items.ToList()
+            };
+
+            @if (_filtered.Count == 0)
+            {
+                <div class="text-center py-10 text-gray-400 bg-white rounded-2xl border border-gray-100">
+                    No rows match this filter on the current page.
+                </div>
+            }
+            else
+            {
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
                 <table class="min-w-full">
                     <thead class="bg-gray-50 border-b border-gray-100">
@@ -101,7 +133,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50">
-                        @foreach (var p in _payments.Items)
+                        @foreach (var p in _filtered)
                         {
                             <tr class="hover:bg-gray-50/50 transition-colors">
                                 <td class="td-cell">
@@ -160,6 +192,7 @@
                     </tbody>
                 </table>
             </div>
+            }
             <div class="flex items-center justify-between text-sm text-gray-500 mt-2">
                 <span>Total: @_payments.TotalCount</span>
                 <div class="flex gap-2">
@@ -651,6 +684,12 @@
     .dropdown-item  { display:block;width:100%;text-align:left;padding:.5rem .85rem;font-size:.83rem;color:#111827;cursor:pointer;border-bottom:1px solid #f3f4f6; }
     .dropdown-item:hover { background:#f5f3ff; }
     .dropdown-item:last-child { border-bottom:none; }
+    .chip           { padding:.3rem .75rem;border-radius:9999px;font-size:.74rem;font-weight:600;border:1px solid #e5e7eb;background:white;color:#4b5563;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:.25rem; }
+    .chip:hover     { background:#f9fafb; }
+    .chip-active        { background:#eef2ff;color:#4338ca;border-color:#c7d2fe; }
+    .chip-active-amber  { background:#fffbeb;color:#b45309;border-color:#fde68a; }
+    .chip-active-green  { background:#f0fdf4;color:#15803d;border-color:#bbf7d0; }
+    .chip-active-slate  { background:#f1f5f9;color:#475569;border-color:#cbd5e1; }
 </style>
 
 @code {
@@ -669,6 +708,12 @@
     private string? _success;
     private string  _filterStatus = "";
     private int     _page = 1;
+
+    // ── Crew-ack quick-filter chips (client-side) ─────────────────────────────
+    private enum AckFilter { All, ReportedPending, AwaitingAck, Received }
+    private AckFilter _ackFilter = AckFilter.All;
+    private int _ackReportedCount;          // count on the current page — drives the badge
+    private void SetAckFilter(AckFilter f)  { _ackFilter = f; }
 
     // ── Mark Paid modal ───────────────────────────────────────────────────────
     private CrewPaymentDto? _markPaidPayment;
@@ -769,7 +814,10 @@
         _loading = true; _error = null; StateHasChanged();
         var status = string.IsNullOrEmpty(_filterStatus) ? null : _filterStatus;
         if (_tab == Tab.Payments)
+        {
             _payments = await PaymentApi.GetPaymentsAsync(status: status, page: _page);
+            _ackReportedCount = _payments?.Items.Count(x => x.CrewAcknowledgment == "Pending") ?? 0;
+        }
         else
             _payroll = await PaymentApi.GetPayrollBatchesAsync(status: status, page: _page);
         _loading = false;
