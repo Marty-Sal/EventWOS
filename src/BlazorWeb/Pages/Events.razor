@@ -57,6 +57,27 @@
                 <option value="3">Completed</option>
                 <option value="4">Cancelled</option>
             </select>
+
+            <select @bind="_sortKey"
+                    class="px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="upcoming">Upcoming first</option>
+                <option value="past">Most recent first</option>
+                <option value="created_desc">Recently created</option>
+                <option value="created_asc">Oldest created</option>
+                <option value="title">Title A→Z</option>
+                <option value="capacity">Capacity (low→high)</option>
+            </select>
+
+            <div class="ml-auto inline-flex rounded-xl border border-gray-200 bg-white p-0.5">
+                <button @onclick='() => _viewMode = "cards"'
+                        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition @(_viewMode == "cards" ? "bg-indigo-50 text-indigo-700" : "text-gray-500 hover:text-gray-700")">
+                    🔲 Cards
+                </button>
+                <button @onclick='() => _viewMode = "list"'
+                        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition @(_viewMode == "list" ? "bg-indigo-50 text-indigo-700" : "text-gray-500 hover:text-gray-700")">
+                    ☰ List
+                </button>
+            </div>
         </div>
 
         <!-- Loading -->
@@ -78,8 +99,12 @@
         }
         else
         {
+            var _sortedEvents = SortEvents(_events!.Items);
+
+            @if (_viewMode == "cards")
+            {
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                @foreach (var ev in _events!.Items)
+                @foreach (var ev in _sortedEvents)
                 {
                     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col gap-3">
                         <div class="flex items-start justify-between gap-2">
@@ -134,6 +159,68 @@
                     </div>
                 }
             </div>
+            }
+            else
+            {
+                <!-- List view -->
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50 text-[11px] uppercase tracking-widest text-gray-500">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-semibold">Event</th>
+                                <th class="px-4 py-3 text-left font-semibold">Venue</th>
+                                <th class="px-4 py-3 text-left font-semibold">Start</th>
+                                <th class="px-4 py-3 text-left font-semibold">End</th>
+                                <th class="px-4 py-3 text-center font-semibold">Crew</th>
+                                <th class="px-4 py-3 text-center font-semibold">Status</th>
+                                <th class="px-4 py-3 text-right font-semibold">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            @foreach (var ev in _sortedEvents)
+                            {
+                                <tr class="hover:bg-gray-50/60">
+                                    <td class="px-4 py-3 font-semibold text-gray-800">@ev.Title</td>
+                                    <td class="px-4 py-3 text-gray-600 text-xs">@ev.Venue</td>
+                                    <td class="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">@ev.StartAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</td>
+                                    <td class="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">@ev.EndAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</td>
+                                    <td class="px-4 py-3 text-center text-xs">
+                                        <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+                                            @ev.AssignedCrew@(ev.MaxCrew > 0 ? $"/{ev.MaxCrew}" : "")
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <span class="text-xs font-semibold px-2.5 py-1 rounded-full @GetStatusClass(ev.Status)">@ev.Status</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <div class="inline-flex gap-1.5">
+                                            <button @onclick="() => OpenDetailPanel(ev)"
+                                                    class="text-xs px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium">View</button>
+                                            <button @onclick="() => OpenEditModal(ev)"
+                                                    class="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium">Edit</button>
+                                            @if (ev.Status == "Draft")
+                                            {
+                                                <button @onclick='() => ChangeStatus(ev.Id, "publish")'
+                                                        class="text-xs px-2.5 py-1 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 font-medium">Publish</button>
+                                            }
+                                            @if (ev.Status == "Published")
+                                            {
+                                                <button @onclick='() => ChangeStatus(ev.Id, "start")'
+                                                        class="text-xs px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium">Start</button>
+                                            }
+                                            @if (ev.Status == "InProgress")
+                                            {
+                                                <button @onclick='() => ChangeStatus(ev.Id, "complete")'
+                                                        class="text-xs px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium">Complete</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
 
             @if (_totalPages > 1)
             {
@@ -617,6 +704,20 @@ else
     private bool   _saving;
     private string? _search;
     private string? _statusFilter;
+    private string  _sortKey   = "upcoming";   // sort dropdown (client-side over current page)
+    private string  _viewMode  = "cards";       // "cards" | "list"
+
+    private IEnumerable<EventListItemDto> SortEvents(IEnumerable<EventListItemDto> items) => _sortKey switch
+    {
+        "past"         => items.OrderByDescending(e => e.StartAt),
+        "created_desc" => items.OrderByDescending(e => e.CreatedAt),
+        "created_asc"  => items.OrderBy(e => e.CreatedAt),
+        "title"        => items.OrderBy(e => e.Title, StringComparer.OrdinalIgnoreCase),
+        "capacity"     => items.OrderBy(e => e.MaxCrew),
+        // "upcoming" — future events first (closest first), then past (most recent first)
+        _              => items.OrderBy(e => e.StartAt < DateTime.UtcNow ? 1 : 0)
+                                .ThenBy(e => e.StartAt < DateTime.UtcNow ? -e.StartAt.Ticks : e.StartAt.Ticks)
+    };
     private string? _error;
     private string? _success;
 
