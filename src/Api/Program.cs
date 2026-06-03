@@ -708,6 +708,36 @@ BEGIN
         RAISE NOTICE 'event_assignments.crew_id is now nullable';
     END IF;
 
+
+    -- ═══ crew_payments — acknowledgment columns (2026-06-03) ═════════════════
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='crew_payments' AND column_name='crew_acknowledgment') THEN
+        ALTER TABLE crew_payments ADD COLUMN crew_acknowledgment TEXT NOT NULL DEFAULT 'None';
+        RAISE NOTICE 'crew_payments.crew_acknowledgment added';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='crew_payments' AND column_name='acknowledged_at') THEN
+        ALTER TABLE crew_payments ADD COLUMN acknowledged_at TIMESTAMPTZ;
+        RAISE NOTICE 'crew_payments.acknowledged_at added';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='crew_payments' AND column_name='acknowledgment_note') THEN
+        ALTER TABLE crew_payments ADD COLUMN acknowledgment_note VARCHAR(500);
+        RAISE NOTICE 'crew_payments.acknowledgment_note added';
+    END IF;
+
+    -- ═══ crew_payments / payroll_batches — vendor_id nullable (2026-06-03) ═══
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name='crew_payments' AND column_name='vendor_id' AND is_nullable='NO') THEN
+        ALTER TABLE crew_payments ALTER COLUMN vendor_id DROP NOT NULL;
+        RAISE NOTICE 'crew_payments.vendor_id is now nullable';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name='payroll_batches' AND column_name='vendor_id' AND is_nullable='NO') THEN
+        ALTER TABLE payroll_batches ALTER COLUMN vendor_id DROP NOT NULL;
+        RAISE NOTICE 'payroll_batches.vendor_id is now nullable';
+    END IF;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");
