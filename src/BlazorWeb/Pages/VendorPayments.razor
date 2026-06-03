@@ -79,6 +79,7 @@
                         <th class="text-right px-4 py-3 font-semibold">Paid</th>
                         <th class="text-center px-4 py-3 font-semibold">Status</th>
                         <th class="text-left px-4 py-3 font-semibold">Paid On</th>
+                        <th class="text-center px-4 py-3 font-semibold">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -104,6 +105,32 @@
                             <td class="px-4 py-3 text-[11px] text-gray-500">
                                 @(p.PaidAt?.ToLocalTime().ToString("dd MMM yyyy") ?? "—")
                             </td>
+                            <td class="px-4 py-3 text-center">
+                                @if (p.Status == "Approved")
+                                {
+                                    <button class="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                                            @onclick="() => OpenMarkPaid(p)">Mark Paid</button>
+                                }
+                                else if (p.Status == "Paid")
+                                {
+                                    @if (p.CrewAcknowledgment == "Received")
+                                    {
+                                        <span class="text-[11px] text-emerald-600 font-semibold">Crew ✓ Received</span>
+                                    }
+                                    else if (p.CrewAcknowledgment == "Pending")
+                                    {
+                                        <span class="text-[11px] text-amber-600 font-semibold" title="@p.AcknowledgmentNote">Crew reported Pending</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-[11px] text-gray-400 italic">Awaiting crew ack</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-gray-300">—</span>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -127,7 +154,87 @@
     }
 </div>
 
+
+
+@* ── Mark Paid modal ────────────────────────────────────────────────────────── *@
+@if (_markPaid is not null)
+{
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" @onclick="() => _markPaid = null">
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" @onclick:stopPropagation="true">
+            <h3 class="text-lg font-bold text-gray-900 mb-1">Mark Payment as Paid</h3>
+            <p class="text-xs text-gray-500 mb-4">@_markPaid.CrewName · @_markPaid.EventTitle</p>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Amount (₹)</label>
+                    <input type="number" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" min="0" step="1" @bind="_paidAmount" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Payment method</label>
+                    <select class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" @bind="_paidMethod">
+                        <option value="">Select…</option>
+                        <option value="UPI">UPI</option>
+                        <option value="BankTransfer">Bank Transfer</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Cheque">Cheque</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Reference number (optional)</label>
+                    <input type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="UTR / txn id" @bind="_paidRef" />
+                </div>
+            </div>
+
+            @if (_payError is not null)
+            {
+                <p class="text-xs text-red-500 mt-3">@_payError</p>
+            }
+
+            <div class="flex justify-end gap-2 mt-5">
+                <button class="px-4 py-2 rounded-lg text-sm bg-gray-100 hover:bg-gray-200 text-gray-700" @onclick="() => _markPaid = null">Cancel</button>
+                <button class="px-4 py-2 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50"
+                        disabled="@_paySaving" @onclick="ConfirmMarkPaid">
+                    @(_paySaving ? "Saving…" : "Confirm")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
+
+    // ── Mark Paid modal state ────────────────────────────────────────────────
+    private CrewPaymentDto? _markPaid;
+    private decimal         _paidAmount;
+    private string?         _paidMethod;
+    private string?         _paidRef;
+    private bool            _paySaving;
+    private string?         _payError;
+
+    private void OpenMarkPaid(CrewPaymentDto p)
+    {
+        _markPaid    = p;
+        _paidAmount  = p.AgreedAmount;
+        _paidMethod  = null;
+        _paidRef     = null;
+        _payError    = null;
+    }
+
+    private async Task ConfirmMarkPaid()
+    {
+        if (_markPaid is null) return;
+        if (string.IsNullOrWhiteSpace(_paidMethod)) { _payError = "Select a payment method."; return; }
+        if (_paidAmount <= 0) { _payError = "Enter a valid amount."; return; }
+
+        _paySaving = true; _payError = null;
+        var (ok, err) = await PaymentApi.UpdatePaymentStatusAsync(
+            _markPaid.Id, "pay", _paidAmount, _paidMethod, _paidRef);
+        _paySaving = false;
+
+        if (ok) { _markPaid = null; await LoadAsync(); }
+        else _payError = err ?? "Failed to mark as paid.";
+    }
+
     private List<CrewPaymentDto>     _items   = new();
     private bool                     _loading = true;
     private string?                  _error;

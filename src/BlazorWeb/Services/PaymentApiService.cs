@@ -30,6 +30,43 @@ public sealed class NewBatchForm
     public decimal?     DefaultAmountPerCrew { get; set; }
 }
 
+
+
+// ── Event-centric batch builder ───────────────────────────────────────────────
+
+public sealed record EventPayableRosterDto(
+    Guid    EventId,
+    string  EventTitle,
+    string  EventStatus,
+    DateTime EventStartAt,
+    IReadOnlyList<PayableLineDto> VendorLines,
+    IReadOnlyList<PayableLineDto> DirectCrewLines
+);
+
+public sealed record PayableLineDto(
+    string  Kind,
+    Guid    PartyId,
+    string  PartyName,
+    string  PartyMobile,
+    int     AttendedCrewCount,
+    decimal SuggestedAmount,
+    bool    AlreadyHasPayment
+);
+
+public sealed class EventBatchLineForm
+{
+    public string  Kind    { get; set; } = "Vendor";
+    public Guid    PartyId { get; set; }
+    public decimal Amount  { get; set; }
+}
+
+public sealed record EventBatchResult(
+    int             BatchesCreated,
+    int             PaymentsCreated,
+    decimal         TotalAmount,
+    IReadOnlyList<Guid> BatchIds
+);
+
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
 public sealed record CrewPaymentDto(
@@ -40,8 +77,8 @@ public sealed record CrewPaymentDto(
     Guid     CrewId,
     string   CrewName,
     string   CrewMobile,
-    Guid     VendorId,
-    string   VendorName,
+    Guid?    VendorId,
+    string?  VendorName,
     decimal  AgreedAmount,
     decimal? PaidAmount,
     string   Status,
@@ -50,13 +87,16 @@ public sealed record CrewPaymentDto(
     string?  Notes,
     DateTime? PaidAt,
     Guid?    PayrollBatchId,
+    string   CrewAcknowledgment,
+    DateTime? AcknowledgedAt,
+    string?  AcknowledgmentNote,
     DateTime CreatedDate
 );
 
 public sealed record PayrollBatchDto(
     Guid     Id,
-    Guid     VendorId,
-    string   VendorName,
+    Guid?    VendorId,
+    string?  VendorName,
     Guid     EventId,
     string   EventTitle,
     string   BatchRef,
@@ -109,6 +149,13 @@ public interface IPaymentApiService
     Task<(bool Ok, string? Error)> CreatePayrollBatchAsync(
         NewBatchForm form, CancellationToken ct = default);
 
+    Task<(EventPayableRosterDto? Roster, string? Error)> GetEventPayableRosterAsync(
+        Guid eventId, CancellationToken ct = default);
+
+    Task<(bool Ok, string? Error)> CreateEventPayrollBatchAsync(
+        Guid eventId, List<EventBatchLineForm> lines, string? notes,
+        CancellationToken ct = default);
+
     Task<(bool Ok, string? Error)> UpdatePayrollBatchStatusAsync(
         Guid batchId, string action, string? reason = null,
         CancellationToken ct = default);
@@ -146,7 +193,10 @@ public sealed class PaymentApiService : IPaymentApiService
 
             var err = System.Text.Json.JsonSerializer
                 .Deserialize<ApiResult<object>>(raw, _jsonOpts);
-            return err?.Message ?? fallback;
+            // ApiResponse<T>.Fail puts the error message in Errors[0]; ApiResponse<T>.Ok
+            // uses Message for an optional success note. Prefer the first error we can find.
+            var firstErr = err?.Errors is { Count: > 0 } ? err.Errors[0] : null;
+            return firstErr ?? err?.Message ?? fallback;
         }
         catch
         {
@@ -263,6 +313,38 @@ public sealed class PaymentApiService : IPaymentApiService
             var r = await _http.PatchAsJsonAsync($"api/v1/payments/payroll/{batchId}/status", body, ct);
             if (r.IsSuccessStatusCode) return (true, null);
             return (false, await ExtractErrorAsync(r, "Status update failed.", ct));
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    public async Task<(EventPayableRosterDto? Roster, string? Error)> GetEventPayableRosterAsync(
+        Guid eventId, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await _http.GetAsync($"api/v1/payments/event/{eventId}/payable-roster", ct);
+            if (!r.IsSuccessStatusCode)
+                return (null, await ExtractErrorAsync(r, "Failed to load payable roster.", ct));
+            var env = await r.Content.ReadFromJsonAsync<ApiResult<EventPayableRosterDto>>(_jsonOpts, ct);
+            return (env?.Data, null);
+        }
+        catch (Exception ex) { return (null, ex.Message); }
+    }
+
+    public async Task<(bool Ok, string? Error)> CreateEventPayrollBatchAsync(
+        Guid eventId, List<EventBatchLineForm> lines, string? notes,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var body = new
+            {
+                lines = lines.Select(l => new { kind = l.Kind, partyId = l.PartyId, amount = l.Amount }),
+                notes
+            };
+            var r = await _http.PostAsJsonAsync($"api/v1/payments/event/{eventId}/payroll", body, ct);
+            if (r.IsSuccessStatusCode) return (true, null);
+            return (false, await ExtractErrorAsync(r, "Failed to create payroll batch.", ct));
         }
         catch (Exception ex) { return (false, ex.Message); }
     }

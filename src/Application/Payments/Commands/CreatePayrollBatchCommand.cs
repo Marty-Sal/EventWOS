@@ -81,22 +81,33 @@ public sealed class CreatePayrollBatchHandler : IRequestHandler<CreatePayrollBat
         if ((cmd.PaymentIds is null || cmd.PaymentIds.Count == 0)
             && cmd.DefaultAmountPerCrew is decimal rate && rate > 0)
         {
-            // Find ManagerApproved assignments for this vendor on this event…
-            var approvedAssignments = await _db.EventAssignments
+            // Per the Payment & Settlement Lifecycle in the product doc,
+            // attendance is the gate for payment — NOT the assignment-approval
+            // workflow. So we accept any non-rejected assignment for this
+            // vendor/event that has at least one CheckIn record.
+            var rejectedStates = new[]
+            {
+                AssignmentStatus.Declined,
+                AssignmentStatus.RejectedByVendor,
+                AssignmentStatus.RejectedByManager,
+                AssignmentStatus.NoShow
+            };
+
+            var candidateAssignments = await _db.EventAssignments
                 .Where(a => a.EventId  == cmd.EventId
                          && a.VendorId == cmd.VendorId
                          && a.CrewId   != null
-                         && a.Status   == AssignmentStatus.ManagerApproved)
+                         && !rejectedStates.Contains(a.Status))
                 .Select(a => new { a.Id, a.CrewId })
                 .ToListAsync(ct);
 
-            if (approvedAssignments.Count == 0)
+            if (candidateAssignments.Count == 0)
                 return Result.Failure<Guid>(Error.Custom("Payroll.NoCrew",
-                    "No approved crew assignments found for this vendor on this event."));
+                    "No active crew assignments found for this vendor on this event."));
 
-            var assignmentIds = approvedAssignments.Select(a => a.Id).ToList();
+            var assignmentIds = candidateAssignments.Select(a => a.Id).ToList();
 
-            // …who actually checked in at least once…
+            // Only pay crew that actually checked in at least once.
             var attendedAssignmentIds = await _db.AttendanceRecords
                 .Where(r => assignmentIds.Contains(r.AssignmentId)
                          && r.Action == AttendanceAction.CheckIn)
@@ -106,15 +117,15 @@ public sealed class CreatePayrollBatchHandler : IRequestHandler<CreatePayrollBat
 
             if (attendedAssignmentIds.Count == 0)
                 return Result.Failure<Guid>(Error.Custom("Payroll.NoAttendance",
-                    "No crew checked in for this event yet — nothing to pay."));
+                    "No crew checked in for this event yet — nothing to pay. Mark attendance first."));
 
-            // …and don't already have a payment row.
+            // Skip anyone that already has a payment row.
             var alreadyPaid = await _db.CrewPayments
                 .Where(p => attendedAssignmentIds.Contains(p.AssignmentId))
                 .Select(p => p.AssignmentId)
                 .ToListAsync(ct);
 
-            var toCreate = approvedAssignments
+            var toCreate = candidateAssignments
                 .Where(a => attendedAssignmentIds.Contains(a.Id)
                          && !alreadyPaid.Contains(a.Id))
                 .ToList();
@@ -187,12 +198,12 @@ public sealed class CreatePayrollBatchHandler : IRequestHandler<CreatePayrollBat
                 action    = "created"
             };
             await _push.PushToUserAsync(pmt.CrewId,   "PaymentCreated", payload, ct);
-            await _push.PushToUserAsync(pmt.VendorId, "PaymentCreated", payload, ct);
+            if (pmt.VendorId is { } _vid_pmt) await _push.PushToUserAsync(_vid_pmt, "PaymentCreated", payload, ct);
         }
         var batchPayload = new { batchId = batch.Id, status = batch.Status.ToString(), action = "created" };
         await _push.PushToRoleAsync("Admin",   "PayrollUpdated", batchPayload, ct);
         await _push.PushToRoleAsync("Manager", "PayrollUpdated", batchPayload, ct);
-        await _push.PushToUserAsync(cmd.VendorId, "PayrollUpdated", batchPayload, ct);
+        if (cmd.VendorId is { } _vid_cmd) await _push.PushToUserAsync(_vid_cmd, "PayrollUpdated", batchPayload, ct);
 
         return Result.Success(batch.Id);
     }

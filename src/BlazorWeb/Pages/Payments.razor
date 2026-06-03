@@ -433,56 +433,17 @@
     </div>
 }
 
-@* ══════════════════ MODAL: New Payroll Batch ════════════════════════════════ *@
+@* ══════════════════ MODAL: New Payroll Batch (event-centric) ══════════════ *@
 @if (_showCreateBatch)
 {
     <div class="modal-bg" @onclick="() => _showCreateBatch = false">
-        <div class="modal" @onclick:stopPropagation="true">
-            <h3 class="text-lg font-bold text-gray-900 mb-5">New Payroll Batch</h3>
+        <div class="modal max-w-3xl" @onclick:stopPropagation="true">
+            <h3 class="text-lg font-bold text-gray-900 mb-1">New Payroll Batch</h3>
+            <p class="text-xs text-gray-500 mb-5">Pick a completed event, then enter the payout amount for each vendor and direct crew member who attended.</p>
+
             <div class="space-y-4">
 
-                @* ── Vendor search ────────────────────────────────────────────── *@
-                <div class="relative">
-                    <label class="lbl">Vendor <span class="text-red-400">*</span></label>
-                    @if (_batchSelectedVendor != null)
-                    {
-                        <div class="inp flex items-center justify-between bg-indigo-50 border-indigo-200">
-                            <div>
-                                <span class="font-semibold text-indigo-800 text-sm">@_batchSelectedVendor.FullName</span>
-                                <span class="text-xs text-gray-500 ml-2">@_batchSelectedVendor.Mobile</span>
-                            </div>
-                            <button class="text-gray-400 hover:text-red-500 ml-2" @onclick="ClearBatchVendor">✕</button>
-                        </div>
-                    }
-                    else
-                    {
-                        <input class="inp" placeholder="Search vendor by name…"
-                               @value="_batchVendorSearch"
-                               @onfocus="() => _batchVendorDropOpen = true"
-                               @oninput="OnBatchVendorSearch" />
-                        @if (_batchVendorDropOpen)
-                        {
-                            @if (_batchVendorResults.Count > 0)
-                            {
-                                <div class="dropdown-list">
-                                    @foreach (var v in _batchVendorResults)
-                                    {
-                                        <button class="dropdown-item" @onclick="() => SelectBatchVendor(v)">
-                                            <span class="font-semibold">@v.FullName</span>
-                                            <span class="text-xs text-gray-400 ml-2">@v.Mobile</span>
-                                        </button>
-                                    }
-                                </div>
-                            }
-                            else if (_batchVendorSearch.Length >= 1)
-                            {
-                                <div class="dropdown-list px-3 py-2 text-xs text-gray-400 italic">No vendors found for "@_batchVendorSearch"</div>
-                            }
-                        }
-                    }
-                </div>
-
-                @* ── Event search ─────────────────────────────────────────────── *@
+                @* ── Event picker ─────────────────────────────────────────────── *@
                 <div class="relative">
                     <label class="lbl">Event <span class="text-red-400">*</span></label>
                     @if (_batchSelectedEvent != null)
@@ -490,7 +451,7 @@
                         <div class="inp flex items-center justify-between bg-indigo-50 border-indigo-200">
                             <div>
                                 <span class="font-semibold text-indigo-800 text-sm">@_batchSelectedEvent.Title</span>
-                                <span class="text-xs text-gray-500 ml-2">@_batchSelectedEvent.Venue</span>
+                                <span class="text-xs text-gray-500 ml-2">@_batchSelectedEvent.Venue · @_batchSelectedEvent.Status</span>
                             </div>
                             <button class="text-gray-400 hover:text-red-500 ml-2" @onclick="ClearBatchEvent">✕</button>
                         </div>
@@ -516,92 +477,125 @@
                     }
                 </div>
 
-                @* ── Event status warning ─────────────────────────────────────── *@
+                @* ── Event status guard ──────────────────────────────────────── *@
                 @if (_batchSelectedEvent != null && _batchSelectedEvent.Status != "Completed")
                 {
                     <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
-                        ⚠ Payroll can only be created after the event is <strong>Completed</strong>.
-                        This event is currently <strong>@_batchSelectedEvent.Status</strong>.
+                        ⚠ Payroll can only be created after the event is <strong>Completed</strong>. This event is currently <strong>@_batchSelectedEvent.Status</strong>.
                     </div>
                 }
 
-                @* ── Existing eligible payments OR auto-create from attendance ──── *@
-                @if (_batchSelectedVendor != null && _batchSelectedEvent != null
-                     && _batchSelectedEvent.Status == "Completed")
+                @* ── Roster table ────────────────────────────────────────────── *@
+                @if (_batchSelectedEvent != null && _batchSelectedEvent.Status == "Completed")
                 {
-                    @if (_batchPaymentsLoading)
+                    @if (_rosterLoading)
                     {
-                        <div class="text-xs text-gray-400 italic">Loading eligible payments…</div>
+                        <div class="text-xs text-gray-400 italic">Loading payable roster…</div>
                     }
-                    else if (_batchEligiblePayments.Count > 0)
+                    else if (_roster is null)
                     {
-                        <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
-                            <p class="text-xs font-semibold text-gray-700 mb-2">
-                                @_batchEligiblePayments.Count existing approved payment(s) — total ₹@_batchEligiblePayments.Sum(p => p.AgreedAmount).ToString("N0")
-                            </p>
-                            <div class="space-y-1 max-h-40 overflow-y-auto">
-                                @foreach (var p in _batchEligiblePayments)
-                                {
-                                    <div class="flex items-center gap-2 text-xs text-gray-600">
-                                        <input type="checkbox" class="rounded" checked="@_batchSelectedPaymentIds.Contains(p.Id)"
-                                               @onchange="e => ToggleBatchPayment(p.Id, (bool)e.Value!)" />
-                                        <span class="font-medium">@p.CrewName</span>
-                                        <span class="text-gray-400">₹@p.AgreedAmount.ToString("N0")</span>
-                                        <span class="badge @PayBadge(p.Status) text-xs">@p.Status</span>
-                                    </div>
-                                }
-                            </div>
-                            <p class="text-xs text-indigo-600 mt-2 font-semibold">
-                                Selected: @_batchSelectedPaymentIds.Count — ₹@_batchEligiblePayments.Where(p => _batchSelectedPaymentIds.Contains(p.Id)).Sum(p => p.AgreedAmount).ToString("N0")
-                            </p>
-                        </div>
-                        <div class="text-[11px] text-gray-400 italic -mt-1">
-                            Or auto-create payments for crew that don't have one yet using the field below.
+                        <div class="text-xs text-red-500 italic">Could not load roster — check the event and try again.</div>
+                    }
+                    else if (_roster.VendorLines.Count == 0 && _roster.DirectCrewLines.Count == 0)
+                    {
+                        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                            No attended crew were found for this event. Make sure crew checked in before creating a payroll batch.
                         </div>
                     }
                     else
                     {
-                        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800">
-                            No payments exist for this vendor &amp; event yet.
-                            Enter a default amount below and we'll auto-create one for every attended crew member.
+                        <div class="border border-gray-200 rounded-xl overflow-hidden">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wide">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left">Type</th>
+                                        <th class="px-3 py-2 text-left">Party</th>
+                                        <th class="px-3 py-2 text-center">Attended Crew</th>
+                                        <th class="px-3 py-2 text-right">Amount (₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    @foreach (var l in _roster.VendorLines)
+                                    {
+                                        <tr class="@(l.AlreadyHasPayment ? "bg-gray-50 opacity-60" : "")">
+                                            <td class="px-3 py-2"><span class="badge bg-indigo-100 text-indigo-800 text-[10px]">Vendor</span></td>
+                                            <td class="px-3 py-2">
+                                                <div class="font-medium text-gray-800">@l.PartyName</div>
+                                                <div class="text-[11px] text-gray-400">@l.PartyMobile</div>
+                                            </td>
+                                            <td class="px-3 py-2 text-center text-gray-700">@l.AttendedCrewCount</td>
+                                            <td class="px-3 py-2 text-right">
+                                                @if (l.AlreadyHasPayment)
+                                                {
+                                                    <span class="text-[11px] text-gray-400 italic">Already in a batch</span>
+                                                }
+                                                else
+                                                {
+                                                    <input type="number" min="0" step="1" class="inp w-32 text-right inline-block"
+                                                           value="@GetLineAmount(l)"
+                                                           @oninput="e => SetLineAmount(l, e.Value)" />
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                    @foreach (var l in _roster.DirectCrewLines)
+                                    {
+                                        <tr class="@(l.AlreadyHasPayment ? "bg-gray-50 opacity-60" : "")">
+                                            <td class="px-3 py-2"><span class="badge bg-purple-100 text-purple-800 text-[10px]">Direct Crew</span></td>
+                                            <td class="px-3 py-2">
+                                                <div class="font-medium text-gray-800">@l.PartyName</div>
+                                                <div class="text-[11px] text-gray-400">@l.PartyMobile</div>
+                                            </td>
+                                            <td class="px-3 py-2 text-center text-gray-700">1</td>
+                                            <td class="px-3 py-2 text-right">
+                                                @if (l.AlreadyHasPayment)
+                                                {
+                                                    <span class="text-[11px] text-gray-400 italic">Already in a batch</span>
+                                                }
+                                                else
+                                                {
+                                                    <input type="number" min="0" step="1" class="inp w-32 text-right inline-block"
+                                                           value="@GetLineAmount(l)"
+                                                           @oninput="e => SetLineAmount(l, e.Value)" />
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="bg-indigo-50 text-indigo-900 text-sm font-semibold">
+                                    <tr>
+                                        <td colspan="3" class="px-3 py-2 text-right">Total</td>
+                                        <td class="px-3 py-2 text-right">₹@RosterTotal().ToString("N0")</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        <div class="text-[11px] text-gray-500 italic">
+                            For vendor rows, the amount is the total paid to the vendor and split evenly across their attended crew. Vendors can fine-tune per-crew amounts later.
                         </div>
                     }
-
-                    @* Auto-create amount ─────────────────────────────────────── *@
-                    <div>
-                        <label class="lbl">Default amount per attended crew (₹)</label>
-                        <input class="inp" type="number" min="0" step="1"
-                               placeholder="e.g. 1000 — leave blank to skip auto-create"
-                               @bind="_batchDefaultAmount" />
-                        <div class="text-[11px] text-gray-500 mt-1">
-                            Only attended crew (with at least one check-in) and without an existing payment will be created.
-                        </div>
-                    </div>
                 }
 
                 <div>
                     <label class="lbl">Notes</label>
-                    <textarea class="inp resize-none h-16" @bind="_batchNotes"></textarea>
+                    <textarea class="inp resize-none h-16" @bind="_batchNotes" placeholder="Optional notes for this payroll batch"></textarea>
                 </div>
             </div>
+
             <div class="flex justify-end gap-3 mt-6">
                 <button class="btn-sec" @onclick="() => _showCreateBatch = false">Cancel</button>
                 <button class="btn-primary" @onclick="CreatePayrollBatch"
-                        disabled="@(_saving || _batchSelectedVendor is null || _batchSelectedEvent is null
+                        disabled="@(_saving || _batchSelectedEvent is null
                                     || _batchSelectedEvent.Status != "Completed"
-                                    || (_batchSelectedPaymentIds.Count == 0 && !(_batchDefaultAmount > 0)))">
-                    @(_saving
-                        ? "Creating…"
-                        : _batchSelectedPaymentIds.Count > 0
-                            ? $"Create Batch ({_batchSelectedPaymentIds.Count})"
-                            : _batchDefaultAmount > 0
-                                ? "Auto-Create Batch"
-                                : "Create Batch")
+                                    || RosterTotal() <= 0)">
+                    @(_saving ? "Creating…" : $"Create Batch (₹{RosterTotal():N0})")
                 </button>
             </div>
         </div>
     </div>
 }
+
+
 
 <style>
     .tab-btn        { padding:.4rem 1rem;border-radius:.75rem;font-size:.85rem;font-weight:600;color:#6b7280;cursor:pointer;transition:all .15s; }
@@ -691,15 +685,9 @@
     private string? _pmtNotes;
 
     // ══════════════════════════════════════════════════════════════════════════
-    // CREATE BATCH STATE
+    // CREATE BATCH STATE (event-centric)
     // ══════════════════════════════════════════════════════════════════════════
     private bool _showCreateBatch;
-
-    // Vendor picker
-    private string             _batchVendorSearch   = "";
-    private bool               _batchVendorDropOpen;
-    private List<VendorListItemDto> _batchVendorResults = new();
-    private VendorListItemDto? _batchSelectedVendor;
 
     // Event picker
     private string                 _batchEventSearch  = "";
@@ -707,12 +695,11 @@
     private List<EventListItemDto> _batchEventResults = new();
     private EventListItemDto?      _batchSelectedEvent;
 
-    // Eligible payments
-    private bool                  _batchPaymentsLoading;
-    private List<CrewPaymentDto>  _batchEligiblePayments   = new();
-    private HashSet<Guid>         _batchSelectedPaymentIds = new();
-    private string?               _batchNotes;
-    private decimal?              _batchDefaultAmount;
+    // Roster + per-line amounts
+    private bool                       _rosterLoading;
+    private EventPayableRosterDto?     _roster;
+    private Dictionary<string, decimal> _lineAmounts = new();
+    private string?                    _batchNotes;
 
     // ══════════════════════════════════════════════════════════════════════════
     // LIFECYCLE
@@ -903,34 +890,6 @@
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // VENDOR SEARCH — Batch modal
-    // ══════════════════════════════════════════════════════════════════════════
-    private async Task OnBatchVendorSearch(ChangeEventArgs e)
-    {
-        _batchVendorSearch = e.Value?.ToString() ?? "";
-        if (_batchVendorSearch.Length < 1) { _batchVendorResults.Clear(); _batchVendorDropOpen = false; return; }
-        var result = await VendorApi.GetVendorsAsync(search: _batchVendorSearch, page: 1);
-        _batchVendorResults  = result?.Items?.Take(8).ToList() ?? new();
-        _batchVendorDropOpen = true;
-    }
-
-    private void SelectBatchVendor(VendorListItemDto v)
-    {
-        _batchSelectedVendor = v;
-        _batchVendorDropOpen = false;
-        _batchVendorSearch   = "";
-        _batchVendorResults.Clear();
-        _ = LoadEligiblePayments();
-    }
-
-    private void ClearBatchVendor()
-    {
-        _batchSelectedVendor   = null;
-        _batchEligiblePayments.Clear();
-        _batchSelectedPaymentIds.Clear();
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
     // EVENT SEARCH — Batch modal
     // ══════════════════════════════════════════════════════════════════════════
     private async Task OnBatchEventSearch(ChangeEventArgs e)
@@ -942,55 +901,21 @@
         _batchEventDropOpen = true;
     }
 
-    private void SelectBatchEvent(EventListItemDto ev)
+    private async Task SelectBatchEvent(EventListItemDto ev)
     {
         _batchSelectedEvent = ev;
         _batchEventDropOpen = false;
         _batchEventSearch   = "";
         _batchEventResults.Clear();
-        _ = LoadEligiblePayments();
+        if (ev.Status == "Completed")
+            await LoadRosterAsync();
     }
 
     private void ClearBatchEvent()
     {
         _batchSelectedEvent = null;
-        _batchEligiblePayments.Clear();
-        _batchSelectedPaymentIds.Clear();
-    }
-
-    // ── Load unbatched Approved payments for vendor + event ───────────────────
-    private async Task LoadEligiblePayments()
-    {
-        if (_batchSelectedVendor == null || _batchSelectedEvent == null) return;
-
-        _batchPaymentsLoading = true;
-        _batchEligiblePayments.Clear();
-        _batchSelectedPaymentIds.Clear();
-        StateHasChanged();
-
-        var result = await PaymentApi.GetPaymentsAsync(
-            vendorId: _batchSelectedVendor.Id,
-            eventId:  _batchSelectedEvent.Id,
-            status:   "Approved",
-            page: 1,
-            pageSize: 100);
-
-        // Only unbatched (no batch assigned yet)
-        _batchEligiblePayments = result?.Items?
-            .Where(p => p.PayrollBatchId == null)
-            .ToList() ?? new();
-
-        // Pre-select all
-        _batchSelectedPaymentIds = _batchEligiblePayments.Select(p => p.Id).ToHashSet();
-
-        _batchPaymentsLoading = false;
-        StateHasChanged();
-    }
-
-    private void ToggleBatchPayment(Guid id, bool selected)
-    {
-        if (selected) _batchSelectedPaymentIds.Add(id);
-        else          _batchSelectedPaymentIds.Remove(id);
+        _roster             = null;
+        _lineAmounts.Clear();
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1008,12 +933,52 @@
 
     private void OpenCreateBatch()
     {
-        _batchSelectedVendor = null; _batchVendorSearch = ""; _batchVendorResults.Clear();
-        _batchSelectedEvent  = null; _batchEventSearch  = ""; _batchEventResults.Clear();
-        _batchEligiblePayments.Clear(); _batchSelectedPaymentIds.Clear();
-        _batchNotes = null;
-        _batchDefaultAmount = null;
-        _showCreateBatch = true;
+        _batchSelectedEvent = null;
+        _batchEventSearch   = "";
+        _batchEventResults.Clear();
+        _roster             = null;
+        _lineAmounts.Clear();
+        _batchNotes         = null;
+        _rosterLoading      = false;
+        _showCreateBatch    = true;
+    }
+
+    // ── Roster helpers ────────────────────────────────────────────────────────
+    private static string LineKey(PayableLineDto l) => $"{l.Kind}:{l.PartyId}";
+
+    private decimal GetLineAmount(PayableLineDto l)
+        => _lineAmounts.TryGetValue(LineKey(l), out var v) ? v : 0m;
+
+    private void SetLineAmount(PayableLineDto l, object? raw)
+    {
+        if (raw is null || !decimal.TryParse(raw.ToString(), out var amt) || amt < 0)
+        {
+            _lineAmounts.Remove(LineKey(l));
+            return;
+        }
+        _lineAmounts[LineKey(l)] = amt;
+    }
+
+    private decimal RosterTotal()
+    {
+        if (_roster is null) return 0m;
+        decimal sum = 0m;
+        foreach (var l in _roster.VendorLines.Concat(_roster.DirectCrewLines))
+            if (!l.AlreadyHasPayment && _lineAmounts.TryGetValue(LineKey(l), out var v))
+                sum += v;
+        return sum;
+    }
+
+    private async Task LoadRosterAsync()
+    {
+        _roster = null;
+        _lineAmounts.Clear();
+        if (_batchSelectedEvent is null) return;
+        _rosterLoading = true;
+        var (r, _) = await PaymentApi.GetEventPayableRosterAsync(_batchSelectedEvent.Id);
+        _roster        = r;
+        _rosterLoading = false;
+        StateHasChanged();
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1051,35 +1016,29 @@
 
     private async Task CreatePayrollBatch()
     {
-        if (_batchSelectedVendor == null) { _error = "Please select a vendor."; return; }
-        if (_batchSelectedEvent  == null) { _error = "Please select an event.";  return; }
+        if (_batchSelectedEvent == null) { _error = "Please select an event."; return; }
         if (_batchSelectedEvent.Status != "Completed")
         {
             _error = "Payroll can only be created once the event is Completed.";
             return;
         }
+        if (_roster is null) { _error = "Roster not loaded yet."; return; }
 
-        // Need EITHER an explicit selection OR a default amount to auto-create.
-        var hasSelection = _batchSelectedPaymentIds.Count > 0;
-        var hasAuto      = _batchDefaultAmount is decimal d && d > 0;
-        if (!hasSelection && !hasAuto)
+        var lines = new List<EventBatchLineForm>();
+        foreach (var l in _roster.VendorLines.Concat(_roster.DirectCrewLines))
         {
-            _error = "Select payments to bundle, or enter a default amount to auto-create.";
-            return;
+            if (l.AlreadyHasPayment) continue;
+            if (!_lineAmounts.TryGetValue(LineKey(l), out var amt) || amt <= 0) continue;
+            lines.Add(new EventBatchLineForm { Kind = l.Kind, PartyId = l.PartyId, Amount = amt });
         }
+        if (lines.Count == 0) { _error = "Enter an amount for at least one row before creating the batch."; return; }
 
         _saving = true;
-        var (ok, err) = await PaymentApi.CreatePayrollBatchAsync(new NewBatchForm
-        {
-            VendorId             = _batchSelectedVendor.Id,
-            EventId              = _batchSelectedEvent.Id,
-            PaymentIds           = hasSelection ? _batchSelectedPaymentIds.ToList() : new(),
-            Notes                = _batchNotes,
-            DefaultAmountPerCrew = hasSelection ? null : _batchDefaultAmount
-        });
+        var (ok, err) = await PaymentApi.CreateEventPayrollBatchAsync(
+            _batchSelectedEvent.Id, lines, _batchNotes);
         _saving = false;
 
-        if (ok) { _success = "Payroll batch created ✅"; _showCreateBatch = false; await LoadData(); }
+        if (ok) { _success = $"Payroll batch created ✅ ({lines.Count} line(s))"; _showCreateBatch = false; await LoadData(); }
         else _error = err;
     }
 

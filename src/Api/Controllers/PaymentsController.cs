@@ -66,14 +66,34 @@ public sealed class PaymentsController : ControllerBase
         return Ok(ApiResponse<Guid>.Ok(result.Value));
     }
 
-    /// <summary>Update payment status: approve | pay | reject | hold.</summary>
-    [Permission("payments:write")]
+    /// <summary>
+    /// Update payment status. The action determines who is allowed:
+    ///   approve / reject / hold   → payments:write   (Admin / Manager)
+    ///   pay                       → payments:write   OR  vendor owns the payment + payments:disburse
+    ///   ack-received / ack-pending → crew owns the payment + payments:acknowledge
+    /// Ownership checks happen inside the command handler (it owns the data).
+    /// </summary>
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> UpdatePaymentStatus(
         Guid id, [FromBody] UpdatePaymentStatusRequest req, CancellationToken ct = default)
     {
+        var action = (req.Action ?? "").ToLowerInvariant();
+
+        // Coarse permission gate. The command does fine-grained ownership.
+        var hasPerm = action switch
+        {
+            "approve" or "reject" or "hold" => _currentUser.HasPermission("payments:write"),
+            "pay"                           => _currentUser.HasPermission("payments:write")
+                                            || _currentUser.HasPermission("payments:disburse"),
+            "ack-received" or "ack-pending" => _currentUser.HasPermission("payments:acknowledge"),
+            _                               => false
+        };
+        if (!hasPerm) return Forbid();
+
         var result = await _mediator.Send(new UpdatePaymentStatusCommand(
-            id, req.Action, req.PaidAmount, req.Method, req.TransactionRef, req.Reason), ct);
+            id, action, req.PaidAmount, req.Method, req.TransactionRef, req.Reason,
+            _currentUser.UserId,
+            _currentUser.HasPermission("payments:write")), ct);
 
         if (!result.IsSuccess)
             return BadRequest(ApiResponse<object>.Fail(result.Error.Message));
@@ -82,6 +102,43 @@ public sealed class PaymentsController : ControllerBase
     }
 
     // ── Payroll Batches ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// List every payable party for an event (vendors with attended crew +
+    /// direct-assigned crew who attended). Drives the event-centric "New
+    /// Payroll Batch" dialog.
+    /// </summary>
+    [Permission("payments:write")]
+    [HttpGet("event/{eventId:guid}/payable-roster")]
+    public async Task<IActionResult> GetEventPayableRoster(
+        Guid eventId, CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new GetEventPayableRosterQuery(eventId), ct);
+        if (!result.IsSuccess)
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Message));
+        return Ok(ApiResponse<EventPayableRosterDto>.Ok(result.Value!));
+    }
+
+    /// <summary>
+    /// Create a payroll batch from per-party amounts typed against the event's
+    /// payable roster. Creates one batch per non-zero line.
+    /// </summary>
+    [Permission("payments:write")]
+    [HttpPost("event/{eventId:guid}/payroll")]
+    public async Task<IActionResult> CreateEventPayrollBatch(
+        Guid eventId,
+        [FromBody] CreateEventPayrollBatchRequest req,
+        CancellationToken ct = default)
+    {
+        var cmd = new CreateEventPayrollBatchCommand(
+            eventId,
+            req.Lines.Select(l => new EventPayrollBatchLine(l.Kind, l.PartyId, l.Amount)).ToList(),
+            req.Notes);
+        var result = await _mediator.Send(cmd, ct);
+        if (!result.IsSuccess)
+            return BadRequest(ApiResponse<object>.Fail(result.Error.Message));
+        return Ok(ApiResponse<EventPayrollBatchResult>.Ok(result.Value!));
+    }
 
     /// <summary>List payroll batches.</summary>
     [Permission("payments:read")]
@@ -185,3 +242,15 @@ public sealed record CreatePayrollBatchRequest(
 );
 
 public sealed record UpdatePayrollStatusRequest(string Action, string? Reason);
+
+
+public sealed record CreateEventPayrollBatchRequest(
+    IReadOnlyList<EventPayrollBatchLineRequest> Lines,
+    string? Notes
+);
+
+public sealed record EventPayrollBatchLineRequest(
+    string  Kind,
+    Guid    PartyId,
+    decimal Amount
+);

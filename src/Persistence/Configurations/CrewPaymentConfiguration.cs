@@ -35,6 +35,12 @@ public sealed class CrewPaymentConfiguration : IEntityTypeConfiguration<CrewPaym
         b.Property(p => p.PaidAt)       .HasColumnName("paid_at");
         b.Property(p => p.PayrollBatchId).HasColumnName("payroll_batch_id");
 
+        // Crew acknowledgement (Payment & Settlement Lifecycle step 5)
+        b.Property(p => p.CrewAcknowledgment).HasColumnName("crew_acknowledgment")
+            .HasConversion<string>().HasDefaultValue(EventWOS.Domain.Enums.PaymentAcknowledgment.None).IsRequired();
+        b.Property(p => p.AcknowledgedAt)    .HasColumnName("acknowledged_at");
+        b.Property(p => p.AcknowledgmentNote).HasColumnName("acknowledgment_note").HasMaxLength(500);
+
         // ── Relationships ─────────────────────────────────────────────────────
         b.HasOne(p => p.Event)
             .WithMany()
@@ -54,6 +60,7 @@ public sealed class CrewPaymentConfiguration : IEntityTypeConfiguration<CrewPaym
         b.HasOne(p => p.Vendor)
             .WithMany()
             .HasForeignKey(p => p.VendorId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         b.HasOne(p => p.PayrollBatch)

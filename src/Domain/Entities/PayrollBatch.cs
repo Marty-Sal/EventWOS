@@ -11,7 +11,7 @@ public sealed class PayrollBatch : BaseEntity
     private PayrollBatch() { }
 
     public PayrollBatch(
-        Guid    vendorId,
+        Guid?   vendorId,           // null for "direct crew" batches (no intermediary vendor)
         Guid    eventId,
         string  batchRef,
         string? notes = null)
@@ -23,7 +23,7 @@ public sealed class PayrollBatch : BaseEntity
         Notes     = notes;
     }
 
-    public Guid          VendorId       { get; private set; }
+    public Guid?         VendorId       { get; private set; }
     public Guid          EventId        { get; private set; }
     public string        BatchRef       { get; private set; } = default!;
     public PayrollStatus Status         { get; private set; }
@@ -35,7 +35,7 @@ public sealed class PayrollBatch : BaseEntity
     public Guid?         ApprovedByUserId { get; private set; }
 
     // Navigation
-    public User                        Vendor   { get; private set; } = default!;
+    public User?                       Vendor   { get; private set; }
     public Event                       Event    { get; private set; } = default!;
     public ICollection<CrewPayment>    Payments { get; private set; } = new List<CrewPayment>();
 

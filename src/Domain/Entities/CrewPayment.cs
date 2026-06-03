@@ -14,7 +14,7 @@ public sealed class CrewPayment : BaseEntity
         Guid   eventId,
         Guid   assignmentId,
         Guid   crewId,
-        Guid   vendorId,
+        Guid?  vendorId,           // null for direct-crew payments (no intermediary vendor)
         decimal agreedAmount,
         string? notes = null)
     {
@@ -30,7 +30,7 @@ public sealed class CrewPayment : BaseEntity
     public Guid          EventId       { get; private set; }
     public Guid          AssignmentId  { get; private set; }
     public Guid          CrewId        { get; private set; }
-    public Guid          VendorId      { get; private set; }
+    public Guid?         VendorId      { get; private set; }
     public decimal       AgreedAmount  { get; private set; }
     public decimal?      PaidAmount    { get; private set; }
     public PaymentStatus Status        { get; private set; }
@@ -40,11 +40,16 @@ public sealed class CrewPayment : BaseEntity
     public DateTime?     PaidAt        { get; private set; }
     public Guid?         PayrollBatchId { get; private set; }
 
+    // Crew-side acknowledgement of receipt (step 5 in Payment & Settlement Lifecycle).
+    public PaymentAcknowledgment CrewAcknowledgment   { get; private set; } = PaymentAcknowledgment.None;
+    public DateTime?             AcknowledgedAt       { get; private set; }
+    public string?               AcknowledgmentNote   { get; private set; }
+
     // Navigation
     public Event           Event       { get; private set; } = default!;
     public EventAssignment Assignment  { get; private set; } = default!;
     public User            Crew        { get; private set; } = default!;
-    public User            Vendor      { get; private set; } = default!;
+    public User?           Vendor      { get; private set; }
     public PayrollBatch?   PayrollBatch { get; private set; }
 
     public void Approve()
@@ -84,5 +89,32 @@ public sealed class CrewPayment : BaseEntity
         if (Status != PaymentStatus.Pending)
             throw new InvalidOperationException("Cannot update amount after processing has started.");
         AgreedAmount = newAmount;
+    }
+
+    /// <summary>
+    /// Crew confirms they received the money. Only legal once Vendor has marked
+    /// the payment Paid.
+    /// </summary>
+    public void AcknowledgeReceived(string? note = null)
+    {
+        if (Status != PaymentStatus.Paid)
+            throw new InvalidOperationException("Only a Paid payment can be marked as Received.");
+        CrewAcknowledgment = PaymentAcknowledgment.Received;
+        AcknowledgedAt     = DateTime.UtcNow;
+        AcknowledgmentNote = note;
+    }
+
+    /// <summary>
+    /// Crew flags the payment as not actually received yet (dispute). The payment
+    /// stays Paid for accounting, but the acknowledgment flips so Admin/Manager
+    /// can see the discrepancy.
+    /// </summary>
+    public void AcknowledgePending(string? note = null)
+    {
+        if (Status != PaymentStatus.Paid)
+            throw new InvalidOperationException("Only a Paid payment can be flagged as Pending by crew.");
+        CrewAcknowledgment = PaymentAcknowledgment.Pending;
+        AcknowledgedAt     = DateTime.UtcNow;
+        AcknowledgmentNote = note;
     }
 }

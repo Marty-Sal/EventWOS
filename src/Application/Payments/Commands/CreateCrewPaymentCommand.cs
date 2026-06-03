@@ -13,7 +13,7 @@ public sealed record CreateCrewPaymentCommand(
     Guid    EventId,
     Guid    AssignmentId,
     Guid    CrewId,
-    Guid    VendorId,
+    Guid?   VendorId,                // null = direct-crew payment (no vendor)
     decimal AgreedAmount,
     string? Notes
 ) : IRequest<Result<Guid>>;
@@ -25,7 +25,7 @@ public sealed class CreateCrewPaymentValidator : AbstractValidator<CreateCrewPay
         RuleFor(x => x.EventId).NotEmpty();
         RuleFor(x => x.AssignmentId).NotEmpty();
         RuleFor(x => x.CrewId).NotEmpty();
-        RuleFor(x => x.VendorId).NotEmpty();
+
         RuleFor(x => x.AgreedAmount).GreaterThan(0).WithMessage("Amount must be greater than 0.");
     }
 }
@@ -79,7 +79,7 @@ public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPayment
             action    = "created"
         };
         await _push.PushToUserAsync(payment.CrewId,   "PaymentCreated", payload, ct);
-        await _push.PushToUserAsync(payment.VendorId, "PaymentCreated", payload, ct);
+        if (payment.VendorId is { } _vid_pc) await _push.PushToUserAsync(_vid_pc, "PaymentCreated", payload, ct);
         await _push.PushToRoleAsync("Admin",          "PaymentCreated", payload, ct);
         await _push.PushToRoleAsync("Manager",        "PaymentCreated", payload, ct);
 

@@ -37,6 +37,7 @@ public sealed class PayrollBatchConfiguration : IEntityTypeConfiguration<Payroll
         b.HasOne(pb => pb.Vendor)
             .WithMany()
             .HasForeignKey(pb => pb.VendorId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         b.HasOne(pb => pb.Event)

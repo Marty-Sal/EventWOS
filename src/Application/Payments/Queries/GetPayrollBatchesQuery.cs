@@ -50,7 +50,7 @@ public sealed class GetPayrollBatchesHandler
                 b.Id, b.VendorId, b.EventId, b.BatchRef,
                 b.Status, b.TotalAmount, b.Notes,
                 b.SubmittedAt, b.ApprovedAt, b.DisbursedAt, b.CreatedAt,
-                VendorName = b.Vendor.FullName,
+                VendorName = b.Vendor == null ? null : b.Vendor.FullName,
                 EventTitle = b.Event.Title
             })
             .ToListAsync(ct);

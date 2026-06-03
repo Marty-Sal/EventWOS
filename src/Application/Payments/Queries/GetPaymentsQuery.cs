@@ -48,7 +48,7 @@ public sealed class GetPaymentsHandler : IRequestHandler<GetPaymentsQuery, Resul
                 p.Crew.FullName,
                 p.Crew.Mobile,
                 p.VendorId,
-                p.Vendor.FullName,
+                p.Vendor == null ? null : p.Vendor.FullName,
                 p.AgreedAmount,
                 p.PaidAmount,
                 p.Status.ToString(),
@@ -57,6 +57,9 @@ public sealed class GetPaymentsHandler : IRequestHandler<GetPaymentsQuery, Resul
                 p.Notes,
                 p.PaidAt,
                 p.PayrollBatchId,
+                p.CrewAcknowledgment.ToString(),
+                p.AcknowledgedAt,
+                p.AcknowledgmentNote,
                 p.CreatedAt))
             .ToListAsync(ct);
 

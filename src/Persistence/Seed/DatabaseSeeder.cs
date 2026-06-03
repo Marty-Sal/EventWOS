@@ -78,6 +78,8 @@ public sealed class DatabaseSeeder
         ("payments:read",     "payments",    "read",    "View payments"),
         ("payments:write",    "payments",    "write",   "Process payments"),
         ("payments:self",     "payments",    "self",    "View own payment records (Crew)"),
+        ("payments:disburse", "payments",    "disburse","Disburse payment to crew (Vendor)"),
+        ("payments:acknowledge","payments",  "acknowledge","Acknowledge receipt of payment (Crew)"),
         ("reports:read",      "reports",     "read",    "View reports"),
         ("audit:read",        "audit",       "read",    "View audit logs"),
         // Phase 2 — Events
@@ -169,7 +171,7 @@ public sealed class DatabaseSeeder
             {
                 "crew:read", "crew:write", "crew:invite", "events:read",
                 "crew:approve", "attendance:read", "profile:read", "profile:write",
-                "payments:read"
+                "payments:read", "payments:disburse"
             })
             {
                 var perm = GetPerm(name);
@@ -184,7 +186,7 @@ public sealed class DatabaseSeeder
             foreach (var name in new[]
             {
                 "profile:read", "profile:write", "events:read",
-                "attendance:read", "payments:self"
+                "attendance:read", "payments:self", "payments:acknowledge"
             })
             {
                 var perm = GetPerm(name);

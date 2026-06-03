@@ -10,11 +10,13 @@ namespace EventWOS.Application.Payments.Commands;
 
 public sealed record UpdatePaymentStatusCommand(
     Guid    PaymentId,
-    string  Action,          // "approve" | "pay" | "reject" | "hold"
+    string  Action,          // "approve" | "pay" | "reject" | "hold" | "ack-received" | "ack-pending"
     decimal? PaidAmount,
     string?  Method,
     string?  TransactionRef,
-    string?  Reason
+    string?  Reason,
+    Guid?   ActorId               = null,   // who is calling
+    bool    ActorIsAdminOrManager = false   // shortcut so we don't re-check perms here
 ) : IRequest<Result>;
 
 public sealed class UpdatePaymentStatusValidator : AbstractValidator<UpdatePaymentStatusCommand>
@@ -23,8 +25,9 @@ public sealed class UpdatePaymentStatusValidator : AbstractValidator<UpdatePayme
     {
         RuleFor(x => x.PaymentId).NotEmpty();
         RuleFor(x => x.Action).NotEmpty()
-            .Must(a => new[] { "approve","pay","reject","hold" }.Contains(a.ToLower()))
-            .WithMessage("Action must be: approve, pay, reject, or hold.");
+            .Must(a => new[] { "approve","pay","reject","hold","ack-received","ack-pending" }
+                .Contains(a.ToLower()))
+            .WithMessage("Action must be: approve, pay, reject, hold, ack-received, or ack-pending.");
         When(x => x.Action.ToLower() == "pay", () => {
             RuleFor(x => x.PaidAmount).NotNull().GreaterThan(0);
             RuleFor(x => x.Method).NotEmpty();
@@ -51,9 +54,26 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
         if (payment is null)
             return Result.Failure(Error.Custom("Payment.NotFound", "Payment not found."));
 
+        // ── Fine-grained ownership rules ─────────────────────────────────────
+        var action = cmd.Action.ToLower();
+        if (action == "pay" && !cmd.ActorIsAdminOrManager)
+        {
+            // Vendor disbursement requires the actor BE the payment's vendor.
+            if (cmd.ActorId is null || payment.VendorId is null || payment.VendorId.Value != cmd.ActorId.Value)
+                return Result.Failure(Error.Custom("Payment.Forbidden",
+                    "Only the vendor on this payment can mark it Paid."));
+        }
+        if (action is "ack-received" or "ack-pending")
+        {
+            // Crew acknowledgement requires the actor BE the payment's crew.
+            if (cmd.ActorId is null || payment.CrewId != cmd.ActorId.Value)
+                return Result.Failure(Error.Custom("Payment.Forbidden",
+                    "Only the crew member on this payment can acknowledge it."));
+        }
+
         try
         {
-            switch (cmd.Action.ToLower())
+            switch (action)
             {
                 case "approve":
                     payment.Approve();
@@ -71,6 +91,14 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
                 case "hold":
                     payment.PutOnHold(cmd.Reason ?? "On hold.");
                     break;
+
+                case "ack-received":
+                    payment.AcknowledgeReceived(cmd.Reason);
+                    break;
+
+                case "ack-pending":
+                    payment.AcknowledgePending(cmd.Reason);
+                    break;
             }
         }
         catch (InvalidOperationException ex)
@@ -83,11 +111,13 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
         // Real-time fan-out so payment screens refresh without a page reload.
         var evt = cmd.Action.ToLower() switch
         {
-            "approve" => "PaymentApproved",
-            "pay"     => "PaymentPaid",
-            "reject"  => "PaymentRejected",
-            "hold"    => "PaymentOnHold",
-            _         => "PaymentUpdated"
+            "approve"      => "PaymentApproved",
+            "pay"          => "PaymentPaid",
+            "reject"       => "PaymentRejected",
+            "hold"         => "PaymentOnHold",
+            "ack-received" => "PaymentAcknowledged",
+            "ack-pending"  => "PaymentAcknowledged",
+            _              => "PaymentUpdated"
         };
         var payload = new
         {
@@ -100,7 +130,7 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
         // Crew owner sees update on /my-payments
         await _push.PushToUserAsync(payment.CrewId,   evt, payload, ct);
         // Vendor sees update on /vendor-payments
-        await _push.PushToUserAsync(payment.VendorId, evt, payload, ct);
+        if (payment.VendorId is { } _vid_evt) await _push.PushToUserAsync(_vid_evt, evt, payload, ct);
         // Admins/Managers see the master /payments list refresh
         await _push.PushToRoleAsync("Admin",   evt, payload, ct);
         await _push.PushToRoleAsync("Manager", evt, payload, ct);

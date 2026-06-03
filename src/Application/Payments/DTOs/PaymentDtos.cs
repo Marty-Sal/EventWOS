@@ -8,8 +8,8 @@ public sealed record CrewPaymentDto(
     Guid     CrewId,
     string   CrewName,
     string   CrewMobile,
-    Guid     VendorId,
-    string   VendorName,
+    Guid?    VendorId,
+    string?  VendorName,
     decimal  AgreedAmount,
     decimal? PaidAmount,
     string   Status,
@@ -18,13 +18,16 @@ public sealed record CrewPaymentDto(
     string?  Notes,
     DateTime? PaidAt,
     Guid?    PayrollBatchId,
+    string   CrewAcknowledgment,    // "None" | "Received" | "Pending"
+    DateTime? AcknowledgedAt,
+    string?  AcknowledgmentNote,
     DateTime CreatedDate
 );
 
 public sealed record PayrollBatchDto(
     Guid     Id,
-    Guid     VendorId,
-    string   VendorName,
+    Guid?    VendorId,
+    string?  VendorName,
     Guid     EventId,
     string   EventTitle,
     string   BatchRef,
