@@ -262,7 +262,7 @@
         try
         {
             var resp = await Http.GetFromJsonAsync<ApiResult<PagedResult<AssignmentDto>>>(
-                "api/v1/events/vendor-assignments?page=1&pageSize=500", JsonOpts);
+                "api/v1/events/vendor-assignments?mode=CrewAssignments&page=1&pageSize=500", JsonOpts);
             _all = resp?.Data?.Items?.ToList() ?? new();
             _awaitingCount = _all.Count(a => a.Status is "Invited" or "VendorApproved");
         }

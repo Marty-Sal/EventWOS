@@ -52,7 +52,46 @@ public sealed class EventAssignment : BaseEntity
     public User   AssignedBy  { get; private set; } = default!;
     public ICollection<AttendanceRecord> AttendanceRecords { get; private set; } = new List<AttendanceRecord>();
 
-    // ── Step 1: Crew responds to invitation ──────────────────────────────────
+    // ── Step 0: Vendor responds to Manager's invitation (placeholder rows) ──
+    // These methods operate on the vendor-only anchor row created when a
+    // Manager assigns a vendor to an event. The row has CrewId == null and
+    // status starts at Invited. The vendor must accept before they can
+    // staff crew onto this event.
+
+    /// <summary>Vendor accepts the Manager's invitation to staff this event.</summary>
+    public void VendorAcceptInvite()
+    {
+        if (CrewId is not null)
+            throw new InvalidOperationException("Only vendor-only placeholder rows can be accepted by vendor.");
+        if (VendorId is null)
+            throw new InvalidOperationException("Assignment has no vendor.");
+        if (Status != AssignmentStatus.Invited)
+            throw new InvalidOperationException("Only Invited vendor placeholders can be accepted.");
+
+        Status           = AssignmentStatus.VendorAccepted;
+        VendorReviewedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Vendor rejects the Manager's invitation — reason is mandatory.</summary>
+    public void VendorRejectInvite(string reason)
+    {
+        if (CrewId is not null)
+            throw new InvalidOperationException("Only vendor-only placeholder rows can be rejected by vendor at the invite stage.");
+        if (VendorId is null)
+            throw new InvalidOperationException("Assignment has no vendor.");
+        if (Status != AssignmentStatus.Invited)
+            throw new InvalidOperationException("Only Invited vendor placeholders can be rejected.");
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Rejection reason is mandatory.", nameof(reason));
+
+        Status            = AssignmentStatus.RejectedByVendor;
+        VendorReviewedAt  = DateTime.UtcNow;
+        RejectionReason   = reason;
+        RejectedByUserId  = VendorId;
+        DeclinedAt        = DateTime.UtcNow;
+    }
+
+        // ── Step 1: Crew responds to invitation ──────────────────────────────────
 
     /// <summary>
     /// Crew accepts the invitation.

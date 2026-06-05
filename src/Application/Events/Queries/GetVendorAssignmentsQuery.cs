@@ -1,14 +1,26 @@
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Interfaces;
+using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace EventWOS.Application.Events.Queries;
 
-/// <summary>Returns all crew assignments that belong to the authenticated vendor.</summary>
-public sealed record GetVendorAssignmentsQuery(Guid VendorId, int Page = 1, int PageSize = 20)
-    : IRequest<Result<PagedAssignmentResult>>;
+public enum VendorAssignmentMode
+{
+    All,             // every row attributed to this vendor (legacy default)
+    Invitations,     // placeholder rows only — CrewId == null AND Status == Invited
+    CrewAssignments  // rows with a real crew member — CrewId != null
+}
+
+/// <summary>Returns assignments that belong to the authenticated vendor, filterable by mode.</summary>
+public sealed record GetVendorAssignmentsQuery(
+    Guid VendorId,
+    VendorAssignmentMode Mode = VendorAssignmentMode.All,
+    int Page = 1,
+    int PageSize = 20
+) : IRequest<Result<PagedAssignmentResult>>;
 
 public sealed class GetVendorAssignmentsHandler
     : IRequestHandler<GetVendorAssignmentsQuery, Result<PagedAssignmentResult>>
@@ -19,14 +31,23 @@ public sealed class GetVendorAssignmentsHandler
     public async Task<Result<PagedAssignmentResult>> Handle(
         GetVendorAssignmentsQuery req, CancellationToken ct)
     {
-        var total = await _db.EventAssignments
-            .CountAsync(a => a.VendorId == req.VendorId, ct);
+        var q = _db.EventAssignments.AsQueryable().Where(a => a.VendorId == req.VendorId);
 
-        var items = await _db.EventAssignments
+        q = req.Mode switch
+        {
+            VendorAssignmentMode.Invitations
+                => q.Where(a => a.CrewId == null && a.Status == AssignmentStatus.Invited),
+            VendorAssignmentMode.CrewAssignments
+                => q.Where(a => a.CrewId != null),
+            _ => q
+        };
+
+        var total = await q.CountAsync(ct);
+
+        var items = await q
             .Include(a => a.Event)
             .Include(a => a.Vendor)
             .Include(a => a.Crew)
-            .Where(a => a.VendorId == req.VendorId)
             .OrderByDescending(a => a.Event.StartAt)
             .Skip((req.Page - 1) * req.PageSize)
             .Take(req.PageSize)

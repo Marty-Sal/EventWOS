@@ -73,6 +73,7 @@ public interface IEventApiService
     Task<PagedEventAssignmentResult?> GetVendorAssignmentsAsync(int page = 1, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> RespondAssignmentAsync(Guid assignmentId, string response, string? reason = null, CancellationToken ct = default);
     Task<(bool Ok, Guid? AssignmentId, string? Error)> VendorAssignCrewAsync(Guid eventId, Guid crewId, CancellationToken ct = default);
+    Task<(bool Ok, string? Error)> VendorRespondToInviteAsync(Guid assignmentId, string response, string? reason, CancellationToken ct = default);
 }
 
 public sealed record CreateEventRequest(
@@ -195,7 +196,22 @@ public sealed class EventApiService : IEventApiService
         catch (Exception ex) { return (false, null, ex.Message); }
     }
 
-    public async Task<AttendanceSummaryDto?> GetAttendanceSummaryAsync(Guid eventId, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Error)> VendorRespondToInviteAsync(
+        Guid assignmentId, string response, string? reason, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PatchAsJsonAsync(
+                $"api/v1/events/vendor-invitations/{assignmentId}/respond",
+                new { response, reason }, ct);
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var err = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+            return (false, err?.Errors?.FirstOrDefault() ?? err?.Message ?? "Unknown error");
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
+        public async Task<AttendanceSummaryDto?> GetAttendanceSummaryAsync(Guid eventId, CancellationToken ct = default)
     {
         try
         {

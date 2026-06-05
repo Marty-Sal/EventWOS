@@ -12,4 +12,8 @@ public enum AssignmentStatus
     ManagerApproved        = 7,   // Manager gave final approval → fully Confirmed
     RejectedByVendor       = 8,   // Vendor rejected crew's application
     RejectedByManager      = 9,   // Manager rejected in final review
+
+    // ── Vendor-event invitation lifecycle (placeholder rows, CrewId == null) ──
+    VendorAccepted         = 10,  // Vendor accepted Manager's invite — can now staff crew.
+                                   // (Distinct from VendorApproved which is on crew rows.)
 }

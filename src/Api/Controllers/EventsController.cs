@@ -158,10 +158,18 @@ public sealed class EventsController : ControllerBase
     [Permission("profile:read")]
     [HttpGet("vendor-assignments")]
     public async Task<IActionResult> GetVendorAssignments(
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+        [FromQuery] string? mode = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
     {
+        var parsedMode = VendorAssignmentMode.All;
+        if (!string.IsNullOrWhiteSpace(mode)
+            && Enum.TryParse<VendorAssignmentMode>(mode, ignoreCase: true, out var m))
+            parsedMode = m;
+
         var result = await _mediator.Send(
-            new GetVendorAssignmentsQuery(_currentUser.UserId!.Value, page, pageSize), ct);
+            new GetVendorAssignmentsQuery(_currentUser.UserId!.Value, parsedMode, page, pageSize), ct);
         return Ok(ApiResponse<PagedAssignmentResult>.Ok(result.Value));
     }
 
@@ -184,6 +192,29 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Vendor responds to the Manager's invitation to staff an event (accept / reject).
+    /// Operates on the placeholder row only (CrewId == null). Does NOT enter the
+    /// Manager approval queue — this is a vendor↔manager decision about the
+    /// event itself.
+    /// </summary>
+    [Permission("profile:write")]
+    [HttpPatch("vendor-invitations/{assignmentId:guid}/respond")]
+    public async Task<IActionResult> VendorRespondToInvite(
+        Guid assignmentId,
+        [FromBody] VendorRespondToInviteRequest req,
+        CancellationToken ct)
+    {
+        if (_currentUser.Role != UserRole.Vendor) return Forbid();
+
+        var result = await _mediator.Send(new VendorRespondToInviteCommand(
+            assignmentId, _currentUser.UserId!.Value, req.Response, req.Reason), ct);
+
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok())
+            : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
+        /// <summary>
     /// Crew responds to an assignment invitation (confirm / decline).
     /// Uses profile:write — Crew always has this permission.
     /// </summary>
@@ -329,6 +360,7 @@ public sealed record UpdateEventRequest(
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
 public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId);
 public sealed record VendorAssignCrewRequest(Guid CrewId);
+public sealed record VendorRespondToInviteRequest(string Response, string? Reason);
 public sealed record RespondAssignmentRequest(string Response, string? Reason = null);
 public sealed record RecordAttendanceRequest(string Action, string? Location = null);
 public sealed record ReviewDecisionRequest(string? Reason = null);

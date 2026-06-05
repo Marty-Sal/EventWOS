@@ -15,7 +15,43 @@
         <p class="text-sm text-gray-500 mt-0.5">@(_userRole == "Vendor" ? "Events you've been assigned to. Add crew to staff them." : "Events you have been assigned to.")</p>
     </div>
 
-    @if (_loading)
+    @* ─── Vendor: pending invitations from Manager ─────────────────────── *@
+    @if (_userRole == "Vendor" && _pendingInvites is { Count: > 0 })
+    {
+        <div class="bg-amber-50/60 border border-amber-200 rounded-2xl p-5 space-y-3">
+            <div class="flex items-center gap-2">
+                <span class="text-xl">✉️</span>
+                <div>
+                    <h3 class="font-bold text-amber-900 text-sm">Pending Invitations</h3>
+                    <p class="text-xs text-amber-700 mt-0.5">Managers have invited you to staff these events. Accept to start adding your crew.</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                @foreach (var inv in _pendingInvites)
+                {
+                    var current = inv;
+                    <div class="bg-white border border-amber-100 rounded-xl p-4">
+                        <p class="font-semibold text-gray-800 text-sm">@current.EventTitle</p>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Invited @current.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</p>
+                        <div class="flex gap-2 mt-3">
+                            <button @onclick="() => AcceptInvite(current)"
+                                    disabled="@(_inviteBusyId == current.Id)"
+                                    class="flex-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50 transition">
+                                @(_inviteBusyId == current.Id ? "Accepting…" : "✓ Accept")
+                            </button>
+                            <button @onclick="() => OpenRejectInvite(current)"
+                                    disabled="@(_inviteBusyId == current.Id)"
+                                    class="flex-1 px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold disabled:opacity-50 transition">
+                                ✕ Reject
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+        @if (_loading)
     {
         <div class="flex items-center justify-center py-20">
             <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
@@ -69,13 +105,22 @@
                         }
                     </div>
 
-                    @* Vendor action: assign crew to this event *@
+                    @* Vendor action: assign crew to this event — gated on invite acceptance *@
                     @if (_userRole == "Vendor" && ev.Status != "Completed" && ev.Status != "Cancelled")
                     {
-                        <button @onclick="() => OpenAssignPanel(ev)"
-                                class="mt-2 w-full px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
-                            <span>👥</span> Assign My Crew
-                        </button>
+                        if (HasAcceptedInvite(ev.Id))
+                        {
+                            <button @onclick="() => OpenAssignPanel(ev)"
+                                    class="mt-2 w-full px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
+                                <span>👥</span> Assign My Crew
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="mt-2 w-full px-4 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium text-center">
+                                ⏳ Accept the Manager's invitation above to start staffing crew.
+                            </div>
+                        }
                     }
                 </div>
             }
@@ -166,6 +211,37 @@
     </div>
 }
 
+@* ─── Reject-Invitation Modal ──────────────────────────────────────────── *@
+@if (_rejectInviteTarget is not null)
+{
+    <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 flex items-center justify-center p-4" @onclick="CancelRejectInvite">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" @onclick:stopPropagation="true">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h3 class="font-bold text-gray-800">Reject Invitation</h3>
+                <p class="text-xs text-gray-500 mt-0.5">@_rejectInviteTarget.EventTitle</p>
+            </div>
+            <div class="p-5 space-y-3">
+                <label class="block text-xs font-medium text-gray-600">Why are you rejecting this event?</label>
+                <textarea @bind="_rejectInviteReason" rows="3" placeholder="e.g. Date conflict with another event"
+                          class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-rose-400 focus:outline-none text-sm"></textarea>
+                @if (_rejectInviteError is not null)
+                {
+                    <p class="text-xs text-rose-600">⚠️ @_rejectInviteError</p>
+                }
+            </div>
+            <div class="px-6 py-3 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
+                <button @onclick="CancelRejectInvite"
+                        class="px-4 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition">Cancel</button>
+                <button @onclick="ConfirmRejectInvite"
+                        disabled="@(_inviteBusyId != Guid.Empty)"
+                        class="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold disabled:opacity-50 transition">
+                    @(_inviteBusyId == _rejectInviteTarget.Id ? "Rejecting…" : "Reject")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<EventListItemDto> _items = new();
     private Dictionary<Guid, string> _myStatuses = new();
@@ -180,6 +256,14 @@
 
     private string? _userRole;
     private Guid? _userId;
+
+    // Vendor invitation state
+    private List<EventAssignmentDto> _pendingInvites = new();
+    private HashSet<Guid>            _acceptedEventIds = new();
+    private Guid                     _inviteBusyId = Guid.Empty;
+    private EventAssignmentDto?      _rejectInviteTarget;
+    private string                   _rejectInviteReason = "";
+    private string?                  _rejectInviteError;
 
     // Assign panel state
     private EventListItemDto? _assignTarget;
@@ -255,14 +339,87 @@
 
             var asgResult = await Http.GetFromJsonAsync<ApiResult<PagedResult<EventAssignmentDto>>>(
                 assignmentEndpoint, JsonOpts);
-            _myStatuses = (asgResult?.Data?.Items ?? new List<EventAssignmentDto>())
+            var allRows = asgResult?.Data?.Items ?? new List<EventAssignmentDto>();
+            _myStatuses = allRows
                 .GroupBy(a => a.EventId)
                 .ToDictionary(
                     g => g.Key,
                     g => g.OrderByDescending(a => StatusRank(a.Status)).First().Status);
+
+            if (_userRole == "Vendor")
+            {
+                // Placeholder rows where the Manager invited the vendor and they
+                // haven't responded yet. CrewId is null + Status is Invited.
+                _pendingInvites = allRows
+                    .Where(a => a.CrewId is null && a.Status == "Invited")
+                    .ToList();
+
+                // Track which events have at least one vendor row past the
+                // invitation stage — that's what gates "Assign My Crew".
+                _acceptedEventIds = allRows
+                    .Where(a => a.Status != "Invited"
+                             && a.Status != "Declined"
+                             && a.Status != "RejectedByVendor"
+                             && a.Status != "RejectedByManager")
+                    .Select(a => a.EventId)
+                    .ToHashSet();
+            }
         }
         catch (Exception ex) { _error = "Could not load your events: " + ex.Message; }
         finally { _loading = false; StateHasChanged(); }
+    }
+
+    // ─── Vendor: pending invitations ─────────────────────────────────────
+    private bool HasAcceptedInvite(Guid eventId) => _acceptedEventIds.Contains(eventId);
+
+    private async Task AcceptInvite(EventAssignmentDto inv)
+    {
+        _inviteBusyId = inv.Id; StateHasChanged();
+        var (ok, err) = await EventApi.VendorRespondToInviteAsync(inv.Id, "accept", null);
+        _inviteBusyId = Guid.Empty;
+        if (ok) { await LoadAsync(); }
+        else    { _error = err ?? "Couldn't accept that invitation."; }
+        StateHasChanged();
+    }
+
+    private void OpenRejectInvite(EventAssignmentDto inv)
+    {
+        _rejectInviteTarget = inv;
+        _rejectInviteReason = "";
+        _rejectInviteError = null;
+        StateHasChanged();
+    }
+
+    private void CancelRejectInvite()
+    {
+        _rejectInviteTarget = null;
+        _rejectInviteError = null;
+    }
+
+    private async Task ConfirmRejectInvite()
+    {
+        if (_rejectInviteTarget is null) return;
+        if (string.IsNullOrWhiteSpace(_rejectInviteReason))
+        {
+            _rejectInviteError = "Please give a brief reason.";
+            StateHasChanged();
+            return;
+        }
+        _inviteBusyId = _rejectInviteTarget.Id;
+        StateHasChanged();
+
+        var (ok, err) = await EventApi.VendorRespondToInviteAsync(
+            _rejectInviteTarget.Id, "reject", _rejectInviteReason.Trim());
+
+        _inviteBusyId = Guid.Empty;
+        if (ok)
+        {
+            _rejectInviteTarget = null;
+            _rejectInviteReason = "";
+            await LoadAsync();
+        }
+        else { _rejectInviteError = err ?? "Couldn't reject that invitation."; }
+        StateHasChanged();
     }
 
     // ─── Vendor: assign-crew panel ──────────────────────────────────────

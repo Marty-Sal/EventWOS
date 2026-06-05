@@ -64,6 +64,22 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
                 "Vendor.NoActiveAssignment",
                 "Your assignment to this event was declined or rejected. Contact the event manager."));
 
+        // Vendor must have accepted the Manager's invite before staffing crew.
+        // The placeholder row (CrewId == null) carries the invitation status.
+        // Once the vendor has at least one row that is past the Invited stage
+        // (VendorAccepted, or any per-crew row they've already placed), they
+        // can keep staffing more crew.
+        var hasAcceptedInvite = anyVendorRow.Any(r =>
+            r.Status != AssignmentStatus.Invited
+         && r.Status != AssignmentStatus.Declined
+         && r.Status != AssignmentStatus.RejectedByManager
+         && r.Status != AssignmentStatus.RejectedByVendor);
+
+        if (!hasAcceptedInvite)
+            return Result.Failure<EventAssignmentDto>(new Error(
+                "Vendor.InviteNotAccepted",
+                "Please accept the Manager's invitation to this event before assigning crew."));
+
         // Crew must belong to this vendor
         var crew = await _db.Users.FirstOrDefaultAsync(
             u => u.Id == req.CrewId && u.Role == UserRole.Crew && !u.IsDeleted, ct);
