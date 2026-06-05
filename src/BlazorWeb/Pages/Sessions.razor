@@ -1,6 +1,7 @@
 @page "/sessions"
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject ISessionApiService SessionApi
+@inject AuthenticationStateProvider AuthState
 
 
     @if (_accessDenied)
@@ -42,25 +43,45 @@
         <div class="grid gap-4">
             @foreach (var session in _sessions)
             {
-                var currentSession = session;
-                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-indigo-200 transition-colors">
+                var currentSession  = session;
+                var isMine          = currentSession.UserId == _currentUserId;
+                <div class="bg-white rounded-2xl border @(isMine ? "border-indigo-200 ring-1 ring-indigo-100" : "border-gray-100") shadow-sm p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-indigo-200 transition-colors">
                     <div class="flex items-start gap-4">
-                        <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl flex-shrink-0">
-                            📱
+                        <div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                            @InitialsOf(currentSession.UserFullName)
                         </div>
-                        <div>
-                            <p class="font-semibold text-gray-800 text-sm">@currentSession.DeviceName</p>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <p class="font-semibold text-gray-800 text-sm truncate">@currentSession.UserFullName</p>
+                                <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full @RoleBadgeColor(currentSession.UserRole)">
+                                    @currentSession.UserRole
+                                </span>
+                                @if (isMine)
+                                {
+                                    <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">This is you</span>
+                                }
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">📱 @currentSession.DeviceName</p>
                             <p class="text-xs text-gray-400 mt-0.5">ID: <span class="font-mono">@currentSession.DeviceId</span></p>
                             <p class="text-xs text-gray-400">IP: @currentSession.IpAddress</p>
                             <p class="text-xs text-gray-400 mt-1">
-                                Last active: <span class="text-gray-600">@currentSession.LastActivityAt.ToString("dd MMM yyyy, HH:mm")</span>
+                                Last active: <span class="text-gray-600">@currentSession.LastActivityAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
                             </p>
                         </div>
                     </div>
-                    <button @onclick="@(() => RevokeAsync(currentSession.Id))"
-                            class="self-start sm:self-center px-4 py-2 rounded-xl text-xs font-semibold text-red-600 border border-red-100 hover:bg-red-50 transition-colors">
-                        Revoke
-                    </button>
+                    @if (!isMine)
+                    {
+                        <button @onclick="@(() => RevokeAsync(currentSession.Id))"
+                                class="self-start sm:self-center px-4 py-2 rounded-xl text-xs font-semibold text-red-600 border border-red-100 hover:bg-red-50 transition-colors">
+                            Revoke
+                        </button>
+                    }
+                    else
+                    {
+                        <span class="self-start sm:self-center px-4 py-2 rounded-xl text-xs font-medium text-gray-400 border border-gray-100">
+                            Sign out from menu
+                        </span>
+                    }
                 </div>
             }
         </div>
@@ -71,12 +92,18 @@
     private bool _accessDenied;
     private IReadOnlyList<SessionDto> _sessions = Array.Empty<SessionDto>();
     private bool _loading = true;
+    private Guid _currentUserId;
 
     protected override async Task OnInitializedAsync()
     {
         // ── Permission gate ──────────────────────────────────────────────────────
         _accessDenied = !await PermGuard.CanAsync("sessions:read");
         if (_accessDenied) { StateHasChanged(); return; }
+
+        // Cache the current user id so we can flag "This is you" cards
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var sub   = state.User.FindFirst("sub")?.Value ?? state.User.FindFirst("nameid")?.Value;
+        Guid.TryParse(sub, out _currentUserId);
 
         _sessions = await SessionApi.GetSessionsAsync();
         _loading = false;
@@ -87,4 +114,21 @@
         await SessionApi.RevokeSessionAsync(id);
         _sessions = await SessionApi.GetSessionsAsync();
     }
+
+    private static string InitialsOf(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][..1].ToUpper();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+    }
+
+    private static string RoleBadgeColor(string role) => role switch
+    {
+        "Admin"   => "bg-purple-50 text-purple-700",
+        "Manager" => "bg-blue-50 text-blue-700",
+        "Vendor"  => "bg-amber-50 text-amber-700",
+        "Crew"    => "bg-emerald-50 text-emerald-700",
+        _         => "bg-gray-100 text-gray-600"
+    };
 }

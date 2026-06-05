@@ -33,9 +33,20 @@ public sealed class SessionsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<SessionDto>>), 200)]
     public async Task<IActionResult> GetSessions(CancellationToken ct)
     {
-        var result = await _mediator.Send(new GetSessionsQuery(_currentUser.UserId!.Value), ct);
+        // Admins/Managers see ALL active sessions (with user name + role).
+        // Everyone else only sees their own sessions.
+        var adminMode = _currentUser.IsInRole(UserRole.Admin) || _currentUser.IsInRole(UserRole.Manager);
+        var result = await _mediator.Send(new GetSessionsQuery(_currentUser.UserId!.Value, adminMode), ct);
         return Ok(ApiResponse<IReadOnlyList<SessionDto>>.Ok(result.Value));
     }
+
+    /// <summary>Lightweight heartbeat. Returns 200 if the access token is valid
+    /// AND the underlying session is still active. The JWT validator returns 401
+    /// automatically when the session has been revoked.</summary>
+    [HttpGet("ping")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(401)]
+    public IActionResult Ping() => Ok(new { alive = true });
 
     /// <summary>Revoke a specific session.</summary>
     [Permission("sessions:revoke")]

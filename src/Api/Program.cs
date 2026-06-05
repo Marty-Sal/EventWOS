@@ -172,6 +172,30 @@ try
                         ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
                         ctx.Token = token;
                     return Task.CompletedTask;
+                },
+                // Enforce session revocation in real time: every request checks the DB
+                // for the IsActive flag of the session referenced by the "session_id" claim.
+                // If the session has been revoked, the token is rejected — effectively
+                // an immediate logout for the user on their next API call (≤30s with
+                // the polling refresh loop on the client).
+                OnTokenValidated = async ctx =>
+                {
+                    var sidClaim = ctx.Principal?.FindFirst("session_id")?.Value;
+                    if (string.IsNullOrEmpty(sidClaim) || !Guid.TryParse(sidClaim, out var sessionId))
+                        return; // legacy / non-session tokens — allow
+
+                    var db = ctx.HttpContext.RequestServices
+                        .GetRequiredService<EventWOS.Application.Interfaces.IAppDbContext>();
+
+                    var isActive = await db.UserSessions
+                        .AsNoTracking()
+                        .AnyAsync(us => us.SessionId == sessionId && us.IsActive,
+                                  ctx.HttpContext.RequestAborted);
+
+                    if (!isActive)
+                    {
+                        ctx.Fail("session_revoked");
+                    }
                 }
             };
         });

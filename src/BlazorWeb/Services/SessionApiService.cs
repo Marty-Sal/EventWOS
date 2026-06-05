@@ -4,7 +4,8 @@ using System.Text.Json;
 namespace EventWOS.BlazorWeb.Services;
 
 public sealed record SessionDto(
-    Guid Id, Guid SessionId, string DeviceId, string DeviceName,
+    Guid Id, Guid SessionId, Guid UserId, string UserFullName, string UserRole,
+    string DeviceId, string DeviceName,
     string IpAddress, DateTime LastActivityAt, bool IsActive, DateTime CreatedAt);
 
 public interface ISessionApiService

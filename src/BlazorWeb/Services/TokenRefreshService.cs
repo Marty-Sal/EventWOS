@@ -1,31 +1,52 @@
 using EventWOS.BlazorWeb.Auth;
+using Microsoft.AspNetCore.Components;
 
 namespace EventWOS.BlazorWeb.Services;
 
 /// <summary>
-/// Background service that proactively refreshes the access token
-/// 5 minutes before it expires, using the stored refresh token.
+/// Two responsibilities, both timer-driven:
+/// 1. Proactively refresh the access token before expiry.
+/// 2. Heartbeat the API every ~30s — if the API rejects the token (401), the
+///    session was revoked server-side (admin pressed "Revoke" or the user was
+///    suspended) and we immediately force-logout the user in the browser.
 /// </summary>
 public sealed class TokenRefreshService
 {
     private readonly AppAuthStateProvider _auth;
     private readonly IAuthApiService _authApi;
-    private Timer? _timer;
+    private readonly HttpClient _http;
+    private readonly NavigationManager _nav;
+    private Timer? _refreshTimer;
+    private Timer? _heartbeatTimer;
 
-    public TokenRefreshService(AppAuthStateProvider auth, IAuthApiService authApi)
+    public TokenRefreshService(
+        AppAuthStateProvider auth,
+        IAuthApiService authApi,
+        HttpClient http,
+        NavigationManager nav)
     {
         _auth = auth;
         _authApi = authApi;
+        _http = http;
+        _nav = nav;
     }
 
     public void Start()
     {
-        // Check every 55 minutes (access tokens live for 60 min)
-        _timer = new Timer(async _ => await TryRefreshAsync(), null,
+        // Token refresh — every 55 min (access tokens live for 60 min)
+        _refreshTimer = new Timer(async _ => await TryRefreshAsync(), null,
             TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(55));
+
+        // Heartbeat — every 30 seconds, lightweight ping to detect server-side revocation
+        _heartbeatTimer = new Timer(async _ => await HeartbeatAsync(), null,
+            TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
 
-    public void Stop() => _timer?.Dispose();
+    public void Stop()
+    {
+        _refreshTimer?.Dispose();
+        _heartbeatTimer?.Dispose();
+    }
 
     private async Task TryRefreshAsync()
     {
@@ -41,13 +62,41 @@ public sealed class TokenRefreshService
             }
             else
             {
-                // Refresh failed — force logout
-                await _auth.MarkLoggedOutAsync();
+                await ForceLogoutAsync();
             }
         }
         catch
         {
             // Swallow — will retry next cycle
         }
+    }
+
+    private async Task HeartbeatAsync()
+    {
+        try
+        {
+            // Skip if we don't have a token to begin with — no-op for anonymous users
+            var token = await _auth.GetAccessTokenAsync();
+            if (string.IsNullOrEmpty(token)) return;
+
+            // Lightweight: GET /api/v1/sessions/me/ping — any 401 = revoked → logout
+            using var req = new HttpRequestMessage(HttpMethod.Get, "api/v1/sessions/ping");
+            using var resp = await _http.SendAsync(req);
+
+            if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                await ForceLogoutAsync();
+            }
+        }
+        catch
+        {
+            // Network blip — ignore, next heartbeat will catch it
+        }
+    }
+
+    private async Task ForceLogoutAsync()
+    {
+        await _auth.MarkLoggedOutAsync();
+        _nav.NavigateTo("/login?reason=session_revoked", forceLoad: true);
     }
 }

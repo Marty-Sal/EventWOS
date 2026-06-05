@@ -20,6 +20,14 @@
                 <p class="text-sm text-gray-500 mt-1">Workforce Operating System</p>
             </div>
 
+            @if (_sessionRevoked)
+            {
+                <div class="mb-5 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+                    <span class="text-base leading-none">⚠️</span>
+                    <span>Your session was ended by an administrator. Please sign in again.</span>
+                </div>
+            }
+
             <!-- Step 1: Mobile -->
             @if (!_otpSent)
             {
@@ -133,6 +141,15 @@
     private string _mobile = string.Empty;
     private string? _devOtp;   // Only set in dev/staging — shown as on-screen hint
     private string _otp = string.Empty;
+    private bool _sessionRevoked;
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Nav.Uri);
+        // Simple "reason=session_revoked" check — keep it dependency-free
+        _sessionRevoked = uri.Query.Contains("reason=session_revoked", StringComparison.OrdinalIgnoreCase);
+    }
+
     private Guid _otpRequestId;
     private bool _otpSent;
     private bool _loading;
