@@ -962,6 +962,116 @@ END $$;
             // Repair must never crash startup.
             Log.Warning(repairEx, "Anchor repair encountered an error and was skipped.");
         }
+
+        // ─── One-time data repair: orphan vendor-routed payments ──────────────
+        // History: before the auto-batch fix, a manager creating an ad-hoc
+        // CrewPayment via "+ New Payment" for a vendor-routed crew would
+        // leave the row with VendorId set but PayrollBatchId = null. The
+        // vendor's payments page then showed the row stuck on "Awaiting
+        // organiser disbursement" forever — no batch ever existed to
+        // disburse. Spotted on "The MIX" for Sam Martin (Saly's crew).
+        //
+        // Repair rules:
+        //   • AgreedAmount <= 0 → soft-delete the row. It was created as a
+        //     placeholder with no real value; the manager will recreate it
+        //     properly via the new auto-batched flow.
+        //   • AgreedAmount > 0  → attach to an existing Draft batch for the
+        //     same (vendor, event), or spin up a new one. Same fold-up
+        //     behavior as CreateCrewPaymentHandler going forward.
+        //
+        // Idempotent: once a row has a PayrollBatchId, it's invisible to
+        // this query on subsequent runs.
+        try
+        {
+            var orphans = await db.CrewPayments
+                .Where(p => p.VendorId != null
+                         && p.PayrollBatchId == null
+                         && p.Status != EventWOS.Domain.Enums.PaymentStatus.Rejected)
+                .ToListAsync();
+
+            if (orphans.Count == 0)
+            {
+                Log.Information("Orphan-payment repair: nothing to fix.");
+            }
+            else
+            {
+                int softDeleted = 0;
+                int attachedExisting = 0;
+                int attachedNew = 0;
+
+                // Cache draft batches per (vendor, event) so multiple orphans
+                // on the same pair fold into one batch.
+                var draftCache = new Dictionary<(Guid VendorId, Guid EventId), EventWOS.Domain.Entities.PayrollBatch>();
+
+                foreach (var pmt in orphans)
+                {
+                    // Case 1: junk row with no amount → soft-delete.
+                    if (pmt.AgreedAmount <= 0m)
+                    {
+                        pmt.IsDeleted = true;
+                        pmt.DeletedAt = DateTime.UtcNow;
+                        softDeleted++;
+                        continue;
+                    }
+
+                    // Case 2: real amount → fold into a draft batch.
+                    var vid = pmt.VendorId!.Value;
+                    var key = (vid, pmt.EventId);
+
+                    if (!draftCache.TryGetValue(key, out var batch))
+                    {
+                        batch = await db.PayrollBatches
+                            .Where(b => b.VendorId == vid
+                                     && b.EventId  == pmt.EventId
+                                     && b.Status   == EventWOS.Domain.Enums.PayrollStatus.Draft)
+                            .OrderByDescending(b => b.CreatedAt)
+                            .FirstOrDefaultAsync();
+
+                        if (batch is null)
+                        {
+                            var batchRef = $"PAY-{pmt.EventId.ToString()[..8].ToUpper()}-{DateTime.UtcNow:yyyyMMddHHmm}-R";
+                            batch = new EventWOS.Domain.Entities.PayrollBatch(
+                                vid, pmt.EventId, batchRef, "Auto-recovered from orphan payment");
+                            await db.PayrollBatches.AddAsync(batch);
+                            await db.SaveChangesAsync(); // need batch.Id
+                            attachedNew++;
+                        }
+                        else
+                        {
+                            attachedExisting++;
+                        }
+                        draftCache[key] = batch;
+                    }
+                    else
+                    {
+                        attachedExisting++;
+                    }
+
+                    pmt.AttachToPayroll(batch.Id);
+                }
+
+                await db.SaveChangesAsync();
+
+                // Now recalc totals on every touched batch.
+                foreach (var batch in draftCache.Values)
+                {
+                    var total = await db.CrewPayments
+                        .Where(p => p.PayrollBatchId == batch.Id
+                                 && p.Status != EventWOS.Domain.Enums.PaymentStatus.Rejected)
+                        .SumAsync(p => p.AgreedAmount);
+                    batch.SetTotal(total);
+                }
+                await db.SaveChangesAsync();
+
+                Log.Information(
+                    "Orphan-payment repair: soft-deleted {Deleted}, attached to existing batches {ExistingBatch}, attached to new batches {NewBatch}.",
+                    softDeleted, attachedExisting, attachedNew);
+            }
+        }
+        catch (Exception orphanEx)
+        {
+            Log.Warning(orphanEx, "Orphan-payment repair encountered an error and was skipped.");
+        }
     }
 
     // ─── Middleware pipeline ──────────────────────────────────────────────────
