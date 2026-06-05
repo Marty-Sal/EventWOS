@@ -607,9 +607,14 @@
         if (ok)
         {
             _assignSuccess = $"Invited {c.FullName}.";
+            // Update the status map → the row's render flips from the
+            // 'Invite' button to the 'Invited' badge + ✕ Revoke pair on
+            // the next StateHasChanged. We deliberately keep the crew in
+            // _roster so the vendor can still see them in the list (and
+            // revoke if they change their mind). Double-add is already
+            // prevented because the Invite button is gone once the
+            // status is 'Invited'.
             _existingByCrewId[c.Id] = "Invited";
-            // Remove from roster list so vendor can't double-add
-            _roster = _roster?.Where(x => x.Id != c.Id).ToList();
             // Refresh event list to bump AssignedCrew count
             _ = LoadAsync();
         }
@@ -633,15 +638,12 @@
         if (ok)
         {
             _assignSuccess = $"Revoked invitation for {c.FullName}.";
-            // Drop from the existing-status map so the row flips back to a
-            // fresh "Invite" button next render.
+            // Drop from the existing-status map so the row flips back to
+            // a fresh 'Invite' button next render. We no longer mutate
+            // _roster — the crew stayed in the list the whole time, the
+            // row just rendered the badge instead of the button while
+            // status was 'Invited'.
             _existingByCrewId.Remove(c.Id);
-            // Add them back to the roster if they were removed earlier
-            if (_roster is not null && !_roster.Any(x => x.Id == c.Id))
-            {
-                _roster.Add(c);
-                _roster = _roster.OrderBy(x => x.FullName).ToList();
-            }
             // Refresh event list so AssignedCrew count drops by 1
             _ = LoadAsync();
         }
@@ -675,20 +677,19 @@
 
         _groupInviteSummary = result;
 
-        // Mark newly-invited crew so the per-crew list shows the right state
-        // and remove them from the pickable roster.
+        // Mark newly-invited crew so each row flips to the 'Invited'
+        // badge + Revoke button. We keep the crew in _roster (parallel
+        // to the per-crew Invite path) so the vendor sees consistent
+        // state across the whole list — every row is always visible,
+        // only its right-hand control changes.
         if (result.InvitedNames.Count > 0 && _roster is not null)
         {
             var invitedSet = result.InvitedNames.ToHashSet();
-            var stillInRoster = new List<CrewLite>();
             foreach (var c in _roster)
             {
                 if (invitedSet.Contains(c.FullName))
                     _existingByCrewId[c.Id] = "Invited";
-                else
-                    stillInRoster.Add(c);
             }
-            _roster = stillInRoster;
         }
 
         if (result.Invited > 0)
