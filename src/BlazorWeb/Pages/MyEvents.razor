@@ -182,17 +182,42 @@
                     <div class="space-y-2">
                         @foreach (var c in FilteredRoster)
                         {
-                            var busy = _assigningId == c.Id;
+                            var busy           = _assigningId == c.Id;
+                            var existingStatus = _existingByCrewId.TryGetValue(c.Id, out var st) ? st : null;
+                            var blocksReinvite = existingStatus is
+                                "Invited" or "VendorApproved" or "PendingManagerApproval" or
+                                "ManagerApproved" or "Confirmed" or "Attended";
+                            var canReinvite    = existingStatus is "Declined" or "RejectedByVendor" or "RejectedByManager" or "NoShow";
+
                             <div class="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition">
                                 <div>
                                     <p class="text-sm font-medium text-gray-800">@c.FullName</p>
                                     <p class="text-xs text-gray-400">@c.Mobile</p>
                                 </div>
-                                <button @onclick="() => AssignCrewMember(c)"
-                                        disabled="@(busy || _assigningId != Guid.Empty)"
-                                        class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-50 transition">
-                                    @(busy ? "Assigning…" : "Invite")
-                                </button>
+
+                                @if (blocksReinvite)
+                                {
+                                    <span class="px-3 py-1.5 rounded-lg text-xs font-semibold @AssignBadgeClass(existingStatus!)">
+                                        @AssignBadgeLabel(existingStatus!)
+                                    </span>
+                                }
+                                else if (canReinvite)
+                                {
+                                    <button @onclick="() => AssignCrewMember(c)"
+                                            disabled="@(busy || _assigningId != Guid.Empty)"
+                                            class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold disabled:opacity-50 transition"
+                                            title="Previously @existingStatus — invite again">
+                                        @(busy ? "Assigning…" : "↻ Re-invite")
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button @onclick="() => AssignCrewMember(c)"
+                                            disabled="@(busy || _assigningId != Guid.Empty)"
+                                            class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold disabled:opacity-50 transition">
+                                        @(busy ? "Assigning…" : "Invite")
+                                    </button>
+                                }
                             </div>
                         }
                     </div>
@@ -266,6 +291,7 @@
     // Assign panel state
     private EventListItemDto? _assignTarget;
     private List<CrewLite>? _roster;
+    private Dictionary<Guid, string> _existingByCrewId = new(); // crewId → current Status
     private string _crewSearch = "";
     private string? _assignError;
     private string? _assignSuccess;
@@ -443,21 +469,39 @@
         _assigningId    = Guid.Empty;
         _crewSearch     = "";
         _roster         = null;
+        _existingByCrewId = new();
         StateHasChanged();
 
         if (_userId is null) { _assignError = "Couldn't identify your account."; return; }
 
-        var page = await VendorApi.GetCrewAsync(page: 1, vendorId: _userId);
-        _roster = page?.Items?.Select(c => new CrewLite(c.Id, c.FullName, c.Mobile)).ToList() ?? new();
+        // Roster + existing assignments load in parallel.
+        var rosterTask     = VendorApi.GetCrewAsync(page: 1, vendorId: _userId);
+        var assignmentTask = EventApi.GetAssignmentsAsync(ev.Id, page: 1);
+        await Task.WhenAll(rosterTask, assignmentTask);
+
+        var rosterPage   = await rosterTask;
+        var assignments  = await assignmentTask;
+
+        _roster = rosterPage?.Items?.Select(c => new CrewLite(c.Id, c.FullName, c.Mobile)).ToList() ?? new();
+
+        // Build crewId → latest Status map (only this vendor's crew rows).
+        if (assignments?.Items is { Count: > 0 })
+        {
+            _existingByCrewId = assignments.Items
+                .Where(a => a.CrewId.HasValue && a.VendorId == _userId)
+                .GroupBy(a => a.CrewId!.Value)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CreatedAt).First().Status);
+        }
         StateHasChanged();
     }
 
     private void CloseAssignPanel()
     {
-        _assignTarget = null;
-        _roster       = null;
-        _assignError  = null;
-        _assignSuccess = null;
+        _assignTarget     = null;
+        _roster           = null;
+        _assignError      = null;
+        _assignSuccess    = null;
+        _existingByCrewId = new();
     }
 
     private async Task AssignCrewMember(CrewLite c)
@@ -473,6 +517,7 @@
         if (ok)
         {
             _assignSuccess = $"Invited {c.FullName}.";
+            _existingByCrewId[c.Id] = "Invited";
             // Remove from roster list so vendor can't double-add
             _roster = _roster?.Where(x => x.Id != c.Id).ToList();
             // Refresh event list to bump AssignedCrew count
@@ -527,5 +572,27 @@
         string Status, DateTime? ConfirmedAt, DateTime? DeclinedAt, DateTime CreatedAt);
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
-    private sealed record CrewLite(Guid Id, string FullName, string Mobile);
+    private static string AssignBadgeLabel(string status) => status switch
+    {
+        "Invited"                => "✓ Invited",
+        "VendorApproved"         => "✓ You approved",
+        "PendingManagerApproval" => "⏳ Awaiting Manager",
+        "ManagerApproved"        => "✓ Approved",
+        "Confirmed"              => "✓ Confirmed",
+        "Attended"               => "✓ Attended",
+        _                        => status
+    };
+
+    private static string AssignBadgeClass(string status) => status switch
+    {
+        "Invited"                => "bg-amber-100 text-amber-700",
+        "VendorApproved"         => "bg-emerald-100 text-emerald-700",
+        "PendingManagerApproval" => "bg-purple-100 text-purple-700",
+        "ManagerApproved"        => "bg-green-100 text-green-700",
+        "Confirmed"              => "bg-green-100 text-green-700",
+        "Attended"               => "bg-teal-100 text-teal-700",
+        _                        => "bg-gray-100 text-gray-600"
+    };
+
+        private sealed record CrewLite(Guid Id, string FullName, string Mobile);
 }
