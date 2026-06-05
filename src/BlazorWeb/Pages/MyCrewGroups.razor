@@ -1,0 +1,403 @@
+@page "/my-crew-groups"
+@attribute [Authorize(Roles = "Vendor")]
+@inject ICrewGroupApiService GroupsApi
+@inject IVendorApiService    VendorApi
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthState
+
+<PageTitle>Crew Groups — EventWOS</PageTitle>
+
+<div class="space-y-5">
+    <div class="flex items-center justify-between flex-wrap gap-3">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">Crew Groups</h2>
+            <p class="text-sm text-gray-500">Save named teams and invite them all to an event in one click.</p>
+        </div>
+        <button @onclick="OpenCreate"
+                class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow">
+            + Create Group
+        </button>
+    </div>
+
+    <div class="relative max-w-sm">
+        <input @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp"
+               placeholder="Search groups…"
+               class="w-64 pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex justify-center py-16">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
+    }
+    else if (_groups is null || _groups.Items.Count == 0)
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+            <p class="text-4xl mb-3">🧑‍🤝‍🧑</p>
+            <p class="text-gray-700 font-medium text-sm">No crew groups yet</p>
+            <p class="text-gray-400 text-xs mt-1">Create your first group to invite a whole team to events at once.</p>
+        </div>
+    }
+    else
+    {
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            @foreach (var g in _groups.Items)
+            {
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-shadow">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <h3 class="font-bold text-gray-800 leading-snug truncate">@g.Name</h3>
+                            @if (!string.IsNullOrWhiteSpace(g.Description))
+                            {
+                                <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">@g.Description</p>
+                            }
+                        </div>
+                        <span class="shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            @g.MemberCount @(g.MemberCount == 1 ? "member" : "members")
+                        </span>
+                    </div>
+
+                    <div class="text-[11px] text-gray-400">
+                        Created @g.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")
+                    </div>
+
+                    <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
+                        <button @onclick="() => OpenEdit(g)"
+                                class="flex-1 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition">
+                            ✏️ Edit Members
+                        </button>
+                        <button @onclick="() => OpenRename(g)"
+                                class="px-3 py-1.5 rounded-lg text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 text-xs font-semibold transition"
+                                title="Rename">
+                            ✎
+                        </button>
+                        <button @onclick="() => OpenDelete(g)"
+                                class="px-3 py-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 text-xs font-semibold transition"
+                                title="Delete">
+                            🗑
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── Create / Rename Modal ───────────────────────────────────────────────── *@
+@if (_showNameModal)
+{
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @onclick="CloseNameModal">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" @onclick:stopPropagation>
+            <h3 class="font-bold text-gray-800 text-lg">
+                @(_editingGroup is null ? "Create Group" : "Rename Group")
+            </h3>
+
+            <div class="space-y-2">
+                <label class="block text-xs font-semibold text-gray-600">Name</label>
+                <input @bind="_formName"
+                       maxlength="120"
+                       placeholder="e.g. Lighting A-Team"
+                       class="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-sm" />
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-xs font-semibold text-gray-600">Description <span class="text-gray-400">(optional)</span></label>
+                <textarea @bind="_formDescription"
+                          maxlength="500" rows="2"
+                          placeholder="What's this team for?"
+                          class="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-sm resize-none"></textarea>
+            </div>
+
+            @if (_formError is not null)
+            {
+                <div class="p-2.5 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs">⚠️ @_formError</div>
+            }
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button @onclick="CloseNameModal" class="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition">Cancel</button>
+                <button @onclick="SubmitNameModal" disabled="@_saving"
+                        class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition">
+                    @(_saving ? "Saving…" : (_editingGroup is null ? "Create" : "Save"))
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Edit Members Modal ─────────────────────────────────────────────────── *@
+@if (_showMembersModal && _editingGroup is not null)
+{
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @onclick="CloseMembersModal">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col" @onclick:stopPropagation>
+            <div class="p-5 border-b border-gray-100">
+                <h3 class="font-bold text-gray-800 text-lg">Edit Members</h3>
+                <p class="text-xs text-gray-500 mt-0.5">@_editingGroup.Name</p>
+            </div>
+
+            <div class="p-5 flex-1 overflow-y-auto">
+                <input @bind="_memberSearch" @bind:event="oninput"
+                       placeholder="Search your crew…"
+                       class="w-full px-4 py-2 mb-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-sm" />
+
+                <p class="text-xs text-gray-500 mb-2">
+                    <span class="font-semibold text-indigo-700">@_selectedMemberIds.Count</span> selected of @(_roster?.Count ?? 0) in your roster.
+                </p>
+
+                @if (_roster is null)
+                {
+                    <p class="text-center text-gray-400 text-sm py-8">Loading roster…</p>
+                }
+                else if (_roster.Count == 0)
+                {
+                    <div class="text-center py-8">
+                        <p class="text-3xl mb-2">👷</p>
+                        <p class="text-gray-700 text-sm font-medium">No crew in your roster</p>
+                        <p class="text-gray-400 text-xs mt-1">Add crew first from the <a href="/crew" class="text-indigo-600 underline">My Crew</a> page.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="space-y-2">
+                        @foreach (var c in FilteredRoster)
+                        {
+                            var isSelected = _selectedMemberIds.Contains(c.Id);
+                            <label class="flex items-center justify-between p-3 rounded-xl border @(isSelected ? "border-indigo-300 bg-indigo-50/50" : "border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30") cursor-pointer transition">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-800">@c.FullName</p>
+                                    <p class="text-xs text-gray-400">@c.Mobile</p>
+                                </div>
+                                <input type="checkbox" checked="@isSelected"
+                                       @onchange="(e) => ToggleMember(c.Id, e.Value is bool b && b)"
+                                       class="w-4 h-4 accent-indigo-600" />
+                            </label>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (_formError is not null)
+            {
+                <div class="px-5 pb-2">
+                    <div class="p-2.5 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs">⚠️ @_formError</div>
+                </div>
+            }
+
+            <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
+                <button @onclick="CloseMembersModal" class="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition">Cancel</button>
+                <button @onclick="SaveMembers" disabled="@_saving"
+                        class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition">
+                    @(_saving ? "Saving…" : "Save Members")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Delete Modal ────────────────────────────────────────────────────────── *@
+@if (_showDeleteModal && _editingGroup is not null)
+{
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @onclick="CloseDeleteModal">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" @onclick:stopPropagation>
+            <h3 class="font-bold text-gray-800 text-lg">Delete group?</h3>
+            <p class="text-sm text-gray-600">
+                <span class="font-semibold">"@_editingGroup.Name"</span> will be removed. Crew members in your roster are not affected.
+            </p>
+            @if (_formError is not null)
+            {
+                <div class="p-2.5 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs">⚠️ @_formError</div>
+            }
+            <div class="flex justify-end gap-2 pt-1">
+                <button @onclick="CloseDeleteModal" class="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition">Cancel</button>
+                <button @onclick="ConfirmDelete" disabled="@_saving"
+                        class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition">
+                    @(_saving ? "Deleting…" : "Delete")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private PagedCrewGroupResult? _groups;
+    private bool   _loading = true;
+    private string _search  = "";
+    private System.Threading.CancellationTokenSource? _searchDebounce;
+
+    // shared modal state
+    private CrewGroupDto? _editingGroup;
+    private bool   _showNameModal;
+    private bool   _showMembersModal;
+    private bool   _showDeleteModal;
+    private string  _formName = "";
+    private string? _formDescription;
+    private string? _formError;
+    private bool    _saving;
+
+    // members state
+    private List<CrewLite>? _roster;
+    private HashSet<Guid>   _selectedMemberIds = new();
+    private string          _memberSearch = "";
+
+    private Guid? _vendorId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var st   = await AuthState.GetAuthenticationStateAsync();
+        var idC  = st.User.FindFirst("sub") ?? st.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (idC is not null && Guid.TryParse(idC.Value, out var id)) _vendorId = id;
+
+        await LoadGroups();
+    }
+
+    private async Task LoadGroups()
+    {
+        _loading = true; StateHasChanged();
+        _groups  = await GroupsApi.GetGroupsAsync(page: 1,
+            search: string.IsNullOrWhiteSpace(_search) ? null : _search);
+        _loading = false;
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        _searchDebounce?.Cancel();
+        _searchDebounce = new System.Threading.CancellationTokenSource();
+        var tok = _searchDebounce.Token;
+        try { await Task.Delay(300, tok); } catch { return; }
+        if (!tok.IsCancellationRequested) await LoadGroups();
+    }
+
+    // ── Create / Rename ──────────────────────────────────────────────────────
+    private void OpenCreate()
+    {
+        _editingGroup    = null;
+        _formName        = "";
+        _formDescription = null;
+        _formError       = null;
+        _showNameModal   = true;
+    }
+
+    private void OpenRename(CrewGroupDto g)
+    {
+        _editingGroup    = g;
+        _formName        = g.Name;
+        _formDescription = g.Description;
+        _formError       = null;
+        _showNameModal   = true;
+    }
+
+    private void CloseNameModal() { _showNameModal = false; _editingGroup = null; _formError = null; }
+
+    private async Task SubmitNameModal()
+    {
+        if (string.IsNullOrWhiteSpace(_formName))
+        {
+            _formError = "Name is required.";
+            return;
+        }
+        _saving = true; _formError = null;
+        if (_editingGroup is null)
+        {
+            var (ok, _, err) = await GroupsApi.CreateAsync(_formName.Trim(), _formDescription?.Trim());
+            _saving = false;
+            if (!ok) { _formError = err ?? "Failed to create."; return; }
+        }
+        else
+        {
+            var (ok, _, err) = await GroupsApi.UpdateAsync(_editingGroup.Id, _formName.Trim(), _formDescription?.Trim());
+            _saving = false;
+            if (!ok) { _formError = err ?? "Failed to update."; return; }
+        }
+        _showNameModal = false;
+        _editingGroup  = null;
+        await LoadGroups();
+    }
+
+    // ── Members ──────────────────────────────────────────────────────────────
+    private async Task OpenEdit(CrewGroupDto g)
+    {
+        _editingGroup = g;
+        _formError    = null;
+        _memberSearch = "";
+        _roster       = null;
+        _selectedMemberIds = new();
+        _showMembersModal = true;
+        StateHasChanged();
+
+        // Load detail + roster in parallel.
+        var detailTask = GroupsApi.GetGroupAsync(g.Id);
+        var rosterTask = _vendorId is null
+            ? Task.FromResult<PagedCrewResult?>(null)
+            : VendorApi.GetCrewAsync(page: 1, vendorId: _vendorId);
+
+        await Task.WhenAll(detailTask, rosterTask);
+
+        var detail = await detailTask;
+        var roster = await rosterTask;
+        _roster = roster?.Items?.Select(c => new CrewLite(c.Id, c.FullName, c.Mobile)).ToList() ?? new();
+        if (detail is not null)
+            _selectedMemberIds = detail.Members.Select(m => m.CrewId).ToHashSet();
+        StateHasChanged();
+    }
+
+    private void CloseMembersModal() { _showMembersModal = false; _editingGroup = null; _formError = null; }
+
+    private void ToggleMember(Guid crewId, bool selected)
+    {
+        if (selected) _selectedMemberIds.Add(crewId);
+        else          _selectedMemberIds.Remove(crewId);
+    }
+
+    private async Task SaveMembers()
+    {
+        if (_editingGroup is null) return;
+        _saving = true; _formError = null;
+        var (ok, _, err) = await GroupsApi.SetMembersAsync(_editingGroup.Id, _selectedMemberIds.ToList());
+        _saving = false;
+        if (!ok) { _formError = err ?? "Failed to save."; return; }
+        _showMembersModal = false;
+        _editingGroup     = null;
+        await LoadGroups();
+    }
+
+    // ── Delete ───────────────────────────────────────────────────────────────
+    private void OpenDelete(CrewGroupDto g)
+    {
+        _editingGroup     = g;
+        _formError        = null;
+        _showDeleteModal  = true;
+    }
+
+    private void CloseDeleteModal() { _showDeleteModal = false; _editingGroup = null; _formError = null; }
+
+    private async Task ConfirmDelete()
+    {
+        if (_editingGroup is null) return;
+        _saving = true; _formError = null;
+        var (ok, err) = await GroupsApi.DeleteAsync(_editingGroup.Id);
+        _saving = false;
+        if (!ok) { _formError = err ?? "Failed to delete."; return; }
+        _showDeleteModal = false;
+        _editingGroup    = null;
+        await LoadGroups();
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    private IReadOnlyList<CrewLite> FilteredRoster
+    {
+        get
+        {
+            if (_roster is null) return Array.Empty<CrewLite>();
+            if (string.IsNullOrWhiteSpace(_memberSearch)) return _roster;
+            var s = _memberSearch.Trim().ToLowerInvariant();
+            return _roster.Where(c =>
+                c.FullName.ToLowerInvariant().Contains(s)
+             || c.Mobile.ToLowerInvariant().Contains(s)).ToList();
+        }
+    }
+
+    private sealed record CrewLite(Guid Id, string FullName, string Mobile);
+}

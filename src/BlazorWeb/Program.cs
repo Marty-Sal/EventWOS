@@ -41,6 +41,7 @@ builder.Services.AddScoped<IManagerApiService, ManagerApiService>();
 builder.Services.AddScoped<PermissionGuard>();
 builder.Services.AddScoped<IAnalyticsApiService, AnalyticsApiService>();
 builder.Services.AddScoped<IPaymentApiService, PaymentApiService>();
+builder.Services.AddScoped<ICrewGroupApiService, CrewGroupApiService>();
 builder.Services.AddScoped<TokenRefreshService>();
 builder.Services.AddScoped<NotificationHubService>();
 

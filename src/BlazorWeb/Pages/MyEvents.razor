@@ -4,6 +4,7 @@
 @inject AuthenticationStateProvider Auth
 @inject IEventApiService EventApi
 @inject IVendorApiService VendorApi
+@inject ICrewGroupApiService GroupsApi
 @inject NotificationHubService Hub
 @implements IAsyncDisposable
 
@@ -161,6 +162,70 @@
                     <div class="mb-3 p-3 bg-green-50 border border-green-100 rounded-lg text-green-700 text-xs">✓ @_assignSuccess</div>
                 }
 
+                @* ─── Invite a saved group ─────────────────────────────────────── *@
+                @if (_groupsForPicker is not null && _groupsForPicker.Count > 0)
+                {
+                    <div class="mb-4 p-3 rounded-xl border border-indigo-100 bg-indigo-50/40 space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="min-w-0">
+                                <p class="text-xs font-bold text-indigo-700 uppercase tracking-wide">Invite a Group</p>
+                                <p class="text-[11px] text-gray-500">Send invites to a whole saved team at once.</p>
+                            </div>
+                            <a href="/my-crew-groups" class="text-[11px] text-indigo-600 hover:underline shrink-0">Manage</a>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <select @bind="_selectedGroupId"
+                                    class="flex-1 px-3 py-2 rounded-lg border border-indigo-200 bg-white text-sm focus:outline-none focus:border-indigo-400">
+                                <option value="">Choose a group…</option>
+                                @foreach (var g in _groupsForPicker)
+                                {
+                                    <option value="@g.Id">@g.Name (@g.MemberCount)</option>
+                                }
+                            </select>
+                            <button @onclick="InviteGroup"
+                                    disabled="@(_invitingGroup || string.IsNullOrEmpty(_selectedGroupId))"
+                                    class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition">
+                                @(_invitingGroup ? "Inviting…" : "Invite All")
+                            </button>
+                        </div>
+
+                        @if (_groupInviteSummary is not null)
+                        {
+                            <div class="text-xs text-gray-700 bg-white border border-indigo-100 rounded-lg p-2.5 space-y-1">
+                                <p>
+                                    <span class="font-semibold text-green-700">Invited @_groupInviteSummary.Invited</span>
+                                    @if (_groupInviteSummary.SkippedAlreadyOnEvent > 0)
+                                    {
+                                        <span class="text-gray-500"> · Skipped @_groupInviteSummary.SkippedAlreadyOnEvent (already on event)</span>
+                                    }
+                                    @if (_groupInviteSummary.Failed > 0)
+                                    {
+                                        <span class="text-red-600"> · Failed @_groupInviteSummary.Failed</span>
+                                    }
+                                </p>
+                                @if (_groupInviteSummary.InvitedNames.Count > 0)
+                                {
+                                    <p class="text-[11px] text-gray-500">✓ @string.Join(", ", _groupInviteSummary.InvitedNames)</p>
+                                }
+                                @if (_groupInviteSummary.Failures.Count > 0)
+                                {
+                                    @foreach (var f in _groupInviteSummary.Failures)
+                                    {
+                                        <p class="text-[11px] text-red-600">⚠️ @f.FullName — @f.Reason</p>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="flex-1 h-px bg-gray-200"></div>
+                        <span class="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">or pick individually</span>
+                        <div class="flex-1 h-px bg-gray-200"></div>
+                    </div>
+                }
+
                 <input type="text" placeholder="Search your crew…"
                        @bind="_crewSearch" @bind:event="oninput"
                        class="w-full px-4 py-2 mb-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-sm" />
@@ -291,6 +356,10 @@
     // Assign panel state
     private EventListItemDto? _assignTarget;
     private List<CrewLite>? _roster;
+    private List<CrewGroupDto>? _groupsForPicker;
+    private string _selectedGroupId = "";
+    private VendorAssignGroupResultDto? _groupInviteSummary;
+    private bool _invitingGroup;
     private Dictionary<Guid, string> _existingByCrewId = new(); // crewId → current Status
     private string _crewSearch = "";
     private string? _assignError;
@@ -474,13 +543,19 @@
 
         if (_userId is null) { _assignError = "Couldn't identify your account."; return; }
 
-        // Roster + existing assignments load in parallel.
+        // Roster + existing assignments + saved groups all load in parallel.
         var rosterTask     = VendorApi.GetCrewAsync(page: 1, vendorId: _userId);
         var assignmentTask = EventApi.GetAssignmentsAsync(ev.Id, page: 1);
-        await Task.WhenAll(rosterTask, assignmentTask);
+        var groupsTask     = GroupsApi.GetGroupsAsync(page: 1);
+        await Task.WhenAll(rosterTask, assignmentTask, groupsTask);
 
         var rosterPage   = await rosterTask;
         var assignments  = await assignmentTask;
+        var groups       = await groupsTask;
+        _groupsForPicker = groups?.Items?.Where(g => g.MemberCount > 0).ToList() ?? new();
+        _selectedGroupId    = "";
+        _groupInviteSummary = null;
+        _invitingGroup      = false;
 
         _roster = rosterPage?.Items?.Select(c => new CrewLite(c.Id, c.FullName, c.Mobile)).ToList() ?? new();
 
@@ -502,6 +577,10 @@
         _assignError      = null;
         _assignSuccess    = null;
         _existingByCrewId = new();
+        _groupsForPicker  = null;
+        _selectedGroupId  = "";
+        _groupInviteSummary = null;
+        _invitingGroup    = false;
     }
 
     private async Task AssignCrewMember(CrewLite c)
@@ -527,6 +606,51 @@
         {
             _assignError = err ?? "Couldn't assign that crew member.";
         }
+        StateHasChanged();
+    }
+
+    private async Task InviteGroup()
+    {
+        if (_assignTarget is null) return;
+        if (!Guid.TryParse(_selectedGroupId, out var gid)) return;
+
+        _invitingGroup       = true;
+        _assignError         = null;
+        _assignSuccess       = null;
+        _groupInviteSummary  = null;
+        StateHasChanged();
+
+        var (ok, result, err) = await GroupsApi.InviteGroupToEventAsync(_assignTarget.Id, gid);
+        _invitingGroup = false;
+
+        if (!ok || result is null)
+        {
+            _assignError = err ?? "Couldn't invite that group.";
+            StateHasChanged();
+            return;
+        }
+
+        _groupInviteSummary = result;
+
+        // Mark newly-invited crew so the per-crew list shows the right state
+        // and remove them from the pickable roster.
+        if (result.InvitedNames.Count > 0 && _roster is not null)
+        {
+            var invitedSet = result.InvitedNames.ToHashSet();
+            var stillInRoster = new List<CrewLite>();
+            foreach (var c in _roster)
+            {
+                if (invitedSet.Contains(c.FullName))
+                    _existingByCrewId[c.Id] = "Invited";
+                else
+                    stillInRoster.Add(c);
+            }
+            _roster = stillInRoster;
+        }
+
+        if (result.Invited > 0)
+            _ = LoadAsync();   // bump AssignedCrew count on event cards
+
         StateHasChanged();
     }
 
