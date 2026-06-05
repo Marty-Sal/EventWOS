@@ -67,7 +67,51 @@ public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPayment
             cmd.AgreedAmount, cmd.Notes);
 
         await _db.CrewPayments.AddAsync(payment, ct);
-        await _uow.SaveChangesAsync(ct);
+
+        // ── Vendor-routed direct payments: auto-wrap in a PayrollBatch ────────
+        // When a crew was invited via a vendor (VendorId is set), the manager
+        // can still create an ad-hoc payment from the "+ New Payment" form.
+        // Historically that left the row orphaned (no batch), so the vendor
+        // never got the standard Approve → Disburse → MarkPaid flow. We now
+        // attach it to an existing Draft batch for the same vendor+event, or
+        // spin up a fresh one. Direct-to-crew payments (no vendor) still
+        // skip this — those are paid out by the organiser directly.
+        PayrollBatch? autoBatch = null;
+        bool          autoBatchIsNew = false;
+        if (cmd.VendorId is { } _vidAuto)
+        {
+            autoBatch = await _db.PayrollBatches
+                .Where(b => b.VendorId == _vidAuto
+                         && b.EventId  == cmd.EventId
+                         && b.Status   == PayrollStatus.Draft)
+                .OrderByDescending(b => b.CreatedAt)
+                .FirstOrDefaultAsync(ct);
+
+            if (autoBatch is null)
+            {
+                var batchRef = $"PAY-{cmd.EventId.ToString()[..8].ToUpper()}-{DateTime.UtcNow:yyyyMMddHHmm}";
+                autoBatch = new PayrollBatch(_vidAuto, cmd.EventId, batchRef, cmd.Notes);
+                await _db.PayrollBatches.AddAsync(autoBatch, ct);
+                autoBatchIsNew = true;
+            }
+        }
+
+        await _uow.SaveChangesAsync(ct);   // get payment.Id + autoBatch.Id
+
+        if (autoBatch is not null)
+        {
+            payment.AttachToPayroll(autoBatch.Id);
+
+            // Recalculate batch total from all non-rejected payments now attached.
+            var batchTotal = await _db.CrewPayments
+                .Where(p => p.PayrollBatchId == autoBatch.Id
+                         && p.Status != PaymentStatus.Rejected)
+                .SumAsync(p => p.AgreedAmount, ct)
+                + payment.AgreedAmount; // include the row we just attached (not yet flushed)
+            autoBatch.SetTotal(batchTotal);
+
+            await _uow.SaveChangesAsync(ct);
+        }
 
         // Fan out so each role's payment screen surfaces the new row live.
         var payload = new
@@ -82,6 +126,21 @@ public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPayment
         if (payment.VendorId is { } _vid_pc) await _push.PushToUserAsync(_vid_pc, "PaymentCreated", payload, ct);
         await _push.PushToRoleAsync("Admin",          "PaymentCreated", payload, ct);
         await _push.PushToRoleAsync("Manager",        "PaymentCreated", payload, ct);
+
+        // Tell every payments screen the batch moved so the row regroups.
+        if (autoBatch is not null)
+        {
+            var batchPayload = new
+            {
+                batchId = autoBatch.Id,
+                status  = autoBatch.Status.ToString(),
+                action  = autoBatchIsNew ? "created" : "updated"
+            };
+            await _push.PushToRoleAsync("Admin",   "PayrollUpdated", batchPayload, ct);
+            await _push.PushToRoleAsync("Manager", "PayrollUpdated", batchPayload, ct);
+            if (payment.VendorId is { } _vid_bp)
+                await _push.PushToUserAsync(_vid_bp, "PayrollUpdated", batchPayload, ct);
+        }
 
         return Result.Success(payment.Id);
     }

@@ -30,7 +30,7 @@ public sealed record PayableLineDto(
     string  PartyMobile,
     int     AttendedCrewCount, // for Vendor lines, how many of their crew attended
     decimal SuggestedAmount,   // sum of agreed amounts on existing assignments (0 if none)
-    bool    AlreadyHasPayment  // true if any unbatched payment already exists for this party on this event
+    bool    AlreadyHasPayment  // true if any non-rejected payment already exists for this party on this event (batched or not)
 );
 
 public sealed class GetEventPayableRosterHandler
@@ -90,10 +90,13 @@ public sealed class GetEventPayableRosterHandler
             })
             .ToListAsync(ct);
 
-        // Existing un-batched payment rows so we can flag duplicates.
+        // Existing non-rejected payment rows so we can grey out parties already
+        // covered. We count BOTH batched and un-batched payments — once a row
+        // exists for a vendor/crew on this event, the manager shouldn't add a
+        // second one from the "New Payroll Batch" dialog. (Auto-batched ad-hoc
+        // payments created via "+ New Payment" land here too.)
         var existingPayments = await _db.CrewPayments
             .Where(p => p.EventId == q.EventId
-                     && p.PayrollBatchId == null
                      && p.Status != PaymentStatus.Rejected)
             .Select(p => new { p.VendorId, p.CrewId })
             .ToListAsync(ct);
