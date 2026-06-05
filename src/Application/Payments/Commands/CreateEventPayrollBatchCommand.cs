@@ -90,35 +90,24 @@ public sealed class CreateEventPayrollBatchHandler
                 Error.Custom("Payroll.NoAmounts",
                     "Enter an amount for at least one row before creating the batch."));
 
-        // ── 3. Pull all attended assignments for this event (the universe of payable rows)
-        var attendedAssignmentIds = await _db.AttendanceRecords
-            .Where(r => r.EventId == cmd.EventId && r.Action == AttendanceAction.CheckIn)
-            .Select(r => r.AssignmentId)
-            .Distinct()
-            .ToListAsync(ct);
-
-        if (attendedAssignmentIds.Count == 0)
-            return Result.Failure<EventPayrollBatchResult>(
-                Error.Custom("Payroll.NoAttendance",
-                    "No crew checked in for this event yet — nothing to pay."));
-
-        var rejected = new[]
-        {
-            AssignmentStatus.Declined,
-            AssignmentStatus.RejectedByVendor,
-            AssignmentStatus.RejectedByManager,
-            AssignmentStatus.NoShow
-        };
-
+        // ── 3. Pull every assignment whose Status == Attended (the payable universe).
+        //    Status is the source of truth — set by real CheckIn (MarkAttended)
+        //    AND by AdminMarkAttended overrides. The earlier CheckIn-record
+        //    filter silently dropped admin-overridden crew.
         var attendedAssignments = await _db.EventAssignments
             .Where(a => a.EventId == cmd.EventId
                      && a.CrewId  != null
-                     && !rejected.Contains(a.Status)
-                     && attendedAssignmentIds.Contains(a.Id))
+                     && a.Status  == AssignmentStatus.Attended)
             .Select(a => new { a.Id, a.VendorId, CrewId = a.CrewId!.Value })
             .ToListAsync(ct);
 
+        if (attendedAssignments.Count == 0)
+            return Result.Failure<EventPayrollBatchResult>(
+                Error.Custom("Payroll.NoAttendance",
+                    "No crew have attended this event yet — nothing to pay."));
+
         // Skip anyone that already has a payment row.
+        var attendedAssignmentIds = attendedAssignments.Select(a => a.Id).ToList();
         var alreadyPaidAssignments = await _db.CrewPayments
             .Where(p => attendedAssignmentIds.Contains(p.AssignmentId))
             .Select(p => p.AssignmentId)

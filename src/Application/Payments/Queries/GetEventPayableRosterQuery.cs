@@ -50,34 +50,17 @@ public sealed class GetEventPayableRosterHandler
         if (ev is null)
             return Result.Failure<EventPayableRosterDto>(Error.Custom("Event.NotFound", "Event not found."));
 
-        // Only attended crew count as payable. Pull all CheckIn records for the event.
-        var attendedAssignmentIds = await _db.AttendanceRecords
-            .Where(r => r.EventId == q.EventId && r.Action == AttendanceAction.CheckIn)
-            .Select(r => r.AssignmentId)
-            .Distinct()
-            .ToListAsync(ct);
-
-        if (attendedAssignmentIds.Count == 0)
-        {
-            return Result.Success(new EventPayableRosterDto(
-                ev.Id, ev.Title, ev.Status.ToString(), ev.StartAt,
-                Array.Empty<PayableLineDto>(), Array.Empty<PayableLineDto>()));
-        }
-
-        // Active (non-rejected) assignments that actually attended.
-        var rejected = new[]
-        {
-            AssignmentStatus.Declined,
-            AssignmentStatus.RejectedByVendor,
-            AssignmentStatus.RejectedByManager,
-            AssignmentStatus.NoShow
-        };
-
+        // Payable universe = every assignment whose Status is Attended.
+        // Status is the post-event source of truth: it flips to Attended either
+        // via a real CheckIn (RecordAttendanceCommand → MarkAttended) OR via an
+        // admin override (AdminMarkAttendedCommand). Earlier this query keyed
+        // off raw AttendanceRecords with Action == CheckIn, which silently
+        // dropped admin-override rows — e.g. Sam Martin on "The MIX" was
+        // marked attended by Admin but invisible to the roster.
         var assignments = await _db.EventAssignments
             .Where(a => a.EventId == q.EventId
                      && a.CrewId  != null
-                     && !rejected.Contains(a.Status)
-                     && attendedAssignmentIds.Contains(a.Id))
+                     && a.Status  == AssignmentStatus.Attended)
             .Select(a => new
             {
                 a.Id,

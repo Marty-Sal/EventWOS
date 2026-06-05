@@ -82,42 +82,23 @@ public sealed class CreatePayrollBatchHandler : IRequestHandler<CreatePayrollBat
             && cmd.DefaultAmountPerCrew is decimal rate && rate > 0)
         {
             // Per the Payment & Settlement Lifecycle in the product doc,
-            // attendance is the gate for payment — NOT the assignment-approval
-            // workflow. So we accept any non-rejected assignment for this
-            // vendor/event that has at least one CheckIn record.
-            var rejectedStates = new[]
-            {
-                AssignmentStatus.Declined,
-                AssignmentStatus.RejectedByVendor,
-                AssignmentStatus.RejectedByManager,
-                AssignmentStatus.NoShow
-            };
-
-            var candidateAssignments = await _db.EventAssignments
+            // Candidate set = every attended assignment for this vendor on
+            // this event. We rely on Status == Attended (set by real CheckIn
+            // OR by AdminMarkAttended override) instead of raw CheckIn
+            // records, so admin-overridden crew get paid too.
+            var attendedAssignments = await _db.EventAssignments
                 .Where(a => a.EventId  == cmd.EventId
                          && a.VendorId == cmd.VendorId
                          && a.CrewId   != null
-                         && !rejectedStates.Contains(a.Status))
+                         && a.Status   == AssignmentStatus.Attended)
                 .Select(a => new { a.Id, a.CrewId })
                 .ToListAsync(ct);
 
-            if (candidateAssignments.Count == 0)
-                return Result.Failure<Guid>(Error.Custom("Payroll.NoCrew",
-                    "No active crew assignments found for this vendor on this event."));
-
-            var assignmentIds = candidateAssignments.Select(a => a.Id).ToList();
-
-            // Only pay crew that actually checked in at least once.
-            var attendedAssignmentIds = await _db.AttendanceRecords
-                .Where(r => assignmentIds.Contains(r.AssignmentId)
-                         && r.Action == AttendanceAction.CheckIn)
-                .Select(r => r.AssignmentId)
-                .Distinct()
-                .ToListAsync(ct);
-
-            if (attendedAssignmentIds.Count == 0)
+            if (attendedAssignments.Count == 0)
                 return Result.Failure<Guid>(Error.Custom("Payroll.NoAttendance",
-                    "No crew checked in for this event yet — nothing to pay. Mark attendance first."));
+                    "No crew have attended this event yet — nothing to pay."));
+
+            var attendedAssignmentIds = attendedAssignments.Select(a => a.Id).ToList();
 
             // Skip anyone that already has a payment row.
             var alreadyPaid = await _db.CrewPayments
@@ -125,9 +106,8 @@ public sealed class CreatePayrollBatchHandler : IRequestHandler<CreatePayrollBat
                 .Select(p => p.AssignmentId)
                 .ToListAsync(ct);
 
-            var toCreate = candidateAssignments
-                .Where(a => attendedAssignmentIds.Contains(a.Id)
-                         && !alreadyPaid.Contains(a.Id))
+            var toCreate = attendedAssignments
+                .Where(a => !alreadyPaid.Contains(a.Id))
                 .ToList();
 
             foreach (var a in toCreate)
