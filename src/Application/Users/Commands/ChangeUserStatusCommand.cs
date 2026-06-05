@@ -39,6 +39,31 @@ public sealed class ChangeUserStatusHandler : IRequestHandler<ChangeUserStatusCo
             default: return Result.Failure(Error.Custom("User.InvalidStatus", "Invalid status transition."));
         }
 
+        // ── Immediate logout for Suspend / Deactivate ────────────────────────────
+        // Terminate every active session and revoke every outstanding refresh
+        // token for this user. Combined with the JWT OnTokenValidated handler
+        // (which checks UserSession.IsActive on every request) and the 30s
+        // browser heartbeat, the user is bounced to the login page within
+        // ~30 seconds of the status flip — they cannot keep working with a
+        // stale token.
+        var deactivating = request.NewStatus is UserStatus.Suspended or UserStatus.Deactivated;
+        if (deactivating)
+        {
+            var reason = request.NewStatus == UserStatus.Suspended ? "user_suspended" : "user_deactivated";
+
+            var sessions = await _db.UserSessions
+                .Where(s => s.UserId == user.Id && s.IsActive)
+                .ToListAsync(ct);
+            foreach (var s in sessions)
+                s.Terminate(reason);
+
+            var tokens = await _db.RefreshTokens
+                .Where(r => r.UserId == user.Id && !r.IsRevoked)
+                .ToListAsync(ct);
+            foreach (var t in tokens)
+                t.Revoke(reason);
+        }
+
         await _uow.SaveChangesAsync(ct);
 
         await _audit.LogAsync(AuditAction.UserStatusChanged, "User", user.Id.ToString(),

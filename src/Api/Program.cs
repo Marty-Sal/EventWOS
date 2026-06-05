@@ -187,14 +187,33 @@ try
                     var db = ctx.HttpContext.RequestServices
                         .GetRequiredService<EventWOS.Application.Interfaces.IAppDbContext>();
 
-                    var isActive = await db.UserSessions
+                    // Session must still be active
+                    var sessionActive = await db.UserSessions
                         .AsNoTracking()
                         .AnyAsync(us => us.SessionId == sessionId && us.IsActive,
                                   ctx.HttpContext.RequestAborted);
 
-                    if (!isActive)
+                    if (!sessionActive)
                     {
                         ctx.Fail("session_revoked");
+                        return;
+                    }
+
+                    // Defense-in-depth: even if a session somehow remained active,
+                    // a Suspended or Deactivated user must not be allowed through.
+                    var subClaim = ctx.Principal?.FindFirst(
+                        System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+                    if (Guid.TryParse(subClaim, out var userId))
+                    {
+                        var userOk = await db.Users
+                            .AsNoTracking()
+                            .AnyAsync(u => u.Id == userId
+                                        && !u.IsDeleted
+                                        && u.Status == EventWOS.Domain.Enums.UserStatus.Active,
+                                      ctx.HttpContext.RequestAborted);
+
+                        if (!userOk)
+                            ctx.Fail("user_inactive");
                     }
                 }
             };
