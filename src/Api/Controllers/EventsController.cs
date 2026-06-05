@@ -214,7 +214,36 @@ public sealed class EventsController : ControllerBase
             : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 
-        /// <summary>
+    /// <summary>
+    /// Manager revokes a pending vendor invitation (vendor hasn't responded yet).
+    /// Soft-deletes the placeholder row.
+    /// </summary>
+    [Permission("events:write")]
+    [HttpDelete("vendor-invitations/{assignmentId:guid}")]
+    public async Task<IActionResult> RevokeVendorInvite(Guid assignmentId, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new RevokeVendorInviteCommand(assignmentId, _currentUser.UserId!.Value), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok())
+            : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
+    /// <summary>
+    /// Manager re-invites a vendor whose invitation was previously rejected.
+    /// </summary>
+    [Permission("events:write")]
+    [HttpPatch("vendor-invitations/{assignmentId:guid}/reinvite")]
+    public async Task<IActionResult> ReinviteVendor(Guid assignmentId, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new ReinviteVendorCommand(assignmentId, _currentUser.UserId!.Value), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok())
+            : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
+                /// <summary>
     /// Crew responds to an assignment invitation (confirm / decline).
     /// Uses profile:write — Crew always has this permission.
     /// </summary>

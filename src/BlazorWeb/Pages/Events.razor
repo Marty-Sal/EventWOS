@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject IEventApiService EventApi
 @inject IVendorApiService VendorApi
+@inject HttpClient Http
 @inject AuthenticationStateProvider Auth
 @inject NotificationHubService Hub
 @implements IAsyncDisposable
@@ -315,26 +316,59 @@
                         <div class="space-y-2">
                             @foreach (var a in _assignments!.Items)
                             {
-                                <div class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
-                                    <div>
-                                        <p class="text-sm font-medium text-gray-800">
-                                            @(string.IsNullOrEmpty(a.CrewName) ? "(Vendor to assign crew)" : a.CrewName)
-                                        </p>
-                                        <p class="text-xs text-gray-400">
-                                            @if (!string.IsNullOrEmpty(a.CrewMobile)) { <span>@a.CrewMobile</span> }
-                                            @if (!string.IsNullOrEmpty(a.VendorName))
+                                var isPlaceholder    = string.IsNullOrEmpty(a.CrewName) && !string.IsNullOrEmpty(a.VendorName);
+                                var canRevoke        = _canWrite && isPlaceholder && a.Status == "Invited";
+                                var canReinvite      = _canWrite && isPlaceholder && a.Status == "RejectedByVendor";
+                                var rowBusy          = _placeholderBusy == a.Id;
+
+                                <div class="bg-gray-50 rounded-xl px-4 py-2.5 space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-800">
+                                                @(string.IsNullOrEmpty(a.CrewName) ? "(Vendor to assign crew)" : a.CrewName)
+                                            </p>
+                                            <p class="text-xs text-gray-400">
+                                                @if (!string.IsNullOrEmpty(a.CrewMobile)) { <span>@a.CrewMobile</span> }
+                                                @if (!string.IsNullOrEmpty(a.VendorName))
+                                                {
+                                                    <span>@(string.IsNullOrEmpty(a.CrewMobile) ? "" : " · ")via @a.VendorName</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="italic text-amber-600">@(string.IsNullOrEmpty(a.CrewMobile) ? "" : " · ")direct</span>
+                                                }
+                                            </p>
+                                            @if (a.Status == "RejectedByVendor" && !string.IsNullOrEmpty(a.RejectionReason))
                                             {
-                                                <span>@(string.IsNullOrEmpty(a.CrewMobile) ? "" : " · ")via @a.VendorName</span>
+                                                <p class="text-[11px] text-rose-500 mt-0.5 italic">"@a.RejectionReason"</p>
                                             }
-                                            else
-                                            {
-                                                <span class="italic text-amber-600">@(string.IsNullOrEmpty(a.CrewMobile) ? "" : " · ")direct</span>
-                                            }
-                                        </p>
+                                        </div>
+                                        <span class="text-xs px-2.5 py-1 rounded-full font-semibold @GetAssignmentStatusClass(a.Status)">
+                                            @a.Status
+                                        </span>
                                     </div>
-                                    <span class="text-xs px-2.5 py-1 rounded-full font-semibold @GetAssignmentStatusClass(a.Status)">
-                                        @a.Status
-                                    </span>
+
+                                    @if (canRevoke || canReinvite)
+                                    {
+                                        <div class="flex justify-end gap-2 pt-1">
+                                            @if (canRevoke)
+                                            {
+                                                <button @onclick="() => RevokeVendorInvite(a)"
+                                                        disabled="@rowBusy"
+                                                        class="px-3 py-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-[11px] font-semibold disabled:opacity-50 transition">
+                                                    @(rowBusy ? "Revoking…" : "✕ Revoke Invite")
+                                                </button>
+                                            }
+                                            @if (canReinvite)
+                                            {
+                                                <button @onclick="() => ReinviteVendor(a)"
+                                                        disabled="@rowBusy"
+                                                        class="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold disabled:opacity-50 transition">
+                                                    @(rowBusy ? "Re-inviting…" : "↻ Re-invite")
+                                                </button>
+                                            }
+                                        </div>
+                                    }
                                 </div>
                             }
                         </div>
@@ -697,6 +731,7 @@ else
 @code {
     private bool _accessDenied;
     private bool _canWrite;
+    private Guid _placeholderBusy = Guid.Empty;
     // ── State ──────────────────────────────────────────────────────────────────
     private string _role = "";
     private bool   _loading = true;
@@ -1088,13 +1123,63 @@ else
         _            => "bg-gray-100 text-gray-600"
     };
 
-    private static string GetAssignmentStatusClass(string status) => status switch
+    private async Task RevokeVendorInvite(EventAssignmentDto a)
     {
-        "Pending"   => "bg-yellow-100 text-yellow-700",
-        "Confirmed" => "bg-green-100 text-green-700",
-        "Declined"  => "bg-red-100 text-red-600",
-        "Completed" => "bg-blue-100 text-blue-700",
-        _           => "bg-gray-100 text-gray-600"
+        _placeholderBusy = a.Id; StateHasChanged();
+        try
+        {
+            var resp = await Http.DeleteAsync($"api/v1/events/vendor-invitations/{a.Id}");
+            if (resp.IsSuccessStatusCode)
+            {
+                _success = "Vendor invitation revoked.";
+                if (_selectedEvent is not null) _assignments = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
+            }
+            else
+            {
+                _error = "Couldn't revoke invitation: " + await resp.Content.ReadAsStringAsync();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _placeholderBusy = Guid.Empty; StateHasChanged(); }
+    }
+
+    private async Task ReinviteVendor(EventAssignmentDto a)
+    {
+        _placeholderBusy = a.Id; StateHasChanged();
+        try
+        {
+            var resp = await Http.PatchAsJsonAsync(
+                $"api/v1/events/vendor-invitations/{a.Id}/reinvite", new { });
+            if (resp.IsSuccessStatusCode)
+            {
+                _success = "Vendor re-invited.";
+                if (_selectedEvent is not null) _assignments = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
+            }
+            else
+            {
+                _error = "Couldn't re-invite vendor: " + await resp.Content.ReadAsStringAsync();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _placeholderBusy = Guid.Empty; StateHasChanged(); }
+    }
+
+        private static string GetAssignmentStatusClass(string status) => status switch
+    {
+        "Pending"                 => "bg-yellow-100 text-yellow-700",
+        "Confirmed"               => "bg-green-100 text-green-700",
+        "Declined"                => "bg-red-100 text-red-600",
+        "Completed"               => "bg-blue-100 text-blue-700",
+        "Invited"                 => "bg-amber-100 text-amber-700",
+        "VendorAccepted"          => "bg-emerald-100 text-emerald-700",
+        "VendorApproved"          => "bg-emerald-100 text-emerald-700",
+        "PendingManagerApproval"  => "bg-purple-100 text-purple-700",
+        "ManagerApproved"         => "bg-green-100 text-green-700",
+        "RejectedByVendor"        => "bg-rose-100 text-rose-700",
+        "RejectedByManager"       => "bg-rose-100 text-rose-700",
+        "Attended"                => "bg-teal-100 text-teal-700",
+        "NoShow"                  => "bg-orange-100 text-orange-700",
+        _                          => "bg-gray-100 text-gray-600"
     };
 
     // ── Form Model ─────────────────────────────────────────────────────────────

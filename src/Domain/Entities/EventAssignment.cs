@@ -91,6 +91,26 @@ public sealed class EventAssignment : BaseEntity
         DeclinedAt        = DateTime.UtcNow;
     }
 
+        /// <summary>
+    /// Manager re-invites a vendor whose invitation was previously rejected.
+    /// Resets the placeholder back to Invited and clears rejection state.
+    /// </summary>
+    public void ManagerReinviteVendor()
+    {
+        if (CrewId is not null)
+            throw new InvalidOperationException("Only vendor-only placeholder rows can be re-invited.");
+        if (VendorId is null)
+            throw new InvalidOperationException("Assignment has no vendor.");
+        if (Status != AssignmentStatus.RejectedByVendor)
+            throw new InvalidOperationException("Only previously-rejected invitations can be re-invited.");
+
+        Status            = AssignmentStatus.Invited;
+        RejectionReason   = null;
+        RejectedByUserId  = null;
+        DeclinedAt        = null;
+        VendorReviewedAt  = null;
+    }
+
         // ── Step 1: Crew responds to invitation ──────────────────────────────────
 
     /// <summary>
