@@ -522,6 +522,17 @@
                         </p>
                     }
 
+                    @* ── Duplicate-assignment warning ── *@
+                    @{
+                        var dupWarn = DuplicateAssignWarning();
+                    }
+                    @if (dupWarn is not null)
+                    {
+                        <div class="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-center gap-1.5">
+                            <span>⚠️</span><span>@dupWarn</span>
+                        </div>
+                    }
+
                     @* ── Assign button ── *@
                     <button @onclick="AssignCrew"
                             disabled="@(!CanSubmitAssign() || _assigning)"
@@ -1005,15 +1016,59 @@ else
         if (mode == "vendor") { _assignSelectedCrew   = null; _assignCrewSearch   = ""; }
     }
 
+    // Statuses that mean the row is still 'live' on the event — re-assigning would be a duplicate.
+    private static readonly HashSet<string> ActiveAssignmentStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Invited", "VendorAccepted", "VendorApproved", "PendingManagerApproval",
+        "ManagerApproved", "Confirmed", "Pending", "Attended"
+    };
+
+    private string? DuplicateAssignWarning()
+    {
+        if (_assignments?.Items is null || _assignments.Items.Count == 0) return null;
+        var rows = _assignments.Items.Where(a => ActiveAssignmentStatuses.Contains(a.Status)).ToList();
+        if (rows.Count == 0) return null;
+
+        if (_assignMode == "crew" && _assignSelectedCrew is not null)
+        {
+            // Direct crew: same crew already assigned (with or without a vendor).
+            var dup = rows.FirstOrDefault(a => a.CrewId == _assignSelectedCrew.Id);
+            if (dup is not null)
+                return $"{_assignSelectedCrew.FullName} is already on this event ({dup.Status}).";
+        }
+        else if (_assignMode == "vendor" && _assignSelectedVendor is not null)
+        {
+            // Vendor-only: this vendor already has a placeholder OR any active row on the event.
+            var dup = rows.FirstOrDefault(a => a.VendorId == _assignSelectedVendor.Id);
+            if (dup is not null)
+                return $"{_assignSelectedVendor.FullName} is already invited to this event ({dup.Status}).";
+        }
+        else if (_assignMode == "both" && _assignSelectedCrew is not null && _assignSelectedVendor is not null)
+        {
+            var dup = rows.FirstOrDefault(a =>
+                a.CrewId   == _assignSelectedCrew.Id &&
+                a.VendorId == _assignSelectedVendor.Id);
+            if (dup is not null)
+                return $"{_assignSelectedCrew.FullName} is already assigned via {_assignSelectedVendor.FullName} ({dup.Status}).";
+
+            // Same crew under a *different* vendor on the same event is also a duplicate.
+            var dupCrew = rows.FirstOrDefault(a => a.CrewId == _assignSelectedCrew.Id);
+            if (dupCrew is not null)
+                return $"{_assignSelectedCrew.FullName} is already on this event via {dupCrew.VendorName ?? "another vendor"} ({dupCrew.Status}).";
+        }
+        return null;
+    }
+
     private bool CanSubmitAssign()
     {
-        return _assignMode switch
+        var baseOk = _assignMode switch
         {
             "crew"   => _assignSelectedCrew   is not null,
             "vendor" => _assignSelectedVendor is not null,
             "both"   => _assignSelectedCrew is not null && _assignSelectedVendor is not null,
             _        => false
         };
+        return baseOk && DuplicateAssignWarning() is null;
     }
 
     // ── Assign button handler ─────────────────────────────────────────────────
@@ -1036,6 +1091,13 @@ else
         if (_assignMode == "both" && (_assignSelectedCrew is null || _assignSelectedVendor is null))
         {
             _assignError = "Please select both a vendor and a crew member.";
+            return;
+        }
+
+        var dupNow = DuplicateAssignWarning();
+        if (dupNow is not null)
+        {
+            _assignError = dupNow;
             return;
         }
 
