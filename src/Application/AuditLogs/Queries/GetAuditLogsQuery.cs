@@ -11,6 +11,8 @@ public sealed record AuditLogDto(
     Guid      Id,
     string    Action,
     string?   PerformedByUserId,
+    string?   PerformedByName,    // resolved from Users — null if the actor is the system or a deleted user
+    string?   PerformedByRole,    // resolved from Users
     string?   PerformedByIp,
     string    EntityType,
     string?   EntityId,
@@ -27,6 +29,7 @@ public sealed record GetAuditLogsQuery(
     string?   Action     = null,
     DateTime? From       = null,
     DateTime? To         = null,
+    string?   ActorSearch = null,   // name substring (case-insensitive)
     int       PageNumber = 1,
     int       PageSize   = 50
 ) : IRequest<Result<PagedResult<AuditLogDto>>>;
@@ -40,7 +43,7 @@ public sealed class GetAuditLogsHandler
     public async Task<Result<PagedResult<AuditLogDto>>> Handle(
         GetAuditLogsQuery req, CancellationToken ct)
     {
-        var query = _db.AuditLogs.AsQueryable();
+        var query = _db.AuditLogs.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(req.EntityType))
             query = query.Where(a => a.EntityType == req.EntityType);
@@ -56,16 +59,39 @@ public sealed class GetAuditLogsHandler
         if (req.To.HasValue)
             query = query.Where(a => a.OccurredAt <= req.To.Value);
 
-        var total = await query.CountAsync(ct);
-        var items = await query
-            .OrderByDescending(a => a.OccurredAt)
+        // LEFT JOIN to Users so we can show the actor's name + role.
+        // System events (PerformedByUserId == null) and events from deleted users
+        // pass through cleanly with null name/role.
+        var joined =
+            from a in query
+            join u in _db.Users.AsNoTracking() on a.PerformedByUserId equals u.Id into gj
+            from u in gj.DefaultIfEmpty()
+            select new
+            {
+                a.Id, a.Action, a.PerformedByUserId, a.PerformedByIp,
+                a.EntityType, a.EntityId, a.OldValues, a.NewValues,
+                a.AdditionalData, a.OccurredAt,
+                ActorName = u != null ? u.FullName : null,
+                ActorRole = u != null ? u.Role.ToString() : null
+            };
+
+        if (!string.IsNullOrWhiteSpace(req.ActorSearch))
+        {
+            var needle = req.ActorSearch.Trim().ToLower();
+            joined = joined.Where(x => x.ActorName != null && x.ActorName.ToLower().Contains(needle));
+        }
+
+        var total = await joined.CountAsync(ct);
+        var items = await joined
+            .OrderByDescending(x => x.OccurredAt)
             .Skip((req.PageNumber - 1) * req.PageSize)
             .Take(req.PageSize)
-            .Select(a => new AuditLogDto(
-                a.Id, a.Action.ToString(),
-                a.PerformedByUserId.HasValue ? a.PerformedByUserId.Value.ToString() : null,
-                a.PerformedByIp, a.EntityType, a.EntityId,
-                a.OldValues, a.NewValues, a.AdditionalData, a.OccurredAt))
+            .Select(x => new AuditLogDto(
+                x.Id, x.Action.ToString(),
+                x.PerformedByUserId.HasValue ? x.PerformedByUserId.Value.ToString() : null,
+                x.ActorName, x.ActorRole,
+                x.PerformedByIp, x.EntityType, x.EntityId,
+                x.OldValues, x.NewValues, x.AdditionalData, x.OccurredAt))
             .ToListAsync(ct);
 
         return Result.Success(PagedResult<AuditLogDto>.Create(items, total, req.PageNumber, req.PageSize));

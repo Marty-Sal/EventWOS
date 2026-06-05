@@ -1,25 +1,24 @@
 @page "/admin/audit"
 @attribute [Authorize]
 @inject HttpClient Http
-@inject IUserApiService UserApi
 
 @if (_accessDenied)
 {
     <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <div class="text-5xl mb-4">🔒</div>
         <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
-        <p class="text-gray-500 text-sm">You don't have permission to view this page.</p>
+        <p class="text-gray-500 text-sm">You don't have permission to view the audit log.<br/>Contact your Admin to request access.</p>
     </div>
     return;
 }
 
 <PageTitle>Audit Log — EventWOS</PageTitle>
 
-<div class="space-y-6">
+<div class="space-y-5">
     <div class="flex items-center justify-between flex-wrap gap-3">
         <div>
             <h2 class="text-lg font-bold text-gray-800">Audit Log</h2>
-            <p class="text-sm text-gray-500 mt-0.5">Immutable record of all system actions.</p>
+            <p class="text-sm text-gray-500 mt-0.5">Immutable record of every sensitive action. Click a row to see what changed.</p>
         </div>
         <button @onclick="LoadAsync" disabled="@_loading"
                 class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50">
@@ -27,47 +26,58 @@
         </button>
     </div>
 
+    <!-- Quick action chips — one-click filter by common actions -->
+    <div class="flex flex-wrap gap-2">
+        @foreach (var chip in _actionChips)
+        {
+            var chipValue = chip.Value;
+            var active = _filterAction == chipValue;
+            <button @onclick="@(() => QuickFilterAction(chipValue))"
+                    class="px-3 py-1.5 rounded-full text-xs font-medium border transition @(active ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-200 hover:border-indigo-300")">
+                @chip.Icon @chip.Label
+            </button>
+        }
+    </div>
+
     <!-- Filters -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3 items-end">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
         <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Action</label>
             <select @bind="_filterAction"
-                    class="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                    class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300">
                 <option value="">All actions</option>
-                <option>Login</option>
-                <option>Logout</option>
-                <option>OtpRequested</option>
-                <option>OtpVerified</option>
-                <option>OtpFailed</option>
-                <option>UserCreated</option>
-                <option>UserUpdated</option>
-                <option>UserStatusChanged</option>
-                <option>RoleAssigned</option>
-                <option>PermissionGranted</option>
-                <option>PermissionRevoked</option>
-                <option>SessionRevoked</option>
-                <option>TokenRefreshed</option>
+                @foreach (var a in _allActions)
+                {
+                    <option>@a</option>
+                }
             </select>
         </div>
         <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Entity Type</label>
             <input @bind="_filterEntity" placeholder="e.g. User"
-                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                   class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Actor name</label>
+            <input @bind="_filterActor" placeholder="e.g. Raman"
+                   class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
         </div>
         <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">From</label>
             <input type="date" @bind="_filterFrom"
-                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                   class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
         </div>
         <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">To</label>
             <input type="date" @bind="_filterTo"
-                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                   class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
         </div>
-        <button @onclick="ApplyFilters"
-                class="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition">Apply</button>
-        <button @onclick="ClearFilters"
-                class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition">Clear</button>
+        <div class="flex gap-2">
+            <button @onclick="ApplyFilters"
+                    class="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition">Apply</button>
+            <button @onclick="ClearFilters"
+                    class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition">Clear</button>
+        </div>
     </div>
 
     @if (_loading)
@@ -87,7 +97,7 @@
     {
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
             <p class="text-4xl mb-3">📋</p>
-            <p class="text-gray-500 text-sm">No audit entries found.</p>
+            <p class="text-gray-500 text-sm">No audit entries match these filters.</p>
         </div>
     }
     else
@@ -98,29 +108,90 @@
                     <tr>
                         <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
                         <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Entity</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Entity ID</th>
                         <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actor</th>
+                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Target</th>
                         <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">IP</th>
+                        <th class="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
                     @foreach (var log in _logs)
                     {
-                        <tr class="hover:bg-gray-50 transition-colors">
-                            <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap text-xs">@log.OccurredAt.ToLocalTime().ToString("dd MMM HH:mm:ss")</td>
+                        var current = log;
+                        var isOpen  = _openLogId == current.Id;
+                        <tr class="hover:bg-gray-50 transition-colors cursor-pointer"
+                            @onclick="@(() => ToggleRow(current.Id))">
+                            <td class="px-5 py-3.5 text-gray-500 whitespace-nowrap text-xs">@current.OccurredAt.ToLocalTime().ToString("dd MMM HH:mm:ss")</td>
                             <td class="px-5 py-3.5">
-                                <span class="px-2 py-0.5 rounded-full text-xs font-medium @GetActionColor(log.Action)">@log.Action</span>
+                                <span class="px-2 py-0.5 rounded-full text-xs font-medium @ActionColor(current.Action)">
+                                    @ActionIcon(current.Action) @current.Action
+                                </span>
                             </td>
-                            <td class="px-5 py-3.5 text-gray-700 font-mono text-xs">@log.EntityType</td>
-                            <td class="px-5 py-3.5 text-gray-400 font-mono text-xs">
-                                @(log.EntityId is { Length: > 8 } eid ? eid[..8] + "…" : (log.EntityId ?? "—"))
+                            <td class="px-5 py-3.5">
+                                @if (!string.IsNullOrWhiteSpace(current.PerformedByName))
+                                {
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-medium text-gray-800 text-xs">@current.PerformedByName</span>
+                                        @if (!string.IsNullOrWhiteSpace(current.PerformedByRole))
+                                        {
+                                            <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full @RoleBadgeColor(current.PerformedByRole)">
+                                                @current.PerformedByRole
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-xs text-gray-400 italic">System</span>
+                                }
                             </td>
-                            <td class="px-5 py-3.5 text-gray-600 text-xs">
-                                @(log.PerformedByUserId is { Length: > 8 } uid ? uid[..8] + "…" : (log.PerformedByUserId ?? "System"))
+                            <td class="px-5 py-3.5 text-gray-700 text-xs">
+                                <span class="font-mono">@current.EntityType</span>
+                                @if (!string.IsNullOrWhiteSpace(current.EntityId))
+                                {
+                                    <span class="text-gray-400 font-mono ml-1">· @ShortId(current.EntityId)</span>
+                                }
                             </td>
-                            <td class="px-5 py-3.5 text-gray-400 text-xs font-mono">@(log.PerformedByIp ?? "—")</td>
+                            <td class="px-5 py-3.5 text-gray-400 text-xs font-mono">@(current.PerformedByIp ?? "—")</td>
+                            <td class="px-5 py-3.5 text-right">
+                                <span class="text-xs text-gray-400">@(isOpen ? "▾" : "▸")</span>
+                            </td>
                         </tr>
+                        @if (isOpen)
+                        {
+                            <tr class="bg-indigo-50/40">
+                                <td colspan="6" class="px-5 py-4">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        <div>
+                                            <div class="text-[10px] font-bold uppercase tracking-wider text-red-600 mb-1">Before</div>
+                                            <pre class="text-[11px] bg-white border border-red-100 rounded-xl p-3 text-gray-700 overflow-auto max-h-64">@PrettyJson(current.OldValues)</pre>
+                                        </div>
+                                        <div>
+                                            <div class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 mb-1">After</div>
+                                            <pre class="text-[11px] bg-white border border-emerald-100 rounded-xl p-3 text-gray-700 overflow-auto max-h-64">@PrettyJson(current.NewValues)</pre>
+                                        </div>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(current.AdditionalData))
+                                    {
+                                        <div class="mt-3">
+                                            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Context</div>
+                                            <p class="text-xs text-gray-600 font-mono">@current.AdditionalData</p>
+                                        </div>
+                                    }
+                                    <div class="mt-3 flex flex-wrap gap-3 text-[11px] text-gray-400">
+                                        <span>Entry ID: <span class="font-mono">@current.Id</span></span>
+                                        @if (!string.IsNullOrWhiteSpace(current.EntityId))
+                                        {
+                                            <span>Target ID: <span class="font-mono">@current.EntityId</span></span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(current.PerformedByUserId))
+                                        {
+                                            <span>Actor ID: <span class="font-mono">@current.PerformedByUserId</span></span>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -147,19 +218,49 @@
     private int _page = 1;
     private const int _pageSize = 50;
     private int _total;
+    private Guid? _openLogId;
 
     private string _filterAction = "";
     private string _filterEntity = "";
+    private string _filterActor  = "";
     private DateTime? _filterFrom;
     private DateTime? _filterTo;
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
         new() { PropertyNameCaseInsensitive = true };
 
+    private static readonly System.Text.Json.JsonSerializerOptions PrettyOpts =
+        new() { WriteIndented = true };
+
+    private readonly string[] _allActions =
+    {
+        "Login","Logout","OtpRequested","OtpVerified","OtpFailed",
+        "UserCreated","UserUpdated","UserStatusChanged",
+        "RoleAssigned","PermissionGranted","PermissionRevoked",
+        "SessionRevoked","AdminOverride","TokenRefreshed","PasswordChanged"
+    };
+
+    private readonly (string Value, string Label, string Icon)[] _actionChips =
+    {
+        ("",                  "All",                "🗂️"),
+        ("Login",             "Logins",             "🔑"),
+        ("SessionRevoked",    "Revocations",        "⛔"),
+        ("UserStatusChanged", "Status changes",     "🔄"),
+        ("OtpFailed",         "Failed OTPs",        "⚠️"),
+        ("RoleAssigned",      "Role changes",       "🛡️"),
+    };
+
+    public sealed record AuditLogDto(
+        Guid Id, string Action,
+        string? PerformedByUserId, string? PerformedByName, string? PerformedByRole,
+        string? PerformedByIp,
+        string EntityType, string? EntityId,
+        string? OldValues, string? NewValues, string? AdditionalData,
+        DateTime OccurredAt);
+
     protected override async Task OnInitializedAsync()
     {
-        var me = await UserApi.GetMeAsync();
-        _accessDenied = me is null || !me.Permissions.Contains("audit:read");
+        _accessDenied = !await PermGuard.CanAsync("audit:read");
         if (_accessDenied) { StateHasChanged(); return; }
         await LoadAsync();
     }
@@ -172,6 +273,7 @@
             var qs = $"api/v1/audit-logs?page={_page}&pageSize={_pageSize}";
             if (!string.IsNullOrWhiteSpace(_filterAction)) qs += $"&action={Uri.EscapeDataString(_filterAction)}";
             if (!string.IsNullOrWhiteSpace(_filterEntity)) qs += $"&entityType={Uri.EscapeDataString(_filterEntity)}";
+            if (!string.IsNullOrWhiteSpace(_filterActor))  qs += $"&actorSearch={Uri.EscapeDataString(_filterActor)}";
             if (_filterFrom.HasValue) qs += $"&from={_filterFrom.Value:yyyy-MM-dd}";
             if (_filterTo.HasValue)   qs += $"&to={_filterTo.Value:yyyy-MM-ddT23:59:59}";
 
@@ -183,30 +285,76 @@
         finally { _loading = false; StateHasChanged(); }
     }
 
+    private void ToggleRow(Guid id) => _openLogId = (_openLogId == id) ? null : id;
+
     private async Task ApplyFilters() { _page = 1; await LoadAsync(); }
     private async Task ClearFilters()
     {
-        _filterAction = ""; _filterEntity = ""; _filterFrom = null; _filterTo = null;
+        _filterAction = ""; _filterEntity = ""; _filterActor = "";
+        _filterFrom = null; _filterTo = null;
         _page = 1; await LoadAsync();
+    }
+    private async Task QuickFilterAction(string action)
+    {
+        _filterAction = action; _page = 1; await LoadAsync();
     }
     private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
     private async Task NextPage() { _page++; await LoadAsync(); }
 
-    private static string GetActionColor(string action) => action switch
+    private static string ShortId(string? id) =>
+        string.IsNullOrEmpty(id) ? "—" : (id.Length > 8 ? id[..8] + "…" : id);
+
+    private static string PrettyJson(string? raw)
     {
-        "Login"             => "bg-green-50 text-green-700 border border-green-100",
+        if (string.IsNullOrWhiteSpace(raw)) return "—";
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
+            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, PrettyOpts);
+        }
+        catch { return raw; }
+    }
+
+    private static string ActionColor(string action) => action switch
+    {
+        "Login"             => "bg-emerald-50 text-emerald-700 border border-emerald-100",
         "Logout"            => "bg-gray-100 text-gray-600",
         "OtpFailed"         => "bg-red-50 text-red-600 border border-red-100",
+        "OtpVerified"       => "bg-emerald-50 text-emerald-700 border border-emerald-100",
+        "OtpRequested"      => "bg-blue-50 text-blue-700 border border-blue-100",
         "PermissionGranted" => "bg-indigo-50 text-indigo-700 border border-indigo-100",
-        "PermissionRevoked" => "bg-orange-50 text-orange-700 border border-orange-100",
-        "SessionRevoked"    => "bg-amber-50 text-amber-700 border border-amber-100",
-        "UserStatusChanged" => "bg-yellow-50 text-yellow-700 border border-yellow-100",
-        _                   => "bg-gray-50 text-gray-700 border border-gray-100"
+        "PermissionRevoked" => "bg-amber-50 text-amber-700 border border-amber-100",
+        "SessionRevoked"    => "bg-rose-50 text-rose-700 border border-rose-100",
+        "UserStatusChanged" => "bg-amber-50 text-amber-700 border border-amber-100",
+        "UserCreated"       => "bg-emerald-50 text-emerald-700 border border-emerald-100",
+        "RoleAssigned"      => "bg-purple-50 text-purple-700 border border-purple-100",
+        "AdminOverride"     => "bg-rose-50 text-rose-700 border border-rose-100",
+        _                   => "bg-gray-100 text-gray-600"
     };
 
-    private sealed record AuditLogDto(Guid Id, string Action, string? PerformedByUserId, string? PerformedByIp,
-        string EntityType, string? EntityId, string? OldValues, string? NewValues,
-        string? AdditionalData, DateTime OccurredAt);
-    private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int PageNumber, int PageSize);
-    private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
+    private static string ActionIcon(string action) => action switch
+    {
+        "Login"             => "🔑",
+        "Logout"            => "🚪",
+        "OtpFailed"         => "⚠️",
+        "OtpVerified"       => "✅",
+        "OtpRequested"      => "📲",
+        "PermissionGranted" => "🛡️",
+        "PermissionRevoked" => "🚫",
+        "SessionRevoked"    => "⛔",
+        "UserStatusChanged" => "🔄",
+        "UserCreated"       => "🆕",
+        "RoleAssigned"      => "👤",
+        "AdminOverride"     => "❗",
+        _                   => "📝"
+    };
+
+    private static string RoleBadgeColor(string role) => role switch
+    {
+        "Admin"   => "bg-purple-50 text-purple-700",
+        "Manager" => "bg-blue-50 text-blue-700",
+        "Vendor"  => "bg-amber-50 text-amber-700",
+        "Crew"    => "bg-emerald-50 text-emerald-700",
+        _         => "bg-gray-100 text-gray-600"
+    };
 }

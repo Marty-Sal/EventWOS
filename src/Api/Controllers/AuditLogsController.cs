@@ -24,18 +24,19 @@ public sealed class AuditLogsController : ControllerBase
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetLogs(
-        [FromQuery] string?   entityType = null,
-        [FromQuery] string?   entityId   = null,
-        [FromQuery] Guid?     userId     = null,
-        [FromQuery] string?   action     = null,
-        [FromQuery] DateTime? from       = null,
-        [FromQuery] DateTime? to         = null,
-        [FromQuery] int       page       = 1,
-        [FromQuery] int       pageSize   = 50,
-        CancellationToken ct             = default)
+        [FromQuery] string?   entityType  = null,
+        [FromQuery] string?   entityId    = null,
+        [FromQuery] Guid?     userId      = null,
+        [FromQuery] string?   action      = null,
+        [FromQuery] DateTime? from        = null,
+        [FromQuery] DateTime? to          = null,
+        [FromQuery] string?   actorSearch = null,
+        [FromQuery] int       page        = 1,
+        [FromQuery] int       pageSize    = 50,
+        CancellationToken ct              = default)
     {
         var result = await _mediator.Send(
-            new GetAuditLogsQuery(entityType, entityId, userId, action, from, to, page, pageSize), ct);
+            new GetAuditLogsQuery(entityType, entityId, userId, action, from, to, actorSearch, page, pageSize), ct);
 
         return result.IsSuccess
             ? Ok(ApiResponse<PagedResult<AuditLogDto>>.Ok(result.Value))
