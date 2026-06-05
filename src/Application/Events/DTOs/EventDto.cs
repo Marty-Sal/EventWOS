@@ -32,6 +32,7 @@ public sealed record EventAssignmentDto(
     Guid      Id,
     Guid      EventId,
     string    EventTitle,
+    string    EventStatus,
     Guid?     CrewId,
     string?   CrewName,
     string?   CrewMobile,
@@ -50,7 +51,8 @@ public sealed record EventAssignmentDto(
     DateTime? DeclinedAt,
     DateTime  CreatedAt,
     decimal?  VendorRating,      // this vendor's rating for this assignment
-    DateTime? RatedAt
+    DateTime? RatedAt,
+    string?   AttendanceNote       // admin override note, if any (e.g. "Marked attended by Admin Saly on 2026-06-06")
 );
 
 public sealed record AttendanceRecordDto(

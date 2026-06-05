@@ -102,7 +102,7 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
         }
 
         return Result.Success(new EventAssignmentDto(
-            assignment.Id, ev.Id, ev.Title,
+            assignment.Id, ev.Id, ev.Title, ev.Status.ToString(),
             crew?.Id ?? Guid.Empty,
             crew?.FullName ?? "(vendor to fill)",
             crew?.Mobile   ?? "",
@@ -118,6 +118,6 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             assignment.ManagerReviewedAt,
             assignment.ConfirmedAt, assignment.DeclinedAt,
             assignment.CreatedAt,
-            assignment.VendorRating, assignment.RatedAt));
+            assignment.VendorRating, assignment.RatedAt, assignment.AttendanceNote));
     }
 }

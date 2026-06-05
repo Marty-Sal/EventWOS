@@ -19,6 +19,7 @@ public sealed record EventAssignmentDto(
     Guid      Id,
     Guid      EventId,
     string    EventTitle,
+    string    EventStatus,     // Draft / Published / InProgress / Completed / Cancelled — needed for badge relabeling on Completed events
     Guid?     CrewId,
     string?   CrewName,
     string?   CrewMobile,
@@ -33,7 +34,9 @@ public sealed record EventAssignmentDto(
     DateTime? ManagerReviewedAt,
     DateTime? ConfirmedAt,
     DateTime? DeclinedAt,
-    DateTime  CreatedAt);
+    DateTime  CreatedAt,
+    string?   AttendanceNote   // admin override audit note (e.g. "Marked attended by Admin Saly on 2026-06-06")
+);
 
 public sealed record AttendanceRecordDto(
     Guid Id, Guid AssignmentId, Guid EventId, Guid CrewId,
@@ -75,6 +78,10 @@ public interface IEventApiService
     Task<(bool Ok, Guid? AssignmentId, string? Error)> VendorAssignCrewAsync(Guid eventId, Guid crewId, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> VendorRevokeCrewInviteAsync(Guid eventId, Guid crewId, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> VendorRespondToInviteAsync(Guid assignmentId, string response, string? reason, CancellationToken ct = default);
+
+    // Admin override — post-event correction. Flips a no-show / hanging
+    // row to Attended and stores an audit note that surfaces everywhere.
+    Task<(bool Ok, string? Error)> AdminMarkAttendedAsync(Guid assignmentId, CancellationToken ct = default);
 }
 
 public sealed record CreateEventRequest(
@@ -219,6 +226,23 @@ public sealed class EventApiService : IEventApiService
             var resp = await _http.PatchAsJsonAsync(
                 $"api/v1/events/vendor-invitations/{assignmentId}/respond",
                 new { response, reason }, ct);
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var err = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+            return (false, err?.Errors?.FirstOrDefault() ?? err?.Message ?? "Unknown error");
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    public async Task<(bool Ok, string? Error)> AdminMarkAttendedAsync(
+        Guid assignmentId, CancellationToken ct = default)
+    {
+        try
+        {
+            // PATCH with an empty body — only the route id is needed.
+            // The API derives the admin user id from the JWT.
+            var resp = await _http.PatchAsJsonAsync(
+                $"api/v1/events/assignments/{assignmentId}/admin-mark-attended",
+                new { }, ct);
             if (resp.IsSuccessStatusCode) return (true, null);
             var err = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
             return (false, err?.Errors?.FirstOrDefault() ?? err?.Message ?? "Unknown error");

@@ -426,6 +426,28 @@ public sealed class EventsController : ControllerBase
                                 : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 
+    // ── Admin Override: Mark Attended (post-event correction) ────────────────
+    /// <summary>
+    /// Admin retroactively marks a hanging / no-show assignment as Attended
+    /// on a Completed event. Writes an audit note ("Marked attended by
+    /// Admin {name} on {date}") that surfaces on every render of the row
+    /// (manager drawer, vendor list, crew list, attendance log).
+    /// Admin-only by both the [Permission] policy (admins bypass all checks
+    /// in PermissionHandler) and the explicit role guard.
+    /// </summary>
+    [Permission("attendance:write")]
+    [HttpPatch("assignments/{assignmentId:guid}/admin-mark-attended")]
+    public async Task<IActionResult> AdminMarkAttended(Guid assignmentId, CancellationToken ct)
+    {
+        if (_currentUser.Role != UserRole.Admin) return Forbid();
+
+        var result = await _mediator.Send(
+            new AdminMarkAttendedCommand(assignmentId, _currentUser.UserId!.Value), ct);
+
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok("Attendance overridden."))
+            : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
 }
 
 // ── Request DTOs ──────────────────────────────────────────────────────────────

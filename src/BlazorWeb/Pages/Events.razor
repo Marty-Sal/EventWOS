@@ -343,10 +343,30 @@
                                                 <p class="text-[11px] text-rose-500 mt-0.5 italic">"@a.RejectionReason"</p>
                                             }
                                         </div>
-                                        <span class="text-xs px-2.5 py-1 rounded-full font-semibold @GetAssignmentStatusClass(a.Status)">
-                                            @a.Status
-                                        </span>
+                                        @{
+                                            var (lbl, badge, sub) = AssignmentStatusDisplay.For(a.Status, _selectedEvent.Status, a.AttendanceNote);
+                                            var canOverride = AssignmentStatusDisplay.CanAdminMarkAttended(a.Status, _selectedEvent.Status, _role == "Admin") && a.CrewId.HasValue;
+                                        }
+                                        <div class="flex flex-col items-end gap-0.5">
+                                            <span class="text-xs px-2.5 py-1 rounded-full font-semibold @badge">@lbl</span>
+                                            @if (!string.IsNullOrEmpty(sub))
+                                            {
+                                                <span class="text-[10px] text-gray-400 italic">@sub</span>
+                                            }
+                                        </div>
                                     </div>
+
+                                    @if (canOverride)
+                                    {
+                                        var ovBusy = _overrideBusy == a.Id;
+                                        <div class="flex justify-end pt-1">
+                                            <button @onclick="() => AdminMarkAttended(a)"
+                                                    disabled="@ovBusy"
+                                                    class="px-3 py-1 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-[11px] font-semibold disabled:opacity-50 transition">
+                                                @(ovBusy ? "Marking…" : "✓ Mark Attended (Admin)")
+                                            </button>
+                                        </div>
+                                    }
 
                                     @if (canRevoke || canReinvite)
                                     {
@@ -743,6 +763,7 @@ else
     private bool _accessDenied;
     private bool _canWrite;
     private Guid _placeholderBusy = Guid.Empty;
+    private Guid _overrideBusy    = Guid.Empty;   // admin "Mark Attended" button busy-state
     // ── State ──────────────────────────────────────────────────────────────────
     private string _role = "";
     private bool   _loading = true;
@@ -1224,6 +1245,37 @@ else
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _placeholderBusy = Guid.Empty; StateHasChanged(); }
+    }
+
+    /// <summary>
+    /// Admin-only post-event correction: flips a No-Show / hanging row to
+    /// Attended via the API. The response carries no body, so the page
+    /// optimistically updates the row and refreshes the drawer's
+    /// assignments + the event's attendance summary so KPIs stay honest.
+    /// </summary>
+    private async Task AdminMarkAttended(EventAssignmentDto a)
+    {
+        if (_selectedEvent is null) return;
+        _overrideBusy = a.Id; StateHasChanged();
+        try
+        {
+            var (ok, err) = await EventApi.AdminMarkAttendedAsync(a.Id);
+            if (!ok)
+            {
+                _error = "Couldn't mark attended: " + (err ?? "unknown error");
+            }
+            else
+            {
+                // Re-pull the assignment list + attendance summary so the
+                // new label, audit note, badge, and KPI counts all render
+                // from the source of truth instead of optimistic guesses.
+                _assignments = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
+                if (_selectedEvent.Status is "InProgress" or "Completed")
+                    _attendance = await EventApi.GetAttendanceSummaryAsync(_selectedEvent.Id);
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _overrideBusy = Guid.Empty; StateHasChanged(); }
     }
 
         private static string GetAssignmentStatusClass(string status) => status switch

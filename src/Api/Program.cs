@@ -876,6 +876,13 @@ BEGIN
         RAISE NOTICE 'Created crew_group_members table';
     END IF;
 
+    -- ═══ event_assignments: attendance audit columns ═════════════════════════
+    -- Belt-and-braces for the 20260606_AddAttendanceNote migration. Idempotent.
+    ALTER TABLE event_assignments
+        ADD COLUMN IF NOT EXISTS attendance_note            VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS attendance_note_at         TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS attendance_note_by_user_id UUID;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");

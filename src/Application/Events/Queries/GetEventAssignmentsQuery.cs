@@ -36,7 +36,7 @@ public sealed class GetEventAssignmentsHandler : IRequestHandler<GetEventAssignm
             .Skip((req.Page - 1) * req.PageSize)
             .Take(req.PageSize)
             .Select(a => new EventAssignmentDto(
-                a.Id, a.EventId, a.Event.Title,
+                a.Id, a.EventId, a.Event.Title, a.Event.Status.ToString(),
                 a.CrewId,
                 a.Crew != null ? a.Crew.FullName : null,
                 a.Crew != null ? a.Crew.Mobile   : null,
@@ -51,7 +51,7 @@ public sealed class GetEventAssignmentsHandler : IRequestHandler<GetEventAssignm
                 a.VendorReviewedAt,
                 a.ManagerReviewedAt,
                 a.ConfirmedAt, a.DeclinedAt, a.CreatedAt,
-                a.VendorRating, a.RatedAt))
+                a.VendorRating, a.RatedAt, a.AttendanceNote))
             .ToListAsync(ct);
 
         return Result.Success(new PagedAssignmentResult(items, total, req.Page, req.PageSize));

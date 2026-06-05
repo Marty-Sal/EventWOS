@@ -163,7 +163,7 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
         }, ct);
 
         return Result.Success(new EventAssignmentDto(
-            assignment.Id, ev.Id, ev.Title,
+            assignment.Id, ev.Id, ev.Title, ev.Status.ToString(),
             crew.Id, crew.FullName, crew.Mobile,
             crew.DisciplineScore, crew.EventsAttended,
             crew.CrewRating, crew.CrewRatingCount,
@@ -175,6 +175,6 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
             assignment.ManagerReviewedAt,
             assignment.ConfirmedAt, assignment.DeclinedAt,
             assignment.CreatedAt,
-            assignment.VendorRating, assignment.RatedAt));
+            assignment.VendorRating, assignment.RatedAt, assignment.AttendanceNote));
     }
 }

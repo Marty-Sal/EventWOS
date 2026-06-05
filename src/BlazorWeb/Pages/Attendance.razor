@@ -103,8 +103,21 @@
                             <td class="px-5 py-3.5 font-medium text-gray-800">@r.CrewName</td>
                             <td class="px-5 py-3.5 text-gray-600 text-xs">@r.EventTitle</td>
                             <td class="px-5 py-3.5">
-                                <span class="px-2 py-0.5 rounded-full text-xs font-medium @(r.Action == "CheckIn" ? "bg-green-50 text-green-700 border border-green-100" : "bg-amber-50 text-amber-700 border border-amber-100")">
-                                    @(r.Action == "CheckIn" ? "✅ Check In" : "🚪 Check Out")
+@{
+                                    // Three-way pill: CheckIn (green), CheckOut (amber),
+                                    // AdminOverride (purple). AdminOverride rows mean an
+                                    // admin retroactively marked a no-show as attended —
+                                    // the override note is surfaced in the Location cell.
+                                    var (actionLabel, actionClass) = r.Action switch
+                                    {
+                                        "CheckIn"       => ("✅ Check In",      "bg-green-50 text-green-700 border border-green-100"),
+                                        "CheckOut"      => ("🚪 Check Out",     "bg-amber-50 text-amber-700 border border-amber-100"),
+                                        "AdminOverride" => ("🛡️ Admin Override","bg-purple-50 text-purple-700 border border-purple-100"),
+                                        _               => (r.Action,           "bg-gray-50 text-gray-700 border border-gray-100")
+                                    };
+                                }
+                                <span class="px-2 py-0.5 rounded-full text-xs font-medium @actionClass">
+                                    @actionLabel
                                 </span>
                             </td>
                             <td class="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">@r.RecordedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>

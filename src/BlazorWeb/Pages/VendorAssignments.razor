@@ -59,7 +59,16 @@
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="font-bold text-gray-800 text-sm">@a.CrewName</span>
                                 <span class="text-xs text-gray-400">@a.CrewMobile</span>
-                                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold @StatusChip(a.Status)">@StatusLabel(a.Status)</span>
+                                @{
+                                    var (lbl, badge, sub) = AssignmentStatusDisplay.For(a.Status, a.EventStatus, a.AttendanceNote);
+                                }
+                                <div class="flex flex-col gap-0.5">
+                                    <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold @badge">@lbl</span>
+                                    @if (!string.IsNullOrEmpty(sub))
+                                    {
+                                        <span class="text-[10px] text-gray-400 italic">@sub</span>
+                                    }
+                                </div>
                             </div>
                             <p class="text-xs text-gray-500">Event: <span class="font-medium text-gray-700">@a.EventTitle</span></p>
                             <div class="flex items-center gap-4 text-xs text-gray-400">
@@ -372,14 +381,15 @@
         score >= 80 ? "text-green-600" : score >= 50 ? "text-amber-600" : "text-red-600";
 
     private sealed record AssignmentDto(
-        Guid Id, Guid EventId, string EventTitle,
+        Guid Id, Guid EventId, string EventTitle, string EventStatus,
         Guid CrewId, string CrewName, string CrewMobile,
         decimal DisciplineScore, int EventsAttended,
         Guid VendorId, string VendorName,
         string Status, string? RejectionReason,
         DateTime? CrewRespondedAt, DateTime? VendorReviewedAt, DateTime? ManagerReviewedAt,
         DateTime? ConfirmedAt, DateTime? DeclinedAt, DateTime CreatedAt,
-        decimal? VendorRating);
+        decimal? VendorRating,
+        string? AttendanceNote);
 
     // Star rating hover state
     private Guid _hoverTarget;

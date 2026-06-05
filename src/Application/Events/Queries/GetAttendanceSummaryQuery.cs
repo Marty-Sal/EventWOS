@@ -44,12 +44,33 @@ public sealed class GetAttendanceSummaryHandler : IRequestHandler<GetAttendanceS
                 return new CrewAttendanceDto(a.CrewId!.Value, a.Crew!.FullName, a.Status.ToString(), checkIn, checkOut);
             }).ToList();
 
+        // On Completed events, the No-Show count needs to include
+        // "effective no-shows" — workflow states that should have led to
+        // attendance but didn't (Confirmed / ManagerApproved with no
+        // CheckIn). Without this the KPI looks artificially clean when
+        // an event ends with people approved but never showing up.
+        // Hanging earlier states (Invited / VendorApproved /
+        // PendingManagerApproval) are NOT counted as no-shows — those
+        // are "Not Finalized" in the UI, a different story.
+        int noShowCount;
+        if (ev.Status == EventStatus.Completed)
+        {
+            noShowCount = assignments.Count(a =>
+                a.Status == AssignmentStatus.NoShow ||
+                a.Status == AssignmentStatus.ManagerApproved ||
+                a.Status == AssignmentStatus.Confirmed);
+        }
+        else
+        {
+            noShowCount = assignments.Count(a => a.Status == AssignmentStatus.NoShow);
+        }
+
         return Result.Success(new AttendanceSummaryDto(
             ev.Id, ev.Title,
             assignments.Count,
             assignments.Count(a => a.Status == AssignmentStatus.Confirmed || a.Status == AssignmentStatus.Attended),
             assignments.Count(a => a.Status == AssignmentStatus.Attended),
-            assignments.Count(a => a.Status == AssignmentStatus.NoShow),
+            noShowCount,
             crewDetails));
     }
 }

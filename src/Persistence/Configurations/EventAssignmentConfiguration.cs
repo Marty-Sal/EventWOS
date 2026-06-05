@@ -75,5 +75,14 @@ public sealed class EventAssignmentConfiguration : IEntityTypeConfiguration<Even
         builder.HasIndex(a => a.VendorId).HasDatabaseName("ix_event_assignments_vendor_id");
         builder.Property(a => a.VendorRating).HasColumnName("vendor_rating").HasColumnType("numeric(3,1)");
         builder.Property(a => a.RatedAt).HasColumnName("rated_at");
+
+        // Attendance audit note (admin overrides etc.)
+        builder.Property(a => a.AttendanceNote)
+               .HasColumnName("attendance_note")
+               .HasMaxLength(500);
+        builder.Property(a => a.AttendanceNoteAt)
+               .HasColumnName("attendance_note_at");
+        builder.Property(a => a.AttendanceNoteByUserId)
+               .HasColumnName("attendance_note_by_user_id");
     }
 }

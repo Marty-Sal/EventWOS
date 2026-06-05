@@ -45,6 +45,14 @@ public sealed class EventAssignment : BaseEntity
     public decimal?  VendorRating  { get; private set; }  // 1–5 stars
     public DateTime? RatedAt       { get; private set; }
 
+    // Audit note attached to the attendance outcome — e.g. when an Admin
+    // overrides a No-Show row to Attended after the event has completed.
+    // Surfaced everywhere the assignment is shown so the override is
+    // transparent to vendor / crew / manager.
+    public string?   AttendanceNote { get; private set; }
+    public DateTime? AttendanceNoteAt { get; private set; }
+    public Guid?     AttendanceNoteByUserId { get; private set; }
+
     // Navigation
     public Event  Event       { get; private set; } = default!;
     public User?  Crew        { get; private set; }
@@ -216,6 +224,37 @@ public sealed class EventAssignment : BaseEntity
     public void MarkAttended() => Status = AssignmentStatus.Attended;
     public void MarkNoShow()   => Status = AssignmentStatus.NoShow;
     public void SetNotes(string notes) => Notes = notes;
+
+    /// <summary>
+    /// Admin override: flip a hanging / no-show row to Attended after the
+    /// event has completed, with a stored audit note explaining why.
+    /// Guards on assignment status (workflow states that imply absence)
+    /// and on the caller — only Admin role should reach this; the API
+    /// enforces that. The note is shown on every surface that renders
+    /// this assignment so vendors and crew know it was an override.
+    /// </summary>
+    public void AdminMarkAttended(Guid adminUserId, string adminDisplayName)
+    {
+        // Only states where the crew didn't formally check in qualify.
+        // Already-Attended rows would be a no-op; already-Declined or
+        // RejectedBy* rows shouldn't be flipped because the crew never
+        // intended to come — admin should re-invite first if that's the
+        // real story.
+        var eligible = Status is AssignmentStatus.Invited
+                              or AssignmentStatus.VendorApproved
+                              or AssignmentStatus.PendingManagerApproval
+                              or AssignmentStatus.ManagerApproved
+                              or AssignmentStatus.Confirmed
+                              or AssignmentStatus.NoShow;
+        if (!eligible)
+            throw new InvalidOperationException(
+                $"Cannot admin-mark-attended from status {Status}. Override only applies to absent / hanging rows.");
+
+        Status                  = AssignmentStatus.Attended;
+        AttendanceNote          = $"Missing attendance — marked attended by Admin {adminDisplayName} on {DateTime.UtcNow:yyyy-MM-dd}";
+        AttendanceNoteAt        = DateTime.UtcNow;
+        AttendanceNoteByUserId  = adminUserId;
+    }
 
     // ── Rating ────────────────────────────────────────────────────────────────
     /// <summary>Vendor rates this crew member 1–5 stars. Can only be called once per assignment.</summary>
