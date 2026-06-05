@@ -807,6 +807,50 @@ BEGIN
         RAISE NOTICE 'Zeroed stale vendor-split agreed_amount on unpaid vendor rows';
     END IF;
 
+    -- ═══ crew_groups + crew_group_members ════════════════════════════════════
+    -- Safety net: if the formal migration didn't apply for any reason, ensure
+    -- the Crew Groups tables exist so the vendor UI doesn't 500 on first use.
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'crew_groups') THEN
+        CREATE TABLE crew_groups (
+            id            UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            vendor_id     UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+            name          VARCHAR(120) NOT NULL,
+            description   VARCHAR(500),
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+            created_by    UUID,
+            updated_at    TIMESTAMPTZ,
+            updated_by    UUID,
+            is_deleted    BOOLEAN NOT NULL DEFAULT false,
+            deleted_at    TIMESTAMPTZ,
+            deleted_by    UUID
+        );
+        CREATE INDEX ix_crew_groups_vendor_id   ON crew_groups(vendor_id);
+        CREATE INDEX ix_crew_groups_vendor_name ON crew_groups(vendor_id, name);
+        RAISE NOTICE 'Created crew_groups table';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'crew_group_members') THEN
+        CREATE TABLE crew_group_members (
+            id             UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            crew_group_id  UUID NOT NULL REFERENCES crew_groups(id) ON DELETE CASCADE,
+            crew_id        UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+            added_at       TIMESTAMPTZ NOT NULL,
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+            created_by     UUID,
+            updated_at     TIMESTAMPTZ,
+            updated_by     UUID,
+            is_deleted     BOOLEAN NOT NULL DEFAULT false,
+            deleted_at     TIMESTAMPTZ,
+            deleted_by     UUID
+        );
+        CREATE INDEX ix_cgm_crew_group_id ON crew_group_members(crew_group_id);
+        CREATE INDEX ix_cgm_crew_id       ON crew_group_members(crew_id);
+        CREATE UNIQUE INDEX ux_cgm_group_crew_active
+            ON crew_group_members(crew_group_id, crew_id)
+            WHERE is_deleted = false;
+        RAISE NOTICE 'Created crew_group_members table';
+    END IF;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");
