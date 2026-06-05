@@ -390,14 +390,46 @@
     private async Task SubmitRating(Guid assignmentId, int stars)
     {
         _busy = assignmentId; StateHasChanged();
-        var resp = await Http.PostAsJsonAsync(
-            $"api/v1/events/assignments/{assignmentId}/rate-crew", new { rating = (decimal)stars });
-        if (resp.IsSuccessStatusCode) ShowToast($"{stars}★ rating submitted!", false);
-        else ShowToast("Could not submit rating.", true);
-        _busy = null;
-        await Load();
+        try
+        {
+            var resp = await Http.PostAsJsonAsync(
+                $"api/v1/events/assignments/{assignmentId}/rate-crew",
+                new { rating = (decimal)stars });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                ShowToast($"{stars}★ rating submitted!", false);
+            }
+            else
+            {
+                // Surface the actual server reason instead of a generic toast
+                // so issues like 'Forbidden' or 'AlreadyRated' don't read as a
+                // mystery failure. Falls back to the HTTP status if the body
+                // isn't a structured ApiResponse.
+                string reason;
+                try
+                {
+                    var body = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(JsonOpts);
+                    reason = body?.Errors?.FirstOrDefault() ?? body?.Message ?? $"{(int)resp.StatusCode} {resp.StatusCode}";
+                }
+                catch
+                {
+                    reason = $"{(int)resp.StatusCode} {resp.StatusCode}";
+                }
+                ShowToast($"Couldn't submit rating: {reason}", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Couldn't submit rating: {ex.Message}", true);
+        }
+        finally
+        {
+            _busy = null;
+            await Load();
+        }
     }
 
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
-    private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
+    private sealed record ApiResult<T>(bool Success, T? Data, string? Message, List<string>? Errors);
 }

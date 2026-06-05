@@ -408,10 +408,19 @@ public sealed class EventsController : ControllerBase
             : NotFound(ApiResponse<AttendanceSummaryDto>.Fail(result.Error.Message));
     }
     // ── Rate Crew (Vendor) ────────────────────────────────────────────────────
+    /// <summary>
+    /// Vendor rates a crew member on an Attended assignment (1–5 stars).
+    /// Switched to the project-standard [Permission] + explicit role guard
+    /// pattern (was bare [Authorize(Roles = "Vendor")] which routed through
+    /// the framework's role middleware instead of our permission policy and
+    /// occasionally returned a silent 403 the toast couldn't surface).
+    /// </summary>
+    [Permission("crew:write")]
     [HttpPost("assignments/{assignmentId:guid}/rate-crew")]
-    [Authorize(Roles = "Vendor")]
     public async Task<IActionResult> RateCrew(Guid assignmentId, [FromBody] RateCrewRequest body, CancellationToken ct)
     {
+        if (_currentUser.Role != UserRole.Vendor) return Forbid();
+
         var result = await _mediator.Send(new RateCrewCommand(assignmentId, _currentUser.UserId!.Value, body.Rating), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok("Crew rated successfully."))
                                 : BadRequest(ApiResponse.Fail(result.Error.Message));
