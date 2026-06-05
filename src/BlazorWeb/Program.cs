@@ -11,8 +11,18 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 // ─── HTTP Client ──────────────────────────────────────────────────────────────
+// Every API call goes through UnauthorizedRedirectHandler, which catches 401
+// responses and force-redirects to /login?reason=session_revoked. This is the
+// PRIMARY mechanism for handling revoked sessions / suspended users — the
+// 30s heartbeat is just a backstop for idle tabs that aren't making any other
+// calls.
 var apiBase = builder.Configuration["ApiBaseUrl"] ?? "http://localhost:5000";
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBase) });
+builder.Services.AddScoped<UnauthorizedRedirectHandler>();
+builder.Services.AddScoped(sp =>
+{
+    var handler = sp.GetRequiredService<UnauthorizedRedirectHandler>();
+    return new HttpClient(handler) { BaseAddress = new Uri(apiBase) };
+});
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 builder.Services.AddBlazoredLocalStorage();
