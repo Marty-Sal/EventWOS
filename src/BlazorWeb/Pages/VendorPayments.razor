@@ -112,11 +112,29 @@
                                 @(p.PaidAt?.ToLocalTime().ToString("dd MMM yyyy") ?? "—")
                             </td>
                             <td class="px-4 py-3 text-center">
-                                @if (p.Status == "Approved" && p.BatchStatus != "Disbursed")
+@{
+                                    // Two flavours of Approved rows reach this cell:
+                                    //   1. Batch-driven  — created as part of a PayrollBatch.
+                                    //      The vendor can only mark paid AFTER the organiser
+                                    //      disburses the batch (BatchStatus == "Disbursed").
+                                    //   2. Direct        — created ad-hoc by a manager from
+                                    //      the /payments "+ New Payment" form. No batch is
+                                    //      involved; the vendor can mark paid immediately.
+                                    //
+                                    // BEFORE THE FIX: the cell only looked at BatchStatus and
+                                    // hid the button for direct rows too — vendors saw
+                                    // "Awaiting organiser disbursement" forever even though
+                                    // there was nothing to disburse. Spotted via Sam Martin.
+                                    var isBatchRow             = p.PayrollBatchId.HasValue;
+                                    var batchDisbursed         = p.BatchStatus == "Disbursed";
+                                    var canVendorMarkPaid      = p.Status == "Approved" && (!isBatchRow || batchDisbursed);
+                                    var awaitingDisbursement   = p.Status == "Approved" && isBatchRow && !batchDisbursed;
+                                }
+                                @if (awaitingDisbursement)
                                 {
                                     <span class="text-[11px] text-slate-500 italic">Awaiting organiser disbursement</span>
                                 }
-                                else if (p.Status == "Approved")
+                                else if (canVendorMarkPaid)
                                 {
                                     <button class="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
                                             @onclick="() => OpenMarkPaid(p)">
@@ -304,11 +322,17 @@
                 _items = result.Items.ToList();
                 _total = result.TotalCount;
 
-                // Roll-up totals — when filtered, totals reflect the filter
-                // From Organiser = sum of DISTINCT batch totals (one batch can have multiple crew rows)
-                _totalAgreed  = _items.Where(p => p.PayrollBatchId.HasValue && p.BatchTotal.HasValue)
-                                      .GroupBy(p => p.PayrollBatchId!.Value)
-                                      .Sum(g => g.First().BatchTotal ?? 0m);
+                // Roll-up totals — when filtered, totals reflect the filter.
+                // From Organiser is the sum of:
+                //   • DISTINCT batch totals (one batch has many crew rows, count it once), PLUS
+                //   • each direct (batch-less) row's AgreedAmount — the organiser owes the
+                //     vendor that amount even though no batch was cut.
+                var batchTotal  = _items.Where(p => p.PayrollBatchId.HasValue && p.BatchTotal.HasValue)
+                                        .GroupBy(p => p.PayrollBatchId!.Value)
+                                        .Sum(g => g.First().BatchTotal ?? 0m);
+                var directTotal = _items.Where(p => !p.PayrollBatchId.HasValue)
+                                        .Sum(p => p.AgreedAmount);
+                _totalAgreed    = batchTotal + directTotal;
                 _totalPaid    = _items.Where(p => p.Status.Equals("paid", StringComparison.OrdinalIgnoreCase))
                                       .Sum(p => p.PaidAmount ?? 0m);
                 _totalPending = Math.Max(0m, _totalAgreed - _totalPaid);
