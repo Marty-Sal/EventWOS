@@ -92,7 +92,16 @@ public sealed class AuthController : ControllerBase
         var result = await _mediator.Send(command, ct);
 
         if (result.IsFailure)
+        {
+            // Surface the reason so the client can show the right message:
+            // suspended account = 'inactive', anything else = 'expired'
+            // (revoked sessions never get this far — they're caught by the
+            //  JWT validation pipeline on subsequent requests).
+            var reason = result.Error.Code == "Auth.AccountSuspended" ? "inactive" : "expired";
+            if (!Response.Headers.ContainsKey("X-Auth-Fail-Reason"))
+                Response.Headers.Append("X-Auth-Fail-Reason", reason);
             return Unauthorized(ApiResponse<AuthResponse>.Fail(result.Error.Message));
+        }
 
         return Ok(ApiResponse<AuthResponse>.Ok(result.Value));
     }

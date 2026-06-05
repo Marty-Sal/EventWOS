@@ -173,6 +173,27 @@ try
                         ctx.Token = token;
                     return Task.CompletedTask;
                 },
+                // Map MSAL failure types to a short reason code the Blazor client
+                // can surface ('expired' vs 'revoked' vs 'inactive'). The actual
+                // 401 header is written in OnChallenge below — we just stash it
+                // here so the right value is available at challenge time.
+                OnAuthenticationFailed = ctx =>
+                {
+                    if (ctx.Exception is Microsoft.IdentityModel.Tokens.SecurityTokenExpiredException)
+                        ctx.HttpContext.Items["auth_fail_reason"] = "expired";
+                    return Task.CompletedTask;
+                },
+                OnChallenge = ctx =>
+                {
+                    // Default to 'expired' for unauthenticated requests — gives
+                    // a sensible message even when no JWT was supplied at all
+                    // (e.g. user came back hours later with no token in storage).
+                    var reason = ctx.HttpContext.Items.TryGetValue("auth_fail_reason", out var r) && r is string rs
+                        ? rs : "expired";
+                    if (!ctx.Response.Headers.ContainsKey("X-Auth-Fail-Reason"))
+                        ctx.Response.Headers.Append("X-Auth-Fail-Reason", reason);
+                    return Task.CompletedTask;
+                },
                 // Enforce session revocation in real time: every request checks the DB
                 // for the IsActive flag of the session referenced by the "session_id" claim.
                 // If the session has been revoked, the token is rejected — effectively
@@ -195,6 +216,7 @@ try
 
                     if (!sessionActive)
                     {
+                        ctx.HttpContext.Items["auth_fail_reason"] = "revoked";
                         ctx.Fail("session_revoked");
                         return;
                     }
@@ -213,7 +235,10 @@ try
                                       ctx.HttpContext.RequestAborted);
 
                         if (!userOk)
+                        {
+                            ctx.HttpContext.Items["auth_fail_reason"] = "inactive";
                             ctx.Fail("user_inactive");
+                        }
                     }
                 }
             };

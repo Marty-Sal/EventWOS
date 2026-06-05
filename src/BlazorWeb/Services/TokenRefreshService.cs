@@ -55,14 +55,15 @@ public sealed class TokenRefreshService
             var refreshToken = await _auth.GetRefreshTokenAsync();
             if (string.IsNullOrEmpty(refreshToken)) return;
 
-            var result = await _authApi.RefreshTokenAsync(refreshToken);
+            var (result, reason) = await _authApi.RefreshTokenWithReasonAsync(refreshToken);
             if (result?.Success == true && result.Data is not null)
             {
                 await _auth.UpdateAccessTokenAsync(result.Data.AccessToken, result.Data.RefreshToken);
             }
             else
             {
-                await ForceLogoutAsync();
+                // No reason from server → fall back to 'expired' (gentlest copy)
+                await ForceLogoutAsync(reason ?? "expired");
             }
         }
         catch
@@ -85,7 +86,9 @@ public sealed class TokenRefreshService
 
             if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                await ForceLogoutAsync();
+                var reason = resp.Headers.TryGetValues("X-Auth-Fail-Reason", out var vals)
+                    ? vals.FirstOrDefault() ?? "expired" : "expired";
+                await ForceLogoutAsync(reason);
             }
         }
         catch
@@ -94,9 +97,9 @@ public sealed class TokenRefreshService
         }
     }
 
-    private async Task ForceLogoutAsync()
+    private async Task ForceLogoutAsync(string reason = "expired")
     {
         await _auth.MarkLoggedOutAsync();
-        _nav.NavigateTo("/login?reason=session_revoked", forceLoad: true);
+        _nav.NavigateTo($"/login?reason={Uri.EscapeDataString(reason)}", forceLoad: true);
     }
 }

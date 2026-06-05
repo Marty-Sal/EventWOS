@@ -20,11 +20,11 @@
                 <p class="text-sm text-gray-500 mt-1">Workforce Operating System</p>
             </div>
 
-            @if (_sessionRevoked)
+            @if (_sessionMessage is not null)
             {
                 <div class="mb-5 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
                     <span class="text-base leading-none">⚠️</span>
-                    <span>Your session was ended by an administrator — either your account was suspended/deactivated or this device was revoked. Please sign in again.</span>
+                    <span>@_sessionMessage</span>
                 </div>
             }
 
@@ -141,13 +141,38 @@
     private string _mobile = string.Empty;
     private string? _devOtp;   // Only set in dev/staging — shown as on-screen hint
     private string _otp = string.Empty;
-    private bool _sessionRevoked;
+    private string? _sessionMessage;
 
     protected override void OnInitialized()
     {
-        var uri = new Uri(Nav.Uri);
-        // Simple "reason=session_revoked" check — keep it dependency-free
-        _sessionRevoked = uri.Query.Contains("reason=session_revoked", StringComparison.OrdinalIgnoreCase);
+        // Map the ?reason= query param to a user-facing message.
+        // Banner is only rendered when there's a reason — fresh visits show nothing.
+        var uri   = new Uri(Nav.Uri);
+        var query = uri.Query;
+        if (string.IsNullOrEmpty(query)) return;
+
+        // Tiny ad-hoc parser — no QueryHelpers dep needed for a single key.
+        string? reason = null;
+        foreach (var part in query.TrimStart('?').Split('&'))
+        {
+            var eq = part.IndexOf('=');
+            if (eq <= 0) continue;
+            if (Uri.UnescapeDataString(part[..eq]).Equals("reason", StringComparison.OrdinalIgnoreCase))
+            {
+                reason = Uri.UnescapeDataString(part[(eq + 1)..]);
+                break;
+            }
+        }
+
+        _sessionMessage = reason?.ToLowerInvariant() switch
+        {
+            "revoked"          => "Your session was ended by an administrator. Please sign in again.",
+            "session_revoked"  => "Your session was ended by an administrator. Please sign in again.",
+            "inactive"         => "Your account is no longer active. Please contact your administrator.",
+            "expired"          => "Your session has expired. Please sign in again.",
+            "session_expired"  => "Your session has expired. Please sign in again.",
+            _                  => null
+        };
     }
 
     private Guid _otpRequestId;

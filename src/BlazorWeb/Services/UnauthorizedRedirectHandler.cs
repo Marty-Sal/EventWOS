@@ -6,15 +6,19 @@ namespace EventWOS.BlazorWeb.Services;
 
 /// <summary>
 /// Global 401 catcher. If ANY API request comes back with 401 Unauthorized,
-/// we treat it as "your session has been killed" — clear tokens, flip the
-/// auth state to logged-out, and force-navigate to /login?reason=session_revoked.
+/// we treat it as "your session has ended" — clear tokens, flip the auth
+/// state to logged-out, and force-navigate to /login.
+///
+/// The API attaches an X-Auth-Fail-Reason header on every 401 with one of:
+///   - expired   (JWT lifetime ran out — natural end of session)
+///   - revoked   (admin revoked the session in the DB)
+///   - inactive  (user account was suspended / deactivated)
+/// We forward that as ?reason= on the redirect so Login.razor can render the
+/// right copy. If the header is absent we default to 'expired' — the gentler
+/// of the two messages.
 ///
 /// This is the primary mechanism. The 30s /sessions/ping heartbeat is just a
 /// backstop for idle tabs that aren't making other calls.
-///
-/// We deliberately swallow the 401 with a synthetic 401 response so callers
-/// don't throw HttpRequestException — by the time they would have, we've
-/// already navigated away anyway.
 /// </summary>
 public sealed class UnauthorizedRedirectHandler : DelegatingHandler
 {
@@ -47,8 +51,12 @@ public sealed class UnauthorizedRedirectHandler : DelegatingHandler
                 if (auth is not null)
                     await auth.MarkLoggedOutAsync();
 
+                var reason = response.Headers.TryGetValues("X-Auth-Fail-Reason", out var vals)
+                    ? vals.FirstOrDefault() ?? "expired"
+                    : "expired";
+
                 var nav = _sp.GetService<NavigationManager>();
-                nav?.NavigateTo("/login?reason=session_revoked", forceLoad: true);
+                nav?.NavigateTo($"/login?reason={Uri.EscapeDataString(reason)}", forceLoad: true);
             }
             catch
             {

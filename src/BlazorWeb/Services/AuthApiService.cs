@@ -28,6 +28,12 @@ public interface IAuthApiService
     Task<ApiResult<AuthResultDto>> VerifyOtpAsync(string mobile, string otp, Guid requestId, string deviceId, CancellationToken ct = default);
     Task LogoutAsync(string refreshToken, CancellationToken ct = default);
     Task<ApiResult<AuthResultDto>?> RefreshTokenAsync(string refreshToken, CancellationToken ct = default);
+    /// <summary>
+    /// Like <see cref="RefreshTokenAsync(string, CancellationToken)"/> but also
+    /// returns the X-Auth-Fail-Reason header (or null) so the caller can show
+    /// the right copy on the login page after a force-logout.
+    /// </summary>
+    Task<(ApiResult<AuthResultDto>? Result, string? FailReason)> RefreshTokenWithReasonAsync(string refreshToken, CancellationToken ct = default);
 }
 
 public sealed class AuthApiService : IAuthApiService
@@ -76,6 +82,16 @@ public sealed class AuthApiService : IAuthApiService
         var resp = await _http.PostAsJsonAsync("api/v1/auth/refresh", new RefreshRequest(refreshToken), ct);
         if (!resp.IsSuccessStatusCode) return null;
         return await ParseAsync<AuthResultDto>(resp);
+    }
+
+    public async Task<(ApiResult<AuthResultDto>? Result, string? FailReason)> RefreshTokenWithReasonAsync(
+        string refreshToken, CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsJsonAsync("api/v1/auth/refresh", new RefreshRequest(refreshToken), ct);
+        string? reason = resp.Headers.TryGetValues("X-Auth-Fail-Reason", out var vals)
+            ? vals.FirstOrDefault() : null;
+        if (!resp.IsSuccessStatusCode) return (null, reason);
+        return (await ParseAsync<AuthResultDto>(resp), reason);
     }
 
     private static async Task<ApiResult<T>> ParseAsync<T>(HttpResponseMessage resp)
