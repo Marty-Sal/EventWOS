@@ -262,9 +262,20 @@
 
                                 @if (blocksReinvite)
                                 {
-                                    <span class="px-3 py-1.5 rounded-lg text-xs font-semibold @AssignBadgeClass(existingStatus!)">
-                                        @AssignBadgeLabel(existingStatus!)
-                                    </span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-3 py-1.5 rounded-lg text-xs font-semibold @AssignBadgeClass(existingStatus!)">
+                                            @AssignBadgeLabel(existingStatus!)
+                                        </span>
+                                        @if (existingStatus == "Invited")
+                                        {
+                                            <button @onclick="() => RevokeCrewInvite(c)"
+                                                    disabled="@(busy || _assigningId != Guid.Empty)"
+                                                    class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 disabled:opacity-50 transition"
+                                                    title="Revoke this pending invitation">
+                                                @(busy ? "…" : "✕ Revoke")
+                                            </button>
+                                        }
+                                    </div>
                                 }
                                 else if (canReinvite)
                                 {
@@ -605,6 +616,38 @@
         else
         {
             _assignError = err ?? "Couldn't assign that crew member.";
+        }
+        StateHasChanged();
+    }
+
+    private async Task RevokeCrewInvite(CrewLite c)
+    {
+        if (_assignTarget is null) return;
+        _assignError   = null;
+        _assignSuccess = null;
+        _assigningId   = c.Id;
+        StateHasChanged();
+
+        var (ok, err) = await EventApi.VendorRevokeCrewInviteAsync(_assignTarget.Id, c.Id);
+        _assigningId = Guid.Empty;
+        if (ok)
+        {
+            _assignSuccess = $"Revoked invitation for {c.FullName}.";
+            // Drop from the existing-status map so the row flips back to a
+            // fresh "Invite" button next render.
+            _existingByCrewId.Remove(c.Id);
+            // Add them back to the roster if they were removed earlier
+            if (_roster is not null && !_roster.Any(x => x.Id == c.Id))
+            {
+                _roster.Add(c);
+                _roster = _roster.OrderBy(x => x.FullName).ToList();
+            }
+            // Refresh event list so AssignedCrew count drops by 1
+            _ = LoadAsync();
+        }
+        else
+        {
+            _assignError = err ?? "Couldn't revoke that invitation.";
         }
         StateHasChanged();
     }

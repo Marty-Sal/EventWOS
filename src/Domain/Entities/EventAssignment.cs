@@ -231,6 +231,53 @@ public sealed class EventAssignment : BaseEntity
         RatedAt      = DateTime.UtcNow;
     }
 
+    // ── Vendor re-invite & revoke (crew rows) ────────────────────────────────
+
+    /// <summary>
+    /// Vendor re-invites a crew member whose previous assignment ended in a
+    /// terminal-rejected state (Declined / RejectedByVendor / RejectedByManager
+    /// / NoShow). Flips status back to Invited and clears the rejection
+    /// fields so the row looks fresh to the crew.
+    /// </summary>
+    public void VendorReInvite(Guid vendorUserId)
+    {
+        if (CrewId is null)
+            throw new InvalidOperationException("Only crew rows can be re-invited here.");
+        if (Status is not AssignmentStatus.Declined
+                  and not AssignmentStatus.RejectedByVendor
+                  and not AssignmentStatus.RejectedByManager
+                  and not AssignmentStatus.NoShow)
+            throw new InvalidOperationException("Only terminal-rejected assignments can be re-invited.");
+
+        Status            = AssignmentStatus.Invited;
+        VendorId          = vendorUserId;
+        AssignedByUserId  = vendorUserId;
+        CrewRespondedAt   = null;
+        VendorReviewedAt  = null;
+        ManagerReviewedAt = null;
+        DeclinedAt        = null;
+        ConfirmedAt       = null;
+        RejectionReason   = null;
+        RejectedByUserId  = null;
+    }
+
+    /// <summary>
+    /// Vendor revokes a crew invitation they sent that the crew hasn't
+    /// responded to yet. Soft-deletes the row — vendor can re-invite later
+    /// (which inserts a fresh row, since this one is is_deleted=true).
+    /// </summary>
+    public void VendorRevokeCrewInvite(Guid revokedByUserId)
+    {
+        if (CrewId is null)
+            throw new InvalidOperationException("Only crew rows can be revoked here.");
+        if (Status != AssignmentStatus.Invited)
+            throw new InvalidOperationException("Only Invited assignments can be revoked.");
+        // Soft-delete via BaseEntity fields
+        IsDeleted = true;
+        DeletedAt = DateTime.UtcNow;
+        DeletedBy = revokedByUserId;
+    }
+
     // ── Backward-compat helpers ──────────────────────────────────────────────
     /// <summary>True if this assignment is in a fully active/confirmed state (eligible for attendance).</summary>
     public bool IsEligibleForAttendance =>

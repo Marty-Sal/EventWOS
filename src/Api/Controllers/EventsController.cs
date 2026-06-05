@@ -214,6 +214,26 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Vendor revokes a pending crew invitation they sent. Only allowed while
+    /// the crew hasn't responded yet (status is still Invited). Mirrors the
+    /// manager's DELETE /vendor-invitations/{id} endpoint.
+    /// </summary>
+    [Permission("profile:write")]
+    [HttpDelete("{id:guid}/vendor-crew-invitations/{crewId:guid}")]
+    public async Task<IActionResult> VendorRevokeCrewInvite(
+        Guid id, Guid crewId, CancellationToken ct)
+    {
+        if (_currentUser.Role != UserRole.Vendor) return Forbid();
+
+        var result = await _mediator.Send(new VendorRevokeCrewInviteCommand(
+            id, crewId, _currentUser.UserId!.Value), ct);
+
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok("Invitation revoked."))
+            : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
+
+    /// <summary>
     /// Vendor responds to the Manager's invitation to staff an event (accept / reject).
     /// Operates on the placeholder row only (CrewId == null). Does NOT enter the
     /// Manager approval queue — this is a vendor↔manager decision about the

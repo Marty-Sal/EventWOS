@@ -88,11 +88,29 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
         if (crew.VendorId != req.VendorUserId)
             return Result.Failure<EventAssignmentDto>(new Error("Crew.NotInRoster", "That crew member is not in your roster."));
 
-        // No double-assign
-        var dup = await _db.EventAssignments.AnyAsync(
-            a => a.EventId == req.EventId && a.CrewId == req.CrewId, ct);
-        if (dup)
-            return Result.Failure<EventAssignmentDto>(new Error("Assignment.Duplicate", "That crew is already on this event."));
+        // Look for any existing row for this (event, crew) pair. We treat
+        // terminal-rejected rows as "spent" — they get resurrected with a
+        // fresh Invited status so the vendor's "Re-invite" button actually
+        // sends a new invite instead of being blocked by the dead row.
+        var existing = await _db.EventAssignments
+            .FirstOrDefaultAsync(a => a.EventId == req.EventId && a.CrewId == req.CrewId, ct);
+
+        bool isResurrection = false;
+        if (existing is not null)
+        {
+            // Active rows still block — can't double-invite someone who's
+            // already pending or working the event.
+            var isTerminal = existing.Status is
+                AssignmentStatus.Declined         or
+                AssignmentStatus.RejectedByVendor or
+                AssignmentStatus.RejectedByManager or
+                AssignmentStatus.NoShow;
+            if (!isTerminal)
+                return Result.Failure<EventAssignmentDto>(new Error(
+                    "Assignment.Duplicate", "That crew is already on this event."));
+
+            isResurrection = true;
+        }
 
         // Capacity check — uses centralised rule (excludes declined,
         // rejected, no-show, placeholders, soft-deleted).
@@ -108,9 +126,23 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
 
         var vendor = await _db.Users.FirstOrDefaultAsync(u => u.Id == req.VendorUserId, ct);
 
-        // Create the crew assignment (vendor self-attributed)
-        var assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorUserId, req.VendorUserId);
-        _db.EventAssignments.Add(assignment);
+        // Create the crew assignment, OR resurrect the previously-terminated
+        // row (Declined / RejectedByVendor / RejectedByManager / NoShow) by
+        // flipping status back to Invited. Resurrection keeps one row per
+        // (event, crew) pair so the badge logic on the picker stays simple.
+        EventAssignment assignment;
+        if (isResurrection && existing is not null)
+        {
+            existing.VendorReInvite(req.VendorUserId);
+            existing.UpdatedAt = DateTime.UtcNow;
+            existing.UpdatedBy = req.VendorUserId;
+            assignment = existing;
+        }
+        else
+        {
+            assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorUserId, req.VendorUserId);
+            _db.EventAssignments.Add(assignment);
+        }
 
         // NOTE: We intentionally DO NOT delete the vendor-only placeholder row.
         // The placeholder is the anchor that says "this vendor is assigned to
