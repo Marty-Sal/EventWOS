@@ -37,6 +37,8 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<VendorCrewMapping> VendorCrewMappings => Set<VendorCrewMapping>();
+    public DbSet<CrewGroup>        CrewGroups        => Set<CrewGroup>();
+    public DbSet<CrewGroupMember>  CrewGroupMembers  => Set<CrewGroupMember>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     // Phase 2 — Events Module
@@ -61,6 +63,8 @@ public sealed class AppDbContext : DbContext, IAppDbContext
         modelBuilder.Entity<RefreshToken>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<UserSession>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<VendorCrewMapping>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<CrewGroup>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<CrewGroupMember>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<Event>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<EventAssignment>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<AttendanceRecord>().HasQueryFilter(e => !e.IsDeleted);

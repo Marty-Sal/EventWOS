@@ -2,6 +2,8 @@ using EventWOS.Api.Authorization;
 using Asp.Versioning;
 using EventWOS.Application.Attendance.Commands;
 using EventWOS.Application.Events.Commands;
+using EventWOS.Application.CrewGroups.Commands;
+using EventWOS.Application.CrewGroups.DTOs;
 using EventWOS.Domain.Enums;
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Events.Queries;
@@ -189,6 +191,26 @@ public sealed class EventsController : ControllerBase
         return result.IsSuccess
             ? Created(string.Empty, ApiResponse<EventAssignmentDto>.Ok(result.Value))
             : BadRequest(ApiResponse<EventAssignmentDto>.Fail(result.Error.Message));
+    }
+
+    /// <summary>
+    /// Vendor self-service: invite every crew member in a saved group to this
+    /// event. Returns an aggregate summary (invited / skipped / failed) so the
+    /// UI can show what actually happened instead of a single OK / error.
+    /// </summary>
+    [Permission("profile:write")]
+    [HttpPost("{id:guid}/vendor-assign-group")]
+    public async Task<IActionResult> VendorAssignGroup(
+        Guid id, [FromBody] VendorAssignGroupRequest req, CancellationToken ct)
+    {
+        if (_currentUser.Role != UserRole.Vendor) return Forbid();
+
+        var result = await _mediator.Send(new VendorAssignGroupCommand(
+            id, req.GroupId, _currentUser.UserId!.Value), ct);
+
+        return result.IsSuccess
+            ? Ok(ApiResponse<VendorAssignGroupResultDto>.Ok(result.Value))
+            : BadRequest(ApiResponse<VendorAssignGroupResultDto>.Fail(result.Error.Message));
     }
 
     /// <summary>
@@ -389,6 +411,7 @@ public sealed record UpdateEventRequest(
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
 public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId);
 public sealed record VendorAssignCrewRequest(Guid CrewId);
+public sealed record VendorAssignGroupRequest(Guid GroupId);
 public sealed record VendorRespondToInviteRequest(string Response, string? Reason);
 public sealed record RespondAssignmentRequest(string Response, string? Reason = null);
 public sealed record RecordAttendanceRequest(string Action, string? Location = null);

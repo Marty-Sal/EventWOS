@@ -15,6 +15,8 @@ public interface IAppDbContext
     DbSet<RefreshToken>     RefreshTokens     { get; }
     DbSet<UserSession>      UserSessions      { get; }
     DbSet<VendorCrewMapping> VendorCrewMappings { get; }
+    DbSet<CrewGroup>        CrewGroups        { get; }
+    DbSet<CrewGroupMember>  CrewGroupMembers  { get; }
     DbSet<AuditLog>         AuditLogs         { get; }
 
     // Phase 2 — Events Module
