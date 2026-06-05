@@ -157,11 +157,6 @@
                 {
                     <div class="mb-3 p-3 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs">⚠️ @_assignError</div>
                 }
-                @if (_assignSuccess is not null)
-                {
-                    <div class="mb-3 p-3 bg-green-50 border border-green-100 rounded-lg text-green-700 text-xs">✓ @_assignSuccess</div>
-                }
-
                 @* ─── Invite a saved group ─────────────────────────────────────── *@
                 @if (_groupsForPicker is not null && _groupsForPicker.Count > 0)
                 {
@@ -260,6 +255,16 @@
                                     <p class="text-xs text-gray-400">@c.Mobile</p>
                                 </div>
 
+                                <div class="flex items-center gap-2">
+
+                                @if (_justActedId == c.Id && _justActedLabel is not null)
+                                {
+                                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-green-50 text-green-700 text-[11px] font-semibold animate-pulse"
+                                          title="@_justActedLabel">
+                                        ✓ @_justActedLabel
+                                    </span>
+                                }
+
                                 @if (blocksReinvite)
                                 {
                                     <div class="flex items-center gap-2">
@@ -294,6 +299,8 @@
                                         @(busy ? "Assigning…" : "Invite")
                                     </button>
                                 }
+
+                                </div>
                             </div>
                         }
                     </div>
@@ -374,8 +381,34 @@
     private Dictionary<Guid, string> _existingByCrewId = new(); // crewId → current Status
     private string _crewSearch = "";
     private string? _assignError;
-    private string? _assignSuccess;
+    private string? _assignSuccess; // legacy — kept for the group-invite success path; per-row uses _justActedId
     private Guid _assigningId = Guid.Empty;
+
+    // Inline per-row success flash. Set after a successful invite/revoke,
+    // cleared 2s later by a fire-and-forget Task so the green ✓ pill
+    // fades away on its own without leaving stale UI behind.
+    private Guid    _justActedId    = Guid.Empty;
+    private string? _justActedLabel;
+    private int     _justActedToken; // bumped on every flash so a late timer never wipes a newer flash
+
+    private async Task FlashJustActed(Guid crewId, string label)
+    {
+        var myToken = ++_justActedToken;
+        _justActedId    = crewId;
+        _justActedLabel = label;
+        StateHasChanged();
+
+        try { await Task.Delay(2000); }
+        catch { /* navigated away */ }
+
+        // Only clear if no newer flash has started in the meantime
+        if (_justActedToken == myToken)
+        {
+            _justActedId    = Guid.Empty;
+            _justActedLabel = null;
+            StateHasChanged();
+        }
+    }
 
     private IReadOnlyList<CrewLite> FilteredRoster
     {
@@ -606,15 +639,11 @@
         _assigningId = Guid.Empty;
         if (ok)
         {
-            _assignSuccess = $"Invited {c.FullName}.";
-            // Update the status map → the row's render flips from the
-            // 'Invite' button to the 'Invited' badge + ✕ Revoke pair on
-            // the next StateHasChanged. We deliberately keep the crew in
-            // _roster so the vendor can still see them in the list (and
-            // revoke if they change their mind). Double-add is already
-            // prevented because the Invite button is gone once the
-            // status is 'Invited'.
+            // Status map flip → row renders the 'Invited' badge + ✕ Revoke
+            // pair on the next StateHasChanged. Crew stays in _roster.
             _existingByCrewId[c.Id] = "Invited";
+            // Brief inline ✓ pill on this row in place of the old top banner.
+            _ = FlashJustActed(c.Id, "Invited");
             // Refresh event list to bump AssignedCrew count
             _ = LoadAsync();
         }
@@ -637,13 +666,11 @@
         _assigningId = Guid.Empty;
         if (ok)
         {
-            _assignSuccess = $"Revoked invitation for {c.FullName}.";
             // Drop from the existing-status map so the row flips back to
-            // a fresh 'Invite' button next render. We no longer mutate
-            // _roster — the crew stayed in the list the whole time, the
-            // row just rendered the badge instead of the button while
-            // status was 'Invited'.
+            // a fresh 'Invite' button next render. Crew stays in _roster.
             _existingByCrewId.Remove(c.Id);
+            // Brief inline ✓ pill confirming the revoke happened.
+            _ = FlashJustActed(c.Id, "Revoked");
             // Refresh event list so AssignedCrew count drops by 1
             _ = LoadAsync();
         }
