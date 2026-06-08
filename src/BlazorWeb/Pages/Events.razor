@@ -578,7 +578,23 @@
                     <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" @onclick="CloseAllocCreate">
                         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-3" @onclick:stopPropagation="true">
                             <div class="flex items-center justify-between">
-                                <h3 class="font-bold text-gray-800 text-sm">Allocate vendor quota</h3>
+                                <div>
+                                    <h3 class="font-bold text-gray-800 text-sm">Allocate vendor quota</h3>
+                                    @{
+                                        var allocShift = _selectedEventShifts?.FirstOrDefault(x => x.Id == _allocCreateShiftId);
+                                    }
+                                    @if (allocShift is not null)
+                                    {
+                                        <p class="text-[11px] text-gray-500 mt-0.5">
+                                            for <b class="text-gray-700">@allocShift.ScopeName</b>
+                                            · @allocShift.StartAt.ToLocalTime().ToString("MMM d, HH:mm")
+                                            @if (allocShift.EndAt is { } e)
+                                            {
+                                                <span> – @e.ToLocalTime().ToString("HH:mm")</span>
+                                            }
+                                        </p>
+                                    }
+                                </div>
                                 <button @onclick="CloseAllocCreate" class="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
                             </div>
                             <div class="relative">
@@ -1296,6 +1312,11 @@ else
     private bool                      _assigning;
     private string?                   _assignError;
     private string                    _assignMode = "both"; // "crew" | "vendor" | "both" 
+    // Phase D step 3: when an event has >1 active shift, the admin must
+    // explicitly pick which shift the assignment lands on. Bound as a
+    // string so the placeholder option ("— pick a shift —") works
+    // cleanly; parsed to Guid? at submit time.
+    private string                    _assignShiftId = "";
 
     // Modal
     private bool              _showEventModal;
@@ -1427,6 +1448,7 @@ else
         _allocSectionOpen = false;
         _allocError       = null;
         _selectedEventShifts = await EventApi.GetEventShiftsAsync(ev.Id);
+        _assignShiftId       = "";   // reset the shift picker for the new event
         if (_selectedEventShifts is not null)
         {
             foreach (var sh in _selectedEventShifts)
@@ -1793,6 +1815,11 @@ else
 
     private async Task OpenEditModal(EventListItemDto ev)
     {
+        // Fix: the shift editor's scope <select> needs the catalog loaded
+        // before render — otherwise the existing shift's ScopeOfWorkId
+        // can't match any option and the dropdown shows blank.
+        await EnsureScopeCatalogLoaded();
+
         _editingEvent = ev;
         _form = new EventForm
         {

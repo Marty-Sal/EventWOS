@@ -14,7 +14,8 @@ public sealed record AssignCrewCommand(
     Guid EventId,
     Guid? CrewId,
     Guid? VendorId,
-    Guid AssignedByUserId
+    Guid AssignedByUserId,
+    Guid? ShiftId = null
 ) : IRequest<Result<EventAssignmentDto>>;
 
 public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Result<EventAssignmentDto>>
@@ -74,20 +75,33 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
                 return Result.Failure<EventAssignmentDto>(new Error("Assignment.MaxReached", $"Event is fully staffed (max {ev.MaxCrew})."));
         }
 
-                // Phase B: every assignment must reference a shift. Until the
-        // multi-shift UI lands (Phase C) we auto-resolve to the event's
-        // single active shift via DefaultShiftResolver. Ambiguous events
-        // (somehow >1 shift) surface a clear error rather than picking
-        // one at random.
-        bool _ambiguous = false;
-        var _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
-            _db, req.EventId, ct, x => _ambiguous = x);
-        if (_ambiguous)
-            return Result.Failure<EventAssignmentDto>(new Error("Assignment.AmbiguousShift",
-                "Event has multiple shifts — caller must specify which one. (Phase C upgrade required.)"));
-        if (_shiftId is null)
-            return Result.Failure<EventAssignmentDto>(new Error("Assignment.NoShift",
-                "Event has no shifts — cannot assign crew."));
+        // Phase D step 3: caller may now specify ShiftId explicitly. We
+        // validate it belongs to this event + isn't archived; otherwise
+        // fall back to DefaultShiftResolver for single-shift events. For
+        // events with >1 shift and no ShiftId we still error out — the
+        // admin UI now surfaces a picker, so this only bites bad clients.
+        Guid? _shiftId;
+        if (req.ShiftId is { } explicitShift)
+        {
+            var ok = await _db.EventShifts
+                .AnyAsync(s => s.Id == explicitShift && s.EventId == req.EventId && !s.IsDeleted, ct);
+            if (!ok)
+                return Result.Failure<EventAssignmentDto>(new Error("Assignment.InvalidShift",
+                    "Selected shift doesn't belong to this event or is archived."));
+            _shiftId = explicitShift;
+        }
+        else
+        {
+            bool _ambiguous = false;
+            _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
+                _db, req.EventId, ct, x => _ambiguous = x);
+            if (_ambiguous)
+                return Result.Failure<EventAssignmentDto>(new Error("Assignment.AmbiguousShift",
+                    "Event has multiple shifts — pick one in the assignment dialog."));
+            if (_shiftId is null)
+                return Result.Failure<EventAssignmentDto>(new Error("Assignment.NoShift",
+                    "Event has no shifts — cannot assign crew."));
+        }
 
         var assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorId, req.AssignedByUserId);
         assignment.AttachToShift(_shiftId.Value);

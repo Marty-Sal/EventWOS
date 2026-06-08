@@ -186,7 +186,7 @@ public sealed class EventsController : ControllerBase
     public async Task<IActionResult> AssignCrew(Guid id, [FromBody] AssignCrewRequest req, CancellationToken ct)
     {
         var result = await _mediator.Send(new AssignCrewCommand(
-            id, req.CrewId, req.VendorId, _currentUser.UserId!.Value), ct);
+            id, req.CrewId, req.VendorId, _currentUser.UserId!.Value, req.ShiftId), ct);
 
         return result.IsSuccess
             ? Created(string.Empty, ApiResponse<EventAssignmentDto>.Ok(result.Value))
@@ -539,7 +539,7 @@ public sealed record UpdateEventRequest(
     DateTime StartAt, DateTime EndAt, int MaxCrew = 0);
 
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
-public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId);
+public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId, Guid? ShiftId = null);
 public sealed record AddEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt = null);
 public sealed record UpdateEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt = null);
 
