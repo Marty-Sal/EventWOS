@@ -451,6 +451,31 @@
                         </p>
                     }
 
+                    @* ── Phase D step 3: per-shift picker ─────────────────
+                       Hidden for single-shift events (the API auto-resolves
+                       via DefaultShiftResolver). Required for multi-shift
+                       so the admin tells the API which shift the
+                       crew/vendor lands on. *@
+                    @{
+                        var activeShifts = _selectedEventShifts?.ToList() ?? new();
+                    }
+                    @if (activeShifts.Count > 1)
+                    {
+                        <div>
+                            <label class="text-[11px] font-medium text-gray-600 mb-1 block">Shift *</label>
+                            <select @bind="_assignShiftId"
+                                    class="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                                <option value="">— pick a shift —</option>
+                                @foreach (var sh in activeShifts)
+                                {
+                                    <option value="@sh.Id">
+                                        @sh.ScopeName — @sh.AssignedCrew/@sh.CrewCount used · @sh.StartAt.ToLocalTime().ToString("MMM d, HH:mm")
+                                    </option>
+                                }
+                            </select>
+                        </div>
+                    }
+
                     @* ── Duplicate-assignment warning ── *@
                     @{
                         var dupWarn = DuplicateAssignWarning();
