@@ -286,6 +286,23 @@ try
     builder.Services.AddScoped<IAuditLogger, AuditLogger>();
     builder.Services.AddScoped<ISmsProvider, StubSmsProvider>();
     builder.Services.AddSingleton<EventWOS.Application.Auth.Interfaces.IPasswordHasher, EventWOS.Infrastructure.Auth.BCryptPasswordHasher>();
+
+    // ── Email service: SendGrid if API key is present, otherwise dev stub (logs only).
+    //    Lets the app boot fine in environments without SendGrid configured.
+    var sendGridKey = builder.Configuration["SendGrid:ApiKey"]
+                   ?? builder.Configuration["SENDGRID_API_KEY"];
+    if (!string.IsNullOrWhiteSpace(sendGridKey))
+    {
+        builder.Services.AddHttpClient<EventWOS.Application.Common.IEmailService,
+                                       EventWOS.Infrastructure.Email.SendGridEmailService>();
+        Log.Information("Email: SendGridEmailService registered.");
+    }
+    else
+    {
+        builder.Services.AddSingleton<EventWOS.Application.Common.IEmailService,
+                                      EventWOS.Infrastructure.Email.StubEmailService>();
+        Log.Information("Email: SENDGRID_API_KEY not set — using StubEmailService (logs only).");
+    }
     builder.Services.AddScoped<ICurrentUser, CurrentUser>();
     builder.Services.AddHttpContextAccessor();
 
