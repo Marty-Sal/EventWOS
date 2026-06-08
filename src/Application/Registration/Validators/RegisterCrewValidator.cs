@@ -15,7 +15,13 @@ public sealed class RegisterCrewValidator : AbstractValidator<RegisterCrewComman
             .WithMessage("Mobile must be 10–15 digits, optionally prefixed with +.");
         RuleFor(x => x.Password).Must(PasswordRules.IsValid).WithMessage(PasswordRules.Description);
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.ReferralCode).MaximumLength(20);
+        // Crew self-registration MUST include a vendor referral code.
+        // Direct (vendor-less) crew can only be created by Admin via the
+        // CreateUser admin endpoint — never through this self-signup path.
+        // See rule #28 / Phase 5 spec.
+        RuleFor(x => x.ReferralCode)
+            .NotEmpty().WithMessage("A vendor referral code is required to register as crew. Please ask your vendor for their code.")
+            .MaximumLength(20);
         RuleFor(x => x.ExperienceYears).InclusiveBetween(0, 60).When(x => x.ExperienceYears.HasValue);
     }
 }

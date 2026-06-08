@@ -11,7 +11,7 @@
             <div class="text-center mb-6">
                 <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-orange-600 text-white text-2xl mb-3 shadow-lg">🧑‍🔧</div>
                 <h1 class="text-2xl font-bold text-gray-900">Crew Sign-up</h1>
-                <p class="text-sm text-gray-500 mt-1">Join EventWOS to pick up shifts and get paid.</p>
+                <p class="text-sm text-gray-500 mt-1">Join EventWOS under your vendor and start picking up shifts.</p>
             </div>
 
             @if (_success is not null)
@@ -67,8 +67,9 @@
                         <input @bind="_skills" class="@Css" placeholder="stage, lighting" />
                     </Field>
 
-                    <Field Label="Vendor referral code (optional)" Hint="Provided by a vendor who invited you">
-                        <input @bind="_ref" class="@Css uppercase" placeholder="ABC12345" disabled="@(_refLocked)" />
+                    <Field Label="Vendor referral code" Required="true"
+                           Hint="Ask your vendor for this code — it's how we link you to their roster.">
+                        <input @bind="_ref" class="@Css uppercase" placeholder="ABC12345" disabled="@(_refLocked)" maxlength="20" />
                     </Field>
 
                     <Field Label="About you (optional)">
@@ -125,6 +126,11 @@
             || string.IsNullOrWhiteSpace(_fullName))
         {
             _error = "Please fill in all required fields."; return;
+        }
+        if (string.IsNullOrWhiteSpace(_ref))
+        {
+            _error = "A vendor referral code is required. Don't have one? Ask the vendor who invited you.";
+            return;
         }
         _loading = true;
         try

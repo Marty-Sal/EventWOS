@@ -64,20 +64,27 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
         if (await _db.Users.AnyAsync(u => u.Email == emailLower, ct))
             return Result.Failure<RegistrationResponse>(Error.Custom("Registration.EmailTaken", "An account already exists with this email."));
 
-        // 3. Resolve referral code (optional). Must point to an Active Vendor.
-        Guid? resolvedVendorId = null;
-        if (!string.IsNullOrEmpty(refCode))
-        {
-            var vendor = await _db.Users
-                .Where(u => u.Role == UserRole.Vendor
-                         && u.Status == UserStatus.Active
-                         && u.ReferralCode == refCode)
-                .Select(u => new { u.Id })
-                .FirstOrDefaultAsync(ct);
-            if (vendor is null)
-                return Result.Failure<RegistrationResponse>(Error.Custom("Registration.InvalidReferral", "That referral code is not valid."));
-            resolvedVendorId = vendor.Id;
-        }
+        // 3. Resolve referral code — MANDATORY for self-registration.
+        //    Direct (vendor-less) crew exist only via the Admin CreateUser
+        //    path; crew self-signup is always under a vendor's umbrella.
+        //    The FluentValidation rule already blocks empty refCode, so this
+        //    is a defence-in-depth check.
+        if (string.IsNullOrEmpty(refCode))
+            return Result.Failure<RegistrationResponse>(Error.Custom(
+                "Registration.ReferralRequired",
+                "A vendor referral code is required to register as crew."));
+
+        var vendor = await _db.Users
+            .Where(u => u.Role == UserRole.Vendor
+                     && u.Status == UserStatus.Active
+                     && u.ReferralCode == refCode)
+            .Select(u => new { u.Id })
+            .FirstOrDefaultAsync(ct);
+        if (vendor is null)
+            return Result.Failure<RegistrationResponse>(Error.Custom(
+                "Registration.InvalidReferral",
+                "That referral code is not valid. Please check it with your vendor."));
+        Guid? resolvedVendorId = vendor.Id;
 
         // 4. Create the Pending crew user.
         var hash = _hasher.Hash(req.Password);
