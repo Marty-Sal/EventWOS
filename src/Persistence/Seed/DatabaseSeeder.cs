@@ -194,7 +194,24 @@ public sealed class DatabaseSeeder
             }
         }
 
-        // Manager — no default permissions (assigned dynamically by Admin)
+        // Manager — minimal baseline only. The rest is assigned dynamically by Admin
+        // through the role-permission UI. Baseline covers "stuff a logged-in user
+        // simply needs to use the app at all":
+        //   • profile:read / profile:write  — view + edit own profile, hit
+        //     /approval-queue (which is gated by profile:read because it's the
+        //     lowest-common-denominator perm + a role check in the controller).
+        // Everything else — users:read, vendors:read, crew:read, attendance:read,
+        // payments:read, sessions:read, audit:read, users:status — stays Admin-assigned
+        // so a brand-new Manager has *no power* until someone explicitly grants it.
+        var managerRole = GetRole(UserRole.Manager);
+        if (managerRole is not null)
+        {
+            foreach (var name in new[] { "profile:read", "profile:write" })
+            {
+                var perm = GetPerm(name);
+                if (perm is not null) TryAdd(managerRole.Id, perm.Id);
+            }
+        }
 
         if (toAdd.Count > 0)
         {

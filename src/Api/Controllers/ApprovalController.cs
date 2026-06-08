@@ -13,11 +13,16 @@ namespace EventWOS.Api.Controllers;
 
 /// <summary>
 /// Unified approval queue for self-registered Vendors and Crew.
-///   - Admin / Manager (perm: users:status) → can approve VENDOR registrations.
-///   - Vendor (perm: crew:approve)          → can approve CREW that
-///     self-registered using THEIR referral code.
-/// Handler enforces the same scoping in case the controller is reused
-/// elsewhere — defence in depth.
+///   - Admin / Manager → can approve VENDOR registrations.
+///   - Vendor          → can approve CREW that self-registered using THEIR
+///                       referral code.
+///
+/// All three endpoints are gated by the lowest-common-denominator permission
+/// (profile:read — granted to every action role by the seeder) PLUS an
+/// explicit role check inside each action. The role-scoped data filtering
+/// is enforced inside the handlers — defence in depth — so even if this
+/// controller is wired in elsewhere with looser auth, a Vendor still can't
+/// see / act on a record outside their referral pool.
 ///
 /// Route renamed from /admin/approval-queue → /approval-queue because
 /// it's no longer admin-only.

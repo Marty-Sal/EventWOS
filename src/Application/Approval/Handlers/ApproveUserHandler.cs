@@ -9,6 +9,7 @@ using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EventWOS.Application.Approval.Handlers;
 
@@ -33,6 +34,7 @@ public sealed class ApproveUserHandler : IRequestHandler<ApproveUserCommand, Res
     private readonly ISmsProvider _sms;
     private readonly INotificationPusher _push;
     private readonly ICurrentUser _me;
+    private readonly AppUrlOptions _appUrls;
     private readonly ILogger<ApproveUserHandler> _logger;
 
     public ApproveUserHandler(
@@ -40,11 +42,12 @@ public sealed class ApproveUserHandler : IRequestHandler<ApproveUserCommand, Res
         IEmailService email, IOtpService smsService, ISmsProvider sms,
         INotificationPusher push,
         ICurrentUser me,
+        IOptions<AppUrlOptions> appUrls,
         ILogger<ApproveUserHandler> logger)
     {
         _db = db; _uow = uow; _audit = audit;
         _email = email; _smsService = smsService; _sms = sms;
-        _push = push; _me = me; _logger = logger;
+        _push = push; _me = me; _appUrls = appUrls.Value; _logger = logger;
     }
 
     public async Task<Result<ApproveUserResponse>> Handle(ApproveUserCommand req, CancellationToken ct)
@@ -97,10 +100,16 @@ public sealed class ApproveUserHandler : IRequestHandler<ApproveUserCommand, Res
             cancellationToken: ct);
 
         // ── Side-effects (best-effort; failures must not break the approval) ─
-        // Login URL is a hard default for now — wire to config in Phase 6.
         // SendGrid email + SMS both link to this. The /login/<portal> shape
         // matches the three-portal split landing in Phase 5.
-        var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL") ?? "https://eventwos.app";
+        //
+        // Resolution order (first non-empty wins):
+        //   1. AppUrls:BaseUrl section in IConfiguration (preferred — typed)
+        //   2. APP_BASE_URL env var (legacy — kept for deploy backward-compat)
+        //   3. Hard default "https://eventwos.app" (matches the typed option's default)
+        var baseUrl = !string.IsNullOrWhiteSpace(_appUrls.BaseUrl)
+            ? _appUrls.BaseUrl
+            : (Environment.GetEnvironmentVariable("APP_BASE_URL") ?? "https://eventwos.app");
         var loginUrl = baseUrl.TrimEnd('/')
                      + (user.Role == UserRole.Vendor ? "/login/vendor"
                         : user.Role == UserRole.Crew  ? "/login/crew"

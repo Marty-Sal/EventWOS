@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Phase 6 — first test project in the solution.
+
+    Scope intentionally narrow: validator-only unit tests for the new
+    self-registration flow. No EF / MediatR / DI plumbing yet —
+    just FluentValidation contracts, which are the single most fragile
+    surface in the registration pipeline because they're shared between
+    the API and the Blazor form.
+
+    Future test projects (Domain.UnitTests, Persistence.IntegrationTests,
+    Api.IntegrationTests) should sit alongside this one under /tests.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>EventWOS.Application.UnitTests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="FluentAssertions" Version="6.12.2" />
+    <PackageReference Include="FluentValidation" Version="11.11.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Application\EventWOS.Application.csproj" />
+  </ItemGroup>
+</Project>

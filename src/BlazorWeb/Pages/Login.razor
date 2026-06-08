@@ -5,14 +5,15 @@
 <PageTitle>Sign in — EventWOS</PageTitle>
 
 @*
-    Portal-picker landing. Replaces the old single-page OTP login.
-    Pre-Phase-5 OTP login is still wired on the backend, but the visible
-    sign-in UI now routes by audience:
+    Portal-picker landing. Replaces the old single-page OTP login with a
+    role-themed router:
        Admin / Manager  → /login/admin
        Vendor           → /login/vendor
        Crew             → /login/crew
     Each portal page renders the same PasswordLoginCard with a different
-    theme + register link.
+    theme + register link. OTP login is still available as a fallback at
+    /login/otp (linked from PasswordLoginCard), used mainly for users who
+    haven't set up a password yet (the first-login forced-setup flow).
 *@
 
 <div class="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900 flex items-center justify-center p-4">

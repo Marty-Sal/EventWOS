@@ -281,6 +281,12 @@ try
 
     // ─── Application Services ─────────────────────────────────────────────────
     builder.Services.Configure<OtpOptions>(builder.Configuration.GetSection(OtpOptions.SectionName));
+
+    // Public frontend URL for approval-flow links (welcome emails, SMS, etc.).
+    // Pulls from AppUrls:BaseUrl in appsettings or AppUrls__BaseUrl env var.
+    builder.Services.Configure<EventWOS.Application.Common.AppUrlOptions>(
+        builder.Configuration.GetSection(EventWOS.Application.Common.AppUrlOptions.SectionName));
+
     builder.Services.AddScoped<IOtpService, OtpService>();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddScoped<IAuditLogger, AuditLogger>();
