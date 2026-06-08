@@ -518,10 +518,16 @@
                     <div class="border-t border-gray-100 pt-4">
                         <div class="flex items-center justify-between mb-3">
                             <h4 class="font-semibold text-gray-700 text-sm">Vendor Quotas</h4>
-                            <button type="button" @onclick="ToggleAllocSection"
-                                    class="text-[11px] text-indigo-600 hover:underline">
-                                @(_allocSectionOpen ? "Hide" : "Show")
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button type="button" @onclick="OpenAllocCreateGlobal"
+                                        class="text-[11px] px-2 py-1 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">
+                                    + Allocate
+                                </button>
+                                <button type="button" @onclick="ToggleAllocSection"
+                                        class="text-[11px] text-indigo-600 hover:underline">
+                                    @(_allocSectionOpen ? "Hide" : "Show")
+                                </button>
+                            </div>
                         </div>
                         @if (_allocSectionOpen)
                         {
@@ -539,12 +545,6 @@
                                                 Capacity @sh.CrewCount · Allocated @totalQ · Free <b class="@(headroom > 0 ? "text-emerald-700" : "text-gray-400")">@headroom</b>
                                             </p>
                                         </div>
-                                        <button type="button"
-                                                @onclick="() => OpenAllocCreate(shiftId)"
-                                                disabled="@(headroom <= 0)"
-                                                class="text-[11px] px-2 py-1 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition">
-                                            + Allocate
-                                        </button>
                                     </div>
                                     @if (rows is null)
                                     {
@@ -598,26 +598,20 @@
                 }
 
                 @* ── Allocation Create mini-modal ───────────────────────── *@
-                @if (_allocCreateShiftId is not null)
+                @if (_allocCreateOpen)
                 {
                     <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" @onclick="CloseAllocCreate">
                         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-3" @onclick:stopPropagation="true">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <h3 class="font-bold text-gray-800 text-sm">Allocate vendor quota</h3>
-                                    @{
-                                        var allocShift = _selectedEventShifts?.FirstOrDefault(x => x.Id == _allocCreateShiftId);
-                                    }
-                                    @if (allocShift is not null)
+                                    @if (_allocCreateVendor is not null)
                                     {
-                                        <p class="text-[11px] text-gray-500 mt-0.5">
-                                            for <b class="text-gray-700">@allocShift.ScopeName</b>
-                                            · @allocShift.StartAt.ToLocalTime().ToString("MMM d, HH:mm")
-                                            @if (allocShift.EndAt is { } e)
-                                            {
-                                                <span> – @e.ToLocalTime().ToString("HH:mm")</span>
-                                            }
-                                        </p>
+                                        <h3 class="font-bold text-gray-800 text-sm">Allocate Shift to Vendor <span class="text-indigo-700">@_allocCreateVendor.FullName</span></h3>
+                                    }
+                                    else
+                                    {
+                                        <h3 class="font-bold text-gray-800 text-sm">Allocate vendor quota</h3>
+                                        <p class="text-[11px] text-gray-500 mt-0.5">Pick a vendor, a shift, and how many seats they get.</p>
                                     }
                                 </div>
                                 <button @onclick="CloseAllocCreate" class="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
@@ -653,11 +647,31 @@
                                 }
                             </div>
                             <div>
+                                <label class="block text-[11px] font-medium text-gray-500 mb-1">Shift</label>
+                                <select @bind="_allocCreateShiftIdStr"
+                                        @bind:after="RecomputeAllocMaxQuota"
+                                        class="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                                    <option value="">— pick a shift —</option>
+                                    @if (_selectedEventShifts is not null)
+                                    {
+                                        @foreach (var sh in _selectedEventShifts)
+                                        {
+                                            var rows    = _allocationsByShift.GetValueOrDefault(sh.Id);
+                                            var totalQ  = rows?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
+                                            var free    = sh.CrewCount - totalQ;
+                                            <option value="@sh.Id">
+                                                @sh.ScopeName — @free free of @sh.CrewCount · @sh.StartAt.ToLocalTime().ToString("MMM d, HH:mm")
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div>
                                 <label class="block text-[11px] font-medium text-gray-500 mb-1">Quota</label>
                                 <input type="number" min="1" max="@_allocCreateMaxQuota"
                                        @bind="_allocCreateQuota"
                                        class="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                                <p class="text-[10px] text-gray-400 mt-1">Max for this shift right now: @_allocCreateMaxQuota</p>
+                                <p class="text-[10px] text-gray-400 mt-1">Max for the picked shift right now: @_allocCreateMaxQuota</p>
                             </div>
                             @if (_allocCreateError is not null)
                             {
@@ -666,7 +680,7 @@
                             <div class="flex justify-end gap-2 pt-1">
                                 <button @onclick="CloseAllocCreate" class="text-xs px-3 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100">Cancel</button>
                                 <button @onclick="SubmitAllocCreate"
-                                        disabled="@(_allocCreateVendor is null || _allocCreateSubmitting || _allocCreateQuota < 1)"
+                                        disabled="@(_allocCreateVendor is null || string.IsNullOrWhiteSpace(_allocCreateShiftIdStr) || _allocCreateSubmitting || _allocCreateQuota < 1)"
                                         class="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-50">
                                     @(_allocCreateSubmitting ? "Saving…" : "Grant Quota")
                                 </button>
@@ -1274,6 +1288,14 @@ else
     private int    _allocEditQuota;
 
     // "+ Allocate" modal state
+    //
+    // Modal is now a single global dialog (not per-shift row). It lets the
+    // admin pick a vendor, then a shift, then a quota — in any order — and
+    // grants the allocation in one call. _allocCreateShiftIdStr is the
+    // bound value of the <select>; we parse it to a Guid on submit /
+    // RecomputeAllocMaxQuota so the Quota field's max stays in sync.
+    private bool   _allocCreateOpen;
+    private string _allocCreateShiftIdStr = string.Empty;
     private Guid?  _allocCreateShiftId;
     private int    _allocCreateMaxQuota;
     private int    _allocCreateQuota = 1;
@@ -1555,29 +1577,64 @@ else
 
     private void OpenAllocCreate(Guid shiftId)
     {
-        var sh = _selectedEventShifts?.FirstOrDefault(x => x.Id == shiftId);
-        if (sh is null) return;
-        var totalQ = _allocationsByShift.GetValueOrDefault(shiftId)
+        // Legacy entry point (per-row "+ Allocate"). Pre-selects the shift.
+        OpenAllocCreateGlobal();
+        _allocCreateShiftIdStr = shiftId.ToString();
+        _allocCreateShiftId    = shiftId;
+        RecomputeAllocMaxQuota();
+    }
+
+    /// <summary>
+    /// Open the global allocation modal with nothing pre-picked. The admin
+    /// chooses vendor + shift inside the dialog.
+    /// </summary>
+    private void OpenAllocCreateGlobal()
+    {
+        _allocCreateOpen       = true;
+        _allocCreateShiftId    = null;
+        _allocCreateShiftIdStr = string.Empty;
+        _allocCreateVendor     = null;
+        _allocVendorSearch     = string.Empty;
+        _allocVendorResults    = new();
+        _allocCreateError      = null;
+        _allocCreateMaxQuota   = 1;
+        _allocCreateQuota      = 1;
+    }
+
+    /// <summary>
+    /// Called after the shift <select> changes. Re-computes the max quota
+    /// (free seats on that shift = CrewCount − allocated) and clamps the
+    /// current quota input into the new range.
+    /// </summary>
+    private void RecomputeAllocMaxQuota()
+    {
+        if (!Guid.TryParse(_allocCreateShiftIdStr, out var sid))
+        {
+            _allocCreateShiftId  = null;
+            _allocCreateMaxQuota = 1;
+            return;
+        }
+        _allocCreateShiftId = sid;
+        var sh = _selectedEventShifts?.FirstOrDefault(x => x.Id == sid);
+        if (sh is null) { _allocCreateMaxQuota = 1; return; }
+        var totalQ = _allocationsByShift.GetValueOrDefault(sid)
                         ?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
-        _allocCreateShiftId  = shiftId;
         _allocCreateMaxQuota = Math.Max(1, sh.CrewCount - totalQ);
-        _allocCreateQuota    = Math.Min(1, _allocCreateMaxQuota);
+        if (_allocCreateQuota > _allocCreateMaxQuota) _allocCreateQuota = _allocCreateMaxQuota;
         if (_allocCreateQuota < 1) _allocCreateQuota = 1;
-        _allocCreateVendor   = null;
-        _allocVendorSearch   = string.Empty;
-        _allocVendorResults  = new();
-        _allocCreateError    = null;
     }
 
     private void CloseAllocCreate()
     {
-        _allocCreateShiftId = null;
-        _allocCreateVendor  = null;
-        _allocCreateError   = null;
-        _allocVendorResults = new();
-        _allocVendorSearch  = string.Empty;
+        _allocCreateOpen       = false;
+        _allocCreateShiftId    = null;
+        _allocCreateShiftIdStr = string.Empty;
+        _allocCreateVendor     = null;
+        _allocCreateError      = null;
+        _allocVendorResults    = new();
+        _allocVendorSearch     = string.Empty;
         _allocSearchCts?.Cancel();
-        _allocSearchCts = null;
+        _allocSearchCts        = null;
     }
 
     private async Task OnAllocVendorSearch(ChangeEventArgs e)
@@ -2098,11 +2155,26 @@ else
             return;
         }
 
+        // Phase D step 3: parse the picker. Required when event has >1
+        // active shift, optional (null = resolver picks) otherwise.
+        Guid? shiftId = null;
+        var activeShiftsCount = _selectedEventShifts?.Count ?? 0;
+        if (activeShiftsCount > 1)
+        {
+            if (string.IsNullOrWhiteSpace(_assignShiftId) || !Guid.TryParse(_assignShiftId, out var parsed))
+            {
+                _assignError = "This event has multiple shifts — pick one above before assigning.";
+                return;
+            }
+            shiftId = parsed;
+        }
+
         _assigning = true;
         var (ok, _, err) = await EventApi.AssignCrewAsync(
             _selectedEvent.Id,
             _assignSelectedCrew?.Id,
-            _assignSelectedVendor?.Id);
+            _assignSelectedVendor?.Id,
+            shiftId);
         _assigning = false;
 
         if (ok)
@@ -2118,7 +2190,10 @@ else
             _assignSelectedCrew   = null;
             _assignVendorSearch   = "";
             _assignCrewSearch     = "";
+            _assignShiftId        = "";   // re-prompt picker for next assign
             _assignments          = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
+            // Refresh shift seat counts so the picker shows up-to-date X/Y.
+            _selectedEventShifts  = await EventApi.GetEventShiftsAsync(_selectedEvent.Id) ?? new List<EventShiftDto>();
         }
         else { _assignError = err; }
     }
