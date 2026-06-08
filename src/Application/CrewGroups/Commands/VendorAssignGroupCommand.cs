@@ -4,6 +4,7 @@ using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Domain.Rules;
+using EventWOS.Application.VendorAllocations.Internal;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -128,6 +129,26 @@ public sealed class VendorAssignGroupHandler
             return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.NoShift",
                 "Event has no shifts — cannot assign crew."));
 
+        // Phase C step 3: resolve the vendor's quota ONCE before the loop.
+        // We then decrement an in-memory counter as we invite, identical
+        // to how currentSeats is tracked. Hard errors (NoAllocation) fail
+        // the entire group invite — same shape as the existing pre-checks.
+        // QuotaExhausted starts at zero remaining but is NOT a hard error
+        // up front (the loop turns it into per-crew "skipped" failures so
+        // the UI can show partial success — matches the existing capacity
+        // overflow shape).
+        var _quota = await VendorQuotaChecker.CheckAsync(_db, _shiftId.Value, req.VendorUserId, ct);
+        if (_quota.Status == VendorQuotaCheck.NoAllocation)
+            return Result.Failure<VendorAssignGroupResultDto>(new Error(
+                "Vendor.NoAllocationOnShift",
+                "You don't have an allocation on this shift. " +
+                "Ask the event manager to grant you a quota first."));
+        // Mutable counter for the loop. NotEnforcedYet → effectively
+        // infinite (we use int.MaxValue) so the existing capacity check
+        // is still the only gate on legacy events.
+        bool _quotaEnforced = _quota.Status != VendorQuotaCheck.NotEnforcedYet;
+        int  _quotaRemaining = _quotaEnforced ? Math.Max(0, _quota.Remaining) : int.MaxValue;
+
         var vendor = await _db.Users.FirstOrDefaultAsync(u => u.Id == req.VendorUserId, ct);
 
         var invited     = new List<(EventAssignment Row, User Crew)>();
@@ -147,6 +168,14 @@ public sealed class VendorAssignGroupHandler
                     crew.Id, crew.FullName, $"Event is fully staffed (max {ev.MaxCrew})."));
                 continue;
             }
+            if (_quotaEnforced && _quotaRemaining <= 0)
+            {
+                // Friendly per-crew failure — partial success still wins.
+                failures.Add(new VendorAssignGroupFailureDto(
+                    crew.Id, crew.FullName,
+                    $"Your allocation on this shift is full ({_quota.Quota}/{_quota.Quota})."));
+                continue;
+            }
 
             var row = new EventAssignment(req.EventId, crew.Id, req.VendorUserId, req.VendorUserId);
             row.AttachToShift(_shiftId.Value);
@@ -154,6 +183,7 @@ public sealed class VendorAssignGroupHandler
             invited.Add((row, crew));
             existingSet.Add(crew.Id);
             currentSeats++;
+            if (_quotaEnforced) _quotaRemaining--;
         }
 
         if (invited.Count > 0)

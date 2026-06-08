@@ -7,6 +7,7 @@ using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using EventWOS.Domain.Rules;
+using EventWOS.Application.VendorAllocations.Internal;
 
 namespace EventWOS.Application.Events.Commands;
 
@@ -154,6 +155,27 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
         if (_shiftId is null)
             return Result.Failure<EventAssignmentDto>(new Error("Assignment.NoShift",
                 "Event has no shifts — cannot assign crew."));
+
+        // Phase C step 3: vendor quota gate. Only fires for fresh-row
+        // path (resurrections skip — they're refilling an already-counted
+        // seat, blocking them would be a UX trap). Returns NotEnforcedYet
+        // on shifts with zero allocations so legacy events still work.
+        var _quota = await VendorQuotaChecker.CheckAsync(_db, _shiftId.Value, req.VendorUserId, ct);
+        switch (_quota.Status)
+        {
+            case VendorQuotaCheck.NoAllocation:
+                return Result.Failure<EventAssignmentDto>(new Error(
+                    "Vendor.NoAllocationOnShift",
+                    "You don't have an allocation on this shift. " +
+                    "Ask the event manager to grant you a quota first."));
+            case VendorQuotaCheck.QuotaExhausted:
+                return Result.Failure<EventAssignmentDto>(new Error(
+                    "Vendor.QuotaExhausted",
+                    $"Your allocation on this shift is full " +
+                    $"({_quota.CurrentlyAssigned}/{_quota.Quota}). " +
+                    "Ask the event manager to raise your quota, or remove a previously-invited crew."));
+            // Allowed and NotEnforcedYet both fall through to the assignment.
+        }
 
         assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorUserId, req.VendorUserId);
         assignment.AttachToShift(_shiftId.Value);
