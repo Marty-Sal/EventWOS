@@ -1,0 +1,16 @@
+@page "/login/admin"
+@layout EventWOS.BlazorWeb.Layout.EmptyLayout
+
+<PageTitle>Admin sign in — EventWOS</PageTitle>
+
+@*
+    Thin wrapper around <PasswordLoginCard /> with the portal pre-selected.
+    ReturnUrl comes from the [SupplyParameterFromQuery] attribute on the
+    component parameter so the post-login redirect still honours it.
+*@
+
+<PasswordLoginCard Portal="Admin" ReturnUrl="@ReturnUrl" />
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+}

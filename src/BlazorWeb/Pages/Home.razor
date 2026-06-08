@@ -58,12 +58,25 @@
             <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <button @onclick="GoLogin"
                         class="px-7 py-3.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-500 transition shadow-xl shadow-indigo-900/50 flex items-center gap-2">
-                    Get Started
+                    Sign in
                     <span>→</span>
                 </button>
                 <a href="#features"
                    class="px-7 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition backdrop-blur">
                     See how it works
+                </a>
+            </div>
+
+            @* Self-registration entry points — quietly visible under the main CTAs *@
+            <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-sm text-indigo-200/80">
+                <span>New here?</span>
+                <a href="/register/vendor"
+                   class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-100 hover:bg-emerald-500/30 transition">
+                    🏢 Vendor sign-up
+                </a>
+                <a href="/register/crew"
+                   class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-500/20 border border-orange-400/30 text-orange-100 hover:bg-orange-500/30 transition">
+                    🧑‍🔧 Crew sign-up
                 </a>
             </div>
 

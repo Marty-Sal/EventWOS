@@ -1,0 +1,139 @@
+@page "/register/vendor"
+@layout EventWOS.BlazorWeb.Layout.EmptyLayout
+@inject IAuthApiService AuthApi
+@inject NavigationManager Nav
+
+<PageTitle>Vendor sign-up — EventWOS</PageTitle>
+
+<div class="min-h-screen bg-gradient-to-br from-gray-900 via-emerald-950 to-gray-900 py-10 px-4">
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-2xl shadow-2xl p-8">
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-600 text-white text-2xl mb-3 shadow-lg">🏢</div>
+                <h1 class="text-2xl font-bold text-gray-900">Vendor Sign-up</h1>
+                <p class="text-sm text-gray-500 mt-1">Tell us about your business. An admin will review and approve.</p>
+            </div>
+
+            @if (_success is not null)
+            {
+                <div class="px-4 py-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm space-y-2">
+                    <div class="font-semibold flex items-center gap-2">✅ Registration submitted</div>
+                    <div>@_success</div>
+                    <a href="/login/vendor?reason=registered" class="inline-block text-emerald-700 underline mt-1">Back to sign in</a>
+                </div>
+            }
+            else
+            {
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Field Label="Business name" Required="true">
+                            <input @bind="_businessName" class="@Css" placeholder="Acme Events Pvt Ltd" />
+                        </Field>
+                        <Field Label="Your full name" Required="true">
+                            <input @bind="_fullName" class="@Css" placeholder="Jane Doe" />
+                        </Field>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Field Label="Username" Required="true" Hint="3–50 chars · letters, numbers, . _ -">
+                            <input @bind="_username" class="@Css" placeholder="acmeevents" autocomplete="username" />
+                        </Field>
+                        <Field Label="Email" Required="true">
+                            <input @bind="_email" type="email" class="@Css" placeholder="you@business.com" autocomplete="email" />
+                        </Field>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Field Label="Mobile" Required="true">
+                            <input @bind="_mobile" type="tel" class="@Css" placeholder="+91 98765 43210" autocomplete="tel" />
+                        </Field>
+                        <Field Label="Password" Required="true" Hint="Min 8 chars · 1 letter · 1 number">
+                            <input @bind="_password" type="password" class="@Css" placeholder="••••••••" autocomplete="new-password" />
+                        </Field>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Field Label="Contact person (optional)">
+                            <input @bind="_contact" class="@Css" placeholder="Operations head" />
+                        </Field>
+                        <Field Label="GST number (optional)">
+                            <input @bind="_gst" class="@Css" placeholder="22AAAAA0000A1Z5" />
+                        </Field>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <Field Label="City">
+                            <input @bind="_city" class="@Css" placeholder="Mumbai" />
+                        </Field>
+                        <Field Label="State">
+                            <input @bind="_state" class="@Css" placeholder="Maharashtra" />
+                        </Field>
+                        <Field Label="Website">
+                            <input @bind="_website" class="@Css" placeholder="https://…" />
+                        </Field>
+                    </div>
+
+                    <Field Label="Address">
+                        <input @bind="_address" class="@Css" placeholder="Street, area" />
+                    </Field>
+
+                    <Field Label="About your business (optional)">
+                        <textarea @bind="_bio" rows="3" class="@Css" placeholder="What kinds of events do you run?"></textarea>
+                    </Field>
+
+                    @if (_error is not null)
+                    {
+                        <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">@_error</div>
+                    }
+
+                    <button type="button" @onclick="SubmitAsync" disabled="@_loading"
+                            class="w-full py-3 rounded-xl bg-emerald-600 text-white font-medium shadow-md hover:bg-emerald-700 disabled:opacity-50">
+                        @(_loading ? "Submitting…" : "Submit registration")
+                    </button>
+
+                    <p class="text-center text-xs text-gray-500 pt-2">
+                        Already have an account? <a href="/login/vendor" class="text-emerald-600 hover:underline">Sign in</a>
+                    </p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private const string Css = "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm";
+
+    private string _username="", _email="", _mobile="", _password="", _fullName="";
+    private string _businessName="";
+    private string? _contact, _gst, _address, _city, _state, _website, _bio;
+    private string? _error, _success;
+    private bool _loading;
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_email)
+            || string.IsNullOrWhiteSpace(_mobile) || string.IsNullOrWhiteSpace(_password)
+            || string.IsNullOrWhiteSpace(_fullName) || string.IsNullOrWhiteSpace(_businessName))
+        {
+            _error = "Please fill in all required fields."; return;
+        }
+
+        _loading = true;
+        try
+        {
+            var req = new RegisterVendorRequest(
+                _username.Trim(), _email.Trim(), _mobile.Trim(), _password, _fullName.Trim(),
+                _businessName.Trim(), _contact, _gst, _address, _city, _state, _website, _bio);
+            var result = await AuthApi.RegisterVendorAsync(req);
+            if (!result.Success)
+            {
+                _error = result.Errors?.FirstOrDefault() ?? result.Message ?? "Registration failed.";
+                return;
+            }
+            _success = result.Data?.Message ?? "We've received your registration.";
+        }
+        catch { _error = "Network error. Please try again."; }
+        finally { _loading = false; }
+    }
+}

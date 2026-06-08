@@ -1,0 +1,18 @@
+@*
+    Tiny tab-pill button used by ApprovalQueue (and reusable elsewhere).
+    Active tab gets an indigo underline + bold text; inactive is gray.
+*@
+<button type="button" @onclick="OnClick"
+        class="@CssClass">
+    @Label
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public bool Active { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private string CssClass => Active
+        ? "px-4 py-2 text-sm font-semibold text-indigo-700 border-b-2 border-indigo-600 -mb-px"
+        : "px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-800 border-b-2 border-transparent -mb-px";
+}

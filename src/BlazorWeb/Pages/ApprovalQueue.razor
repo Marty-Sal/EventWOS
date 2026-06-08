@@ -1,0 +1,218 @@
+@page "/approval-queue"
+@attribute [Authorize]
+@inject IApprovalApiService Api
+@inject IJSRuntime JS
+
+<PageTitle>Approval Queue — EventWOS</PageTitle>
+
+@*
+    Admin/Manager review page for self-registered Vendors and Crew.
+    Two tabs (Vendors / Crew), counts on each, per-row Approve / Reject.
+    Reject prompts for a mandatory reason via window.prompt — backend
+    enforces the requirement too.
+*@
+
+<div class="p-6 max-w-7xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Approval Queue</h1>
+            <p class="text-sm text-gray-500">Review and approve new self-registrations.</p>
+        </div>
+        <button type="button" @onclick="LoadAsync"
+                class="px-3 py-1.5 text-sm rounded-lg bg-white border border-gray-300 hover:bg-gray-50">
+            🔄 Refresh
+        </button>
+    </div>
+
+    @if (_loading && _queue is null)
+    {
+        <div class="text-gray-500">Loading…</div>
+    }
+    else if (_queue is null)
+    {
+        <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">
+            @(_error ?? "Failed to load queue.")
+        </div>
+    }
+    else
+    {
+        <div class="flex gap-2 border-b border-gray-200 mb-4">
+            <TabButton Label="@($"Vendors ({_queue.VendorCount})")"
+                       Active="_tab == Tab.Vendors"
+                       OnClick="() => _tab = Tab.Vendors" />
+            <TabButton Label="@($"Crew ({_queue.CrewCount})")"
+                       Active="_tab == Tab.Crew"
+                       OnClick="() => _tab = Tab.Crew" />
+        </div>
+
+        @if (CurrentRows.Count == 0)
+        {
+            <div class="text-center py-12 bg-white rounded-2xl border border-gray-200">
+                <div class="text-4xl mb-2">🎉</div>
+                <div class="text-gray-700 font-medium">All caught up</div>
+                <div class="text-sm text-gray-500">No pending @(_tab == Tab.Vendors ? "vendor" : "crew") registrations.</div>
+            </div>
+        }
+        else
+        {
+            <div class="space-y-3">
+                @foreach (var r in CurrentRows)
+                {
+                    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center font-semibold flex-shrink-0">
+                                @(string.IsNullOrEmpty(r.FullName) ? "?" : r.FullName[0].ToString().ToUpperInvariant())
+                            </div>
+
+                            <div class="flex-1 min-w-0">
+                                <div class="font-semibold text-gray-900">
+                                    @r.FullName
+                                    @if (_tab == Tab.Vendors && !string.IsNullOrEmpty(r.BusinessName))
+                                    {
+                                        <span class="text-xs text-gray-500 font-normal">· @r.BusinessName</span>
+                                    }
+                                </div>
+                                <div class="text-xs text-gray-500 mt-0.5">@r.Username · @r.Email · @r.Mobile</div>
+
+                                @if (_tab == Tab.Vendors)
+                                {
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-600 mt-2">
+                                        @if (!string.IsNullOrEmpty(r.ContactPersonName)) { <div>👤 @r.ContactPersonName</div> }
+                                        @if (!string.IsNullOrEmpty(r.City))              { <div>📍 @r.City</div> }
+                                        @if (!string.IsNullOrEmpty(r.Website))           { <div class="truncate">🔗 @r.Website</div> }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-600 mt-2">
+                                        @if (!string.IsNullOrEmpty(r.City))         { <div>📍 @r.City</div> }
+                                        @if (r.ExperienceYears.HasValue)            { <div>📅 @r.ExperienceYears yr exp</div> }
+                                        @if (!string.IsNullOrEmpty(r.Skills))       { <div class="col-span-2 truncate">🔧 @r.Skills</div> }
+                                        @if (!string.IsNullOrEmpty(r.ReferredVendorName))
+                                        {
+                                            <div class="col-span-2">🎟️ Referred by <strong>@r.ReferredVendorName</strong></div>
+                                        }
+                                        else if (!string.IsNullOrEmpty(r.ReferralCodeUsed))
+                                        {
+                                            <div class="col-span-2 text-amber-600">🎟️ Code <strong>@r.ReferralCodeUsed</strong> (vendor inactive)</div>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="text-[11px] text-gray-400 mt-2">
+                                    Submitted @r.RegisteredAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col gap-2 flex-shrink-0">
+                                <button type="button" @onclick="() => ApproveAsync(r)"
+                                        disabled="@_busyIds.Contains(r.UserId)"
+                                        class="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+                                    ✅ Approve
+                                </button>
+                                <button type="button" @onclick="() => RejectAsync(r)"
+                                        disabled="@_busyIds.Contains(r.UserId)"
+                                        class="px-3 py-1.5 text-xs rounded-lg bg-white border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50">
+                                    ✖ Reject
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+
+    @if (_toast is not null)
+    {
+        <div class="fixed bottom-6 right-6 px-4 py-3 rounded-xl shadow-lg text-sm @(_toastIsError ? "bg-red-600 text-white" : "bg-emerald-600 text-white")">
+            @_toast
+        </div>
+    }
+</div>
+
+@code {
+    private enum Tab { Vendors, Crew }
+    private Tab _tab = Tab.Vendors;
+
+    private ApprovalQueueDto? _queue;
+    private bool _loading;
+    private string? _error, _toast;
+    private bool _toastIsError;
+    private readonly HashSet<Guid> _busyIds = new();
+
+    // Computed property avoids the @{ } code-block pitfall when inside else { }.
+    private IReadOnlyList<PendingRegistrationDto> CurrentRows =>
+        _queue is null
+            ? Array.Empty<PendingRegistrationDto>()
+            : (_tab == Tab.Vendors ? _queue.Vendors : _queue.Crew);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var result = await Api.GetQueueAsync();
+            if (result.Success && result.Data is not null) _queue = result.Data;
+            else _error = result.Errors?.FirstOrDefault() ?? result.Message;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task ApproveAsync(PendingRegistrationDto r)
+    {
+        _busyIds.Add(r.UserId);
+        try
+        {
+            var result = await Api.ApproveAsync(r.UserId);
+            if (result.Success)
+            {
+                var refCode = result.Data?.ReferralCode;
+                Toast(refCode is not null
+                    ? $"Approved {r.FullName}. Referral code: {refCode}"
+                    : $"Approved {r.FullName}.", isError: false);
+                await LoadAsync();
+            }
+            else
+            {
+                Toast(result.Errors?.FirstOrDefault() ?? "Approval failed.", isError: true);
+            }
+        }
+        finally { _busyIds.Remove(r.UserId); }
+    }
+
+    private async Task RejectAsync(PendingRegistrationDto r)
+    {
+        var reason = await JS.InvokeAsync<string?>("prompt",
+            $"Why are you rejecting {r.FullName}? (visible to the user in their rejection email)", "");
+        if (string.IsNullOrWhiteSpace(reason)) return;
+
+        _busyIds.Add(r.UserId);
+        try
+        {
+            var result = await Api.RejectAsync(r.UserId, reason.Trim());
+            if (result.Success)
+            {
+                Toast($"Rejected {r.FullName}.", isError: false);
+                await LoadAsync();
+            }
+            else
+            {
+                Toast(result.Errors?.FirstOrDefault() ?? "Rejection failed.", isError: true);
+            }
+        }
+        finally { _busyIds.Remove(r.UserId); }
+    }
+
+    private async void Toast(string msg, bool isError)
+    {
+        _toast = msg; _toastIsError = isError;
+        StateHasChanged();
+        await Task.Delay(3500);
+        _toast = null;
+        StateHasChanged();
+    }
+}

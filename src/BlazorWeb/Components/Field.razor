@@ -1,0 +1,25 @@
+@*
+    Tiny labeled-field wrapper used by registration / setup forms.
+    Keeps markup compact and consistent across the auth pages.
+*@
+<div>
+    <label class="block text-sm font-medium text-gray-700 mb-1">
+        @Label
+        @if (Required)
+        {
+            <span class="text-red-500">*</span>
+        }
+    </label>
+    @ChildContent
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <p class="text-[11px] text-gray-400 mt-1">@Hint</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

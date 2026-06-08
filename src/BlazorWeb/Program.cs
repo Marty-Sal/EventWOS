@@ -34,6 +34,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
 // ─── App Services ─────────────────────────────────────────────────────────────
 builder.Services.AddScoped<IAuthApiService, AuthApiService>();
 builder.Services.AddScoped<IUserApiService, UserApiService>();
+builder.Services.AddScoped<IApprovalApiService, ApprovalApiService>();
 builder.Services.AddScoped<ISessionApiService, SessionApiService>();
 builder.Services.AddScoped<IVendorApiService, VendorApiService>();
 builder.Services.AddScoped<IEventApiService, EventApiService>();
