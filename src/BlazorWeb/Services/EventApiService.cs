@@ -82,6 +82,13 @@ public interface IEventApiService
     // Phase C step 5: list shifts on an event (for the allocation editor).
     Task<IReadOnlyList<EventShiftDto>?> GetEventShiftsAsync(Guid eventId, CancellationToken ct = default);
 
+    // Phase D step 1: shift editor — add / update / archive shifts post-create.
+    Task<(bool Ok, EventShiftDto? Shift, string? Error)> AddEventShiftAsync(
+        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime? endAt, CancellationToken ct = default);
+    Task<(bool Ok, EventShiftDto? Shift, string? Error)> UpdateEventShiftAsync(
+        Guid shiftId, Guid scopeOfWorkId, int crewCount, DateTime? endAt, CancellationToken ct = default);
+    Task<(bool Ok, string? Error)> ArchiveEventShiftAsync(Guid shiftId, CancellationToken ct = default);
+
     // Admin override — post-event correction. Flips a no-show / hanging
     // row to Attended and stores an audit note that surfaces everywhere.
     Task<(bool Ok, string? Error)> AdminMarkAttendedAsync(Guid assignmentId, CancellationToken ct = default);
@@ -246,6 +253,56 @@ public sealed class EventApiService : IEventApiService
             if (resp.IsSuccessStatusCode) return (true, null);
             var err = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
             return (false, err?.Errors?.FirstOrDefault() ?? err?.Message ?? "Unknown error");
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    public async Task<(bool Ok, EventShiftDto? Shift, string? Error)> AddEventShiftAsync(
+        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime? endAt, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync(
+                $"api/v1/events/{eventId}/shifts",
+                new { scopeOfWorkId, crewCount, endAt }, ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiResult<EventShiftDto>>(_jsonOpts, ct);
+                return (true, body?.Data, null);
+            }
+            var err = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+            return (false, null, err?.Errors?.FirstOrDefault() ?? err?.Message ?? "Couldn't add shift.");
+        }
+        catch (Exception ex) { return (false, null, ex.Message); }
+    }
+
+    public async Task<(bool Ok, EventShiftDto? Shift, string? Error)> UpdateEventShiftAsync(
+        Guid shiftId, Guid scopeOfWorkId, int crewCount, DateTime? endAt, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PutAsJsonAsync(
+                $"api/v1/events/shifts/{shiftId}",
+                new { scopeOfWorkId, crewCount, endAt }, ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiResult<EventShiftDto>>(_jsonOpts, ct);
+                return (true, body?.Data, null);
+            }
+            var err = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+            return (false, null, err?.Errors?.FirstOrDefault() ?? err?.Message ?? "Couldn't update shift.");
+        }
+        catch (Exception ex) { return (false, null, ex.Message); }
+    }
+
+    public async Task<(bool Ok, string? Error)> ArchiveEventShiftAsync(Guid shiftId, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.DeleteAsync($"api/v1/events/shifts/{shiftId}", ct);
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var err = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+            return (false, err?.Errors?.FirstOrDefault() ?? err?.Message ?? "Couldn't archive shift.");
         }
         catch (Exception ex) { return (false, ex.Message); }
     }

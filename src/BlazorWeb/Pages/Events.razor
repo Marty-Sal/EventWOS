@@ -880,22 +880,109 @@
                     }
                     else
                     {
-                        @* Edit mode — capacity-from-shifts is read-only here.
-                           MaxCrew still bound for back-compat with the legacy
-                           UpdateEventCommand path until Phase C ships the
-                           shift editor. *@
-                        <input type="number" @bind="_form.MaxCrew" placeholder="Max crew"
-                               min="@(_editingEvent?.AssignedCrew ?? 0)"
-                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                        @if (_editingEvent is not null && _editingEvent.AssignedCrew > 0)
-                        {
+                        @* ── Phase D step 1: real shift editor ─────────────────
+                           Replaces the legacy MaxCrew input. Each row in
+                           _editShifts is one EventShift; add/edit/archive
+                           each one independently. Total capacity is computed
+                           from SUM(active CrewCount) and auto-synced on the
+                           server side via Event.RecomputeCapacityFromShifts. *@
+                        <div class="border border-gray-200 rounded-xl p-3 space-y-3 bg-gray-50">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-700">🧰 Shifts</span>
+                                @if (_editShifts is not null)
+                                {
+                                    <span class="text-[11px] text-gray-500">
+                                        Total crew: <b class="text-gray-700">@_editShifts.Sum(x => x.CrewCount)</b>
+                                    </span>
+                                }
+                            </div>
+
+                            @if (_editShiftError is not null)
+                            {
+                                <div class="text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg p-2">⚠️ @_editShiftError</div>
+                            }
+
+                            @if (_editShiftsLoading)
+                            {
+                                <p class="text-[11px] text-gray-400 italic">Loading shifts…</p>
+                            }
+                            else if (_editShifts is null || _editShifts.Count == 0)
+                            {
+                                <p class="text-[11px] text-gray-500 italic">No shifts on this event yet.</p>
+                            }
+                            else
+                            {
+                                @foreach (var sh in _editShifts.ToList())
+                                {
+                                    var row = sh;
+                                    var busy = _editShiftBusyId == row.Id;
+                                    <div class="bg-white border border-gray-200 rounded-xl p-3 space-y-2">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-[11px] font-semibold text-gray-600">@row.ScopeName · @row.AssignedCrew/@row.CrewCount used</span>
+                                            <button type="button" @onclick="() => ArchiveShiftRow(row)"
+                                                    disabled="@busy"
+                                                    title="@(row.AssignedCrew > 0 ? "Reject or unassign crew first" : "Remove shift")"
+                                                    class="text-[11px] text-gray-400 hover:text-red-500 disabled:opacity-40 transition">✕ Remove</button>
+                                        </div>
+                                        <select value="@row.ScopeOfWorkId.ToString()"
+                                                @onchange="e => OnShiftScopeChanged(row, e)"
+                                                disabled="@busy"
+                                                class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white">
+                                            @foreach (var sc in _scopeCatalog)
+                                            {
+                                                <option value="@sc.Id">@sc.Name</option>
+                                            }
+                                        </select>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label class="text-[11px] text-gray-500 mb-1 block">Crew needed (min @row.AssignedCrew)</label>
+                                                <input type="number" min="@Math.Max(1, row.AssignedCrew)" value="@row.CrewCount"
+                                                       @onchange="e => OnShiftCrewCountChanged(row, e)"
+                                                       disabled="@busy"
+                                                       class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+                                            </div>
+                                            <div>
+                                                <label class="text-[11px] text-gray-500 mb-1 block">Shift end (optional)</label>
+                                                <input type="datetime-local" value="@(row.EndAt?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm"))"
+                                                       @onchange="e => OnShiftEndChanged(row, e)"
+                                                       disabled="@busy"
+                                                       class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+
+                            @* Inline add-shift row *@
+                            @if (_scopeCatalog.Count > 0)
+                            {
+                                <div class="bg-white border border-dashed border-indigo-200 rounded-xl p-3 space-y-2">
+                                    <span class="text-[11px] font-semibold text-indigo-700">➕ Add another shift</span>
+                                    <select @bind="_addShiftDraft.ScopeOfWorkId"
+                                            class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white">
+                                        @foreach (var sc in _scopeCatalog)
+                                        {
+                                            <option value="@sc.Id">@sc.Name</option>
+                                        }
+                                    </select>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <input type="number" min="1" @bind="_addShiftDraft.CrewCount" placeholder="Crew needed"
+                                               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+                                        <input type="datetime-local" @bind="_addShiftDraft.EndAt" placeholder="End time (optional)"
+                                               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+                                    </div>
+                                    <button type="button" @onclick="AddShiftToExistingEvent"
+                                            disabled="@_editShiftsLoading"
+                                            class="w-full py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition">
+                                        Add shift
+                                    </button>
+                                </div>
+                            }
+
                             <p class="text-[11px] text-gray-500 italic">
-                                ℹ️ Minimum is @_editingEvent.AssignedCrew — that many crew are already approved or confirmed for this event.
+                                Total capacity auto-syncs to SUM(crew needed). Removing a shift is blocked while crew are still approved or confirmed on it.
                             </p>
-                        }
-                        <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                            ℹ️ Shift editing comes in Phase C. For now, edit capacity here; scope assignments stay as set at create time.
-                        </p>
+                        </div>
                     }
                 </div>
 
@@ -1184,6 +1271,23 @@ else
     // Modal
     private bool              _showEventModal;
     private EventListItemDto? _editingEvent;
+
+    // ── Phase D step 1: in-modal shift editor (edit-mode only) ─────────
+    // Loaded when an existing event opens in edit-mode. _editShifts is the
+    // authoritative list mid-edit (mirrors the API state); _addShiftDraft
+    // holds the form values for the inline "add shift" row.
+    private List<EventShiftDto>? _editShifts;
+    private bool                 _editShiftsLoading;
+    private string?              _editShiftError;
+    private Guid                 _editShiftBusyId = Guid.Empty;   // row currently saving
+    private EditShiftDraft       _addShiftDraft   = new();
+
+    private sealed class EditShiftDraft
+    {
+        public Guid     ScopeOfWorkId { get; set; }
+        public int      CrewCount     { get; set; } = 1;
+        public DateTime? EndAt        { get; set; }
+    }
     private EventForm         _form = new();
 
     // Phase B: cache of the scope-of-work catalog for the create-modal
@@ -1518,7 +1622,131 @@ else
     private sealed record ScopeApiEnvelope(ScopeApiData? Data);
     private sealed record ScopeApiData(List<ScopePickItem> Items);
 
-    private void OpenEditModal(EventListItemDto ev)
+    // ── Phase D step 1: shift editor handlers ──────────────────────────
+    // Each row mutates in-place via @onchange so the user can keep typing;
+    // the actual API call fires on blur (we treat onchange as "commit").
+    // This makes the editor feel responsive and avoids per-keystroke
+    // network chatter.
+
+    private async Task OnShiftScopeChanged(EventShiftDto row, ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var newScope) || newScope == row.ScopeOfWorkId) return;
+        await SaveShiftEdit(row with { ScopeOfWorkId = newScope });
+    }
+
+    private async Task OnShiftCrewCountChanged(EventShiftDto row, ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var newCount) || newCount == row.CrewCount) return;
+        await SaveShiftEdit(row with { CrewCount = newCount });
+    }
+
+    private async Task OnShiftEndChanged(EventShiftDto row, ChangeEventArgs e)
+    {
+        DateTime? newEnd = null;
+        if (DateTime.TryParse(e.Value?.ToString(), out var parsed))
+            newEnd = DateTime.SpecifyKind(parsed, DateTimeKind.Local).ToUniversalTime();
+        if (newEnd == row.EndAt) return;
+        await SaveShiftEdit(row with { EndAt = newEnd });
+    }
+
+    private async Task SaveShiftEdit(EventShiftDto next)
+    {
+        if (_editShifts is null) return;
+        _editShiftError = null;
+        _editShiftBusyId = next.Id;
+        StateHasChanged();
+        try
+        {
+            var (ok, updated, err) = await EventApi.UpdateEventShiftAsync(
+                next.Id, next.ScopeOfWorkId, next.CrewCount, next.EndAt);
+            if (!ok)
+            {
+                _editShiftError = err ?? "Couldn't save shift.";
+                return;
+            }
+            if (updated is not null)
+            {
+                var idx = _editShifts.FindIndex(x => x.Id == updated.Id);
+                if (idx >= 0) _editShifts[idx] = updated;
+                // Auto-sync the form's MaxCrew badge so the user sees the new total.
+                _form.MaxCrew = _editShifts.Sum(x => x.CrewCount);
+            }
+        }
+        finally
+        {
+            _editShiftBusyId = Guid.Empty;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ArchiveShiftRow(EventShiftDto row)
+    {
+        if (_editShifts is null) return;
+        if (row.AssignedCrew > 0)
+        {
+            _editShiftError = $"Reject or unassign the {row.AssignedCrew} crew on this shift before removing it.";
+            return;
+        }
+        if (_editShifts.Count <= 1)
+        {
+            _editShiftError = "Can't remove the only shift — add another first, or cancel the event.";
+            return;
+        }
+        _editShiftError = null;
+        _editShiftBusyId = row.Id;
+        StateHasChanged();
+        try
+        {
+            var (ok, err) = await EventApi.ArchiveEventShiftAsync(row.Id);
+            if (!ok)
+            {
+                _editShiftError = err ?? "Couldn't remove shift.";
+                return;
+            }
+            _editShifts.RemoveAll(x => x.Id == row.Id);
+            _form.MaxCrew = _editShifts.Sum(x => x.CrewCount);
+        }
+        finally
+        {
+            _editShiftBusyId = Guid.Empty;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AddShiftToExistingEvent()
+    {
+        if (_editingEvent is null || _editShifts is null) return;
+        if (_addShiftDraft.ScopeOfWorkId == Guid.Empty)
+        {
+            _editShiftError = "Pick a scope of work for the new shift.";
+            return;
+        }
+        if (_addShiftDraft.CrewCount < 1)
+        {
+            _editShiftError = "Crew count must be at least 1.";
+            return;
+        }
+        _editShiftError = null;
+        DateTime? endUtc = _addShiftDraft.EndAt is { } e
+            ? DateTime.SpecifyKind(e, DateTimeKind.Local).ToUniversalTime()
+            : (DateTime?)null;
+        var (ok, shift, err) = await EventApi.AddEventShiftAsync(
+            _editingEvent.Id, _addShiftDraft.ScopeOfWorkId, _addShiftDraft.CrewCount, endUtc);
+        if (!ok)
+        {
+            _editShiftError = err ?? "Couldn't add shift.";
+            return;
+        }
+        if (shift is not null)
+        {
+            _editShifts.Add(shift);
+            _form.MaxCrew = _editShifts.Sum(x => x.CrewCount);
+            _addShiftDraft = new() { ScopeOfWorkId = _scopeCatalog.FirstOrDefault()?.Id ?? Guid.Empty };
+        }
+        StateHasChanged();
+    }
+
+    private async Task OpenEditModal(EventListItemDto ev)
     {
         _editingEvent = ev;
         _form = new EventForm
@@ -1529,8 +1757,26 @@ else
             EndAt       = ev.EndAt.ToLocalTime(),
             MaxCrew     = ev.MaxCrew,
         };
-        _formError = null;
+        _formError      = null;
+        _editShiftError = null;
+        _editShifts     = null;
+        _addShiftDraft  = new() { ScopeOfWorkId = _scopeCatalog.FirstOrDefault()?.Id ?? Guid.Empty };
         _showEventModal = true;
+
+        // Phase D: load shifts so the editor can render. We don't block the
+        // modal on this — it shows a skeleton while loading.
+        _editShiftsLoading = true;
+        StateHasChanged();
+        try
+        {
+            var shifts = await EventApi.GetEventShiftsAsync(ev.Id);
+            _editShifts = shifts?.ToList() ?? new();
+        }
+        finally
+        {
+            _editShiftsLoading = false;
+            StateHasChanged();
+        }
     }
 
     private void CloseModal() => _showEventModal = false;

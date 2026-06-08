@@ -73,6 +73,55 @@ public sealed class EventsController : ControllerBase
             : NotFound(ApiResponse<IReadOnlyList<EventShiftDto>>.Fail(result.Error.Message));
     }
 
+    /// <summary>
+    /// Phase D step 1: add a new shift to an existing event. Auto-grows the
+    /// event's MaxCrew. Admin/Manager only.
+    /// </summary>
+    [Permission("events:write")]
+    [HttpPost("{id:guid}/shifts")]
+    public async Task<IActionResult> AddEventShift(
+        Guid id, [FromBody] AddEventShiftRequest req, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new AddEventShiftCommand(
+            id, req.ScopeOfWorkId, req.CrewCount, req.EndAt,
+            _currentUser.UserId!.Value), ct);
+        return result.IsSuccess
+            ? Created(string.Empty, ApiResponse<EventShiftDto>.Ok(result.Value))
+            : BadRequest(ApiResponse<EventShiftDto>.Fail(result.Error.Message));
+    }
+
+    /// <summary>
+    /// Phase D step 1: edit an existing shift (scope, crew count, end-time).
+    /// Auto-syncs the event's MaxCrew. Admin/Manager only.
+    /// </summary>
+    [Permission("events:write")]
+    [HttpPut("shifts/{shiftId:guid}")]
+    public async Task<IActionResult> UpdateEventShift(
+        Guid shiftId, [FromBody] UpdateEventShiftRequest req, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new UpdateEventShiftCommand(
+            shiftId, req.ScopeOfWorkId, req.CrewCount, req.EndAt), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse<EventShiftDto>.Ok(result.Value))
+            : BadRequest(ApiResponse<EventShiftDto>.Fail(result.Error.Message));
+    }
+
+    /// <summary>
+    /// Phase D step 1: archive (soft-delete) a shift. Refused while any
+    /// crew still occupies a seat or it's the last shift on the event.
+    /// Auto-shrinks the event's MaxCrew. Admin/Manager only.
+    /// </summary>
+    [Permission("events:write")]
+    [HttpDelete("shifts/{shiftId:guid}")]
+    public async Task<IActionResult> ArchiveEventShift(Guid shiftId, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ArchiveEventShiftCommand(
+            shiftId, _currentUser.UserId!.Value), ct);
+        return result.IsSuccess
+            ? NoContent()
+            : BadRequest(ApiResponse<object>.Fail(result.Error.Message));
+    }
+
     /// <summary>Create event. Admin/Manager only.</summary>
     [Permission("events:write")]
     [HttpPost]
@@ -491,6 +540,9 @@ public sealed record UpdateEventRequest(
 
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
 public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId);
+public sealed record AddEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime? EndAt = null);
+public sealed record UpdateEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime? EndAt = null);
+
 public sealed record VendorAssignCrewRequest(Guid CrewId, Guid? ShiftId = null);
 public sealed record VendorAssignGroupRequest(Guid GroupId, Guid? ShiftId = null);
 public sealed record VendorRespondToInviteRequest(string Response, string? Reason);

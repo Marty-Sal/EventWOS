@@ -123,4 +123,23 @@ public sealed class Event : BaseEntity
         MaxCrew     = maxCrew;
         UpdatedAt   = DateTime.UtcNow;
     }
+
+    /// <summary>
+    /// Recompute capacity from the event's shifts. Called by shift
+    /// add/update/archive handlers after they mutate a shift, so the
+    /// legacy MaxCrew field always equals SUM(active shifts.CrewCount).
+    /// Auto-grow only — see argument <paramref name="currentSeatsOccupied"/>
+    /// for the shrink guard. Handlers pass the sum from the database.
+    /// </summary>
+    public void RecomputeCapacityFromShifts(int newTotal, int currentSeatsOccupied = 0)
+    {
+        if (newTotal < 0)
+            throw new ArgumentOutOfRangeException(nameof(newTotal), "Capacity cannot be negative.");
+        if (newTotal < currentSeatsOccupied)
+            throw new InvalidOperationException(
+                $"Cannot reduce capacity below {currentSeatsOccupied} — that many crew already occupy a seat.");
+
+        MaxCrew   = newTotal;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }
