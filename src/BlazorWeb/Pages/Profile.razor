@@ -3,6 +3,7 @@
 @inject IUserApiService UserApi
 @inject HttpClient Http
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <PageTitle>My Profile — EventWOS</PageTitle>
 
@@ -85,6 +86,30 @@
                         }
                     </div>
                     <p class="text-xs text-gray-400">Share this code with crew members so they can join your roster.</p>
+                </div>
+
+                @* Invite link — one-click share for crew sign-up. Hits the
+                   existing /register/crew page with ?ref=<code>, which the
+                   form already auto-fills + locks. We build the URL from
+                   NavigationManager.BaseUri so it's always the right host
+                   in every deploy (prod, staging, local). *@
+                <div class="space-y-2 pt-2 border-t border-gray-100">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Crew Invite Link</p>
+                    <div class="flex items-center gap-3">
+                        <input readonly value="@InviteLink"
+                               class="flex-1 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl text-sm text-indigo-700 font-mono truncate"
+                               @onclick="SelectInviteLink" />
+                        <button @onclick="CopyInviteLink"
+                                class="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition shadow-sm whitespace-nowrap">
+                            @(_inviteCopied ? "✅ Copied!" : "📋 Copy link")
+                        </button>
+                        <button @onclick="ShareInviteLink"
+                                class="px-4 py-3 rounded-xl bg-white border border-indigo-200 text-indigo-700 text-xs font-semibold hover:bg-indigo-50 transition whitespace-nowrap"
+                                title="Share via WhatsApp, SMS, etc.">
+                            📤 Share
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-400">Anyone who opens this link will see the sign-up form with your referral code already filled in.</p>
                 </div>
             </div>
         }
@@ -289,6 +314,50 @@
         }
         catch { _joinError = "Network error. Please try again."; }
         finally { _joining = false; StateHasChanged(); }
+    }
+
+    // ── Crew invite link ────────────────────────────────────────────────────
+    private bool _inviteCopied;
+    private string InviteLink => _profile?.ReferralCode is null
+        ? string.Empty
+        : $"{Nav.BaseUri.TrimEnd('/')}/register/crew?ref={Uri.EscapeDataString(_profile.ReferralCode)}";
+
+    private async Task SelectInviteLink()
+    {
+        try { await JS.InvokeVoidAsync("eval", "document.activeElement && document.activeElement.select && document.activeElement.select()"); }
+        catch { }
+    }
+
+    private async Task CopyInviteLink()
+    {
+        if (string.IsNullOrEmpty(InviteLink)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", InviteLink);
+            _inviteCopied = true; StateHasChanged();
+            await Task.Delay(2000);
+            _inviteCopied = false; StateHasChanged();
+        }
+        catch { }
+    }
+
+    /// <summary>Opens the OS share sheet on mobile (Web Share API) or
+    /// falls back to copying + a toast on desktop.</summary>
+    private async Task ShareInviteLink()
+    {
+        if (string.IsNullOrEmpty(InviteLink)) return;
+        var shared = false;
+        try
+        {
+            shared = await JS.InvokeAsync<bool>("eval",
+                $"(async () => {{ if (navigator.share) {{ try {{ await navigator.share({{ title: 'Join my crew on EventWOS', text: 'Sign up here to join my crew:', url: '{InviteLink}' }}); return true; }} catch {{ return false; }} }} return false; }})()");
+        }
+        catch { }
+        if (!shared)
+        {
+            await CopyInviteLink();
+            ShowToast("Share menu unavailable — link copied instead.", err: false);
+        }
     }
 
     private async Task CopyReferralCode()

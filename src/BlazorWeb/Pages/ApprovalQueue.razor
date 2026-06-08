@@ -12,27 +12,40 @@
     enforces the requirement too.
 *@
 
-<div class="p-6 max-w-7xl mx-auto">
+<div class="space-y-6">
     <ApprovalTabsHeader Active="people" />
 
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Registrations</h1>
-            <p class="text-sm text-gray-500">Review and approve new self-registrations awaiting approval.</p>
+            <h2 class="text-lg font-bold text-gray-800">Registrations</h2>
+            <p class="text-sm text-gray-500 mt-0.5">Review and approve new self-registrations awaiting your decision.</p>
         </div>
-        <button type="button" @onclick="LoadAsync"
-                class="px-3 py-1.5 text-sm rounded-lg bg-white border border-gray-300 hover:bg-gray-50">
-            🔄 Refresh
-        </button>
+        <div class="flex items-center gap-2">
+            @if (TotalPending > 0)
+            {
+                <span class="px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-bold border border-red-200">
+                    @TotalPending pending
+                </span>
+            }
+            <button type="button" @onclick="LoadAsync"
+                    class="px-3 py-1.5 text-sm rounded-lg bg-white border border-gray-300 hover:bg-gray-50">
+                🔄 Refresh
+            </button>
+        </div>
     </div>
 
     @if (_loading && _queue is null)
     {
-        <div class="text-gray-500">Loading…</div>
+        <div class="flex justify-center py-20">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+        </div>
     }
     else if (_queue is null)
     {
-        <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">
+        <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">
             @(_error ?? "Failed to load queue.")
         </div>
     }
@@ -40,7 +53,7 @@
     {
         @if (_queue.VendorCount > 0 && _queue.CrewCount > 0)
         {
-            <div class="flex gap-2 border-b border-gray-200 mb-4">
+            <div class="flex gap-2 border-b border-gray-200">
                 <TabButton Label="@($"Vendors ({_queue.VendorCount})")"
                            Active="_tab == Tab.Vendors"
                            OnClick="() => _tab = Tab.Vendors" />
@@ -52,18 +65,18 @@
 
         @if (CurrentRows.Count == 0)
         {
-            <div class="text-center py-12 bg-white rounded-2xl border border-gray-200">
-                <div class="text-4xl mb-2">🎉</div>
-                <div class="text-gray-700 font-medium">All caught up</div>
-                <div class="text-sm text-gray-500">No pending @(_tab == Tab.Vendors ? "vendor" : "crew") registrations.</div>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+                <p class="text-5xl mb-4">✅</p>
+                <p class="font-semibold text-gray-700 text-sm">All caught up!</p>
+                <p class="text-xs text-gray-400 mt-1">No pending @(_tab == Tab.Vendors ? "vendor" : "crew") registrations.</p>
             </div>
         }
         else
         {
-            <div class="space-y-3">
+            <div class="space-y-4">
                 @foreach (var r in CurrentRows)
                 {
-                    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                    <div class="bg-white rounded-2xl border border-blue-100 shadow-sm p-5">
                         <div class="flex items-start gap-4">
                             <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center font-semibold flex-shrink-0">
                                 @(string.IsNullOrEmpty(r.FullName) ? "?" : r.FullName[0].ToString().ToUpperInvariant())
@@ -130,7 +143,7 @@
 
     @if (_toast is not null)
     {
-        <div class="fixed bottom-6 right-6 px-4 py-3 rounded-xl shadow-lg text-sm @(_toastIsError ? "bg-red-600 text-white" : "bg-emerald-600 text-white")">
+        <div class="fixed bottom-6 right-6 px-4 py-3 rounded-2xl shadow-lg text-sm @(_toastIsError ? "bg-red-600 text-white" : "bg-emerald-600 text-white")">
             @_toast
         </div>
     }
@@ -144,6 +157,7 @@
     private bool _loading;
     private string? _error, _toast;
     private bool _toastIsError;
+    private int TotalPending => (_queue?.VendorCount ?? 0) + (_queue?.CrewCount ?? 0);
     private readonly HashSet<Guid> _busyIds = new();
 
     // Computed property avoids the @{ } code-block pitfall when inside else { }.
