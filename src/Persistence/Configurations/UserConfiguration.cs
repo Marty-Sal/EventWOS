@@ -27,6 +27,32 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.FailedOtpAttempts).HasColumnName("failed_otp_attempts").HasDefaultValue(0);
         builder.Property(u => u.LockedUntil).HasColumnName("locked_until");
 
+        // Auth (password-based)
+        builder.Property(u => u.Username).HasColumnName("username").HasMaxLength(50);
+        builder.Property(u => u.PasswordHash).HasColumnName("password_hash").HasMaxLength(255);
+        builder.Property(u => u.RequirePasswordReset).HasColumnName("require_password_reset").HasDefaultValue(false);
+        builder.Property(u => u.FailedLoginAttempts).HasColumnName("failed_login_attempts").HasDefaultValue(0);
+        builder.Property(u => u.LastPasswordChangeAt).HasColumnName("last_password_change_at");
+
+        // Self-registration: rejection + approval audit
+        builder.Property(u => u.RejectedAt).HasColumnName("rejected_at");
+        builder.Property(u => u.RejectionReason).HasColumnName("rejection_reason").HasMaxLength(500);
+        builder.Property(u => u.RejectedByUserId).HasColumnName("rejected_by_user_id");
+        builder.Property(u => u.ApprovedAt).HasColumnName("approved_at");
+        builder.Property(u => u.ApprovedByUserId).HasColumnName("approved_by_user_id");
+
+        // Extended profile (Vendor + Crew)
+        builder.Property(u => u.ContactPersonName).HasColumnName("contact_person_name").HasMaxLength(150);
+        builder.Property(u => u.GstNumber).HasColumnName("gst_number").HasMaxLength(50);
+        builder.Property(u => u.Address).HasColumnName("address").HasMaxLength(500);
+        builder.Property(u => u.City).HasColumnName("city").HasMaxLength(100);
+        builder.Property(u => u.State).HasColumnName("state").HasMaxLength(100);
+        builder.Property(u => u.Website).HasColumnName("website").HasMaxLength(255);
+        builder.Property(u => u.Bio).HasColumnName("bio").HasMaxLength(2000);
+        builder.Property(u => u.Skills).HasColumnName("skills").HasMaxLength(500);
+        builder.Property(u => u.ExperienceYears).HasColumnName("experience_years");
+        builder.Property(u => u.ReferralCodeUsed).HasColumnName("referral_code_used").HasMaxLength(20);
+
         // Vendor-specific
         builder.Property(u => u.BusinessName).HasColumnName("business_name").HasMaxLength(200);
         builder.Property(u => u.ReferralCode).HasColumnName("referral_code").HasMaxLength(20);
@@ -58,6 +84,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasDatabaseName("ix_users_referral_code");
         builder.HasIndex(u => u.VendorId).HasDatabaseName("ix_users_vendor_id");
         builder.HasIndex(u => new { u.IsDeleted, u.Status }).HasDatabaseName("ix_users_soft_delete_status");
+        builder.HasIndex(u => u.Username).IsUnique().HasFilter("username IS NOT NULL")
+            .HasDatabaseName("ix_users_username");
+        builder.HasIndex(u => u.RejectedAt).HasFilter("rejected_at IS NOT NULL")
+            .HasDatabaseName("ix_users_rejected_at");
 
         // Relationships
         builder.HasOne(u => u.Manager)

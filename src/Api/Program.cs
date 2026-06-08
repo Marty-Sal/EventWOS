@@ -285,6 +285,7 @@ try
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddScoped<IAuditLogger, AuditLogger>();
     builder.Services.AddScoped<ISmsProvider, StubSmsProvider>();
+    builder.Services.AddSingleton<EventWOS.Application.Auth.Interfaces.IPasswordHasher, EventWOS.Infrastructure.Auth.BCryptPasswordHasher>();
     builder.Services.AddScoped<ICurrentUser, CurrentUser>();
     builder.Services.AddHttpContextAccessor();
 
@@ -882,6 +883,46 @@ BEGIN
         ADD COLUMN IF NOT EXISTS attendance_note            VARCHAR(500),
         ADD COLUMN IF NOT EXISTS attendance_note_at         TIMESTAMPTZ,
         ADD COLUMN IF NOT EXISTS attendance_note_by_user_id UUID;
+
+    -- ═══ users: self-registration + password auth columns ═══════════════════
+    -- Belt-and-braces for 20260608_AddSelfRegistration. Idempotent.
+    -- Mirrors the formal migration so a partial / never-applied migration
+    -- still results in a healthy schema on next API boot.
+    ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS username                  VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS password_hash             VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS require_password_reset    BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS failed_login_attempts     INT     NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS last_password_change_at   TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS rejected_at               TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS rejection_reason          VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS rejected_by_user_id       UUID,
+        ADD COLUMN IF NOT EXISTS approved_at               TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS approved_by_user_id       UUID,
+        ADD COLUMN IF NOT EXISTS contact_person_name       VARCHAR(150),
+        ADD COLUMN IF NOT EXISTS gst_number                VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS address                   VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS city                      VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS state                     VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS website                   VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS bio                       VARCHAR(2000),
+        ADD COLUMN IF NOT EXISTS skills                    VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS experience_years          INT,
+        ADD COLUMN IF NOT EXISTS referral_code_used        VARCHAR(20);
+
+    -- Backfill: grandfather existing accounts. Username = lowercase mobile.
+    -- They'll be forced through the OTP-driven password-setup flow on next login.
+    UPDATE users
+       SET username = LOWER(mobile),
+           require_password_reset = TRUE
+     WHERE username IS NULL;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username
+        ON users (username)
+        WHERE username IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS ix_users_rejected_at
+        ON users (rejected_at)
+        WHERE rejected_at IS NOT NULL;
 
 END $$;
 ");
