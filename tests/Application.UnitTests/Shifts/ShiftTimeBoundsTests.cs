@@ -56,7 +56,7 @@ public sealed class ShiftTimeBoundsTests
     }
 
     [Fact]
-    public void Shift_starts_exactly_24h_before_event_is_ok()
+    public void Shift_starts_exactly_pad_before_event_is_ok()
     {
         // Boundary: the lower edge of the pre-event pad.
         var ev = MakeEvent();
@@ -68,7 +68,7 @@ public sealed class ShiftTimeBoundsTests
     }
 
     [Fact]
-    public void Shift_starts_more_than_24h_before_event_fails()
+    public void Shift_starts_more_than_pad_before_event_fails()
     {
         // Almost certainly a typo (e.g. picked Nov 30 instead of Dec 1).
         var ev = MakeEvent();
@@ -105,7 +105,7 @@ public sealed class ShiftTimeBoundsTests
     }
 
     [Fact]
-    public void Shift_ends_exactly_24h_after_event_is_ok()
+    public void Shift_ends_exactly_pad_after_event_is_ok()
     {
         var ev = MakeEvent();
         var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
@@ -116,7 +116,7 @@ public sealed class ShiftTimeBoundsTests
     }
 
     [Fact]
-    public void Shift_ends_more_than_24h_after_event_fails()
+    public void Shift_ends_more_than_pad_after_event_fails()
     {
         var ev = MakeEvent();
         var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
@@ -134,5 +134,34 @@ public sealed class ShiftTimeBoundsTests
         var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev, startAt: ev.StartAt.AddMinutes(30), endAt: null);
         r.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shift_ends_before_event_starts_is_ok_boxoffice()
+    {
+        // Box office shift: opens for load-in, closes once doors open and
+        // all guests are inside. End time is BEFORE event.StartAt. Allowed.
+        var ev = MakeEvent();
+        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+            ev,
+            startAt: ev.StartAt.AddHours(-6),
+            endAt:   ev.StartAt.AddHours(-1));
+        r.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shift_end_before_or_equal_start_fails_cleanly()
+    {
+        // Catches the screenshot bug: user picked Jun 9 for end but Jun 10
+        // for start. Surface a friendly message via ShiftTimeBounds rather
+        // than letting the entity throw an ArgumentException with the raw
+        // (Parameter 'endAt') tail.
+        var ev = MakeEvent();
+        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+            ev,
+            startAt: ev.StartAt,
+            endAt:   ev.StartAt);
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be("Shift.EndBeforeStart");
     }
 }
