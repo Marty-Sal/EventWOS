@@ -61,7 +61,7 @@ public interface ICrewGroupApiService
     Task<(bool Ok, CrewGroupDto? Group, string? Error)>      UpdateAsync(Guid id, string? name, string? description, CancellationToken ct = default);
     Task<(bool Ok, string? Error)>                           DeleteAsync(Guid id, CancellationToken ct = default);
     Task<(bool Ok, CrewGroupDto? Group, string? Error)>      SetMembersAsync(Guid id, IReadOnlyList<Guid> crewIds, CancellationToken ct = default);
-    Task<(bool Ok, VendorAssignGroupResultDto? Result, string? Error)> InviteGroupToEventAsync(Guid eventId, Guid groupId, CancellationToken ct = default);
+    Task<(bool Ok, VendorAssignGroupResultDto? Result, string? Error)> InviteGroupToEventAsync(Guid eventId, Guid groupId, Guid? shiftId = null, CancellationToken ct = default);
 }
 
 // ── Implementation ────────────────────────────────────────────────────────────
@@ -151,13 +151,13 @@ public sealed class CrewGroupApiService : ICrewGroupApiService
     }
 
     public async Task<(bool Ok, VendorAssignGroupResultDto? Result, string? Error)> InviteGroupToEventAsync(
-        Guid eventId, Guid groupId, CancellationToken ct = default)
+        Guid eventId, Guid groupId, Guid? shiftId = null, CancellationToken ct = default)
     {
         try
         {
             var resp = await _http.PostAsJsonAsync(
                 $"api/v1/events/{eventId}/vendor-assign-group",
-                new { groupId }, ct);
+                new { groupId, shiftId }, ct);
             var body = await TryReadAsync<VendorAssignGroupResultDto>(resp, ct);
             if (resp.IsSuccessStatusCode) return (true, body?.Data, null);
             return (false, null, body?.Errors?.FirstOrDefault() ?? body?.Message ?? "Failed to invite group.");

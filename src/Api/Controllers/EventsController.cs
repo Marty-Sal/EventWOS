@@ -205,7 +205,7 @@ public sealed class EventsController : ControllerBase
         if (_currentUser.Role != UserRole.Vendor) return Forbid();
 
         var result = await _mediator.Send(new VendorAssignCrewCommand(
-            id, req.CrewId, _currentUser.UserId!.Value), ct);
+            id, req.CrewId, _currentUser.UserId!.Value, req.ShiftId), ct);
 
         return result.IsSuccess
             ? Created(string.Empty, ApiResponse<EventAssignmentDto>.Ok(result.Value))
@@ -225,7 +225,7 @@ public sealed class EventsController : ControllerBase
         if (_currentUser.Role != UserRole.Vendor) return Forbid();
 
         var result = await _mediator.Send(new VendorAssignGroupCommand(
-            id, req.GroupId, _currentUser.UserId!.Value), ct);
+            id, req.GroupId, _currentUser.UserId!.Value, req.ShiftId), ct);
 
         return result.IsSuccess
             ? Ok(ApiResponse<VendorAssignGroupResultDto>.Ok(result.Value))
@@ -491,8 +491,8 @@ public sealed record UpdateEventRequest(
 
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
 public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId);
-public sealed record VendorAssignCrewRequest(Guid CrewId);
-public sealed record VendorAssignGroupRequest(Guid GroupId);
+public sealed record VendorAssignCrewRequest(Guid CrewId, Guid? ShiftId = null);
+public sealed record VendorAssignGroupRequest(Guid GroupId, Guid? ShiftId = null);
 public sealed record VendorRespondToInviteRequest(string Response, string? Reason);
 public sealed record RespondAssignmentRequest(string Response, string? Reason = null);
 public sealed record RecordAttendanceRequest(string Action, string? Location = null);

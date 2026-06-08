@@ -75,9 +75,12 @@ public interface IEventApiService
     Task<PagedEventAssignmentResult?> GetMyAssignmentsAsync(int page = 1, CancellationToken ct = default);
     Task<PagedEventAssignmentResult?> GetVendorAssignmentsAsync(int page = 1, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> RespondAssignmentAsync(Guid assignmentId, string response, string? reason = null, CancellationToken ct = default);
-    Task<(bool Ok, Guid? AssignmentId, string? Error)> VendorAssignCrewAsync(Guid eventId, Guid crewId, CancellationToken ct = default);
+    Task<(bool Ok, Guid? AssignmentId, string? Error)> VendorAssignCrewAsync(Guid eventId, Guid crewId, Guid? shiftId = null, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> VendorRevokeCrewInviteAsync(Guid eventId, Guid crewId, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> VendorRespondToInviteAsync(Guid assignmentId, string response, string? reason, CancellationToken ct = default);
+
+    // Phase C step 5: list shifts on an event (for the allocation editor).
+    Task<IReadOnlyList<EventShiftDto>?> GetEventShiftsAsync(Guid eventId, CancellationToken ct = default);
 
     // Admin override — post-event correction. Flips a no-show / hanging
     // row to Attended and stores an audit note that surfaces everywhere.
@@ -202,11 +205,11 @@ public sealed class EventApiService : IEventApiService
         catch (Exception ex) { return (false, null, ex.Message); }
     }
 
-    public async Task<(bool Ok, Guid? AssignmentId, string? Error)> VendorAssignCrewAsync(Guid eventId, Guid crewId, CancellationToken ct = default)
+    public async Task<(bool Ok, Guid? AssignmentId, string? Error)> VendorAssignCrewAsync(Guid eventId, Guid crewId, Guid? shiftId = null, CancellationToken ct = default)
     {
         try
         {
-            var resp = await _http.PostAsJsonAsync($"api/v1/events/{eventId}/vendor-assign-crew", new { crewId }, ct);
+            var resp = await _http.PostAsJsonAsync($"api/v1/events/{eventId}/vendor-assign-crew", new { crewId, shiftId }, ct);
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<ApiResult<EventAssignmentDto>>(_jsonOpts, ct);
@@ -330,5 +333,16 @@ public sealed class EventApiService : IEventApiService
             return (false, body?.Errors?.FirstOrDefault() ?? "Unknown error");
         }
         catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    public async Task<IReadOnlyList<EventShiftDto>?> GetEventShiftsAsync(Guid eventId, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await _http.GetFromJsonAsync<ApiResult<IReadOnlyList<EventShiftDto>>>(
+                $"api/v1/events/{eventId}/shifts", _jsonOpts, ct);
+            return r?.Data;
+        }
+        catch { return null; }
     }
 }

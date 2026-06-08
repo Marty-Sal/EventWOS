@@ -17,9 +17,10 @@ namespace EventWOS.Application.Events.Commands;
 /// assignment — the vendor then staffs the event with their roster.
 /// </summary>
 public sealed record VendorAssignCrewCommand(
-    Guid EventId,
-    Guid CrewId,
-    Guid VendorUserId
+    Guid  EventId,
+    Guid  CrewId,
+    Guid  VendorUserId,
+    Guid? ShiftId = null    // Phase C step 6: explicit shift picker. Null = auto-resolve (legacy).
 ) : IRequest<Result<EventAssignmentDto>>;
 
 public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCommand, Result<EventAssignmentDto>>
@@ -146,15 +147,31 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
         // single active shift via DefaultShiftResolver. Ambiguous events
         // (somehow >1 shift) surface a clear error rather than picking
         // one at random.
-        bool _ambiguous = false;
-        var _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
-            _db, req.EventId, ct, x => _ambiguous = x);
-        if (_ambiguous)
-            return Result.Failure<EventAssignmentDto>(new Error("Assignment.AmbiguousShift",
-                "Event has multiple shifts — caller must specify which one. (Phase C upgrade required.)"));
-        if (_shiftId is null)
-            return Result.Failure<EventAssignmentDto>(new Error("Assignment.NoShift",
-                "Event has no shifts — cannot assign crew."));
+        // Phase C step 6: if the caller (vendor portal) explicitly picked a
+        // shift, validate it belongs to this event and use it. Otherwise
+        // fall back to the auto-resolver (legacy single-shift path).
+        Guid? _shiftId;
+        if (req.ShiftId is { } explicitShift)
+        {
+            var belongs = await _db.EventShifts.AnyAsync(
+                x => x.Id == explicitShift && x.EventId == req.EventId, ct);
+            if (!belongs)
+                return Result.Failure<EventAssignmentDto>(new Error("Assignment.ShiftNotOnEvent",
+                    "The picked shift does not belong to this event."));
+            _shiftId = explicitShift;
+        }
+        else
+        {
+            bool _ambiguous = false;
+            _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
+                _db, req.EventId, ct, x => _ambiguous = x);
+            if (_ambiguous)
+                return Result.Failure<EventAssignmentDto>(new Error("Assignment.AmbiguousShift",
+                    "Event has multiple shifts — pick one before assigning."));
+            if (_shiftId is null)
+                return Result.Failure<EventAssignmentDto>(new Error("Assignment.NoShift",
+                    "Event has no shifts — cannot assign crew."));
+        }
 
         // Phase C step 3: vendor quota gate. Only fires for fresh-row
         // path (resurrections skip — they're refilling an already-counted

@@ -21,9 +21,10 @@ namespace EventWOS.Application.CrewGroups.Commands;
 /// on event, Failed 1 (capacity reached)" — no single failure short-circuits.
 /// </summary>
 public sealed record VendorAssignGroupCommand(
-    Guid EventId,
-    Guid GroupId,
-    Guid VendorUserId
+    Guid  EventId,
+    Guid  GroupId,
+    Guid  VendorUserId,
+    Guid? ShiftId = null    // Phase C step 6: explicit shift picker. Null = auto-resolve (legacy).
 ) : IRequest<Result<VendorAssignGroupResultDto>>;
 
 public sealed class VendorAssignGroupHandler
@@ -119,15 +120,31 @@ public sealed class VendorAssignGroupHandler
         // inviting. Multi-shift events get rejected with a clear error until
         // Phase C teaches this handler to accept a per-crew shift map. Doing
         // this BEFORE the loop avoids N round trips for a group of 50 crew.
-        bool _ambiguousShift = false;
-        var _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
-            _db, req.EventId, ct, x => _ambiguousShift = x);
-        if (_ambiguousShift)
-            return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.AmbiguousShift",
-                "Event has multiple shifts — group assign requires a shift picker (Phase C upgrade required)."));
-        if (_shiftId is null)
-            return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.NoShift",
-                "Event has no shifts — cannot assign crew."));
+        // Phase C step 6: honour an explicit ShiftId from the vendor portal's
+        // shift picker; otherwise auto-resolve as before. Validation is the
+        // same single-row lookup we do for individual assignment.
+        Guid? _shiftId;
+        if (req.ShiftId is { } explicitShift)
+        {
+            var belongs = await _db.EventShifts.AnyAsync(
+                x => x.Id == explicitShift && x.EventId == req.EventId, ct);
+            if (!belongs)
+                return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.ShiftNotOnEvent",
+                    "The picked shift does not belong to this event."));
+            _shiftId = explicitShift;
+        }
+        else
+        {
+            bool _ambiguousShift = false;
+            _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
+                _db, req.EventId, ct, x => _ambiguousShift = x);
+            if (_ambiguousShift)
+                return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.AmbiguousShift",
+                    "Event has multiple shifts — pick one before inviting the group."));
+            if (_shiftId is null)
+                return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.NoShift",
+                    "Event has no shifts — cannot assign crew."));
+        }
 
         // Phase C step 3: resolve the vendor's quota ONCE before the loop.
         // We then decrement an in-memory counter as we invite, identical

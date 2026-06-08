@@ -157,6 +157,46 @@
                 {
                     <div class="mb-3 p-3 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs">⚠️ @_assignError</div>
                 }
+
+                @* ── Phase C step 6: Shift picker ──────────────────────────
+                   Hidden for single-shift events (the only option is the
+                   default). For multi-shift events the vendor picks which
+                   shift each invite/group lands on; the quota label updates
+                   as they switch. If the vendor has NO allocations on ANY
+                   shift the picker is empty — we surface a friendly
+                   "ask your manager" banner instead of a broken control. *@
+                @if (_shiftPickerOptions.Count == 0 && _assignTarget is not null)
+                {
+                    <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                        ⚠️ You don't have a quota on any shift of this event yet.
+                        Ask the event manager to allocate you a slot before inviting crew.
+                    </div>
+                }
+                else if (_shiftPickerOptions.Count > 1)
+                {
+                    <div class="mb-4 p-3 rounded-xl border border-indigo-100 bg-white space-y-1.5">
+                        <label class="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Shift</label>
+                        <select @bind="_selectedShiftId"
+                                class="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                            @foreach (var opt in _shiftPickerOptions)
+                            {
+                                <option value="@opt.ShiftId">@opt.Label</option>
+                            }
+                        </select>
+                        @{ var picked = _shiftPickerOptions.FirstOrDefault(o => o.ShiftId == _selectedShiftId); }
+                        @if (picked is not null && picked.Enforced)
+                        {
+                            var left = Math.Max(0, picked.Quota - picked.Used);
+                            <p class="text-[11px] @(left == 0 ? "text-red-600" : "text-gray-500")">
+                                @(left == 0 ? "Quota full — rejected/no-show crew free up seats." : $"{left} seat(s) left in your quota.")
+                            </p>
+                        }
+                        else if (picked is not null)
+                        {
+                            <p class="text-[11px] text-gray-500 italic">No vendor quotas set on this shift — capacity is shared.</p>
+                        }
+                    </div>
+                }
                 @* ─── Invite a saved group ─────────────────────────────────────── *@
                 @if (_groupsForPicker is not null && _groupsForPicker.Count > 0)
                 {
@@ -383,6 +423,21 @@
     private string? _assignError;
     private string? _assignSuccess; // legacy — kept for the group-invite success path; per-row uses _justActedId
     private Guid _assigningId = Guid.Empty;
+
+    // ── Phase C step 6: vendor shift picker ────────────────────────────
+    // For each event opened in the assign panel, we load the list of
+    // shifts and the vendor's own allocations (per shift). The picker
+    // surfaces only shifts where this vendor either has an allocation
+    // OR the shift is in legacy mode (no allocations at all).
+    private List<ShiftPickerOption> _shiftPickerOptions = new();
+    private Guid? _selectedShiftId;
+
+    private sealed record ShiftPickerOption(
+        Guid   ShiftId,
+        string Label,
+        int    Quota,
+        int    Used,
+        bool   Enforced);
 
     // Inline per-row success flash. Set after a successful invite/revoke,
     // cleared 2s later by a fire-and-forget Task so the green ✓ pill
@@ -692,7 +747,7 @@
         _groupInviteSummary  = null;
         StateHasChanged();
 
-        var (ok, result, err) = await GroupsApi.InviteGroupToEventAsync(_assignTarget.Id, gid);
+        var (ok, result, err) = await GroupsApi.InviteGroupToEventAsync(_assignTarget.Id, gid, _selectedShiftId);
         _invitingGroup = false;
 
         if (!ok || result is null)

@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject IEventApiService EventApi
 @inject IVendorApiService VendorApi
+@inject IVendorAllocationApiService AllocApi
 @inject HttpClient Http
 @inject AuthenticationStateProvider Auth
 @inject NotificationHubService Hub
@@ -481,6 +482,158 @@
                     </div>
                 }
 
+                @* ── Phase C step 5: Vendor allocations per shift ──────────
+                   Admins/Managers grant per-vendor quotas on each shift.
+                   Without at least one allocation on a shift, the quota
+                   gate stays in legacy mode (capacity-only) — so this
+                   section is the on-ramp to quota-managed staffing.
+                   Hidden when event is locked (matches assign-crew form). *@
+                @if (!_isEventLocked && _selectedEventShifts is not null && _selectedEventShifts.Count > 0)
+                {
+                    <div class="border-t border-gray-100 pt-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-gray-700 text-sm">Vendor Quotas <span class="text-[10px] font-medium text-gray-400 uppercase tracking-wide ml-1">Phase C</span></h4>
+                            <button type="button" @onclick="ToggleAllocSection"
+                                    class="text-[11px] text-indigo-600 hover:underline">
+                                @(_allocSectionOpen ? "Hide" : "Show")
+                            </button>
+                        </div>
+                        @if (_allocSectionOpen)
+                        {
+                            @foreach (var sh in _selectedEventShifts)
+                            {
+                                var shiftId = sh.Id;
+                                var rows    = _allocationsByShift.GetValueOrDefault(shiftId);
+                                var totalQ  = rows?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
+                                var headroom = sh.CrewCount - totalQ;
+                                <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-2 space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-semibold text-gray-700 truncate">@sh.ScopeName</p>
+                                            <p class="text-[10px] text-gray-500">
+                                                Capacity @sh.CrewCount · Allocated @totalQ · Free <b class="@(headroom > 0 ? "text-emerald-700" : "text-gray-400")">@headroom</b>
+                                            </p>
+                                        </div>
+                                        <button type="button"
+                                                @onclick="() => OpenAllocCreate(shiftId)"
+                                                disabled="@(headroom <= 0)"
+                                                class="text-[11px] px-2 py-1 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                                            + Allocate
+                                        </button>
+                                    </div>
+                                    @if (rows is null)
+                                    {
+                                        <p class="text-[11px] text-gray-400 italic">Loading…</p>
+                                    }
+                                    else if (rows.Where(r => !r.IsArchived).ToList() is var active && active.Count == 0)
+                                    {
+                                        <p class="text-[11px] text-gray-400 italic">No vendor allocations yet. The quota gate is off for this shift until you add one.</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="space-y-1.5">
+                                            @foreach (var r in active.OrderBy(x => x.VendorName))
+                                            {
+                                                <div class="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
+                                                    <div class="min-w-0">
+                                                        <p class="text-[11px] font-semibold text-gray-800 truncate">@r.VendorName</p>
+                                                        <p class="text-[10px] text-gray-500">@r.CurrentlyAssigned / @r.Quota assigned</p>
+                                                    </div>
+                                                    <div class="flex items-center gap-1 shrink-0">
+                                                        @if (_allocEditingId == r.Id)
+                                                        {
+                                                            <input type="number" min="@r.CurrentlyAssigned"
+                                                                   @bind="_allocEditQuota"
+                                                                   class="w-14 px-1.5 py-0.5 text-[11px] rounded border border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+                                                            <button type="button" @onclick="() => SaveAllocEdit(r)"
+                                                                    class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">Save</button>
+                                                            <button type="button" @onclick="CancelAllocEdit"
+                                                                    class="text-[11px] px-1.5 py-0.5 rounded text-gray-500 hover:text-gray-700">✕</button>
+                                                        }
+                                                        else
+                                                        {
+                                                            <button type="button" @onclick="() => StartAllocEdit(r)"
+                                                                    class="text-[10px] text-indigo-600 hover:underline">Edit</button>
+                                                            <button type="button" @onclick="() => ArchiveAlloc(r)"
+                                                                    class="text-[10px] text-gray-400 hover:text-red-500">Remove</button>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            @if (_allocError is not null)
+                            {
+                                <p class="text-xs text-red-600 mt-1">⚠️ @_allocError</p>
+                            }
+                        }
+                    </div>
+                }
+
+                @* ── Allocation Create mini-modal ───────────────────────── *@
+                @if (_allocCreateShiftId is not null)
+                {
+                    <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" @onclick="CloseAllocCreate">
+                        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-3" @onclick:stopPropagation="true">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-gray-800 text-sm">Allocate vendor quota</h3>
+                                <button @onclick="CloseAllocCreate" class="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+                            </div>
+                            <div class="relative">
+                                <label class="block text-[11px] font-medium text-gray-500 mb-1">Vendor</label>
+                                @if (_allocCreateVendor is not null)
+                                {
+                                    <div class="flex items-center justify-between px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-xs">
+                                        <span class="font-semibold text-indigo-800">@_allocCreateVendor.FullName</span>
+                                        <button class="text-gray-400 hover:text-red-500" @onclick="() => { _allocCreateVendor = null; }">✕</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <input class="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                           placeholder="Search vendor by name…"
+                                           @value="_allocVendorSearch"
+                                           @oninput="OnAllocVendorSearch" />
+                                    @if (_allocVendorResults.Count > 0)
+                                    {
+                                        <div class="absolute left-0 right-0 top-full z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                                            @foreach (var v in _allocVendorResults)
+                                            {
+                                                <button class="block w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 border-b border-gray-50 last:border-0"
+                                                        @onclick="() => SelectAllocVendor(v)">
+                                                    <span class="font-semibold text-gray-800">@v.FullName</span>
+                                                    <span class="text-gray-400 ml-2">@v.Mobile</span>
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-gray-500 mb-1">Quota</label>
+                                <input type="number" min="1" max="@_allocCreateMaxQuota"
+                                       @bind="_allocCreateQuota"
+                                       class="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                                <p class="text-[10px] text-gray-400 mt-1">Max for this shift right now: @_allocCreateMaxQuota</p>
+                            </div>
+                            @if (_allocCreateError is not null)
+                            {
+                                <p class="text-xs text-red-600">⚠️ @_allocCreateError</p>
+                            }
+                            <div class="flex justify-end gap-2 pt-1">
+                                <button @onclick="CloseAllocCreate" class="text-xs px-3 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100">Cancel</button>
+                                <button @onclick="SubmitAllocCreate"
+                                        disabled="@(_allocCreateVendor is null || _allocCreateSubmitting || _allocCreateQuota < 1)"
+                                        class="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                                    @(_allocCreateSubmitting ? "Saving…" : "Grant Quota")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+
                 <!-- Assignments (grouped by vendor) -->
                 <div class="border-t border-gray-100 pt-4">
                     <h4 class="font-semibold text-gray-700 text-sm mb-3">Crew Assignments</h4>
@@ -653,12 +806,19 @@
                        from this modal (read-only summary shown instead).
                        Editing shifts after creation is a dedicated Phase C
                        affordance — too much UX to retrofit safely here. *@
+                    @* ── Phase C step 4: multi-shift editor (CREATE only) ──────
+                       Repeating row list. Each row = one EventShift. Total
+                       capacity (MaxCrew) is derived from SUM(CrewCount) and
+                       is shown read-only at the bottom. Empty list disables
+                       Save. We don't allow editing shifts after creation
+                       from this modal — that's a Phase D affordance and
+                       safer as a dedicated drawer than retrofitted here. *@
                     @if (_editingEvent is null)
                     {
                         <div class="border border-gray-200 rounded-xl p-3 space-y-3 bg-gray-50">
                             <div class="flex items-center justify-between">
-                                <span class="text-xs font-semibold text-gray-700">🧰 Scope of Work</span>
-                                <span class="text-[10px] text-gray-400 uppercase tracking-wide">Phase B</span>
+                                <span class="text-xs font-semibold text-gray-700">🧰 Shifts</span>
+                                <span class="text-[10px] text-gray-400 uppercase tracking-wide">Phase C</span>
                             </div>
                             @if (_scopeCatalog.Count == 0)
                             {
@@ -668,27 +828,52 @@
                             }
                             else
                             {
-                                <select @bind="_form.ScopeOfWorkId"
-                                        class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-                                    @foreach (var sc in _scopeCatalog)
-                                    {
-                                        <option value="@sc.Id">@sc.Name</option>
-                                    }
-                                </select>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="text-[11px] text-gray-500 mb-1 block">Crew needed *</label>
-                                        <input type="number" min="1" @bind="_form.MaxCrew"
-                                               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                @for (int i = 0; i < _form.Shifts.Count; i++)
+                                {
+                                    var ix  = i; // capture for lambdas
+                                    var row = _form.Shifts[ix];
+                                    <div class="bg-white border border-gray-200 rounded-xl p-3 space-y-2">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-[11px] font-semibold text-gray-600">Shift @(ix + 1)</span>
+                                            @if (_form.Shifts.Count > 1)
+                                            {
+                                                <button type="button" @onclick="() => RemoveShiftRow(ix)"
+                                                        class="text-[11px] text-gray-400 hover:text-red-500 transition">✕ Remove</button>
+                                            }
+                                        </div>
+                                        <select @bind="row.ScopeOfWorkId"
+                                                class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                                            @foreach (var sc in _scopeCatalog)
+                                            {
+                                                <option value="@sc.Id">@sc.Name</option>
+                                            }
+                                        </select>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label class="text-[11px] text-gray-500 mb-1 block">Crew needed *</label>
+                                                <input type="number" min="1" @bind="row.CrewCount"
+                                                       class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                            </div>
+                                            <div>
+                                                <label class="text-[11px] text-gray-500 mb-1 block">Shift end (optional)</label>
+                                                <input type="datetime-local" @bind="row.EndAt"
+                                                       class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label class="text-[11px] text-gray-500 mb-1 block">Shift end (optional)</label>
-                                        <input type="datetime-local" @bind="_form.ShiftEndAt"
-                                               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                                    </div>
+                                }
+
+                                <div class="flex items-center justify-between gap-2 pt-1">
+                                    <button type="button" @onclick="AddShiftRow"
+                                            class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition">
+                                        ➕ Add another shift
+                                    </button>
+                                    <span class="text-[11px] text-gray-500">
+                                        Total crew: <b class="text-gray-700">@_form.Shifts.Sum(x => Math.Max(0, x.CrewCount))</b>
+                                    </span>
                                 </div>
                                 <p class="text-[11px] text-gray-500 italic">
-                                    Leave shift end blank if crew finish when the event wraps. You can split into multiple scopes (Phase C).
+                                    Each shift is a separate staffing slot (different scope or different end-time). Leave shift end blank to run until the event wraps.
                                 </p>
                             }
                         </div>
@@ -913,6 +1098,36 @@ else
     // synthetic "no-vendor" bucket). Reset on each drawer open in OpenDetailPanel.
     private readonly HashSet<string> _expandedVendorGroups = new();
 
+    // ── Phase C step 5: Vendor allocation state ────────────────────────
+    // _selectedEventShifts: cached shifts for the drawer's open event;
+    //   reset to null on CloseDetailPanel and re-loaded in OpenDetailPanel.
+    // _allocationsByShift: per-shift dictionary of every allocation row
+    //   (active + archived). Markup filters archived in the view layer.
+    // _allocSectionOpen: drawer-level toggle so the section starts
+    //   collapsed for clean events; admins click "Show" to expose it.
+    // _alloc*Edit*: in-row quota editor (single row at a time).
+    // _allocCreate*: state for the "+ Allocate" mini-modal.
+    private IReadOnlyList<EventShiftDto>? _selectedEventShifts;
+    private readonly Dictionary<Guid, IReadOnlyList<VendorAllocationDto>> _allocationsByShift = new();
+    private bool   _allocSectionOpen;
+    private string? _allocError;
+
+    // Per-row inline edit
+    private Guid?  _allocEditingId;
+    private int    _allocEditQuota;
+
+    // "+ Allocate" modal state
+    private Guid?  _allocCreateShiftId;
+    private int    _allocCreateMaxQuota;
+    private int    _allocCreateQuota = 1;
+    private string _allocVendorSearch = string.Empty;
+    private List<VendorListItemDto> _allocVendorResults = new();
+    private VendorListItemDto? _allocCreateVendor;
+    private bool   _allocCreateSubmitting;
+    private string? _allocCreateError;
+    private System.Threading.CancellationTokenSource? _allocSearchCts;
+
+
     // Computed: is the event in a terminal state where editing & assignment
     // are forbidden? Backend enforces this too (Event.Update throws), but the
     // UI hides the entry points so users don't bonk into a 400.
@@ -1071,6 +1286,22 @@ else
         if (_selectedEvent.Status is "InProgress" or "Completed")
             _attendance = await EventApi.GetAttendanceSummaryAsync(ev.Id);
 
+        // Phase C step 5: load shifts + allocations for this event so the
+        // Vendor Quotas section can render. Errors are silent (UI shows
+        // "no shifts" naturally) — section gates on _selectedEventShifts.
+        _allocationsByShift.Clear();
+        _allocSectionOpen = false;
+        _allocError       = null;
+        _selectedEventShifts = await EventApi.GetEventShiftsAsync(ev.Id);
+        if (_selectedEventShifts is not null)
+        {
+            foreach (var sh in _selectedEventShifts)
+            {
+                var rows = await AllocApi.GetForShiftAsync(sh.Id);
+                _allocationsByShift[sh.Id] = rows ?? Array.Empty<VendorAllocationDto>();
+            }
+        }
+
         // Auto-expand the first vendor group so the drawer doesn't open
         // looking empty when there are assignments. Subsequent groups stay
         // collapsed — keeps the panel tidy for events fanned across many
@@ -1089,6 +1320,143 @@ else
         _assignments = null;
         _attendance = null;
         _expandedVendorGroups.Clear();
+        // Phase C step 5: tear down allocation drawer state too.
+        _selectedEventShifts = null;
+        _allocationsByShift.Clear();
+        _allocSectionOpen = false;
+        _allocError = null;
+        _allocEditingId = null;
+        CloseAllocCreate();
+    }
+
+    // ── Phase C step 5: handlers ───────────────────────────────────────
+    private void ToggleAllocSection() => _allocSectionOpen = !_allocSectionOpen;
+
+    private void StartAllocEdit(VendorAllocationDto row)
+    {
+        _allocEditingId = row.Id;
+        _allocEditQuota = row.Quota;
+        _allocError     = null;
+    }
+
+    private void CancelAllocEdit()
+    {
+        _allocEditingId = null;
+        _allocError = null;
+    }
+
+    private async Task SaveAllocEdit(VendorAllocationDto row)
+    {
+        if (_allocEditQuota < row.CurrentlyAssigned)
+        {
+            _allocError = $"Can't shrink below {row.CurrentlyAssigned} — that many crew are already assigned under this vendor.";
+            return;
+        }
+        var (ok, err, updated) = await AllocApi.UpdateAsync(row.Id, _allocEditQuota);
+        if (!ok) { _allocError = err; return; }
+        await ReloadShiftAllocations(row.ShiftId);
+        _allocEditingId = null;
+        _allocError     = null;
+    }
+
+    private async Task ArchiveAlloc(VendorAllocationDto row)
+    {
+        if (row.CurrentlyAssigned > 0)
+        {
+            _allocError = $"Can't remove — {row.CurrentlyAssigned} crew are still assigned under this vendor on this shift.";
+            return;
+        }
+        var (ok, err) = await AllocApi.ArchiveAsync(row.Id);
+        if (!ok) { _allocError = err; return; }
+        await ReloadShiftAllocations(row.ShiftId);
+        _allocError = null;
+    }
+
+    private void OpenAllocCreate(Guid shiftId)
+    {
+        var sh = _selectedEventShifts?.FirstOrDefault(x => x.Id == shiftId);
+        if (sh is null) return;
+        var totalQ = _allocationsByShift.GetValueOrDefault(shiftId)
+                        ?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
+        _allocCreateShiftId  = shiftId;
+        _allocCreateMaxQuota = Math.Max(1, sh.CrewCount - totalQ);
+        _allocCreateQuota    = Math.Min(1, _allocCreateMaxQuota);
+        if (_allocCreateQuota < 1) _allocCreateQuota = 1;
+        _allocCreateVendor   = null;
+        _allocVendorSearch   = string.Empty;
+        _allocVendorResults  = new();
+        _allocCreateError    = null;
+    }
+
+    private void CloseAllocCreate()
+    {
+        _allocCreateShiftId = null;
+        _allocCreateVendor  = null;
+        _allocCreateError   = null;
+        _allocVendorResults = new();
+        _allocVendorSearch  = string.Empty;
+        _allocSearchCts?.Cancel();
+        _allocSearchCts = null;
+    }
+
+    private async Task OnAllocVendorSearch(ChangeEventArgs e)
+    {
+        _allocVendorSearch = e.Value?.ToString() ?? string.Empty;
+        if (_allocVendorSearch.Length < 1)
+        {
+            _allocVendorResults = new();
+            return;
+        }
+        // Cancel previous in-flight search so we don't race results.
+        _allocSearchCts?.Cancel();
+        _allocSearchCts = new System.Threading.CancellationTokenSource();
+        var token = _allocSearchCts.Token;
+        try
+        {
+            var page = await VendorApi.GetVendorsAsync(1, _allocVendorSearch, token);
+            if (token.IsCancellationRequested) return;
+            _allocVendorResults = page?.Items?.Take(8).ToList() ?? new();
+        }
+        catch (OperationCanceledException) { /* superseded; ignore */ }
+    }
+
+    private void SelectAllocVendor(VendorListItemDto v)
+    {
+        _allocCreateVendor  = v;
+        _allocVendorResults = new();
+        _allocVendorSearch  = string.Empty;
+    }
+
+    private async Task SubmitAllocCreate()
+    {
+        if (_allocCreateShiftId is null || _allocCreateVendor is null) return;
+        if (_allocCreateQuota < 1) { _allocCreateError = "Quota must be at least 1."; return; }
+        if (_allocCreateQuota > _allocCreateMaxQuota)
+        {
+            _allocCreateError = $"Only {_allocCreateMaxQuota} seats left on this shift.";
+            return;
+        }
+        _allocCreateSubmitting = true;
+        _allocCreateError      = null;
+        try
+        {
+            var (ok, err, _) = await AllocApi.CreateAsync(
+                _allocCreateShiftId.Value, _allocCreateVendor.Id, _allocCreateQuota);
+            if (!ok) { _allocCreateError = err; return; }
+            var shiftId = _allocCreateShiftId.Value;
+            await ReloadShiftAllocations(shiftId);
+            CloseAllocCreate();
+        }
+        finally
+        {
+            _allocCreateSubmitting = false;
+        }
+    }
+
+    private async Task ReloadShiftAllocations(Guid shiftId)
+    {
+        var rows = await AllocApi.GetForShiftAsync(shiftId);
+        _allocationsByShift[shiftId] = rows ?? Array.Empty<VendorAllocationDto>();
     }
 
     private async Task OpenCreateModal()
@@ -1098,9 +1466,26 @@ else
         _formError = null;
         _showEventModal = true;
         await EnsureScopeCatalogLoaded();
-        // Pre-pick the first scope so the picker is never on an empty option.
-        if (_form.ScopeOfWorkId is null && _scopeCatalog.Count > 0)
-            _form.ScopeOfWorkId = _scopeCatalog[0].Id;
+        // Phase C step 4: seed exactly ONE default shift row pointing at the
+        // first scope. If the catalog is empty the editor renders a helpful
+        // "create one first" banner instead.
+        if (_form.Shifts.Count == 0 && _scopeCatalog.Count > 0)
+            _form.Shifts.Add(new ShiftDraft { ScopeOfWorkId = _scopeCatalog[0].Id, CrewCount = 1 });
+    }
+
+    /// <summary>Append a fresh shift row, defaulting to the first scope.</summary>
+    private void AddShiftRow()
+    {
+        if (_scopeCatalog.Count == 0) return;
+        _form.Shifts.Add(new ShiftDraft { ScopeOfWorkId = _scopeCatalog[0].Id, CrewCount = 1 });
+    }
+
+    /// <summary>Remove a shift row by index. Last-row delete is guarded in markup.</summary>
+    private void RemoveShiftRow(int index)
+    {
+        if (index < 0 || index >= _form.Shifts.Count) return;
+        if (_form.Shifts.Count <= 1) return;  // belt-and-braces; UI hides the button too
+        _form.Shifts.RemoveAt(index);
     }
 
     /// <summary>
@@ -1157,39 +1542,49 @@ else
             _formError = "Title and Venue are required.";
             return;
         }
-        if (_editingEvent is null && _form.ScopeOfWorkId is null)
+        if (_editingEvent is null)
         {
-            _formError = "Pick a Scope of Work for the shift, or create one in /admin/scope-of-work.";
-            return;
+            if (_form.Shifts.Count == 0)
+            {
+                _formError = "Add at least one shift, or create a Scope of Work first.";
+                return;
+            }
+            if (_form.Shifts.Any(x => x.ScopeOfWorkId == Guid.Empty))
+            {
+                _formError = "Every shift needs a Scope of Work.";
+                return;
+            }
+            if (_form.Shifts.Any(x => x.CrewCount < 1))
+            {
+                _formError = "Every shift needs at least 1 crew.";
+                return;
+            }
         }
         _saving = true;
         _formError = null;
-        // Phase B: on Create, attach a single shift built from the form.
-        // On Edit, we don't change shifts from this modal (Phase C) — so we
-        // send the legacy MaxCrew-only shape. The API treats Shifts=null as
-        // "don't touch shifts" on update.
+        // Phase C step 4: on Create, send the whole shift list. Each draft
+        // row maps to one CreateEventShiftRequest; the API derives the
+        // event's MaxCrew from SUM(CrewCount). On Edit, we still don't
+        // touch shifts from this modal (dedicated editor is a future
+        // affordance) — Shifts=null leaves them alone on the server.
         IReadOnlyList<CreateEventShiftRequest>? shifts = null;
-        if (_editingEvent is null && _form.ScopeOfWorkId is { } scopeId)
+        int derivedMaxCrew = _form.MaxCrew;
+        if (_editingEvent is null)
         {
-            // ShiftEndAt == default → caller left it blank → null on the wire.
-            DateTime? shiftEnd = _form.ShiftEndAt == default
-                ? null
-                : _form.ShiftEndAt.ToUniversalTime();
-
-            shifts = new[]
-            {
-                new CreateEventShiftRequest(
-                    scopeId,
-                    Math.Max(_form.MaxCrew, 1),
+            shifts = _form.Shifts
+                .Select(s => new CreateEventShiftRequest(
+                    s.ScopeOfWorkId,
+                    Math.Max(s.CrewCount, 1),
                     _form.StartAt.ToUniversalTime(),
-                    shiftEnd)
-            };
+                    s.EndAt == default ? null : s.EndAt.ToUniversalTime()))
+                .ToArray();
+            derivedMaxCrew = shifts.Sum(x => x.CrewCount);
         }
 
         var req = new CreateEventRequest(
             _form.Title, _form.Description, _form.Venue, _form.Address,
             _form.StartAt.ToUniversalTime(), _form.EndAt.ToUniversalTime(),
-            _form.MaxCrew, shifts);
+            derivedMaxCrew, shifts);
 
         if (_editingEvent is null)
         {
@@ -1545,13 +1940,24 @@ else
         public DateTime  EndAt       { get; set; } = DateTime.Now.AddDays(1).AddHours(4);
         public int       MaxCrew     { get; set; } = 1;
 
-        // Phase B (create-mode only): the modal's single-shift editor
-        // populates these. On save we wrap them into a one-element Shifts
-        // list. ShiftEndAt is nullable — empty means "shift runs until the
-        // event itself ends (or open-ended; crew portal will show contact
-        // vendor)". The bound input is a non-nullable DateTime so we use
-        // a sentinel of DateTime.MinValue to mean "unset".
-        public Guid?     ScopeOfWorkId { get; set; }
-        public DateTime  ShiftEndAt    { get; set; } = default;
+        // Phase C step 4 (create-mode only): list of shift drafts. Each
+        // row maps 1:1 to a CreateEventShiftRequest on save. MaxCrew is
+        // derived from SUM(Shifts.CrewCount) at submit-time. We don't
+        // include a default row here — OpenCreateModal seeds it once
+        // (after the catalog is loaded) so we know which scope to default to.
+        public List<ShiftDraft> Shifts { get; set; } = new();
+    }
+
+    /// <summary>
+    /// One row in the multi-shift editor. ScopeOfWorkId is required on
+    /// save; EndAt is a sentinel DateTime (MinValue = "unset" → null on
+    /// the wire). CrewCount has min=1 from the input element but the
+    /// save-time guard also floors it to 1.
+    /// </summary>
+    public sealed class ShiftDraft
+    {
+        public Guid     ScopeOfWorkId { get; set; }
+        public int      CrewCount     { get; set; } = 1;
+        public DateTime EndAt         { get; set; } = default;
     }
 }
