@@ -268,6 +268,12 @@ try
         options.AddPolicy("perm:reports:read",      policy => policy.Requirements.Add(new PermissionRequirement("reports:read")));
         options.AddPolicy("perm:roles:read",        policy => policy.Requirements.Add(new PermissionRequirement("roles:read")));
         options.AddPolicy("perm:roles:write",       policy => policy.Requirements.Add(new PermissionRequirement("roles:write")));
+        // Phase A of Scope-of-Work feature — controller uses [Permission(...)]
+        // which builds policies named "perm:<perm-string>". These two were
+        // missed in the original Phase A commit; without them the controller
+        // returns "AuthorizationPolicy not found" on first request.
+        options.AddPolicy("perm:scope_of_work:read",  policy => policy.Requirements.Add(new PermissionRequirement("scope_of_work:read")));
+        options.AddPolicy("perm:scope_of_work:write", policy => policy.Requirements.Add(new PermissionRequirement("scope_of_work:write")));
         options.AddPolicy("perm:sessions:read",     policy => policy.Requirements.Add(new PermissionRequirement("sessions:read")));
         options.AddPolicy("perm:sessions:revoke",   policy => policy.Requirements.Add(new PermissionRequirement("sessions:revoke")));
         options.AddPolicy("perm:users:delete",      policy => policy.Requirements.Add(new PermissionRequirement("users:delete")));
