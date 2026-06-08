@@ -83,7 +83,7 @@ public sealed class EventsController : ControllerBase
         Guid id, [FromBody] AddEventShiftRequest req, CancellationToken ct)
     {
         var result = await _mediator.Send(new AddEventShiftCommand(
-            id, req.ScopeOfWorkId, req.CrewCount, req.EndAt,
+            id, req.ScopeOfWorkId, req.CrewCount, req.StartAt, req.EndAt,
             _currentUser.UserId!.Value), ct);
         return result.IsSuccess
             ? Created(string.Empty, ApiResponse<EventShiftDto>.Ok(result.Value))
@@ -100,7 +100,7 @@ public sealed class EventsController : ControllerBase
         Guid shiftId, [FromBody] UpdateEventShiftRequest req, CancellationToken ct)
     {
         var result = await _mediator.Send(new UpdateEventShiftCommand(
-            shiftId, req.ScopeOfWorkId, req.CrewCount, req.EndAt), ct);
+            shiftId, req.ScopeOfWorkId, req.CrewCount, req.StartAt, req.EndAt), ct);
         return result.IsSuccess
             ? Ok(ApiResponse<EventShiftDto>.Ok(result.Value))
             : BadRequest(ApiResponse<EventShiftDto>.Fail(result.Error.Message));
@@ -540,8 +540,8 @@ public sealed record UpdateEventRequest(
 
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
 public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId);
-public sealed record AddEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime? EndAt = null);
-public sealed record UpdateEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime? EndAt = null);
+public sealed record AddEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt = null);
+public sealed record UpdateEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt = null);
 
 public sealed record VendorAssignCrewRequest(Guid CrewId, Guid? ShiftId = null);
 public sealed record VendorAssignGroupRequest(Guid GroupId, Guid? ShiftId = null);

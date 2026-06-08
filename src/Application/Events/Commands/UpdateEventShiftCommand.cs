@@ -1,5 +1,6 @@
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Events.Shifts;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Rules;
@@ -23,6 +24,7 @@ public sealed record UpdateEventShiftCommand(
     Guid     ShiftId,
     Guid     ScopeOfWorkId,
     int      CrewCount,
+    DateTime StartAt,
     DateTime? EndAt
 ) : IRequest<Result<EventShiftDto>>;
 
@@ -70,9 +72,13 @@ public sealed class UpdateEventShiftHandler
             .Where(AssignmentCapacityRules.OccupiesSeatOnShift(shift.Id))
             .CountAsync(ct);
 
+        var boundsCheck = ShiftTimeBounds.Validate(ev, req.StartAt, req.EndAt);
+        if (boundsCheck.IsFailure)
+            return Result.Failure<EventShiftDto>(boundsCheck.Error);
+
         try
         {
-            shift.Update(req.CrewCount, shift.StartAt, req.EndAt, seatsOnThisShift);
+            shift.Update(req.CrewCount, req.StartAt, req.EndAt, seatsOnThisShift);
             if (shift.ScopeOfWorkId != req.ScopeOfWorkId)
                 shift.ChangeScope(req.ScopeOfWorkId);
         }

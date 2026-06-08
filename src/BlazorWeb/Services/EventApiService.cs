@@ -84,9 +84,9 @@ public interface IEventApiService
 
     // Phase D step 1: shift editor — add / update / archive shifts post-create.
     Task<(bool Ok, EventShiftDto? Shift, string? Error)> AddEventShiftAsync(
-        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime? endAt, CancellationToken ct = default);
+        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, CancellationToken ct = default);
     Task<(bool Ok, EventShiftDto? Shift, string? Error)> UpdateEventShiftAsync(
-        Guid shiftId, Guid scopeOfWorkId, int crewCount, DateTime? endAt, CancellationToken ct = default);
+        Guid shiftId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> ArchiveEventShiftAsync(Guid shiftId, CancellationToken ct = default);
 
     // Admin override — post-event correction. Flips a no-show / hanging
@@ -258,13 +258,13 @@ public sealed class EventApiService : IEventApiService
     }
 
     public async Task<(bool Ok, EventShiftDto? Shift, string? Error)> AddEventShiftAsync(
-        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime? endAt, CancellationToken ct = default)
+        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, CancellationToken ct = default)
     {
         try
         {
             var resp = await _http.PostAsJsonAsync(
                 $"api/v1/events/{eventId}/shifts",
-                new { scopeOfWorkId, crewCount, endAt }, ct);
+                new { scopeOfWorkId, crewCount, startAt, endAt }, ct);
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<ApiResult<EventShiftDto>>(_jsonOpts, ct);
@@ -277,13 +277,13 @@ public sealed class EventApiService : IEventApiService
     }
 
     public async Task<(bool Ok, EventShiftDto? Shift, string? Error)> UpdateEventShiftAsync(
-        Guid shiftId, Guid scopeOfWorkId, int crewCount, DateTime? endAt, CancellationToken ct = default)
+        Guid shiftId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, CancellationToken ct = default)
     {
         try
         {
             var resp = await _http.PutAsJsonAsync(
                 $"api/v1/events/shifts/{shiftId}",
-                new { scopeOfWorkId, crewCount, endAt }, ct);
+                new { scopeOfWorkId, crewCount, startAt, endAt }, ct);
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<ApiResult<EventShiftDto>>(_jsonOpts, ct);

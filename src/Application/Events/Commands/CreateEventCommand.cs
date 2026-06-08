@@ -1,5 +1,6 @@
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Events.Shifts;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Result;
@@ -92,6 +93,13 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
 
             foreach (var sh in providedShifts)
             {
+                // Phase D step 2: per-shift bounds-check against the event
+                // window. UI defaults shift.StartAt to event.StartAt, but
+                // we re-check here to catch malicious or stale clients.
+                var boundsCheck = ShiftTimeBounds.Validate(ev, sh.StartAt, sh.EndAt);
+                if (boundsCheck.IsFailure)
+                    return Result.Failure<EventDto>(boundsCheck.Error);
+
                 try
                 {
                     var shift = new EventShift(

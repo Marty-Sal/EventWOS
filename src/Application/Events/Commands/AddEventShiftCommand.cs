@@ -1,5 +1,6 @@
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Events.Shifts;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
@@ -23,6 +24,7 @@ public sealed record AddEventShiftCommand(
     Guid     EventId,
     Guid     ScopeOfWorkId,
     int      CrewCount,
+    DateTime StartAt,
     DateTime? EndAt,
     Guid     ActorUserId
 ) : IRequest<Result<EventShiftDto>>;
@@ -56,16 +58,28 @@ public sealed class AddEventShiftHandler
             return Result.Failure<EventShiftDto>(new Error("Shift.InvalidScope",
                 "Scope of work not found or archived."));
 
-        // Shift's StartAt defaults to the event's StartAt; the UI doesn't
-        // surface per-shift start today (only end). Keeps the create-time
-        // shape consistent.
-        var shift = new EventShift(
-            eventId:        req.EventId,
-            scopeOfWorkId:  req.ScopeOfWorkId,
-            crewCount:      req.CrewCount,
-            startAt:        ev.StartAt,
-            endAt:          req.EndAt,
-            createdByUserId: req.ActorUserId);
+        // Phase D step 2: per-shift start time. Caller defaults to event
+        // StartAt when they don't want to vary it; we still bounds-check
+        // here in case a stale or malicious client sends junk.
+        var boundsCheck = ShiftTimeBounds.Validate(ev, req.StartAt, req.EndAt);
+        if (boundsCheck.IsFailure)
+            return Result.Failure<EventShiftDto>(boundsCheck.Error);
+
+        EventShift shift;
+        try
+        {
+            shift = new EventShift(
+                eventId:        req.EventId,
+                scopeOfWorkId:  req.ScopeOfWorkId,
+                crewCount:      req.CrewCount,
+                startAt:        req.StartAt,
+                endAt:          req.EndAt,
+                createdByUserId: req.ActorUserId);
+        }
+        catch (ArgumentException ex)
+        {
+            return Result.Failure<EventShiftDto>(new Error("Shift.Invalid", ex.Message));
+        }
         _db.EventShifts.Add(shift);
 
         // Auto-grow MaxCrew. SUM the existing active crew counts + the new

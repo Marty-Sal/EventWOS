@@ -848,10 +848,16 @@
                                                 <option value="@sc.Id">@sc.Name</option>
                                             }
                                         </select>
-                                        <div class="grid grid-cols-2 gap-2">
+                                        <div class="grid grid-cols-3 gap-2">
                                             <div>
                                                 <label class="text-[11px] text-gray-500 mb-1 block">Crew needed *</label>
                                                 <input type="number" min="1" @bind="row.CrewCount"
+                                                       class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                            </div>
+                                            <div>
+                                                <label class="text-[11px] text-gray-500 mb-1 block" title="Defaults to event start">Shift start</label>
+                                                <input type="datetime-local" @bind="row.StartAt"
+                                                       placeholder="(event start)"
                                                        class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                                             </div>
                                             <div>
@@ -933,16 +939,23 @@
                                                 <option value="@sc.Id">@sc.Name</option>
                                             }
                                         </select>
-                                        <div class="grid grid-cols-2 gap-2">
+                                        <div class="grid grid-cols-3 gap-2">
                                             <div>
-                                                <label class="text-[11px] text-gray-500 mb-1 block">Crew needed (min @row.AssignedCrew)</label>
+                                                <label class="text-[11px] text-gray-500 mb-1 block">Crew (min @row.AssignedCrew)</label>
                                                 <input type="number" min="@Math.Max(1, row.AssignedCrew)" value="@row.CrewCount"
                                                        @onchange="e => OnShiftCrewCountChanged(row, e)"
                                                        disabled="@busy"
                                                        class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
                                             </div>
                                             <div>
-                                                <label class="text-[11px] text-gray-500 mb-1 block">Shift end (optional)</label>
+                                                <label class="text-[11px] text-gray-500 mb-1 block">Shift start</label>
+                                                <input type="datetime-local" value="@row.StartAt.ToLocalTime().ToString("yyyy-MM-ddTHH:mm")"
+                                                       @onchange="e => OnShiftStartChanged(row, e)"
+                                                       disabled="@busy"
+                                                       class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+                                            </div>
+                                            <div>
+                                                <label class="text-[11px] text-gray-500 mb-1 block">Shift end</label>
                                                 <input type="datetime-local" value="@(row.EndAt?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm"))"
                                                        @onchange="e => OnShiftEndChanged(row, e)"
                                                        disabled="@busy"
@@ -965,10 +978,14 @@
                                             <option value="@sc.Id">@sc.Name</option>
                                         }
                                     </select>
-                                    <div class="grid grid-cols-2 gap-2">
+                                    <div class="grid grid-cols-3 gap-2">
                                         <input type="number" min="1" @bind="_addShiftDraft.CrewCount" placeholder="Crew needed"
                                                class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
-                                        <input type="datetime-local" @bind="_addShiftDraft.EndAt" placeholder="End time (optional)"
+                                        <input type="datetime-local" @bind="_addShiftDraft.StartAt"
+                                               title="Defaults to event start"
+                                               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+                                        <input type="datetime-local" @bind="_addShiftDraft.EndAt"
+                                               title="Optional end time"
                                                class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
                                     </div>
                                     <button type="button" @onclick="AddShiftToExistingEvent"
@@ -1284,9 +1301,10 @@ else
 
     private sealed class EditShiftDraft
     {
-        public Guid     ScopeOfWorkId { get; set; }
-        public int      CrewCount     { get; set; } = 1;
-        public DateTime? EndAt        { get; set; }
+        public Guid      ScopeOfWorkId { get; set; }
+        public int       CrewCount     { get; set; } = 1;
+        public DateTime? StartAt       { get; set; }
+        public DateTime? EndAt         { get; set; }
     }
     private EventForm         _form = new();
 
@@ -1649,6 +1667,15 @@ else
         await SaveShiftEdit(row with { EndAt = newEnd });
     }
 
+    private async Task OnShiftStartChanged(EventShiftDto row, ChangeEventArgs e)
+    {
+        // Required field — empty means "no change" rather than "clear".
+        if (!DateTime.TryParse(e.Value?.ToString(), out var parsed)) return;
+        var newStartUtc = DateTime.SpecifyKind(parsed, DateTimeKind.Local).ToUniversalTime();
+        if (newStartUtc == row.StartAt) return;
+        await SaveShiftEdit(row with { StartAt = newStartUtc });
+    }
+
     private async Task SaveShiftEdit(EventShiftDto next)
     {
         if (_editShifts is null) return;
@@ -1658,7 +1685,7 @@ else
         try
         {
             var (ok, updated, err) = await EventApi.UpdateEventShiftAsync(
-                next.Id, next.ScopeOfWorkId, next.CrewCount, next.EndAt);
+                next.Id, next.ScopeOfWorkId, next.CrewCount, next.StartAt, next.EndAt);
             if (!ok)
             {
                 _editShiftError = err ?? "Couldn't save shift.";
@@ -1730,8 +1757,14 @@ else
         DateTime? endUtc = _addShiftDraft.EndAt is { } e
             ? DateTime.SpecifyKind(e, DateTimeKind.Local).ToUniversalTime()
             : (DateTime?)null;
+        // Default per-shift start to the event's StartAt when the user
+        // doesn't enter one — same fallback as the create-mode form.
+        DateTime startUtc = _addShiftDraft.StartAt is { } sa
+            ? DateTime.SpecifyKind(sa, DateTimeKind.Local).ToUniversalTime()
+            : _editingEvent.StartAt;   // already UTC
         var (ok, shift, err) = await EventApi.AddEventShiftAsync(
-            _editingEvent.Id, _addShiftDraft.ScopeOfWorkId, _addShiftDraft.CrewCount, endUtc);
+            _editingEvent.Id, _addShiftDraft.ScopeOfWorkId, _addShiftDraft.CrewCount,
+            startUtc, endUtc);
         if (!ok)
         {
             _editShiftError = err ?? "Couldn't add shift.";
@@ -1821,7 +1854,7 @@ else
                 .Select(s => new CreateEventShiftRequest(
                     s.ScopeOfWorkId,
                     Math.Max(s.CrewCount, 1),
-                    _form.StartAt.ToUniversalTime(),
+                    (s.StartAt ?? _form.StartAt).ToUniversalTime(),
                     s.EndAt == default ? null : s.EndAt.ToUniversalTime()))
                 .ToArray();
             derivedMaxCrew = shifts.Sum(x => x.CrewCount);
@@ -2202,8 +2235,11 @@ else
     /// </summary>
     public sealed class ShiftDraft
     {
-        public Guid     ScopeOfWorkId { get; set; }
-        public int      CrewCount     { get; set; } = 1;
-        public DateTime EndAt         { get; set; } = default;
+        public Guid      ScopeOfWorkId { get; set; }
+        public int       CrewCount     { get; set; } = 1;
+        // Phase D step 2: optional per-shift start. Null = use event StartAt.
+        // Stored as nullable local-time DateTime; converted to UTC at save.
+        public DateTime? StartAt       { get; set; }
+        public DateTime  EndAt         { get; set; } = default;
     }
 }
