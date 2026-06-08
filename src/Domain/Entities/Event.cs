@@ -46,6 +46,14 @@ public sealed class Event : BaseEntity
     // Navigation
     public User                        Creator     { get; private set; } = default!;
     public ICollection<EventAssignment> Assignments { get; private set; } = new List<EventAssignment>();
+    /// <summary>
+    /// Phase B (Scope-of-Work): staffing breakdown of this event as one or
+    /// more <see cref="EventShift"/> rows. The sum of <see cref="EventShift.CrewCount"/>
+    /// is the authoritative staffing cap; the legacy <see cref="MaxCrew"/>
+    /// field stays in the schema during the rollout but is no longer the
+    /// source of truth (strategy "c", see Phase B/C/D roadmap).
+    /// </summary>
+    public ICollection<EventShift>      Shifts      { get; private set; } = new List<EventShift>();
 
     // ── Behaviours ────────────────────────────────────────────────────────────
     public void Publish()

@@ -971,6 +971,111 @@ BEGIN
         RAISE NOTICE 'Created scope_of_work table';
     END IF;
 
+    -- ═══ event_shifts (Phase B) ══════════════════════════════════════════════
+    -- Belt-and-braces for 20260609_AddEventShifts. Idempotent — table CREATE,
+    -- column ADD, indexes, ""General"" scope seed and backfill all reproduced
+    -- here for the same reason every other table is: a partial migration
+    -- leaves a healthy schema on next API boot.
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'event_shifts') THEN
+        CREATE TABLE event_shifts (
+            id                   UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            event_id             UUID NOT NULL REFERENCES events(id)         ON DELETE CASCADE,
+            scope_of_work_id     UUID NOT NULL REFERENCES scope_of_work(id)  ON DELETE RESTRICT,
+            crew_count           INTEGER NOT NULL CHECK (crew_count >= 1),
+            start_at             TIMESTAMPTZ NOT NULL,
+            end_at               TIMESTAMPTZ,
+            created_by_user_id   UUID NOT NULL,
+            created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+            created_by           UUID,
+            updated_at           TIMESTAMPTZ,
+            updated_by           UUID,
+            is_deleted           BOOLEAN NOT NULL DEFAULT false,
+            deleted_at           TIMESTAMPTZ,
+            deleted_by           UUID,
+            CONSTRAINT ck_event_shifts_end_after_start
+                CHECK (end_at IS NULL OR end_at > start_at)
+        );
+        CREATE INDEX ix_event_shifts_event_id        ON event_shifts (event_id);
+        CREATE INDEX ix_event_shifts_scope_of_work_id ON event_shifts (scope_of_work_id);
+        RAISE NOTICE 'Created event_shifts table';
+    END IF;
+
+    -- event_assignments.shift_id — nullable, then backfilled, then NOT NULL.
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'event_assignments' AND column_name = 'shift_id') THEN
+        ALTER TABLE event_assignments ADD COLUMN shift_id UUID;
+        CREATE INDEX ix_event_assignments_shift_id ON event_assignments (shift_id);
+        RAISE NOTICE 'Added event_assignments.shift_id (nullable)';
+    END IF;
+
+    -- Seed ""General"" scope + synthetic shifts. Block-scoped so the
+    -- variables don't bleed.
+    DECLARE
+        v_general_id UUID;
+        v_admin_id   UUID;
+        v_orphans    INT;
+    BEGIN
+        SELECT id INTO v_general_id
+          FROM scope_of_work
+         WHERE LOWER(name) = 'general' AND is_deleted = false
+         LIMIT 1;
+
+        SELECT id INTO v_admin_id FROM users ORDER BY created_at ASC LIMIT 1;
+
+        IF v_general_id IS NULL AND v_admin_id IS NOT NULL THEN
+            INSERT INTO scope_of_work
+                (id, name, description, created_by_user_id, created_at, is_deleted)
+            VALUES
+                (gen_random_uuid(), 'General',
+                 'Default scope of work backfilled from pre-shift events. ' ||
+                 'Edit the shift to assign a more specific category.',
+                 v_admin_id, now(), false)
+            RETURNING id INTO v_general_id;
+            RAISE NOTICE 'Seeded ""General"" scope-of-work row';
+        END IF;
+
+        IF v_general_id IS NOT NULL THEN
+            WITH events_needing_shift AS (
+                SELECT e.id, e.start_at, e.end_at, GREATEST(e.max_crew, 1) AS cc,
+                       COALESCE(e.created_by_user_id, v_admin_id) AS creator
+                  FROM events e
+                  LEFT JOIN event_shifts s
+                        ON s.event_id = e.id AND s.is_deleted = false
+                 WHERE s.id IS NULL
+            ),
+            inserted_shifts AS (
+                INSERT INTO event_shifts
+                    (id, event_id, scope_of_work_id, crew_count,
+                     start_at, end_at, created_by_user_id, created_at, is_deleted)
+                SELECT gen_random_uuid(), id, v_general_id, cc,
+                       start_at, end_at, creator, now(), false
+                  FROM events_needing_shift
+                RETURNING id, event_id
+            )
+            UPDATE event_assignments a
+               SET shift_id = ish.id
+              FROM inserted_shifts ish
+             WHERE a.event_id = ish.event_id
+               AND a.shift_id IS NULL;
+        END IF;
+
+        SELECT COUNT(*) INTO v_orphans
+          FROM event_assignments
+         WHERE shift_id IS NULL AND is_deleted = false;
+
+        IF v_orphans = 0 THEN
+            BEGIN
+                ALTER TABLE event_assignments ALTER COLUMN shift_id SET NOT NULL;
+            EXCEPTION WHEN OTHERS THEN
+                -- Already NOT NULL — fine.
+                NULL;
+            END;
+        ELSE
+            RAISE NOTICE 'Skipping shift_id NOT NULL — % orphans remain.', v_orphans;
+        END IF;
+    END;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");

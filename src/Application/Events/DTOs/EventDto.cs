@@ -73,3 +73,20 @@ public sealed record PagedEventResult(
 public sealed record PagedAssignmentResult(
     IReadOnlyList<EventAssignmentDto> Items,
     int TotalCount, int Page, int PageSize);
+
+
+/// <summary>
+/// Phase B: shape of one staffing slot on an event. Returned by
+/// GetEventShiftsQuery; consumed by the create-event UI (read-back on edit)
+/// and by Phase D's crew portal hours display.
+/// </summary>
+public sealed record EventShiftDto(
+    Guid     Id,
+    Guid     EventId,
+    Guid     ScopeOfWorkId,
+    string   ScopeName,
+    int      CrewCount,
+    int      AssignedCrew,     // current OccupiesSeat count on this shift
+    DateTime StartAt,
+    DateTime? EndAt
+);

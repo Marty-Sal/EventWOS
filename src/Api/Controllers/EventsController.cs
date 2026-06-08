@@ -59,14 +59,33 @@ public sealed class EventsController : ControllerBase
             : NotFound(ApiResponse<EventDto>.Fail(result.Error.Message));
     }
 
+    /// <summary>
+    /// Phase B: list every shift on this event with per-shift assigned-crew
+    /// counts. Open to anyone who can see the event itself (events:read).
+    /// </summary>
+    [Permission("events:read")]
+    [HttpGet("{id:guid}/shifts")]
+    public async Task<IActionResult> GetEventShifts(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetEventShiftsQuery(id), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse<IReadOnlyList<EventShiftDto>>.Ok(result.Value))
+            : NotFound(ApiResponse<IReadOnlyList<EventShiftDto>>.Fail(result.Error.Message));
+    }
+
     /// <summary>Create event. Admin/Manager only.</summary>
     [Permission("events:write")]
     [HttpPost]
     public async Task<IActionResult> CreateEvent([FromBody] CreateEventRequest req, CancellationToken ct)
     {
+        var shifts = req.Shifts?
+            .Select(x => new EventWOS.Application.Events.Commands.CreateEventShiftDto(
+                x.ScopeOfWorkId, x.CrewCount, x.StartAt, x.EndAt))
+            .ToList();
+
         var result = await _mediator.Send(new CreateEventCommand(
             req.Title, req.Description, req.Venue, req.Address,
-            req.StartAt, req.EndAt, req.MaxCrew, _currentUser.UserId!.Value), ct);
+            req.StartAt, req.EndAt, req.MaxCrew, _currentUser.UserId!.Value, shifts), ct);
 
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetEvent), new { id = result.Value.Id, version = "1" },
@@ -451,9 +470,20 @@ public sealed class EventsController : ControllerBase
 }
 
 // ── Request DTOs ──────────────────────────────────────────────────────────────
+/// <summary>
+/// Phase B: Shifts is the new shape — each entry is a staffing slot
+/// (ScopeOfWork + CrewCount + time window). When supplied, MaxCrew is
+/// ignored and the event's capacity is computed from the sum of shift
+/// crew counts. MaxCrew stays as a fallback for legacy callers / scripts
+/// that don't know about shifts yet.
+/// </summary>
+public sealed record CreateEventShiftRequest(
+    Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt);
+
 public sealed record CreateEventRequest(
     string Title, string? Description, string Venue, string? Address,
-    DateTime StartAt, DateTime EndAt, int MaxCrew = 0);
+    DateTime StartAt, DateTime EndAt, int MaxCrew = 0,
+    IReadOnlyList<CreateEventShiftRequest>? Shifts = null);
 
 public sealed record UpdateEventRequest(
     string Title, string? Description, string Venue, string? Address,

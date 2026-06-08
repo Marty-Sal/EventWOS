@@ -74,7 +74,23 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
                 return Result.Failure<EventAssignmentDto>(new Error("Assignment.MaxReached", $"Event is fully staffed (max {ev.MaxCrew})."));
         }
 
+                // Phase B: every assignment must reference a shift. Until the
+        // multi-shift UI lands (Phase C) we auto-resolve to the event's
+        // single active shift via DefaultShiftResolver. Ambiguous events
+        // (somehow >1 shift) surface a clear error rather than picking
+        // one at random.
+        bool _ambiguous = false;
+        var _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
+            _db, req.EventId, ct, x => _ambiguous = x);
+        if (_ambiguous)
+            return Result.Failure<EventAssignmentDto>(new Error("Assignment.AmbiguousShift",
+                "Event has multiple shifts — caller must specify which one. (Phase C upgrade required.)"));
+        if (_shiftId is null)
+            return Result.Failure<EventAssignmentDto>(new Error("Assignment.NoShift",
+                "Event has no shifts — cannot assign crew."));
+
         var assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorId, req.AssignedByUserId);
+        assignment.AttachToShift(_shiftId.Value);
         _db.EventAssignments.Add(assignment);
         await _uow.SaveChangesAsync(ct);
 

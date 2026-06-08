@@ -28,7 +28,41 @@ public sealed class DatabaseSeeder
         await SeedRolePermissionsAsync(ct);
         await SeedAdminUserAsync(ct);
         await SeedTestUsersAsync(ct);
+        await SeedDefaultScopeOfWorkAsync(ct);
         _logger.LogInformation("Database seeding complete.");
+    }
+
+    // ─── Default Scope of Work (Phase B) ─────────────────────────────────────
+    // Backfills a single ""General"" row used as the FK target for synthetic
+    // shifts created from legacy events. Idempotent — only inserts if no
+    // active row with that name exists. The migration / Program.cs schema
+    // patch already does this in SQL; this is here for the fresh-DB path
+    // where the migration runs before any users exist (so the SQL skipped
+    // the seed). Once a user lands, the next boot's seeder fills it in.
+    private async Task SeedDefaultScopeOfWorkAsync(CancellationToken ct)
+    {
+        var exists = await _db.ScopesOfWork
+            .IgnoreQueryFilters()
+            .AnyAsync(s => s.Name.ToLower() == "general" && !s.IsDeleted, ct);
+        if (exists) return;
+
+        var creator = await _db.Users.OrderBy(u => u.CreatedAt).FirstOrDefaultAsync(ct);
+        if (creator is null)
+        {
+            // No users at all — extremely fresh DB. Seeder runs again after
+            // SeedAdminUserAsync on the next pass; this call site is after
+            // that step, so this branch is mostly impossible. Belt-and-braces.
+            _logger.LogWarning("No users present; deferring General scope-of-work seed.");
+            return;
+        }
+
+        _db.ScopesOfWork.Add(new EventWOS.Domain.Entities.ScopeOfWork(
+            "General",
+            "Default scope of work backfilled from pre-shift events. " +
+            "Edit the shift to assign a more specific category.",
+            creator.Id));
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Seeded \"General\" scope-of-work row.");
     }
 
     // ─── Roles ──────────────────────────────────────────────────────────────

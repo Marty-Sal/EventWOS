@@ -84,9 +84,23 @@ public interface IEventApiService
     Task<(bool Ok, string? Error)> AdminMarkAttendedAsync(Guid assignmentId, CancellationToken ct = default);
 }
 
+/// <summary>
+/// Phase B: one staffing slot, mirroring the API contract. The page sends a
+/// list of these (one entry in v1, multi in Phase C) and the API computes
+/// the event's effective MaxCrew as their sum.
+/// </summary>
+public sealed record CreateEventShiftRequest(
+    Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt);
+
 public sealed record CreateEventRequest(
     string Title, string? Description, string Venue, string? Address,
-    DateTime StartAt, DateTime EndAt, int MaxCrew);
+    DateTime StartAt, DateTime EndAt, int MaxCrew,
+    IReadOnlyList<CreateEventShiftRequest>? Shifts = null);
+
+/// <summary>Phase B read-back shape — matches API EventShiftDto.</summary>
+public sealed record EventShiftDto(
+    Guid Id, Guid EventId, Guid ScopeOfWorkId, string ScopeName,
+    int CrewCount, int AssignedCrew, DateTime StartAt, DateTime? EndAt);
 
 // ── Implementation ────────────────────────────────────────────────────────────
 public sealed class EventApiService : IEventApiService

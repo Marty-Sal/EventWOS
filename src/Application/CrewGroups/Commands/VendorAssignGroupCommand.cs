@@ -114,6 +114,20 @@ public sealed class VendorAssignGroupHandler
             .Where(AssignmentCapacityRules.OccupiesSeat)
             .CountAsync(ct);
 
+        // Phase B: resolve the event's single shift once, before we start
+        // inviting. Multi-shift events get rejected with a clear error until
+        // Phase C teaches this handler to accept a per-crew shift map. Doing
+        // this BEFORE the loop avoids N round trips for a group of 50 crew.
+        bool _ambiguousShift = false;
+        var _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
+            _db, req.EventId, ct, x => _ambiguousShift = x);
+        if (_ambiguousShift)
+            return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.AmbiguousShift",
+                "Event has multiple shifts — group assign requires a shift picker (Phase C upgrade required)."));
+        if (_shiftId is null)
+            return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.NoShift",
+                "Event has no shifts — cannot assign crew."));
+
         var vendor = await _db.Users.FirstOrDefaultAsync(u => u.Id == req.VendorUserId, ct);
 
         var invited     = new List<(EventAssignment Row, User Crew)>();
@@ -135,6 +149,7 @@ public sealed class VendorAssignGroupHandler
             }
 
             var row = new EventAssignment(req.EventId, crew.Id, req.VendorUserId, req.VendorUserId);
+            row.AttachToShift(_shiftId.Value);
             _db.EventAssignments.Add(row);
             invited.Add((row, crew));
             existingSet.Add(crew.Id);

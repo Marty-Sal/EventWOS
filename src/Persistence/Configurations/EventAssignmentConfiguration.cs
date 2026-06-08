@@ -14,6 +14,12 @@ public sealed class EventAssignmentConfiguration : IEntityTypeConfiguration<Even
         builder.Property(a => a.Id).HasColumnName("id");
 
         builder.Property(a => a.EventId)         .HasColumnName("event_id");
+        // ShiftId is nullable in the model during Phase B rollout; the DB
+        // column flips to NOT NULL after backfill (see migration + Program.cs
+        // schema patch). Leaving it nullable in the model is safe because
+        // every code path that creates an assignment now goes through the
+        // shift-aware ctor or AttachToShift().
+        builder.Property(a => a.ShiftId)         .HasColumnName("shift_id");
         builder.Property(a => a.CrewId)          .HasColumnName("crew_id").IsRequired(false);
         builder.Property(a => a.VendorId)        .HasColumnName("vendor_id").IsRequired(false);
         builder.Property(a => a.AssignedByUserId).HasColumnName("assigned_by_user_id");
@@ -47,6 +53,18 @@ public sealed class EventAssignmentConfiguration : IEntityTypeConfiguration<Even
                .WithMany(e => e.Assignments)
                .HasForeignKey(a => a.EventId)
                .OnDelete(DeleteBehavior.Cascade);
+
+        // Shift FK — RESTRICT because deleting a shift with active assignments
+        // is a domain-level error caught upstream (EventShift.Archive() throws).
+        // The FK is here for referential integrity in case raw SQL bypasses
+        // the domain. WithMany() — EventShift doesn't expose an Assignments
+        // collection to keep the entity surface small.
+        builder.HasOne<EventShift>()
+               .WithMany()
+               .HasForeignKey(a => a.ShiftId)
+               .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(a => a.ShiftId).HasDatabaseName("ix_event_assignments_shift_id");
 
         builder.HasOne(a => a.Crew)
                .WithMany()

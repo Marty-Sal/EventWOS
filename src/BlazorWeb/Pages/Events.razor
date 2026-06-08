@@ -642,13 +642,74 @@
                                    class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         </div>
                     </div>
-                    <input type="number" @bind="_form.MaxCrew" placeholder="Max crew (0 = unlimited)"
-                           min="@(_editingEvent?.AssignedCrew ?? 0)"
-                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    @if (_editingEvent is not null && _editingEvent.AssignedCrew > 0)
+                    @* ─── Phase B: Scope of Work + Crew Count ───────────────────
+                       Replaces the old MaxCrew field. v1 of the UI surfaces
+                       ONE shift per event (scope + count + optional end time);
+                       Phase C will let admins add more rows here. The API
+                       already accepts a list, so the data path is forward-
+                       compatible — only the UI is single-shift for now.
+
+                       On Edit: we don't yet allow editing existing shifts
+                       from this modal (read-only summary shown instead).
+                       Editing shifts after creation is a dedicated Phase C
+                       affordance — too much UX to retrofit safely here. *@
+                    @if (_editingEvent is null)
                     {
-                        <p class="text-[11px] text-gray-500 italic">
-                            ℹ️ Minimum is @_editingEvent.AssignedCrew — that many crew are already approved or confirmed for this event.
+                        <div class="border border-gray-200 rounded-xl p-3 space-y-3 bg-gray-50">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-700">🧰 Scope of Work</span>
+                                <span class="text-[10px] text-gray-400 uppercase tracking-wide">Phase B</span>
+                            </div>
+                            @if (_scopeCatalog.Count == 0)
+                            {
+                                <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                                    ⚠️ No scope-of-work categories yet. <a href="/admin/scope-of-work" class="underline">Create one</a> first.
+                                </p>
+                            }
+                            else
+                            {
+                                <select @bind="_form.ScopeOfWorkId"
+                                        class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                                    @foreach (var sc in _scopeCatalog)
+                                    {
+                                        <option value="@sc.Id">@sc.Name</option>
+                                    }
+                                </select>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="text-[11px] text-gray-500 mb-1 block">Crew needed *</label>
+                                        <input type="number" min="1" @bind="_form.MaxCrew"
+                                               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] text-gray-500 mb-1 block">Shift end (optional)</label>
+                                        <input type="datetime-local" @bind="_form.ShiftEndAt"
+                                               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    </div>
+                                </div>
+                                <p class="text-[11px] text-gray-500 italic">
+                                    Leave shift end blank if crew finish when the event wraps. You can split into multiple scopes (Phase C).
+                                </p>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        @* Edit mode — capacity-from-shifts is read-only here.
+                           MaxCrew still bound for back-compat with the legacy
+                           UpdateEventCommand path until Phase C ships the
+                           shift editor. *@
+                        <input type="number" @bind="_form.MaxCrew" placeholder="Max crew"
+                               min="@(_editingEvent?.AssignedCrew ?? 0)"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        @if (_editingEvent is not null && _editingEvent.AssignedCrew > 0)
+                        {
+                            <p class="text-[11px] text-gray-500 italic">
+                                ℹ️ Minimum is @_editingEvent.AssignedCrew — that many crew are already approved or confirmed for this event.
+                            </p>
+                        }
+                        <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                            ℹ️ Shift editing comes in Phase C. For now, edit capacity here; scope assignments stay as set at create time.
                         </p>
                     }
                 </div>
@@ -909,6 +970,12 @@ else
     private bool              _showEventModal;
     private EventListItemDto? _editingEvent;
     private EventForm         _form = new();
+
+    // Phase B: cache of the scope-of-work catalog for the create-modal
+    // picker. Loaded lazily the first time the modal opens, refreshed
+    // when the page reloads. Tiny enough to keep in memory; no pagination.
+    private List<ScopePickItem> _scopeCatalog = new();
+    private sealed record ScopePickItem(Guid Id, string Name);
     private string?           _formError;
 
     // Crew/Vendor paging
@@ -1024,13 +1091,47 @@ else
         _expandedVendorGroups.Clear();
     }
 
-    private void OpenCreateModal()
+    private async Task OpenCreateModal()
     {
         _editingEvent = null;
         _form = new EventForm { StartAt = DateTime.Now.AddDays(1), EndAt = DateTime.Now.AddDays(1).AddHours(4) };
         _formError = null;
         _showEventModal = true;
+        await EnsureScopeCatalogLoaded();
+        // Pre-pick the first scope so the picker is never on an empty option.
+        if (_form.ScopeOfWorkId is null && _scopeCatalog.Count > 0)
+            _form.ScopeOfWorkId = _scopeCatalog[0].Id;
     }
+
+    /// <summary>
+    /// Phase B: lazy-load the active scope-of-work catalog. We pull a big
+    /// page (200) instead of paginating — the catalog is admin-curated and
+    /// realistically &lt; 50 rows. If that ever stops being true, swap for
+    /// a typeahead.
+    /// </summary>
+    private async Task EnsureScopeCatalogLoaded()
+    {
+        if (_scopeCatalog.Count > 0) return;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ScopeApiEnvelope>(
+                "/api/v1/scope-of-work?page=1&pageSize=200&includeArchived=false");
+            if (resp?.Data?.Items is not null)
+                _scopeCatalog = resp.Data.Items
+                    .Select(x => new ScopePickItem(x.Id, x.Name))
+                    .OrderBy(x => x.Name)
+                    .ToList();
+        }
+        catch
+        {
+            // Picker degrades gracefully — modal shows the "no scopes yet"
+            // empty state and the user goes to /admin/scope-of-work.
+            _scopeCatalog = new();
+        }
+    }
+
+    private sealed record ScopeApiEnvelope(ScopeApiData? Data);
+    private sealed record ScopeApiData(List<ScopePickItem> Items);
 
     private void OpenEditModal(EventListItemDto ev)
     {
@@ -1056,11 +1157,39 @@ else
             _formError = "Title and Venue are required.";
             return;
         }
+        if (_editingEvent is null && _form.ScopeOfWorkId is null)
+        {
+            _formError = "Pick a Scope of Work for the shift, or create one in /admin/scope-of-work.";
+            return;
+        }
         _saving = true;
         _formError = null;
+        // Phase B: on Create, attach a single shift built from the form.
+        // On Edit, we don't change shifts from this modal (Phase C) — so we
+        // send the legacy MaxCrew-only shape. The API treats Shifts=null as
+        // "don't touch shifts" on update.
+        IReadOnlyList<CreateEventShiftRequest>? shifts = null;
+        if (_editingEvent is null && _form.ScopeOfWorkId is { } scopeId)
+        {
+            // ShiftEndAt == default → caller left it blank → null on the wire.
+            DateTime? shiftEnd = _form.ShiftEndAt == default
+                ? null
+                : _form.ShiftEndAt.ToUniversalTime();
+
+            shifts = new[]
+            {
+                new CreateEventShiftRequest(
+                    scopeId,
+                    Math.Max(_form.MaxCrew, 1),
+                    _form.StartAt.ToUniversalTime(),
+                    shiftEnd)
+            };
+        }
+
         var req = new CreateEventRequest(
             _form.Title, _form.Description, _form.Venue, _form.Address,
-            _form.StartAt.ToUniversalTime(), _form.EndAt.ToUniversalTime(), _form.MaxCrew);
+            _form.StartAt.ToUniversalTime(), _form.EndAt.ToUniversalTime(),
+            _form.MaxCrew, shifts);
 
         if (_editingEvent is null)
         {
@@ -1414,6 +1543,15 @@ else
         public string?   Address     { get; set; }
         public DateTime  StartAt     { get; set; } = DateTime.Now.AddDays(1);
         public DateTime  EndAt       { get; set; } = DateTime.Now.AddDays(1).AddHours(4);
-        public int       MaxCrew     { get; set; } = 0;
+        public int       MaxCrew     { get; set; } = 1;
+
+        // Phase B (create-mode only): the modal's single-shift editor
+        // populates these. On save we wrap them into a one-element Shifts
+        // list. ShiftEndAt is nullable — empty means "shift runs until the
+        // event itself ends (or open-ended; crew portal will show contact
+        // vendor)". The bound input is a non-nullable DateTime so we use
+        // a sentinel of DateTime.MinValue to mean "unset".
+        public Guid?     ScopeOfWorkId { get; set; }
+        public DateTime  ShiftEndAt    { get; set; } = default;
     }
 }

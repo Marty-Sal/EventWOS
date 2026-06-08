@@ -21,7 +21,44 @@ public sealed class EventAssignment : BaseEntity
         Status           = AssignmentStatus.Invited;
     }
 
+    /// <summary>
+    /// Phase-B-aware constructor. Same as the legacy ctor but also wires
+    /// the assignment to a specific <see cref="EventShift"/>. New call sites
+    /// (CreateEventCommand v2, AssignCrew flows after Phase B) use this;
+    /// existing call sites keep the 4-arg form during the transition.
+    /// </summary>
+    public EventAssignment(Guid eventId, Guid shiftId, Guid? crewId, Guid? vendorId, Guid assignedByUserId)
+        : this(eventId, crewId, vendorId, assignedByUserId)
+    {
+        if (shiftId == Guid.Empty)
+            throw new ArgumentException("ShiftId is required.", nameof(shiftId));
+        ShiftId = shiftId;
+    }
+
+    /// <summary>
+    /// Attach an existing assignment to a shift (used by the Phase B
+    /// backfill path inside the app, mirroring the backfill SQL, and by
+    /// Phase C re-pointing when a vendor's allocation moves between shifts).
+    /// Idempotent — no-op if already on the target shift.
+    /// </summary>
+    public void AttachToShift(Guid shiftId)
+    {
+        if (shiftId == Guid.Empty)
+            throw new ArgumentException("ShiftId is required.", nameof(shiftId));
+        if (ShiftId == shiftId) return;
+        ShiftId   = shiftId;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public Guid             EventId           { get; private set; }
+    /// <summary>
+    /// FK to the <see cref="EventShift"/> this assignment fills. Nullable
+    /// during the Phase B rollout — backfill SQL populates it for every
+    /// existing row, then the column flips to NOT NULL in the DB. Once
+    /// every code path passes a shiftId on creation we promote this to
+    /// non-nullable in the domain too (follow-up).
+    /// </summary>
+    public Guid?            ShiftId           { get; private set; }
     public Guid?            CrewId            { get; private set; }
     public Guid?            VendorId          { get; private set; }
     public Guid             AssignedByUserId  { get; private set; }
