@@ -1,0 +1,40 @@
+@page "/approvals/events"
+@page "/approvals"
+@attribute [Authorize]
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Approval Queue — EventWOS</PageTitle>
+
+@*
+    Role-aware dispatcher for the Events tab of the unified Approvals
+    screen. Both roles see "Events" + "People" tabs (rendered by their
+    target page), but the actual content differs:
+      • Admin / Manager → ManagerApprovals page  (crew forwarded by vendors)
+      • Vendor          → VendorAssignments page (crew responses to invites)
+    Other roles → bounced to dashboard.
+
+    Why this exists: Blazor's @page directive cannot resolve to two
+    different pages on the same URL even if [Authorize(Roles=…)] would
+    distinguish them. So we use a thin redirect-only shell that reads
+    the current role at first render and forwards to the right route.
+*@
+
+<div class="flex items-center justify-center py-20 text-gray-400">Loading approvals…</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var role  = state.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                  ?? state.User.FindFirst("role")?.Value;
+        var target = role switch
+        {
+            "Admin" or "Manager" => "/manager-approvals",
+            "Vendor"             => "/vendor-assignments",
+            "Crew"               => "/dashboard",   // crew have no approvals to give
+            _                    => "/dashboard"
+        };
+        Nav.NavigateTo(target, replace: true);
+    }
+}

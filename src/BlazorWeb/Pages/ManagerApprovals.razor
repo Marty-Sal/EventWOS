@@ -9,12 +9,14 @@
 @using System.Net.Http
 @using System.Net.Http.Json
 
-<PageTitle>Manager Approval Queue — EventWOS</PageTitle>
+<PageTitle>Approvals · Events — EventWOS</PageTitle>
 
 <div class="space-y-6">
+    <ApprovalTabsHeader Active="events" EventsCount="@_pendingCount" />
+
     <div class="flex items-center justify-between">
         <div>
-            <h2 class="text-lg font-bold text-gray-800">Approval Queue</h2>
+            <h2 class="text-lg font-bold text-gray-800">Event assignments</h2>
             <p class="text-sm text-gray-500 mt-0.5">Crew forwarded by Vendors awaiting your final decision.</p>
         </div>
         @if (_pendingCount > 0)

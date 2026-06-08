@@ -1,0 +1,76 @@
+@inject IApprovalApiService PeopleApi
+@inject HttpClient Http
+@inject EventWOS.BlazorWeb.Auth.AppAuthStateProvider Auth
+@implements IDisposable
+
+@*
+    Shared tab strip used by every approval-queue page so the three
+    sibling routes (/approvals/events and /approvals/people) feel like
+    one screen.
+
+    Two tabs, exactly:
+      • Events  → /approvals/events
+                  Admin/Manager: crew forwarded by vendors (existing
+                                 ManagerApprovals queue).
+                  Vendor       : crew responses to invites (existing
+                                 VendorAssignments queue).
+      • People  → /approvals/people
+                  Admin/Manager: vendor account registrations.
+                  Vendor       : crew account registrations under the
+                                 vendor's referral code.
+
+    Counts are best-effort:
+      • EventsCount is read from a parent-provided value (each page
+        knows its own count) — we accept it as a parameter so we
+        don't double-fetch.
+      • PeopleCount is fetched from /api/v1/approval-queue which is
+        already role-scoped on the backend.
+*@
+
+<div class="flex gap-2 border-b border-gray-200 mb-6">
+    <a href="/approvals/events"
+       class="@(Active == "events"
+              ? "px-4 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-700"
+              : "px-4 py-2 text-sm text-gray-600 hover:text-indigo-600")">
+        📋 Events
+        @if (EventsCount > 0)
+        {
+            <span class="ml-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">@EventsCount</span>
+        }
+    </a>
+    <a href="/approvals/people"
+       class="@(Active == "people"
+              ? "px-4 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-700"
+              : "px-4 py-2 text-sm text-gray-600 hover:text-indigo-600")">
+        👤 People
+        @if (_peopleCount > 0)
+        {
+            <span class="ml-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">@_peopleCount</span>
+        }
+    </a>
+</div>
+
+@code {
+    /// <summary>Which tab is currently active — "events" or "people".</summary>
+    [Parameter, EditorRequired] public string Active { get; set; } = "events";
+
+    /// <summary>Caller-provided count for the Events tab badge.</summary>
+    [Parameter] public int EventsCount { get; set; }
+
+    private int _peopleCount;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cts = new CancellationTokenSource();
+        try
+        {
+            var result = await PeopleApi.GetQueueAsync(_cts.Token);
+            if (result.Success && result.Data is not null)
+                _peopleCount = result.Data.VendorCount + result.Data.CrewCount;
+        }
+        catch { /* swallow — badge is best-effort */ }
+    }
+
+    public void Dispose() { _cts?.Cancel(); _cts?.Dispose(); }
+}

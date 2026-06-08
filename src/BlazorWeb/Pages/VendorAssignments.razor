@@ -4,11 +4,13 @@
 @inject NotificationHubService Hub
 @implements IAsyncDisposable
 
-<PageTitle>Crew Assignments — EventWOS</PageTitle>
+<PageTitle>Approvals · Events — EventWOS</PageTitle>
 
 <div class="space-y-6">
+    <ApprovalTabsHeader Active="events" EventsCount="@_awaitingCount" />
+
     <div>
-        <h2 class="text-lg font-bold text-gray-800">Crew Assignments</h2>
+        <h2 class="text-lg font-bold text-gray-800">Crew event responses</h2>
         <p class="text-sm text-gray-500 mt-0.5">Review crew responses and approve or reject before forwarding to Manager.</p>
     </div>
 

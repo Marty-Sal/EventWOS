@@ -1,9 +1,9 @@
-@page "/approval-queue"
+@page "/approvals/people"
 @attribute [Authorize]
 @inject IApprovalApiService Api
 @inject IJSRuntime JS
 
-<PageTitle>Registrations — EventWOS</PageTitle>
+<PageTitle>Approvals · People — EventWOS</PageTitle>
 
 @*
     Admin/Manager review page for self-registered Vendors and Crew.
@@ -13,10 +13,12 @@
 *@
 
 <div class="p-6 max-w-7xl mx-auto">
+    <ApprovalTabsHeader Active="people" />
+
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Registrations</h1>
-            <p class="text-sm text-gray-500">Review and approve new self-registrations.</p>
+            <p class="text-sm text-gray-500">Review and approve new self-registrations awaiting approval.</p>
         </div>
         <button type="button" @onclick="LoadAsync"
                 class="px-3 py-1.5 text-sm rounded-lg bg-white border border-gray-300 hover:bg-gray-50">
@@ -36,14 +38,17 @@
     }
     else
     {
-        <div class="flex gap-2 border-b border-gray-200 mb-4">
-            <TabButton Label="@($"Vendors ({_queue.VendorCount})")"
-                       Active="_tab == Tab.Vendors"
-                       OnClick="() => _tab = Tab.Vendors" />
-            <TabButton Label="@($"Crew ({_queue.CrewCount})")"
-                       Active="_tab == Tab.Crew"
-                       OnClick="() => _tab = Tab.Crew" />
-        </div>
+        @if (_queue.VendorCount > 0 && _queue.CrewCount > 0)
+        {
+            <div class="flex gap-2 border-b border-gray-200 mb-4">
+                <TabButton Label="@($"Vendors ({_queue.VendorCount})")"
+                           Active="_tab == Tab.Vendors"
+                           OnClick="() => _tab = Tab.Vendors" />
+                <TabButton Label="@($"Crew ({_queue.CrewCount})")"
+                           Active="_tab == Tab.Crew"
+                           OnClick="() => _tab = Tab.Crew" />
+            </div>
+        }
 
         @if (CurrentRows.Count == 0)
         {
@@ -155,7 +160,14 @@
         try
         {
             var result = await Api.GetQueueAsync();
-            if (result.Success && result.Data is not null) _queue = result.Data;
+            if (result.Success && result.Data is not null)
+            {
+                _queue = result.Data;
+                // Caller is role-scoped on the backend — only one of the two
+                // lists will have any rows. Default the active tab to it.
+                if (_queue.VendorCount == 0 && _queue.CrewCount > 0) _tab = Tab.Crew;
+                else if (_queue.CrewCount == 0 && _queue.VendorCount > 0) _tab = Tab.Vendors;
+            }
             else _error = result.Errors?.FirstOrDefault() ?? result.Message;
         }
         catch (Exception ex) { _error = ex.Message; }

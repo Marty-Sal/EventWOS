@@ -25,16 +25,18 @@ public sealed class RejectUserHandler : IRequestHandler<RejectUserCommand, Resul
     private readonly IEmailService _email;
     private readonly ISmsProvider _sms;
     private readonly INotificationPusher _push;
+    private readonly ICurrentUser _me;
     private readonly ILogger<RejectUserHandler> _logger;
     private static readonly TimeSpan CoolDown = TimeSpan.FromHours(24);
 
     public RejectUserHandler(
         IAppDbContext db, IUnitOfWork uow, IAuditLogger audit,
         IEmailService email, ISmsProvider sms, INotificationPusher push,
+        ICurrentUser me,
         ILogger<RejectUserHandler> logger)
     {
         _db = db; _uow = uow; _audit = audit;
-        _email = email; _sms = sms; _push = push; _logger = logger;
+        _email = email; _sms = sms; _push = push; _me = me; _logger = logger;
     }
 
     public async Task<Result> Handle(RejectUserCommand req, CancellationToken ct)
@@ -46,6 +48,32 @@ public sealed class RejectUserHandler : IRequestHandler<RejectUserCommand, Resul
         if (user is null) return Result.Failure(Error.UserNotFound);
         if (user.Status != UserStatus.Pending)
             return Result.Failure(Error.Custom("Approval.NotPending", $"Cannot reject a user in {user.Status} status."));
+
+        // Authorization — see ApproveUserHandler for the matrix.
+        if (_me.Role is UserRole.Admin or UserRole.Manager)
+        {
+            if (user.Role != UserRole.Vendor)
+                return Result.Failure(Error.Custom("Approval.Forbidden",
+                    "Crew registrations are handled by the referring vendor."));
+        }
+        else if (_me.Role == UserRole.Vendor)
+        {
+            if (user.Role != UserRole.Crew)
+                return Result.Failure(Error.Custom("Approval.Forbidden",
+                    "Vendors can only act on crew registrations."));
+            var myRef = await _db.Users
+                .Where(u => u.Id == _me.UserId)
+                .Select(u => u.ReferralCode)
+                .FirstOrDefaultAsync(ct);
+            if (string.IsNullOrEmpty(myRef) || user.ReferralCodeUsed != myRef)
+                return Result.Failure(Error.Custom("Approval.Forbidden",
+                    "This crew did not register under your referral code."));
+        }
+        else
+        {
+            return Result.Failure(Error.Custom("Approval.Forbidden",
+                "Your role cannot reject registrations."));
+        }
 
         user.Reject(req.RejectedByUserId, req.Reason);
         await _uow.SaveChangesAsync(ct);

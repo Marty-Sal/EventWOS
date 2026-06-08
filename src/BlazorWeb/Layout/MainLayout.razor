@@ -41,7 +41,6 @@
 
                 @* Admin always sees all nav *@
                 <AuthorizeView Roles="Admin">
-                    <NavItem Href="/approval-queue" Icon="🆕" Label="Registrations" />
                     <NavItem Href="/users"    Icon="👥" Label="Users" />
                     <NavItem Href="/managers" Icon="👔" Label="Managers" />
                     <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" />
@@ -53,7 +52,6 @@
 
                 @* Manager sees only links matching their permissions *@
                 <AuthorizeView Roles="Manager">
-                    @if (_perms.Contains("users:status"))  { <NavItem Href="/approval-queue" Icon="🆕" Label="Registrations" /> }
                     @if (_perms.Contains("users:read"))    { <NavItem Href="/users"    Icon="👥" Label="Users" /> }
                     @if (_perms.Contains("vendors:read"))  { <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" /> }
                     @if (_perms.Contains("crew:read"))     { <NavItem Href="/crew"     Icon="👷" Label="Crew" /> }
@@ -88,15 +86,17 @@
                 <AuthorizeView Roles="Vendor">
                     <NavItem Href="/crew"               Icon="👷" Label="My Crew" />
                     <NavItem Href="/my-crew-groups"     Icon="🧑‍🤝‍🧑" Label="Crew Groups" />
-                    <NavItem Href="/vendor-assignments"  Icon="📋" Label="Crew Assignments" />
                     <NavItem Href="/vendor-payments"     Icon="💸" Label="My Payments" />
                     <NavItem Href="/vendor-report"       Icon="📊" Label="My Report" />
                 </AuthorizeView>
 
-                @* Manager / Admin — Approval queue with live badge *@
-                <AuthorizeView Roles="Admin,Manager">
+                @* Approval queue — every action role gets one entry.
+                   Route is /approvals; the dispatcher page forwards to
+                   the role-specific events page, then the tab header
+                   lets the user switch to People. *@
+                <AuthorizeView Roles="Admin,Manager,Vendor">
                     <div class="relative">
-                        <NavItem Href="/manager-approvals" Icon="✅" Label="Approval Queue" />
+                        <NavItem Href="/approvals" Icon="✅" Label="Approval Queue" />
                         @if (_approvalCount > 0)
                         {
                             <span class="absolute top-1 right-2 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold pointer-events-none">
@@ -178,8 +178,14 @@
 <NotificationToast />
 
 @code {
-    private string PageTitle => Nav.Uri.Split('/').Last() switch
+    private string PageTitle
     {
+        get
+        {
+            if (Nav.Uri.Contains("/approvals", StringComparison.OrdinalIgnoreCase))
+                return "Approval Queue";
+            return Nav.Uri.Split('/').Last() switch
+            {
         "dashboard"   => "Dashboard",
         "users"       => "Users",
         "managers"    => "Managers",
@@ -196,8 +202,10 @@
         "approval-queue"    => "Registrations",
         "my-payments"       => "My Payments",
         "vendor-report"     => "My Performance Report",
-        _             => "EventWOS"
-    };
+                _             => "EventWOS"
+            };
+        }
+    }
 
     // Current Manager's effective permissions (loaded from JWT claims)
     private HashSet<string> _perms = new(StringComparer.OrdinalIgnoreCase);
@@ -267,7 +275,12 @@
         catch { }
     }
 
-    // ── Manager / Admin approval-queue badge ──────────────────────────────────
+    // ── Sidebar approval-queue badge ─────────────────────────────────────────
+    // Sums BOTH tabs of the unified /approvals page:
+    //   • Events tab — Admin/Manager: assignments from vendors awaiting review
+    //                  Vendor      : crew responses awaiting vendor review
+    //   • People tab — Admin/Manager: pending vendor registrations
+    //                  Vendor      : pending crew registrations under their code
     private async Task LoadApprovalCountAsync()
     {
         try
@@ -275,12 +288,36 @@
             var authState = await AuthState.GetAuthenticationStateAsync();
             var role      = authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
                          ?? authState.User.FindFirst("role")?.Value;
-            if (role is not ("Admin" or "Manager")) return;
+            if (role is not ("Admin" or "Manager" or "Vendor")) return;
 
-            var resp = await Http.GetFromJsonAsync<ApprovalQueueResult>(
-                "api/v1/events/assignments/manager-queue?page=1&pageSize=1",
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            _approvalCount = resp?.Data?.TotalCount ?? 0;
+            var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            int events = 0, people = 0;
+
+            // ── Events tab count ──
+            try
+            {
+                if (role is "Admin" or "Manager")
+                {
+                    var r = await Http.GetFromJsonAsync<ApprovalQueueResult>(
+                        "api/v1/events/assignments/manager-queue?page=1&pageSize=1", jsonOpts);
+                    events = r?.Data?.TotalCount ?? 0;
+                }
+                // Vendor events count is harder to fetch generically; the
+                // VendorAssignments page sets _awaitingCount locally — for
+                // the sidebar we just show People count when on Vendor.
+            }
+            catch { /* best-effort */ }
+
+            // ── People tab count (role-scoped on backend) ──
+            try
+            {
+                var r = await Http.GetFromJsonAsync<PeopleQueueResult>(
+                    "api/v1/approval-queue", jsonOpts);
+                people = (r?.Data?.VendorCount ?? 0) + (r?.Data?.CrewCount ?? 0);
+            }
+            catch { /* best-effort */ }
+
+            _approvalCount = events + people;
             StateHasChanged();
         }
         catch { }
@@ -288,4 +325,6 @@
 
     private sealed record ApprovalQueueResult(bool Success, ApprovalQueueData? Data);
     private sealed record ApprovalQueueData(int TotalCount);
+    private sealed record PeopleQueueResult(bool Success, PeopleQueueData? Data);
+    private sealed record PeopleQueueData(int VendorCount, int CrewCount);
 }

@@ -44,19 +44,19 @@ public sealed class ApprovalApiService : IApprovalApiService
 
     public async Task<ApiResult<ApprovalQueueDto>> GetQueueAsync(CancellationToken ct = default)
     {
-        var resp = await _http.GetAsync("api/v1/admin/approval-queue", ct);
+        var resp = await _http.GetAsync("api/v1/approval-queue", ct);
         return await ParseAsync<ApprovalQueueDto>(resp);
     }
 
     public async Task<ApiResult<ApproveResultDto>> ApproveAsync(Guid userId, CancellationToken ct = default)
     {
-        var resp = await _http.PostAsync($"api/v1/admin/approval-queue/{userId}/approve", content: null, ct);
+        var resp = await _http.PostAsync($"api/v1/approval-queue/{userId}/approve", content: null, ct);
         return await ParseAsync<ApproveResultDto>(resp);
     }
 
     public async Task<ApiResult<object>> RejectAsync(Guid userId, string reason, CancellationToken ct = default)
     {
-        var resp = await _http.PostAsJsonAsync($"api/v1/admin/approval-queue/{userId}/reject", new { reason }, ct);
+        var resp = await _http.PostAsJsonAsync($"api/v1/approval-queue/{userId}/reject", new { reason }, ct);
         return await ParseAsync<object>(resp);
     }
 

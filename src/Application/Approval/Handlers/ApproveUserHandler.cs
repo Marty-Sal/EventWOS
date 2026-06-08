@@ -32,17 +32,19 @@ public sealed class ApproveUserHandler : IRequestHandler<ApproveUserCommand, Res
     private readonly IOtpService _smsService;       // reuse — it owns the ISmsProvider
     private readonly ISmsProvider _sms;
     private readonly INotificationPusher _push;
+    private readonly ICurrentUser _me;
     private readonly ILogger<ApproveUserHandler> _logger;
 
     public ApproveUserHandler(
         IAppDbContext db, IUnitOfWork uow, IAuditLogger audit,
         IEmailService email, IOtpService smsService, ISmsProvider sms,
         INotificationPusher push,
+        ICurrentUser me,
         ILogger<ApproveUserHandler> logger)
     {
         _db = db; _uow = uow; _audit = audit;
         _email = email; _smsService = smsService; _sms = sms;
-        _push = push; _logger = logger;
+        _push = push; _me = me; _logger = logger;
     }
 
     public async Task<Result<ApproveUserResponse>> Handle(ApproveUserCommand req, CancellationToken ct)
@@ -52,6 +54,37 @@ public sealed class ApproveUserHandler : IRequestHandler<ApproveUserCommand, Res
         if (user.Status != UserStatus.Pending)
             return Result.Failure<ApproveUserResponse>(Error.Custom(
                 "Approval.NotPending", $"Cannot approve a user in {user.Status} status."));
+
+        // ── Authorization (defence in depth; controller does a coarse pass) ──
+        //   Admin / Manager → can approve Vendor accounts only.
+        //   Vendor          → can approve Crew accounts whose ReferralCodeUsed
+        //                     matches THIS vendor's referral code.
+        //   Anyone else     → forbidden.
+        if (_me.Role is UserRole.Admin or UserRole.Manager)
+        {
+            if (user.Role != UserRole.Vendor)
+                return Result.Failure<ApproveUserResponse>(Error.Custom(
+                    "Approval.Forbidden",
+                    "Crew registrations are approved by the referring vendor, not by managers."));
+        }
+        else if (_me.Role == UserRole.Vendor)
+        {
+            if (user.Role != UserRole.Crew)
+                return Result.Failure<ApproveUserResponse>(Error.Custom(
+                    "Approval.Forbidden", "Vendors can only approve crew registrations."));
+            var myRef = await _db.Users
+                .Where(u => u.Id == _me.UserId)
+                .Select(u => u.ReferralCode)
+                .FirstOrDefaultAsync(ct);
+            if (string.IsNullOrEmpty(myRef) || user.ReferralCodeUsed != myRef)
+                return Result.Failure<ApproveUserResponse>(Error.Custom(
+                    "Approval.Forbidden", "This crew did not register under your referral code."));
+        }
+        else
+        {
+            return Result.Failure<ApproveUserResponse>(Error.Custom(
+                "Approval.Forbidden", "Your role cannot approve registrations."));
+        }
 
         var oldStatus = user.Status;
         user.Approve(req.ApprovedByUserId);
