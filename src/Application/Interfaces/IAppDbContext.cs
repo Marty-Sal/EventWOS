@@ -23,6 +23,7 @@ public interface IAppDbContext
     // Phase 2 — Events Module
     DbSet<Event>            Events            { get; }
     DbSet<EventShift>       EventShifts       { get; }
+    DbSet<VendorShiftAllocation> VendorShiftAllocations { get; }
     DbSet<EventAssignment>  EventAssignments  { get; }
     DbSet<AttendanceRecord> AttendanceRecords { get; }
     DbSet<CrewPayment>      CrewPayments      { get; }

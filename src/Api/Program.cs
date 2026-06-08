@@ -1076,6 +1076,34 @@ BEGIN
         END IF;
     END;
 
+    -- ═══ vendor_shift_allocations (Phase C) ════════════════════════════════════
+    -- Quota table that gates how many crew a vendor can invite onto a given
+    -- shift. No backfill — legacy events have NO vendor allocations and the
+    -- assignment handlers fall back to the unallocated-vendor path for those
+    -- (rows pre-Phase-C had no concept of vendor↔shift quotas anyway).
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'vendor_shift_allocations') THEN
+        CREATE TABLE vendor_shift_allocations (
+            id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            shift_id           uuid NOT NULL REFERENCES event_shifts(id) ON DELETE CASCADE,
+            vendor_id          uuid NOT NULL REFERENCES users(id)        ON DELETE RESTRICT,
+            quota              integer NOT NULL CHECK (quota >= 1),
+            created_by_user_id uuid NOT NULL,
+            created_at         timestamptz NOT NULL DEFAULT now(),
+            created_by         uuid,
+            updated_at         timestamptz,
+            updated_by         uuid,
+            is_deleted         boolean NOT NULL DEFAULT false,
+            deleted_at         timestamptz,
+            deleted_by         uuid
+        );
+        CREATE UNIQUE INDEX ux_vendor_shift_allocations_shift_vendor_active
+            ON vendor_shift_allocations (shift_id, vendor_id)
+            WHERE is_deleted = false;
+        CREATE INDEX ix_vendor_shift_allocations_vendor_id
+            ON vendor_shift_allocations (vendor_id);
+        RAISE NOTICE 'Created vendor_shift_allocations table';
+    END IF;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");

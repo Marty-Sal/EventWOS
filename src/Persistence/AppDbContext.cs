@@ -45,6 +45,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     // Phase 2 — Events Module
     public DbSet<Event>            Events            => Set<Event>();
     public DbSet<EventShift>       EventShifts       => Set<EventShift>();
+    public DbSet<VendorShiftAllocation> VendorShiftAllocations => Set<VendorShiftAllocation>();
     public DbSet<EventAssignment>  EventAssignments  => Set<EventAssignment>();
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<CrewPayment>      CrewPayments      => Set<CrewPayment>();
