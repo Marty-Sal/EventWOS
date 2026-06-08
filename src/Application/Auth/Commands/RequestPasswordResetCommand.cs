@@ -16,5 +16,6 @@ public sealed record RequestPasswordResetCommand(
 
 public sealed record RequestPasswordResetResponse(
     Guid?  OtpRequestId,        // null when no user matched (so client still gets generic flow)
-    string MaskedDestination    // e.g. "+91*****7890" or "j***@example.com"
+    string MaskedDestination,   // e.g. "+91*****7890" or "j***@example.com"
+    string? DevOtp = null        // Dev-only: surfaced on the UI until SMS is production-ready
 );

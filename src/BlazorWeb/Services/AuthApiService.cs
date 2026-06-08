@@ -25,7 +25,7 @@ public sealed record RegisterCrewRequest(
 public sealed record RegistrationResultDto(Guid UserId, string Status, string Message);
 
 public sealed record ForgotPasswordRequest(string UsernameEmailOrMobile);
-public sealed record ForgotPasswordResultDto(Guid? OtpRequestId, string MaskedDestination);
+public sealed record ForgotPasswordResultDto(Guid? OtpRequestId, string MaskedDestination, string? DevOtp = null);
 public sealed record ResetPasswordRequest(Guid OtpRequestId, string Mobile, string Otp, string NewPassword);
 public sealed record SetupPasswordRequest(Guid OtpRequestId, string Mobile, string Otp, string NewUsername, string NewPassword);
 

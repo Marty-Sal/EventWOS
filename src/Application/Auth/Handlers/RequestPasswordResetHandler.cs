@@ -72,8 +72,9 @@ public sealed class RequestPasswordResetHandler : IRequestHandler<RequestPasswor
         await _audit.LogAsync(AuditAction.OtpRequested, nameof(User), user.Id.ToString(),
             additionalData: "Reason:PasswordReset", cancellationToken: ct);
 
+        var devOtp = _otpService.IsDevelopmentMode ? plaintext : null;
         return Result.Success(new RequestPasswordResetResponse(
-            otpRequest.Id, Mask(user.Mobile)));
+            otpRequest.Id, Mask(user.Mobile), devOtp));
     }
 
     /// <summary>Best-effort masking for the toast: "+91*****7890" / "j***@x.com".</summary>

@@ -43,7 +43,7 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
         }
 
         return Result.Success(new UserProfileDto(
-            user.Id, user.Mobile, user.FullName, user.Email,
+            user.Id, user.Username, user.Mobile, user.FullName, user.Email,
             user.AvatarUrl, user.Role, user.Status, permissions, user.LastLoginAt,
             // Vendor-specific
             user.ReferralCode,

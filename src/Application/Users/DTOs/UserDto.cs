@@ -17,6 +17,7 @@ public sealed record UserDto(
 
 public sealed record UserProfileDto(
     Guid Id,
+    string Username,
     string Mobile,
     string FullName,
     string? Email,

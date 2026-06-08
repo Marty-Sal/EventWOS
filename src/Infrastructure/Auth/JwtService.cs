@@ -39,6 +39,7 @@ public sealed class JwtService : IJwtService
             new(JwtRegisteredClaimNames.Jti,  Guid.NewGuid().ToString()),
             new(JwtRegisteredClaimNames.Iat,  DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
             new("mobile",                     user.Mobile),
+            new("username",                   user.Username ?? user.Mobile),
             new("role",                       user.Role.ToString()),
             new("session_id",                 sessionId.ToString()),
             new("device_id",                  user.DeviceId ?? string.Empty),

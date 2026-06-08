@@ -1,0 +1,152 @@
+@page "/login/otp"
+@layout EventWOS.BlazorWeb.Layout.EmptyLayout
+@inject IAuthApiService AuthApi
+@inject NavigationManager Nav
+@inject TokenRefreshService RefreshSvc
+
+<PageTitle>OTP sign-in — EventWOS</PageTitle>
+
+@*
+    Fallback OTP-based sign-in. Password+username is now the default —
+    this page is the "Sign in with OTP instead" escape hatch linked from
+    every PasswordLoginCard.
+
+    Flow: enter mobile → /api/v1/auth/request-otp → enter 6-digit code →
+    /api/v1/auth/verify-otp → straight into the app.
+
+    Dev-mode: if the backend echoes plaintext OTP in the response
+    (DevOtp), we surface it inline so testers don't need SMS access.
+*@
+
+<div class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900">
+    <div class="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8 space-y-4">
+        <div class="text-center mb-2">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-600 text-white text-xl mb-3 shadow-lg">📱</div>
+            <h1 class="text-lg font-bold text-gray-900">Sign in with OTP</h1>
+            <p class="text-xs text-gray-500 mt-1">We'll text a 6-digit code to your registered mobile.</p>
+        </div>
+
+        @if (_step == Step.Mobile)
+        {
+            <Field Label="Mobile number" Required="true">
+                <input @bind="_mobile" @bind:event="oninput" @onkeydown="OnMobileKey"
+                       type="tel" autocomplete="tel"
+                       class="@Css" placeholder="+91 98765 43210" />
+            </Field>
+
+            @if (_error is not null)
+            {
+                <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">@_error</div>
+            }
+
+            <button type="button" @onclick="RequestOtpAsync" disabled="@_loading"
+                    class="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-medium shadow-md hover:bg-indigo-700 disabled:opacity-50">
+                @(_loading ? "Sending…" : "Send OTP")
+            </button>
+        }
+        else
+        {
+            <div class="px-3 py-2 rounded-lg bg-indigo-50 text-indigo-800 text-xs space-y-1">
+                <div>Code sent to <strong>@_maskedMobile</strong></div>
+                @if (_devOtp is not null)
+                {
+                    <div class="font-mono text-base text-indigo-900 bg-white border border-dashed border-indigo-300 rounded px-2 py-1 mt-1 text-center">
+                        🛠 DEV OTP: <strong>@_devOtp</strong>
+                    </div>
+                    <div class="text-[10px] text-indigo-600">Dev mode — shown until SMS delivery is production-ready.</div>
+                }
+            </div>
+
+            <Field Label="6-digit OTP" Required="true">
+                <input @bind="_otp" @bind:event="oninput" @onkeydown="OnOtpKey"
+                       maxlength="6" type="tel" inputmode="numeric"
+                       class="@Css tracking-[0.5em] text-center text-lg font-mono" placeholder="••••••" />
+            </Field>
+
+            @if (_error is not null)
+            {
+                <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">@_error</div>
+            }
+
+            <button type="button" @onclick="VerifyOtpAsync" disabled="@_loading"
+                    class="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-medium shadow-md hover:bg-indigo-700 disabled:opacity-50">
+                @(_loading ? "Verifying…" : "Verify & sign in")
+            </button>
+
+            <div class="flex items-center justify-between text-xs">
+                <button type="button" @onclick="ResetAsync" class="text-gray-500 hover:underline">← Change number</button>
+                <button type="button" @onclick="RequestOtpAsync" disabled="@_loading" class="text-indigo-600 hover:underline disabled:opacity-50">Resend code</button>
+            </div>
+        }
+
+        <p class="text-center text-xs text-gray-500 pt-3 border-t mt-3">
+            Prefer a password? <a href="/login" class="text-indigo-600 hover:underline">Back to portal sign-in</a>
+        </p>
+    </div>
+</div>
+
+@code {
+    private const string Css = "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm";
+
+    private enum Step { Mobile, Otp }
+    private Step _step = Step.Mobile;
+
+    private string _mobile = "", _otp = "";
+    private string? _maskedMobile, _devOtp;
+    private Guid _otpRequestId;
+    private bool _loading;
+    private string? _error;
+
+    private async Task OnMobileKey(KeyboardEventArgs e) { if (e.Key == "Enter") await RequestOtpAsync(); }
+    private async Task OnOtpKey   (KeyboardEventArgs e) { if (e.Key == "Enter") await VerifyOtpAsync();  }
+
+    private async Task RequestOtpAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_mobile)) { _error = "Please enter your mobile number."; return; }
+        _loading = true; _error = null;
+        try
+        {
+            var result = await AuthApi.RequestOtpAsync(_mobile.Trim());
+            if (!result.Success || result.Data is null)
+            {
+                _error = result.Errors?.FirstOrDefault() ?? result.Message ?? "Couldn't send OTP."; return;
+            }
+            _otpRequestId  = result.Data.OtpRequestId;
+            _maskedMobile  = result.Data.Mobile;
+            _devOtp        = result.Data.DevOtp;
+            _step          = Step.Otp;
+        }
+        catch { _error = "Network error. Please try again."; }
+        finally { _loading = false; }
+    }
+
+    private async Task VerifyOtpAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_otp) || _otp.Trim().Length != 6)
+        { _error = "Enter the 6-digit OTP."; return; }
+        _loading = true; _error = null;
+        try
+        {
+            var deviceId = Guid.NewGuid().ToString("N")[..16];
+            var result = await AuthApi.VerifyOtpAsync(_mobile.Trim(), _otp.Trim(), _otpRequestId, deviceId);
+            if (!result.Success)
+            {
+                _error = result.Errors?.FirstOrDefault() ?? result.Message ?? "Invalid or expired OTP.";
+                return;
+            }
+            RefreshSvc.Start();
+            Nav.NavigateTo("/dashboard", forceLoad: true);
+        }
+        catch { _error = "Network error. Please try again."; }
+        finally { _loading = false; }
+    }
+
+    private Task ResetAsync()
+    {
+        _step = Step.Mobile;
+        _otp  = "";
+        _devOtp = null;
+        _error = null;
+        return Task.CompletedTask;
+    }
+}

@@ -41,7 +41,7 @@
 
                 @* Admin always sees all nav *@
                 <AuthorizeView Roles="Admin">
-                    <NavItem Href="/approval-queue" Icon="🆕" Label="Approval Queue" />
+                    <NavItem Href="/approval-queue" Icon="🆕" Label="Registrations" />
                     <NavItem Href="/users"    Icon="👥" Label="Users" />
                     <NavItem Href="/managers" Icon="👔" Label="Managers" />
                     <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" />
@@ -53,7 +53,7 @@
 
                 @* Manager sees only links matching their permissions *@
                 <AuthorizeView Roles="Manager">
-                    @if (_perms.Contains("users:status"))  { <NavItem Href="/approval-queue" Icon="🆕" Label="Approval Queue" /> }
+                    @if (_perms.Contains("users:status"))  { <NavItem Href="/approval-queue" Icon="🆕" Label="Registrations" /> }
                     @if (_perms.Contains("users:read"))    { <NavItem Href="/users"    Icon="👥" Label="Users" /> }
                     @if (_perms.Contains("vendors:read"))  { <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" /> }
                     @if (_perms.Contains("crew:read"))     { <NavItem Href="/crew"     Icon="👷" Label="Crew" /> }
@@ -125,16 +125,23 @@
             <div class="p-4 border-t border-gray-700">
                 <AuthorizeView>
                     <Authorized>
+                        @{
+                            var sbUsername = context.User.FindFirst("username")?.Value;
+                            var sbMobile   = context.User.FindFirst("mobile")?.Value;
+                            var sbRole     = context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                                          ?? context.User.FindFirst("role")?.Value;
+                            var sbInitialSource = !string.IsNullOrEmpty(sbUsername) ? sbUsername : (sbMobile ?? "?");
+                        }
                         <div class="flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">
-                                @GetInitials(context.User.FindFirst("mobile")?.Value ?? "?")
+                            <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold uppercase">
+                                @sbInitialSource[0]
                             </div>
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-medium text-white truncate">
-                                    @context.User.FindFirst("mobile")?.Value
+                                    @@@(sbUsername ?? sbMobile)
                                 </p>
                                 <p class="text-xs text-gray-400 truncate">
-                                    @(context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? context.User.FindFirst("role")?.Value)
+                                    @sbRole · @sbMobile
                                 </p>
                             </div>
                             <button @onclick="LogoutAsync"
@@ -186,7 +193,7 @@
         "permissions" => "Permissions",
         "audit"       => "Audit Log",
         "manager-approvals" => "Approval Queue",
-        "approval-queue"    => "Approval Queue",
+        "approval-queue"    => "Registrations",
         "my-payments"       => "My Payments",
         "vendor-report"     => "My Performance Report",
         _             => "EventWOS"

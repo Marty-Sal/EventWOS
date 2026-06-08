@@ -35,7 +35,11 @@
                 </div>
                 <div>
                     <h2 class="text-xl font-bold text-gray-800">@(_profile.FullName ?? "—")</h2>
-                    <p class="text-sm text-gray-500">@_profile.Mobile</p>
+                    <p class="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+                        <span class="font-mono text-indigo-700">@@@_profile.Username</span>
+                        <span class="text-gray-300">·</span>
+                        <span>@_profile.Mobile</span>
+                    </p>
                     <div class="flex items-center gap-2 mt-1 flex-wrap">
                         <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">@_profile.Role</span>
                         <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">@_profile.Status</span>

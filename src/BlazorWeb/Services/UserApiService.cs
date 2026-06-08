@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 namespace EventWOS.BlazorWeb.Services;
 
 public sealed record UserProfileDto(
-    Guid Id, string Mobile, string FullName, string? Email,
+    Guid Id, string Username, string Mobile, string FullName, string? Email,
     string? AvatarUrl, string Role, string Status,
     IReadOnlyList<string> Permissions, DateTime? LastLoginAt,
     // Vendor fields
