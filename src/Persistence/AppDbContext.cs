@@ -39,6 +39,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<VendorCrewMapping> VendorCrewMappings => Set<VendorCrewMapping>();
     public DbSet<CrewGroup>        CrewGroups        => Set<CrewGroup>();
     public DbSet<CrewGroupMember>  CrewGroupMembers  => Set<CrewGroupMember>();
+    public DbSet<EventWOS.Domain.Entities.ScopeOfWork>      ScopesOfWork      => Set<ScopeOfWork>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     // Phase 2 — Events Module

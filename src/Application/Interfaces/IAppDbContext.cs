@@ -17,6 +17,7 @@ public interface IAppDbContext
     DbSet<VendorCrewMapping> VendorCrewMappings { get; }
     DbSet<CrewGroup>        CrewGroups        { get; }
     DbSet<CrewGroupMember>  CrewGroupMembers  { get; }
+    DbSet<EventWOS.Domain.Entities.ScopeOfWork>      ScopesOfWork      { get; }
     DbSet<AuditLog>         AuditLogs         { get; }
 
     // Phase 2 — Events Module

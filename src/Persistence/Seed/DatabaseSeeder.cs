@@ -87,6 +87,10 @@ public sealed class DatabaseSeeder
         ("events:write",      "events",      "write",   "Create and manage events"),
         ("profile:read",      "profile",     "read",    "View own profile"),
         ("profile:write",     "profile",     "write",   "Update own profile"),
+
+        // Phase A — Scope of Work catalog (admin-managed)
+        ("scope_of_work:read",  "scope_of_work", "read",  "View scope-of-work catalog"),
+        ("scope_of_work:write", "scope_of_work", "write", "Manage scope-of-work catalog"),
     };
 
     private async Task SeedPermissionsAsync(CancellationToken ct)
@@ -206,7 +210,11 @@ public sealed class DatabaseSeeder
         var managerRole = GetRole(UserRole.Manager);
         if (managerRole is not null)
         {
-            foreach (var name in new[] { "profile:read", "profile:write" })
+            // Managers can read the scope-of-work catalog so they can pick
+            // categories when creating events. They cannot edit the catalog
+            // (Admin only) — keeps "what work types exist" a centrally-governed
+            // taxonomy rather than something every Manager mutates.
+            foreach (var name in new[] { "profile:read", "profile:write", "scope_of_work:read" })
             {
                 var perm = GetPerm(name);
                 if (perm is not null) TryAdd(managerRole.Id, perm.Id);

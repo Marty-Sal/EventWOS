@@ -1,0 +1,398 @@
+@page "/admin/scope-of-work"
+@attribute [Authorize(Roles = "Admin,Manager")]
+@inject HttpClient Http
+@using System.Net.Http
+@using System.Net.Http.Json
+
+<PageTitle>Scope of Work — EventWOS</PageTitle>
+
+@*
+    Admin-managed catalog of work categories (Box Office, Gates, F&B,
+    Accreditation, Inventory…). Phase A of the Scope-of-Work feature.
+
+    Managers can VIEW (seeder grants them scope_of_work:read) so they can
+    confirm what's available when creating events. Only Admin gets the
+    Create / Edit / Archive buttons because only Admin has scope_of_work:write
+    by default. Permission gating is enforced by the API; this page just
+    hides UI affordances based on _canWrite so non-admins don't bonk into 403s.
+*@
+
+@if (_accessDenied)
+{
+    <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div class="text-5xl mb-4">🔒</div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+        <p class="text-gray-500 text-sm">You need <strong>scope_of_work:read</strong> permission.</p>
+    </div>
+    return;
+}
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">Scope of Work</h2>
+            <p class="text-sm text-gray-500 mt-0.5">
+                Catalog of work categories used when staffing events. Pickable in event creation.
+            </p>
+        </div>
+        @if (_canWrite)
+        {
+            <button @onclick="OpenCreateModal"
+                    class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition">
+                ➕ New Scope
+            </button>
+        }
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-center gap-3">
+        <input @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKey"
+               placeholder="Search by name or description…"
+               class="px-3 py-2 rounded-xl border border-gray-200 text-sm flex-1 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+            <input type="checkbox" @bind="_includeArchived" @bind:after="LoadAsync"
+                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+            Show archived
+        </label>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex items-center justify-center py-20">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            </svg>
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">@_error</div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
+            <div class="text-4xl mb-2">🧰</div>
+            <p class="text-sm text-gray-500">
+                No scope-of-work categories yet.
+                @if (_canWrite) { <span>Create your first one to use it when staffing events.</span> }
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 border-b border-gray-100 text-xs uppercase tracking-wider text-gray-500">
+                    <tr>
+                        <th class="px-5 py-3 text-left">Name</th>
+                        <th class="px-5 py-3 text-left">Description</th>
+                        <th class="px-5 py-3 text-left">Status</th>
+                        <th class="px-5 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @foreach (var s in _items)
+                    {
+                        <tr class="hover:bg-gray-50 transition">
+                            <td class="px-5 py-3 font-semibold text-gray-800">@s.Name</td>
+                            <td class="px-5 py-3 text-gray-500">@(string.IsNullOrEmpty(s.Description) ? "—" : s.Description)</td>
+                            <td class="px-5 py-3">
+                                @if (s.IsArchived)
+                                {
+                                    <span class="text-xs px-2.5 py-1 rounded-full font-semibold bg-gray-100 text-gray-500">Archived</span>
+                                }
+                                else
+                                {
+                                    <span class="text-xs px-2.5 py-1 rounded-full font-semibold bg-emerald-50 text-emerald-700">Active</span>
+                                }
+                            </td>
+                            <td class="px-5 py-3 text-right">
+                                @if (_canWrite)
+                                {
+                                    @if (s.IsArchived)
+                                    {
+                                        <button @onclick="() => RestoreAsync(s)"
+                                                class="text-xs px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold">
+                                            ↻ Restore
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button @onclick="() => OpenEditModal(s)"
+                                                class="text-xs px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold mr-2">
+                                            Edit
+                                        </button>
+                                        <button @onclick="() => ArchiveAsync(s)"
+                                                class="text-xs px-3 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold">
+                                            Archive
+                                        </button>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-xs text-gray-300 italic">read-only</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (_totalPages > 1)
+        {
+            <div class="flex justify-center gap-2 pt-2">
+                <button @onclick="PrevPage" disabled="@(_page == 1)"
+                        class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">← Prev</button>
+                <span class="px-3 py-1.5 text-sm text-gray-500">Page @_page of @_totalPages</span>
+                <button @onclick="NextPage" disabled="@(_page >= _totalPages)"
+                        class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next →</button>
+            </div>
+        }
+    }
+</div>
+
+@* ── Create / Edit modal ──────────────────────────────────────────────────── *@
+@if (_modalOpen)
+{
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @onclick="CloseModal">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5" @onclick:stopPropagation>
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-gray-800">@(_editing is null ? "New Scope of Work" : "Edit Scope of Work")</h3>
+                <button @onclick="CloseModal" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Name *</label>
+                    <input @bind="_form.Name" maxlength="80"
+                           placeholder="e.g. Box Office, Gates, F&B"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Description (optional)</label>
+                    <textarea @bind="_form.Description" maxlength="500" rows="3"
+                              placeholder="Short note describing what this work category covers."
+                              class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+            </div>
+
+            @if (_formError is not null)
+            {
+                <p class="text-sm text-red-600">⚠️ @_formError</p>
+            }
+
+            <div class="flex gap-3">
+                <button @onclick="CloseModal"
+                        class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition">
+                    Cancel
+                </button>
+                <button @onclick="SaveAsync" disabled="@_saving"
+                        class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-60">
+                    @(_saving ? "Saving…" : (_editing is null ? "Create" : "Save"))
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* Toasts *@
+@if (_success is not null)
+{
+    <div class="fixed bottom-5 right-5 bg-green-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
+        ✅ @_success <button @onclick="() => _success = null" class="ml-3 font-bold">✕</button>
+    </div>
+}
+@if (_pageError is not null)
+{
+    <div class="fixed bottom-5 right-5 bg-red-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
+        ⚠️ @_pageError <button @onclick="() => _pageError = null" class="ml-3 font-bold">✕</button>
+    </div>
+}
+
+@code {
+    // ── State ──────────────────────────────────────────────────────────────────
+    private bool _accessDenied;
+    private bool _canWrite;     // Admin only (scope_of_work:write seeded for Admin)
+    private bool _loading = true;
+    private string? _error;
+    private string? _success;
+    private string? _pageError;
+
+    private string? _search;
+    private bool    _includeArchived;
+    private int     _page = 1;
+    private int     _totalPages = 1;
+    private List<ScopeOfWorkDto> _items = new();
+
+    // Modal state
+    private bool   _modalOpen;
+    private bool   _saving;
+    private string? _formError;
+    private ScopeOfWorkDto? _editing;
+    private ScopeForm _form = new();
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Permission gating uses the shared PermGuard service (globally
+        // injected via _Imports.razor) — same pattern as Crew, Vendors,
+        // Events, Users, Payments. Two checks:
+        //   • scope_of_work:read  — gates the whole page
+        //   • scope_of_work:write — gates the create/edit/archive buttons
+        // The API enforces both — _canWrite is purely a UX hint to hide
+        // affordances non-admins can't action anyway.
+        _accessDenied = !await PermGuard.CanAsync("scope_of_work:read");
+        if (_accessDenied) { _loading = false; StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("scope_of_work:write");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error   = null;
+        try
+        {
+            var url = $"/api/v1/scope-of-work?page={_page}&pageSize=50&includeArchived={_includeArchived.ToString().ToLower()}";
+            if (!string.IsNullOrWhiteSpace(_search))
+                url += $"&search={Uri.EscapeDataString(_search)}";
+
+            var resp = await Http.GetFromJsonAsync<ApiEnvelope<PagedShape<ScopeOfWorkDto>>>(url, JsonOpts);
+            if (resp?.Data is null) { _error = "Failed to load."; return; }
+            _items      = resp.Data.Items?.ToList() ?? new();
+            _totalPages = resp.Data.TotalPages == 0 ? 1 : resp.Data.TotalPages;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { if (_page < _totalPages) { _page++; await LoadAsync(); } }
+
+    // ── Create / Edit ────────────────────────────────────────────────────────
+    private void OpenCreateModal()
+    {
+        _editing   = null;
+        _form      = new ScopeForm();
+        _formError = null;
+        _modalOpen = true;
+    }
+
+    private void OpenEditModal(ScopeOfWorkDto s)
+    {
+        _editing   = s;
+        _form      = new ScopeForm { Name = s.Name, Description = s.Description };
+        _formError = null;
+        _modalOpen = true;
+    }
+
+    private void CloseModal() { _modalOpen = false; _formError = null; }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            _formError = "Name is required.";
+            return;
+        }
+        _saving = true;
+        _formError = null;
+        try
+        {
+            HttpResponseMessage resp;
+            if (_editing is null)
+            {
+                resp = await Http.PostAsJsonAsync("/api/v1/scope-of-work", _form);
+            }
+            else
+            {
+                resp = await Http.PutAsJsonAsync($"/api/v1/scope-of-work/{_editing.Id}", _form);
+            }
+
+            if (resp.IsSuccessStatusCode)
+            {
+                _success = _editing is null ? "Created." : "Updated.";
+                _modalOpen = false;
+                await LoadAsync();
+            }
+            else
+            {
+                // Pull the structured error out of the envelope (memory rule #29
+                // sister-rule: surface Errors[0] / Message, never a generic toast).
+                var body = await resp.Content.ReadFromJsonAsync<ApiEnvelope<object>>();
+                _formError = body?.Errors?.FirstOrDefault() ?? body?.Message ?? "Save failed.";
+            }
+        }
+        catch (Exception ex) { _formError = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task ArchiveAsync(ScopeOfWorkDto s)
+    {
+        try
+        {
+            var resp = await Http.DeleteAsync($"/api/v1/scope-of-work/{s.Id}");
+            if (resp.IsSuccessStatusCode) { _success = "Archived."; await LoadAsync(); }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiEnvelope<object>>();
+                _pageError = body?.Errors?.FirstOrDefault() ?? body?.Message ?? "Archive failed.";
+            }
+        }
+        catch (Exception ex) { _pageError = ex.Message; }
+    }
+
+    private async Task RestoreAsync(ScopeOfWorkDto s)
+    {
+        try
+        {
+            var resp = await Http.PostAsync($"/api/v1/scope-of-work/{s.Id}/restore", null);
+            if (resp.IsSuccessStatusCode) { _success = "Restored."; await LoadAsync(); }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiEnvelope<object>>();
+                _pageError = body?.Errors?.FirstOrDefault() ?? body?.Message ?? "Restore failed.";
+            }
+        }
+        catch (Exception ex) { _pageError = ex.Message; }
+    }
+
+    // ── Local DTO shapes ──────────────────────────────────────────────────────
+    // Mirror the API shape minimally — the page doesn't share a model lib with
+    // the API, so we keep these as private records colocated with the page.
+
+    public sealed class ScopeForm
+    {
+        public string  Name        { get; set; } = "";
+        public string? Description { get; set; }
+    }
+
+    public sealed record ScopeOfWorkDto(
+        Guid Id, string Name, string? Description, bool IsArchived,
+        DateTime CreatedAt, DateTime? UpdatedAt);
+
+    private sealed class ApiEnvelope<T>
+    {
+        public bool         Success { get; set; }
+        public T?           Data    { get; set; }
+        public string?      Message { get; set; }
+        public List<string>? Errors { get; set; }
+    }
+
+    private sealed class PagedShape<T>
+    {
+        public List<T> Items      { get; set; } = new();
+        public int     TotalCount { get; set; }
+        public int     PageNumber { get; set; }
+        public int     PageSize   { get; set; }
+        public int     TotalPages { get; set; }
+    }
+}

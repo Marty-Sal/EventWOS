@@ -947,6 +947,30 @@ BEGIN
         ON users (rejected_at)
         WHERE rejected_at IS NOT NULL;
 
+    -- ═══ scope_of_work catalog ═══════════════════════════════════════════════
+    -- Belt-and-braces for 20260609_AddScopeOfWork. Idempotent. Phase A of the
+    -- Scope-of-Work feature (admin-managed global list of work categories).
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'scope_of_work') THEN
+        CREATE TABLE scope_of_work (
+            id                  UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            name                VARCHAR(80) NOT NULL,
+            description         VARCHAR(500),
+            created_by_user_id  UUID NOT NULL,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+            created_by          UUID,
+            updated_at          TIMESTAMPTZ,
+            updated_by          UUID,
+            is_deleted          BOOLEAN NOT NULL DEFAULT false,
+            deleted_at          TIMESTAMPTZ,
+            deleted_by          UUID
+        );
+        CREATE INDEX ix_scope_of_work_name ON scope_of_work (name);
+        CREATE UNIQUE INDEX ux_scope_of_work_name_active
+            ON scope_of_work (LOWER(name))
+            WHERE is_deleted = false;
+        RAISE NOTICE 'Created scope_of_work table';
+    END IF;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");
