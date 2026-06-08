@@ -1,5 +1,6 @@
 using EventWOS.Application.Interfaces;
 using EventWOS.Domain.Interfaces;
+using EventWOS.Domain.Rules;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -26,10 +27,30 @@ public sealed class ManagerApproveAssignmentHandler
     {
         var assignment = await _db.EventAssignments
             .Include(a => a.Crew)
+            .Include(a => a.Event)
             .FirstOrDefaultAsync(a => a.Id == req.AssignmentId, ct);
 
         if (assignment is null)
             return Result.Failure(new Error("Assignment.NotFound", "Assignment not found."));
+
+        // Capacity check — approving this row will (typically) turn it into a
+        // seat-occupier. Reject when the cap would be exceeded so we don't
+        // silently over-staff the event. MaxCrew == 0 means "unlimited".
+        if (assignment.Event is not null && assignment.Event.MaxCrew > 0)
+        {
+            var occupiedExcludingThis = await _db.EventAssignments
+                .Where(a => a.EventId == assignment.EventId && a.Id != assignment.Id)
+                .Where(AssignmentCapacityRules.OccupiesSeat)
+                .CountAsync(ct);
+
+            if (occupiedExcludingThis + 1 > assignment.Event.MaxCrew)
+            {
+                return Result.Failure(new Error(
+                    "Assignment.MaxCrewReached",
+                    $"Staff cap reached ({assignment.Event.MaxCrew} approved). " +
+                    "Update the event to add more slots before approving more crew."));
+            }
+        }
 
         try   { assignment.ManagerApprove(); }
         catch (InvalidOperationException ex)

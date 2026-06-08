@@ -78,11 +78,34 @@ public sealed class Event : BaseEntity
         if (reason is not null) Notes = reason;
     }
 
+    /// <summary>
+    /// Update editable fields on the event.
+    ///
+    /// <paramref name="currentSeatsOccupied"/> is the count of EventAssignments
+    /// that currently OccupiesSeat (see <c>AssignmentCapacityRules</c>). The
+    /// handler computes this — the domain entity doesn't see the assignment
+    /// graph directly, so we pass it in. This keeps the rule colocated with
+    /// the invariant it protects (you can't shrink MaxCrew below already-
+    /// approved staff) without coupling the entity to a repository.
+    /// </summary>
     public void Update(string title, string? description, string venue, string? address,
-                       DateTime startAt, DateTime endAt, int maxCrew)
+                       DateTime startAt, DateTime endAt, int maxCrew,
+                       int currentSeatsOccupied = 0)
     {
         if (Status == EventStatus.Completed || Status == EventStatus.Cancelled)
             throw new InvalidOperationException("Completed or Cancelled events cannot be edited.");
+
+        // Guard: you cannot shrink the staffing cap below the number of crew
+        // who already occupy a seat (approved / confirmed / attended). The UI
+        // shows the floor when editing, but a determined client could still
+        // POST a smaller value — so the rule lives here too.
+        // MaxCrew == 0 historically means "unlimited", so skip the check then.
+        if (maxCrew > 0 && maxCrew < currentSeatsOccupied)
+        {
+            throw new InvalidOperationException(
+                $"Cannot reduce staff cap below {currentSeatsOccupied} — that many crew are already approved or confirmed for this event.");
+        }
+
         Title       = title;
         Description = description;
         Venue       = venue;

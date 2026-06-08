@@ -30,5 +30,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Application\EventWOS.Application.csproj" />
+    <ProjectReference Include="..\..\src\Domain\EventWOS.Domain.csproj" />
   </ItemGroup>
 </Project>

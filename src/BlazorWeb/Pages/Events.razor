@@ -131,10 +131,13 @@
                                     class="flex-1 text-xs py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium transition">
                                 View Details
                             </button>
-                            <button @onclick="() => OpenEditModal(ev)"
-                                    class="px-3 text-xs py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium transition">
-                                Edit
-                            </button>
+                            @if (ev.Status is not "Completed" and not "Cancelled")
+                            {
+                                <button @onclick="() => OpenEditModal(ev)"
+                                        class="px-3 text-xs py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium transition">
+                                    Edit
+                                </button>
+                            }
                             @if (ev.Status == "Draft")
                             {
                                 <button @onclick='() => ChangeStatus(ev.Id, "publish")'
@@ -197,8 +200,11 @@
                                         <div class="inline-flex gap-1.5">
                                             <button @onclick="() => OpenDetailPanel(ev)"
                                                     class="text-xs px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium">View</button>
-                                            <button @onclick="() => OpenEditModal(ev)"
-                                                    class="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium">Edit</button>
+                                            @if (ev.Status is not "Completed" and not "Cancelled")
+                                            {
+                                                <button @onclick="() => OpenEditModal(ev)"
+                                                        class="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium">Edit</button>
+                                            }
                                             @if (ev.Status == "Draft")
                                             {
                                                 <button @onclick='() => ChangeStatus(ev.Id, "publish")'
@@ -295,108 +301,10 @@
                     </div>
                 </div>
 
-                <!-- Assignments -->
-                <div>
-                    <h4 class="font-semibold text-gray-700 text-sm mb-3">Crew Assignments</h4>
-                    @if (_loadingAssignments)
-                    {
-                        <div class="flex justify-center py-4">
-                            <svg class="animate-spin h-5 w-5 text-indigo-400" viewBox="0 0 24 24" fill="none">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                            </svg>
-                        </div>
-                    }
-                    else if (_assignments?.Items.Count == 0)
-                    {
-                        <p class="text-xs text-gray-400 text-center py-4">No crew assigned yet.</p>
-                    }
-                    else
-                    {
-                        <div class="space-y-2">
-                            @foreach (var a in _assignments!.Items)
-                            {
-                                var isPlaceholder    = string.IsNullOrEmpty(a.CrewName) && !string.IsNullOrEmpty(a.VendorName);
-                                var canRevoke        = _canWrite && isPlaceholder && a.Status == "Invited";
-                                var canReinvite      = _canWrite && isPlaceholder && a.Status == "RejectedByVendor";
-                                var rowBusy          = _placeholderBusy == a.Id;
-
-                                <div class="bg-gray-50 rounded-xl px-4 py-2.5 space-y-2">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <p class="text-sm font-medium text-gray-800">
-                                                @(string.IsNullOrEmpty(a.CrewName) ? "(Vendor to assign crew)" : a.CrewName)
-                                            </p>
-                                            <p class="text-xs text-gray-400">
-                                                @if (!string.IsNullOrEmpty(a.CrewMobile)) { <span>@a.CrewMobile</span> }
-                                                @if (!string.IsNullOrEmpty(a.VendorName))
-                                                {
-                                                    <span>@(string.IsNullOrEmpty(a.CrewMobile) ? "" : " · ")via @a.VendorName</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="italic text-amber-600">@(string.IsNullOrEmpty(a.CrewMobile) ? "" : " · ")direct</span>
-                                                }
-                                            </p>
-                                            @if (a.Status == "RejectedByVendor" && !string.IsNullOrEmpty(a.RejectionReason))
-                                            {
-                                                <p class="text-[11px] text-rose-500 mt-0.5 italic">"@a.RejectionReason"</p>
-                                            }
-                                        </div>
-                                        @{
-                                            var (lbl, badge, sub) = AssignmentStatusDisplay.For(a.Status, _selectedEvent.Status, a.AttendanceNote);
-                                            var canOverride = AssignmentStatusDisplay.CanAdminMarkAttended(a.Status, _selectedEvent.Status, _role == "Admin") && a.CrewId.HasValue;
-                                        }
-                                        <div class="flex flex-col items-end gap-0.5">
-                                            <span class="text-xs px-2.5 py-1 rounded-full font-semibold @badge">@lbl</span>
-                                            @if (!string.IsNullOrEmpty(sub))
-                                            {
-                                                <span class="text-[10px] text-gray-400 italic">@sub</span>
-                                            }
-                                        </div>
-                                    </div>
-
-                                    @if (canOverride)
-                                    {
-                                        var ovBusy = _overrideBusy == a.Id;
-                                        <div class="flex justify-end pt-1">
-                                            <button @onclick="() => AdminMarkAttended(a)"
-                                                    disabled="@ovBusy"
-                                                    class="px-3 py-1 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-[11px] font-semibold disabled:opacity-50 transition">
-                                                @(ovBusy ? "Marking…" : "✓ Mark Attended (Admin)")
-                                            </button>
-                                        </div>
-                                    }
-
-                                    @if (canRevoke || canReinvite)
-                                    {
-                                        <div class="flex justify-end gap-2 pt-1">
-                                            @if (canRevoke)
-                                            {
-                                                <button @onclick="() => RevokeVendorInvite(a)"
-                                                        disabled="@rowBusy"
-                                                        class="px-3 py-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-[11px] font-semibold disabled:opacity-50 transition">
-                                                    @(rowBusy ? "Revoking…" : "✕ Revoke Invite")
-                                                </button>
-                                            }
-                                            @if (canReinvite)
-                                            {
-                                                <button @onclick="() => ReinviteVendor(a)"
-                                                        disabled="@rowBusy"
-                                                        class="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold disabled:opacity-50 transition">
-                                                    @(rowBusy ? "Re-inviting…" : "↻ Re-invite")
-                                                </button>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
-
-                <!-- Assign Crew (Admin/Manager) -->
-                <div class="border-t border-gray-100 pt-4 space-y-3">
+                <!-- Assign Crew (Admin/Manager) — first per UX -->
+                @if (!_isEventLocked)
+                {
+                <div class="space-y-3">
                     <h4 class="font-semibold text-gray-700 text-sm">Assign Crew Member</h4>
 
                     @* ── Mode toggle: Direct OR Via Vendor ── *@
@@ -565,6 +473,140 @@
                         <p class="text-xs text-red-600">⚠️ @_assignError</p>
                     }
                 </div>
+                }
+                else
+                {
+                    <div class="border border-gray-200 bg-gray-50 rounded-xl p-4 text-xs text-gray-500 italic">
+                        🔒 This event is @_selectedEvent.Status.ToLower() — crew can no longer be assigned or edited.
+                    </div>
+                }
+
+                <!-- Assignments (grouped by vendor) -->
+                <div class="border-t border-gray-100 pt-4">
+                    <h4 class="font-semibold text-gray-700 text-sm mb-3">Crew Assignments</h4>
+                    @if (_loadingAssignments)
+                    {
+                        <div class="flex justify-center py-4">
+                            <svg class="animate-spin h-5 w-5 text-indigo-400" viewBox="0 0 24 24" fill="none">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                        </div>
+                    }
+                    else if (_assignments?.Items.Count == 0)
+                    {
+                        <p class="text-xs text-gray-400 text-center py-4">No crew assigned yet.</p>
+                    }
+                    else
+                    {
+                        @* Group assignments by vendor. Vendor-less rows ("direct"
+                           assignments — admin assigned the crew bypassing a vendor)
+                           collapse into a synthetic "Direct (no vendor)" bucket
+                           pinned at the bottom so it doesn't clutter the top. *@
+                        <div class="space-y-2">
+                            @foreach (var group in GroupAssignmentsByVendor(_assignments!.Items))
+                            {
+                                var isOpen = _expandedVendorGroups.Contains(group.Key);
+                                var headerLabel = group.VendorName ?? "Direct (no vendor)";
+                                var headerSub   = group.VendorName is null
+                                                  ? "Crew assigned directly by Admin/Manager"
+                                                  : $"{group.Rows.Count} crew assignment{(group.Rows.Count == 1 ? "" : "s")}";
+
+                                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                                    <button type="button"
+                                            @onclick="() => ToggleVendorGroup(group.Key)"
+                                            class="w-full flex items-center justify-between bg-gray-50 hover:bg-gray-100 px-4 py-2.5 text-left transition">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-400 text-xs">@(isOpen ? "▼" : "▶")</span>
+                                            <span class="text-sm font-semibold text-gray-800">@headerLabel</span>
+                                        </div>
+                                        <span class="text-[11px] text-gray-500">@headerSub</span>
+                                    </button>
+
+                                    @if (isOpen)
+                                    {
+                                        <div class="bg-white p-2 space-y-2">
+                                            @foreach (var a in group.Rows)
+                                            {
+                                                var isPlaceholder    = string.IsNullOrEmpty(a.CrewName) && !string.IsNullOrEmpty(a.VendorName);
+                                                var canRevoke        = _canWrite && isPlaceholder && a.Status == "Invited" && !_isEventLocked;
+                                                var canReinvite      = _canWrite && isPlaceholder && a.Status == "RejectedByVendor" && !_isEventLocked;
+                                                var rowBusy          = _placeholderBusy == a.Id;
+
+                                                <div class="bg-gray-50 rounded-xl px-4 py-2.5 space-y-2">
+                                                    <div class="flex items-center justify-between">
+                                                        <div>
+                                                            <p class="text-sm font-medium text-gray-800">
+                                                                @(string.IsNullOrEmpty(a.CrewName) ? "(Vendor to assign crew)" : a.CrewName)
+                                                            </p>
+                                                            <p class="text-xs text-gray-400">
+                                                                @if (!string.IsNullOrEmpty(a.CrewMobile)) { <span>@a.CrewMobile</span> }
+                                                                @if (string.IsNullOrEmpty(a.VendorName))
+                                                                {
+                                                                    <span class="italic text-amber-600">@(string.IsNullOrEmpty(a.CrewMobile) ? "" : " · ")direct</span>
+                                                                }
+                                                            </p>
+                                                            @if (a.Status == "RejectedByVendor" && !string.IsNullOrEmpty(a.RejectionReason))
+                                                            {
+                                                                <p class="text-[11px] text-rose-500 mt-0.5 italic">"@a.RejectionReason"</p>
+                                                            }
+                                                        </div>
+                                                        @{
+                                                            var (lbl, badge, sub) = AssignmentStatusDisplay.For(a.Status, _selectedEvent.Status, a.AttendanceNote);
+                                                            var canOverride = AssignmentStatusDisplay.CanAdminMarkAttended(a.Status, _selectedEvent.Status, _role == "Admin") && a.CrewId.HasValue;
+                                                        }
+                                                        <div class="flex flex-col items-end gap-0.5">
+                                                            <span class="text-xs px-2.5 py-1 rounded-full font-semibold @badge">@lbl</span>
+                                                            @if (!string.IsNullOrEmpty(sub))
+                                                            {
+                                                                <span class="text-[10px] text-gray-400 italic">@sub</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+
+                                                    @if (canOverride)
+                                                    {
+                                                        var ovBusy = _overrideBusy == a.Id;
+                                                        <div class="flex justify-end pt-1">
+                                                            <button @onclick="() => AdminMarkAttended(a)"
+                                                                    disabled="@ovBusy"
+                                                                    class="px-3 py-1 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-[11px] font-semibold disabled:opacity-50 transition">
+                                                                @(ovBusy ? "Marking…" : "✓ Mark Attended (Admin)")
+                                                            </button>
+                                                        </div>
+                                                    }
+
+                                                    @if (canRevoke || canReinvite)
+                                                    {
+                                                        <div class="flex justify-end gap-2 pt-1">
+                                                            @if (canRevoke)
+                                                            {
+                                                                <button @onclick="() => RevokeVendorInvite(a)"
+                                                                        disabled="@rowBusy"
+                                                                        class="px-3 py-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-[11px] font-semibold disabled:opacity-50 transition">
+                                                                    @(rowBusy ? "Revoking…" : "✕ Revoke Invite")
+                                                                </button>
+                                                            }
+                                                            @if (canReinvite)
+                                                            {
+                                                                <button @onclick="() => ReinviteVendor(a)"
+                                                                        disabled="@rowBusy"
+                                                                        class="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold disabled:opacity-50 transition">
+                                                                    @(rowBusy ? "Re-inviting…" : "↻ Re-invite")
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
             </div>
         </div>
     }
@@ -601,7 +643,14 @@
                         </div>
                     </div>
                     <input type="number" @bind="_form.MaxCrew" placeholder="Max crew (0 = unlimited)"
+                           min="@(_editingEvent?.AssignedCrew ?? 0)"
                            class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    @if (_editingEvent is not null && _editingEvent.AssignedCrew > 0)
+                    {
+                        <p class="text-[11px] text-gray-500 italic">
+                            ℹ️ Minimum is @_editingEvent.AssignedCrew — that many crew are already approved or confirmed for this event.
+                        </p>
+                    }
                 </div>
 
                 @if (_formError is not null)
@@ -797,6 +846,49 @@ else
     private EventDetailDto?          _selectedEvent;
     private PagedEventAssignmentResult? _assignments;
     private AttendanceSummaryDto?    _attendance;
+
+    // Vendor-group accordion state (one entry per expanded vendor — keyed by
+    // VendorId.ToString() for real vendors, or the sentinel "_direct" for the
+    // synthetic "no-vendor" bucket). Reset on each drawer open in OpenDetailPanel.
+    private readonly HashSet<string> _expandedVendorGroups = new();
+
+    // Computed: is the event in a terminal state where editing & assignment
+    // are forbidden? Backend enforces this too (Event.Update throws), but the
+    // UI hides the entry points so users don't bonk into a 400.
+    private bool _isEventLocked =>
+        _selectedEvent is not null
+        && _selectedEvent.Status is "Completed" or "Cancelled";
+
+    // Lightweight DTO + grouping helper. Lives here (not in a separate file)
+    // because it's a view-model concern — the API returns a flat list and the
+    // grouping is purely a presentation choice.
+    private sealed record VendorGroup(string Key, string? VendorName, List<EventAssignmentDto> Rows);
+
+    private static IEnumerable<VendorGroup> GroupAssignmentsByVendor(IEnumerable<EventAssignmentDto> rows)
+    {
+        // Real-vendor groups first (alphabetised by name for stable order),
+        // then the synthetic "Direct (no vendor)" bucket pinned last.
+        var byVendor = rows
+            .Where(a => a.VendorId.HasValue)
+            .GroupBy(a => new { a.VendorId, a.VendorName })
+            .OrderBy(g => g.Key.VendorName, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new VendorGroup(
+                Key:        g.Key.VendorId!.Value.ToString(),
+                VendorName: g.Key.VendorName,
+                Rows:       g.ToList()));
+
+        var direct = rows.Where(a => !a.VendorId.HasValue).ToList();
+
+        foreach (var group in byVendor) yield return group;
+        if (direct.Count > 0)
+            yield return new VendorGroup("_direct", null, direct);
+    }
+
+    private void ToggleVendorGroup(string key)
+    {
+        if (!_expandedVendorGroups.Add(key))
+            _expandedVendorGroups.Remove(key);
+    }
     // Assign crew — vendor picker
     private string                    _assignVendorSearch  = "";
     private bool                      _assignVendorDropOpen;
@@ -911,9 +1003,26 @@ else
         _loadingAssignments = false;
         if (_selectedEvent.Status is "InProgress" or "Completed")
             _attendance = await EventApi.GetAttendanceSummaryAsync(ev.Id);
+
+        // Auto-expand the first vendor group so the drawer doesn't open
+        // looking empty when there are assignments. Subsequent groups stay
+        // collapsed — keeps the panel tidy for events fanned across many
+        // vendors.
+        _expandedVendorGroups.Clear();
+        if (_assignments is not null && _assignments.Items.Count > 0)
+        {
+            var first = GroupAssignmentsByVendor(_assignments.Items).FirstOrDefault();
+            if (first is not null) _expandedVendorGroups.Add(first.Key);
+        }
     }
 
-    private void CloseDetailPanel() { _selectedEvent = null; _assignments = null; _attendance = null; }
+    private void CloseDetailPanel()
+    {
+        _selectedEvent = null;
+        _assignments = null;
+        _attendance = null;
+        _expandedVendorGroups.Clear();
+    }
 
     private void OpenCreateModal()
     {
