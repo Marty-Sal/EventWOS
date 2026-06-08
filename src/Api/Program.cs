@@ -280,6 +280,8 @@ try
         options.AddPolicy("perm:users:read",        policy => policy.Requirements.Add(new PermissionRequirement("users:read")));
         options.AddPolicy("perm:users:status",      policy => policy.Requirements.Add(new PermissionRequirement("users:status")));
         options.AddPolicy("perm:users:write",       policy => policy.Requirements.Add(new PermissionRequirement("users:write")));
+        options.AddPolicy("perm:vendor_allocations:read",  policy => policy.Requirements.Add(new PermissionRequirement("vendor_allocations:read")));
+        options.AddPolicy("perm:vendor_allocations:write", policy => policy.Requirements.Add(new PermissionRequirement("vendor_allocations:write")));
         options.AddPolicy("perm:vendors:read",      policy => policy.Requirements.Add(new PermissionRequirement("vendors:read")));
         options.AddPolicy("perm:vendors:write",     policy => policy.Requirements.Add(new PermissionRequirement("vendors:write")));
     });

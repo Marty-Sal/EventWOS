@@ -125,6 +125,12 @@ public sealed class DatabaseSeeder
         // Phase A — Scope of Work catalog (admin-managed)
         ("scope_of_work:read",  "scope_of_work", "read",  "View scope-of-work catalog"),
         ("scope_of_work:write", "scope_of_work", "write", "Manage scope-of-work catalog"),
+
+        // Phase C — Vendor shift allocations (per-vendor quota on a shift)
+        ("vendor_allocations:read",  "vendor_allocations", "read",
+            "View vendor allocations on event shifts"),
+        ("vendor_allocations:write", "vendor_allocations", "write",
+            "Create, update, or archive vendor allocations on shifts"),
     };
 
     private async Task SeedPermissionsAsync(CancellationToken ct)
@@ -209,7 +215,11 @@ public sealed class DatabaseSeeder
             {
                 "crew:read", "crew:write", "crew:invite", "events:read",
                 "crew:approve", "attendance:read", "profile:read", "profile:write",
-                "payments:read", "payments:disburse"
+                "payments:read", "payments:disburse",
+                // Phase C: vendor can SEE their own allocations on shifts so
+                // the portal can display the per-shift quota counter. They
+                // cannot grant themselves more — write is Admin/Manager only.
+                "vendor_allocations:read"
             })
             {
                 var perm = GetPerm(name);
@@ -248,7 +258,15 @@ public sealed class DatabaseSeeder
             // categories when creating events. They cannot edit the catalog
             // (Admin only) — keeps "what work types exist" a centrally-governed
             // taxonomy rather than something every Manager mutates.
-            foreach (var name in new[] { "profile:read", "profile:write", "scope_of_work:read" })
+            foreach (var name in new[]
+            {
+                "profile:read", "profile:write", "scope_of_work:read",
+                // Phase C: Managers run day-to-day staffing, so they can
+                // both view and grant per-vendor quotas on event shifts.
+                // (Vendors only get :read; Admins implicitly get both via
+                // the "Admin owns everything" loop above.)
+                "vendor_allocations:read", "vendor_allocations:write"
+            })
             {
                 var perm = GetPerm(name);
                 if (perm is not null) TryAdd(managerRole.Id, perm.Id);
