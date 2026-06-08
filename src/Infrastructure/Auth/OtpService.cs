@@ -1,4 +1,5 @@
 using EventWOS.Application.Auth.Interfaces;
+using EventWOS.Application.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -55,13 +56,8 @@ public sealed class OtpOptions
     public bool IsDevelopmentMode { get; init; } = true;
 }
 
-/// <summary>SMS provider abstraction. Implement for Twilio, MSG91, SNS, etc.</summary>
-public interface ISmsProvider
-{
-    Task<bool> SendAsync(string mobile, string message, CancellationToken ct = default);
-}
-
-/// <summary>Stub SMS provider for development/testing.</summary>
+/// <summary>Stub SMS provider for development/testing.
+/// Implements <see cref="EventWOS.Application.Common.ISmsProvider"/>.</summary>
 public sealed class StubSmsProvider : ISmsProvider
 {
     private readonly ILogger<StubSmsProvider> _logger;

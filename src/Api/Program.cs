@@ -284,7 +284,7 @@ try
     builder.Services.AddScoped<IOtpService, OtpService>();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddScoped<IAuditLogger, AuditLogger>();
-    builder.Services.AddScoped<ISmsProvider, StubSmsProvider>();
+    builder.Services.AddScoped<EventWOS.Application.Common.ISmsProvider, EventWOS.Infrastructure.Auth.StubSmsProvider>();
     builder.Services.AddSingleton<EventWOS.Application.Auth.Interfaces.IPasswordHasher, EventWOS.Infrastructure.Auth.BCryptPasswordHasher>();
 
     // ── Email service: SendGrid if API key is present, otherwise dev stub (logs only).
