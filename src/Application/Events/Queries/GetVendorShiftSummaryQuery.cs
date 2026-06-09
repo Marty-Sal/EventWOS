@@ -102,10 +102,16 @@ public sealed class GetVendorShiftSummaryHandler
         var legacyReserved = new Dictionary<Guid, int>();
         if (legacyShiftIds.Count > 0)
         {
+            // Phase D step 17: placeholders (CrewId == null) NEVER reserve
+            // a seat — they ARE the open seats. This filter mirrors
+            // AssignmentCapacityRules.OccupiesSeat so non-enforced shifts
+            // (Phase B legacy) compute SeatsFree the same way enforced
+            // shifts do.
             var rows = await _db.EventAssignments
                 .Where(a => a.ShiftId != null
                          && legacyShiftIds.Contains(a.ShiftId.Value)
                          && !a.IsDeleted
+                         && a.CrewId != null
                          && a.Status != AssignmentStatus.Declined
                          && a.Status != AssignmentStatus.RejectedByVendor
                          && a.Status != AssignmentStatus.RejectedByManager
@@ -123,23 +129,50 @@ public sealed class GetVendorShiftSummaryHandler
             var quota    = mine.TryGetValue(s.Id, out var q) ? q : 0;
 
             var rows = myRows.Where(r => r.ShiftId == s.Id).ToList();
-            int placeholders = rows.Count(r => r.IsPlaceholder && r.Status == AssignmentStatus.Invited);
+
+            // Phase D step 17: chip semantics align with Domain truth.
+            // Placeholder rows (CrewId == null) are OPEN SEATS the vendor
+            // owns — regardless of whether the vendor has accepted the
+            // invitation or not. They do NOT occupy a seat by the
+            // AssignmentCapacityRules.OccupiesSeat predicate (which all
+            // capacity math elsewhere in the system uses) and so must
+            // NOT reduce SeatsFree either. Previous bug: 10 placeholder
+            // rows the vendor had accepted (status=VendorAccepted) were
+            // counted as "occupied" → SeatsFree=0 → Publish disabled,
+            // even though the vendor literally had 0 crew assigned.
+            //
+            // Buckets the chips read from:
+            //   • placeholders → ALL placeholder rows still pending fill
+            //     (Invited OR VendorAccepted) — these are the "slots to
+            //     staff" the vendor has committed to.
+            //   • invited / accepted / approved / final / declined / noShow
+            //     → real-crew rows (CrewId != null) by status.
+            int placeholders = rows.Count(r => r.IsPlaceholder
+                                            && (r.Status == AssignmentStatus.Invited
+                                             || r.Status == AssignmentStatus.VendorAccepted));
             int invited      = rows.Count(r => !r.IsPlaceholder && r.Status == AssignmentStatus.Invited);
-            int accepted     = rows.Count(r => r.Status == AssignmentStatus.VendorAccepted);
-            int approved     = rows.Count(r => r.Status == AssignmentStatus.VendorApproved
-                                            || r.Status == AssignmentStatus.PendingManagerApproval);
-            int final        = rows.Count(r => r.Status == AssignmentStatus.ManagerApproved
-                                            || r.Status == AssignmentStatus.Confirmed
-                                            || r.Status == AssignmentStatus.Attended);
-            int declined     = rows.Count(r => r.Status == AssignmentStatus.Declined
-                                            || r.Status == AssignmentStatus.RejectedByVendor
-                                            || r.Status == AssignmentStatus.RejectedByManager);
-            int noShow       = rows.Count(r => r.Status == AssignmentStatus.NoShow);
+            int accepted     = rows.Count(r => !r.IsPlaceholder && r.Status == AssignmentStatus.VendorAccepted);
+            int approved     = rows.Count(r => !r.IsPlaceholder
+                                            && (r.Status == AssignmentStatus.VendorApproved
+                                             || r.Status == AssignmentStatus.PendingManagerApproval));
+            int final        = rows.Count(r => !r.IsPlaceholder
+                                            && (r.Status == AssignmentStatus.ManagerApproved
+                                             || r.Status == AssignmentStatus.Confirmed
+                                             || r.Status == AssignmentStatus.Attended));
+            int declined     = rows.Count(r => !r.IsPlaceholder
+                                            && (r.Status == AssignmentStatus.Declined
+                                             || r.Status == AssignmentStatus.RejectedByVendor
+                                             || r.Status == AssignmentStatus.RejectedByManager));
+            int noShow       = rows.Count(r => !r.IsPlaceholder && r.Status == AssignmentStatus.NoShow);
 
             int seatsFree;
             if (enforced)
             {
-                var occupies = placeholders + invited + accepted + approved + final;
+                // Only real-crew rows in active states occupy seats —
+                // mirrors AssignmentCapacityRules.OccupiesSeat exactly
+                // (CrewId != null AND status is active). Placeholders
+                // are excluded entirely.
+                var occupies = invited + accepted + approved + final;
                 seatsFree = Math.Max(0, quota - occupies);
             }
             else
