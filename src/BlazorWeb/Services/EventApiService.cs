@@ -84,6 +84,8 @@ public interface IEventApiService
     // Phase C step 5: list shifts on an event (for the allocation editor).
     Task<IReadOnlyList<EventShiftDto>?> GetEventShiftsAsync(Guid eventId, CancellationToken ct = default);
 
+    Task<IReadOnlyList<VendorShiftSummaryDto>?> GetMyShiftSummaryAsync(Guid eventId, CancellationToken ct = default);
+
     // Phase D step 1: shift editor — add / update / archive shifts post-create.
     Task<(bool Ok, EventShiftDto? Shift, string? Error)> AddEventShiftAsync(
         Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, CancellationToken ct = default);
@@ -113,6 +115,24 @@ public sealed record CreateEventRequest(
 public sealed record EventShiftDto(
     Guid Id, Guid EventId, Guid ScopeOfWorkId, string ScopeName,
     int CrewCount, int AssignedCrew, DateTime StartAt, DateTime? EndAt);
+
+/// <summary>Phase D step 11: mirror of API VendorShiftSummaryDto.</summary>
+public sealed record VendorShiftSummaryDto(
+    Guid     ShiftId,
+    string   ScopeName,
+    DateTime StartAt,
+    DateTime? EndAt,
+    int      ShiftCapacity,
+    int      Quota,
+    bool     Enforced,
+    int      Placeholders,
+    int      Invited,
+    int      Accepted,
+    int      Approved,
+    int      Final,
+    int      Declined,
+    int      NoShow,
+    int      SeatsFree);
 
 // ── Implementation ────────────────────────────────────────────────────────────
 public sealed class EventApiService : IEventApiService
@@ -400,6 +420,17 @@ public sealed class EventApiService : IEventApiService
         {
             var r = await _http.GetFromJsonAsync<ApiResult<IReadOnlyList<EventShiftDto>>>(
                 $"api/v1/events/{eventId}/shifts", _jsonOpts, ct);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<IReadOnlyList<VendorShiftSummaryDto>?> GetMyShiftSummaryAsync(Guid eventId, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await _http.GetFromJsonAsync<ApiResult<IReadOnlyList<VendorShiftSummaryDto>>>(
+                $"api/v1/events/{eventId}/my-shift-summary", _jsonOpts, ct);
             return r?.Data;
         }
         catch { return null; }

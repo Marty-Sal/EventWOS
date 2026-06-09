@@ -222,6 +222,23 @@ public sealed class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Phase D step 11: per-shift summary for the calling vendor on ONE event.
+    /// Drives the vendor's Assign Crew modal — shift picker, headroom, and
+    /// the "Invite All Active Crew" button. Vendor-only; non-vendors get 403.
+    /// </summary>
+    [Permission("profile:read")]
+    [HttpGet("{id:guid}/my-shift-summary")]
+    public async Task<IActionResult> GetMyShiftSummary(Guid id, CancellationToken ct)
+    {
+        if (_currentUser.Role != UserRole.Vendor) return Forbid();
+        var result = await _mediator.Send(
+            new GetVendorShiftSummaryQuery(id, _currentUser.UserId!.Value), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse<IReadOnlyList<VendorShiftSummaryDto>>.Ok(result.Value))
+            : BadRequest(ApiResponse<IReadOnlyList<VendorShiftSummaryDto>>.Fail(result.Error.Message));
+    }
+
+    /// <summary>
     /// Get assignments for the authenticated vendor's crew.
     /// Uses profile:read so Vendor (who may not have events:read) can call this.
     /// </summary>
