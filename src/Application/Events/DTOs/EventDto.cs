@@ -54,7 +54,9 @@ public sealed record EventAssignmentDto(
     DateTime? RatedAt,
     string?   AttendanceNote,      // admin override note, if any (e.g. "Marked attended by Admin Saly on 2026-06-06")
     Guid?     ShiftId,             // which EventShift this assignment fills (nullable for legacy rows from before multi-shift)
-    string?   ShiftScopeName       // denormalised "Box Office" / "F&B" label for UI grouping; null when ShiftId is null
+    string?   ShiftScopeName,      // denormalised "Box Office" / "F&B" label for UI grouping; null when ShiftId is null
+    DateTime? ShiftStartAt,        // shift start time (UTC); null when ShiftId is null
+    DateTime? ShiftEndAt           // shift end time (UTC); null when ShiftId is null OR shift has no defined end
 );
 
 public sealed record AttendanceRecordDto(

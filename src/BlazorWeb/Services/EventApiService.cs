@@ -37,7 +37,9 @@ public sealed record EventAssignmentDto(
     DateTime  CreatedAt,
     string?   AttendanceNote,   // admin override audit note
     Guid?     ShiftId,          // FK to EventShift — used for grouping rows by shift in the admin UI
-    string?   ShiftScopeName    // denormalised scope name ("Box Office" etc.) for header label
+    string?   ShiftScopeName,   // denormalised scope name ("Box Office" etc.) for header label
+    DateTime? ShiftStartAt = null, // Phase D step 12: shift start (UTC) — used by crew portal
+    DateTime? ShiftEndAt   = null  // Phase D step 12: shift end (UTC); null when shift has no end
 );
 
 public sealed record AttendanceRecordDto(

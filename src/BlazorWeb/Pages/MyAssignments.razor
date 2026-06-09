@@ -67,6 +67,10 @@
                                 <p class="font-bold text-gray-800 text-sm">@a.EventTitle</p>
 @{
                                     var (lbl, badge, sub) = AssignmentStatusDisplay.For(a.Status, a.EventStatus, a.AttendanceNote);
+                                    // Phase D step 12: per-shift label. When multiple shift invites
+                                    // exist for the same event, each renders as its own row with its
+                                    // own scope + time + hours so the crew sees them as distinct.
+                                    var shiftLabel = BuildShiftLabel(a);
                                 }
                                 <div class="flex flex-col items-end gap-0.5">
                                     <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold @badge">@lbl</span>
@@ -76,6 +80,13 @@
                                     }
                                 </div>
                             </div>
+                            @if (shiftLabel is not null)
+                            {
+                                <div class="flex items-center gap-1.5 text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5 w-fit">
+                                    <span>🎯</span>
+                                    <span class="font-semibold">@shiftLabel</span>
+                                </div>
+                            }
                             <p class="text-xs text-gray-400">
                                 via <span class="font-medium text-gray-600">@a.VendorName</span>
                                 &nbsp;·&nbsp; Invited @TimeAgo(a.CreatedAt)
@@ -390,5 +401,34 @@
         if (diff.TotalDays    < 1)  return $"{(int)diff.TotalHours}h ago";
         if (diff.TotalDays    < 7)  return $"{(int)diff.TotalDays}d ago";
         return dt.ToLocalTime().ToString("dd MMM");
+    }
+
+    /// <summary>
+    /// Phase D step 12: build the per-shift label "Box Office · 18:00–23:00 · 5h"
+    /// shown under the event title. Returns null when this is a legacy
+    /// (pre-multi-shift) assignment with no shift attached, so the original
+    /// event-only display still works for old data.
+    /// </summary>
+    private static string? BuildShiftLabel(EventAssignmentDto a)
+    {
+        if (string.IsNullOrWhiteSpace(a.ShiftScopeName) && a.ShiftStartAt is null) return null;
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(a.ShiftScopeName)) parts.Add(a.ShiftScopeName!);
+        if (a.ShiftStartAt is { } s)
+        {
+            var local = s.ToLocalTime();
+            if (a.ShiftEndAt is { } e)
+            {
+                var le = e.ToLocalTime();
+                parts.Add($"{local:HH:mm}–{le:HH:mm}");
+                var hrs = (le - local).TotalHours;
+                if (hrs > 0) parts.Add($"{hrs:0.#}h");
+            }
+            else
+            {
+                parts.Add($"from {local:HH:mm}");
+            }
+        }
+        return parts.Count > 0 ? string.Join(" · ", parts) : null;
     }
 }

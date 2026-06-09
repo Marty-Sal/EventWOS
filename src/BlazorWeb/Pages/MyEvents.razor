@@ -70,13 +70,39 @@
 
                     <div class="flex items-center justify-between text-xs text-gray-400 border-t border-gray-50 pt-3">
                         <span>👥 @ev.AssignedCrew / @ev.MaxCrew crew</span>
-                        @if (_myStatuses.TryGetValue(ev.Id, out var myStatus))
+                        @if (_userRole != "Vendor"
+                             && _myShiftRowsByEventId.TryGetValue(ev.Id, out var myRows)
+                             && myRows.Any(r => r.ShiftId is not null))
+                        {
+                            @* Phase D step 12: one chip per shift the crew is on.
+                               Falls through to legacy single-pill below if no shift
+                               metadata exists (pre-multi-shift assignments). *@
+                        }
+                        else if (_myStatuses.TryGetValue(ev.Id, out var myStatus))
                         {
                             <span class="px-2 py-0.5 rounded-full font-medium @AssignmentStatusColor(myStatus)">
                                 My status: @myStatus
                             </span>
                         }
                     </div>
+
+                    @* Phase D step 12: per-shift chip row. Renders only when
+                       crew has shift-attached assignments on this event. Each
+                       chip shows scope · status · hours. *@
+                    @if (_userRole != "Vendor"
+                         && _myShiftRowsByEventId.TryGetValue(ev.Id, out var crewShiftRows)
+                         && crewShiftRows.Any(r => r.ShiftId is not null))
+                    {
+                        <div class="flex flex-wrap gap-1.5 -mt-1">
+                            @foreach (var r in crewShiftRows.Where(x => x.ShiftId is not null))
+                            {
+                                var chipLabel = CrewShiftChipLabel(r);
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold border @CrewShiftChipColor(r.Status)">
+                                    🎯 @chipLabel
+                                </span>
+                            }
+                        </div>
+                    }
 
                     @* Vendor action: invite response → then assign crew *@
                     @if (_userRole == "Vendor" && ev.Status != "Completed" && ev.Status != "Cancelled")
@@ -498,6 +524,10 @@
 @code {
     private List<EventListItemDto> _items = new();
     private Dictionary<Guid, string> _myStatuses = new();
+    // Phase D step 12: per-event list of THIS crew's assignment rows so the
+    // card can show one chip per shift ("Box Office · Invited · 5h"). Built
+    // alongside _myStatuses on every Load; empty for vendor role.
+    private Dictionary<Guid, List<EventAssignmentDto>> _myShiftRowsByEventId = new();
     private bool _loading = true;
     private string? _error;
     private int _page = 1;
@@ -686,6 +716,16 @@
                 .ToDictionary(
                     g => g.Key,
                     g => g.OrderByDescending(a => StatusRank(a.Status)).First().Status);
+
+            // Phase D step 12: stash per-event rows for the crew-side card.
+            // For vendors this dict is also built (cheap) but unused — the
+            // vendor card already has its own pending/accepted breakdown.
+            _myShiftRowsByEventId = allRows
+                .Where(a => a.CrewId is not null)   // exclude vendor placeholder rows
+                .GroupBy(a => a.EventId)
+                .ToDictionary(g => g.Key, g => g.OrderBy(r => r.ShiftStartAt ?? DateTime.MaxValue)
+                                                .ThenBy(r => r.ShiftScopeName ?? "")
+                                                .ToList());
 
             if (_userRole == "Vendor")
             {
@@ -1113,6 +1153,55 @@
         }
     }
 
+    /// <summary>
+    /// Phase D step 12: build a compact chip label for ONE crew assignment
+    /// shown on the Crew "My Events" cards. Format: "Box Office · Invited · 5h".
+    /// </summary>
+    private static string CrewShiftChipLabel(EventAssignmentDto a)
+    {
+        var parts = new List<string>();
+        parts.Add(string.IsNullOrWhiteSpace(a.ShiftScopeName) ? "Shift" : a.ShiftScopeName!);
+        parts.Add(ShortStatus(a.Status));
+        if (a.ShiftStartAt is { } st && a.ShiftEndAt is { } et)
+        {
+            var hrs = (et.ToLocalTime() - st.ToLocalTime()).TotalHours;
+            if (hrs > 0) parts.Add($"{hrs:0.#}h");
+        }
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>Phase D step 12: colour the chip by status — same palette as the
+    /// global AssignmentStatusColor map, just borders + lighter bg for chips.</summary>
+    private static string CrewShiftChipColor(string status) => status switch
+    {
+        "Invited"                => "bg-amber-50 border-amber-200 text-amber-700",
+        "Confirmed"              => "bg-emerald-50 border-emerald-200 text-emerald-700",
+        "VendorApproved"         => "bg-emerald-50 border-emerald-200 text-emerald-700",
+        "PendingManagerApproval" => "bg-purple-50 border-purple-200 text-purple-700",
+        "ManagerApproved"        => "bg-green-50 border-green-200 text-green-700",
+        "Attended"               => "bg-indigo-50 border-indigo-200 text-indigo-700",
+        "Declined"               => "bg-rose-50 border-rose-200 text-rose-700",
+        "RejectedByVendor"       => "bg-rose-50 border-rose-200 text-rose-700",
+        "RejectedByManager"      => "bg-rose-50 border-rose-200 text-rose-700",
+        "NoShow"                 => "bg-rose-50 border-rose-200 text-rose-700",
+        _                        => "bg-gray-50 border-gray-200 text-gray-700",
+    };
+
+    private static string ShortStatus(string s) => s switch
+    {
+        "Invited"                => "Invited",
+        "Confirmed"              => "Confirmed",
+        "VendorApproved"         => "Vendor OK",
+        "PendingManagerApproval" => "Awaiting Mgr",
+        "ManagerApproved"        => "Approved",
+        "Attended"               => "Attended",
+        "Declined"               => "Declined",
+        "RejectedByVendor"       => "Vendor rejected",
+        "RejectedByManager"      => "Mgr rejected",
+        "NoShow"                 => "No-show",
+        _                        => s,
+    };
+
     // Higher = more advanced in the workflow → shown as event badge
     private static int StatusRank(string s) => s switch
     {
@@ -1153,7 +1242,8 @@
     private sealed record EventAssignmentDto(Guid Id, Guid EventId, string EventTitle,
         Guid? CrewId, string? CrewName, string? CrewMobile, Guid? VendorId, string? VendorName,
         string Status, DateTime? ConfirmedAt, DateTime? DeclinedAt, DateTime CreatedAt,
-        Guid? ShiftId = null, string? ShiftScopeName = null);
+        Guid? ShiftId = null, string? ShiftScopeName = null,
+        DateTime? ShiftStartAt = null, DateTime? ShiftEndAt = null);
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
     private static string AssignBadgeLabel(string status) => status switch

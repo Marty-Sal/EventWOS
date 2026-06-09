@@ -43,7 +43,7 @@ public sealed class GetMyAssignmentsHandler : IRequestHandler<GetMyAssignmentsQu
                 a.VendorReviewedAt,
                 a.ManagerReviewedAt,
                 a.ConfirmedAt, a.DeclinedAt, a.CreatedAt,
-                a.VendorRating, a.RatedAt, a.AttendanceNote, a.ShiftId, _db.EventShifts.Where(s => s.Id == a.ShiftId).Select(s => s.ScopeOfWork.Name).FirstOrDefault()))
+                a.VendorRating, a.RatedAt, a.AttendanceNote, a.ShiftId, _db.EventShifts.Where(s => s.Id == a.ShiftId).Select(s => (string?)s.ScopeOfWork.Name).FirstOrDefault(), _db.EventShifts.Where(s => s.Id == a.ShiftId).Select(s => (DateTime?)s.StartAt).FirstOrDefault(), _db.EventShifts.Where(s => s.Id == a.ShiftId).Select(s => s.EndAt).FirstOrDefault()))
             .ToListAsync(ct);
 
         return Result.Success(new PagedAssignmentResult(items, total, req.Page, req.PageSize));

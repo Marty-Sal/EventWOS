@@ -218,10 +218,13 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
         }, ct);
 
         // Phase D step 5: surface shift + scope name on the returned DTO.
-        var shiftScopeName = await _db.EventShifts
+        var shiftInfo = await _db.EventShifts
             .Where(s => s.Id == assignment.ShiftId)
-            .Select(s => s.ScopeOfWork.Name)
+            .Select(s => new { Name = (string?)s.ScopeOfWork.Name, StartAt = (DateTime?)s.StartAt, EndAt = s.EndAt })
             .FirstOrDefaultAsync(ct);
+        var shiftScopeName = shiftInfo?.Name;
+        var shiftStartAt   = shiftInfo?.StartAt;
+        var shiftEndAt     = shiftInfo?.EndAt;
 
         return Result.Success(new EventAssignmentDto(
             assignment.Id, ev.Id, ev.Title, ev.Status.ToString(),
@@ -237,6 +240,6 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
             assignment.ConfirmedAt, assignment.DeclinedAt,
             assignment.CreatedAt,
             assignment.VendorRating, assignment.RatedAt, assignment.AttendanceNote,
-            assignment.ShiftId, shiftScopeName));
+            assignment.ShiftId, shiftScopeName, shiftStartAt, shiftEndAt));
     }
 }

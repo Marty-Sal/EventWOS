@@ -22,7 +22,12 @@ public sealed record ManagerApprovalItemDto(
     string?  VendorName,
     DateTime CrewRespondedAt,
     DateTime? VendorReviewedAt,
-    string   Status
+    string   Status,
+    // Phase D step 12: per-shift fields so managers approve shift-by-shift.
+    Guid?     ShiftId,
+    string?   ShiftScopeName,
+    DateTime? ShiftStartAt,
+    DateTime? ShiftEndAt
 );
 
 public sealed record GetManagerApprovalQueueQuery(
@@ -66,7 +71,11 @@ public sealed class GetManagerApprovalQueueHandler
                 a.Vendor.FullName,
                 a.CrewRespondedAt ?? a.CreatedAt,
                 a.VendorReviewedAt,
-                a.Status.ToString()))
+                a.Status.ToString(),
+                a.ShiftId,
+                _db.EventShifts.Where(s => s.Id == a.ShiftId).Select(s => (string?)s.ScopeOfWork.Name).FirstOrDefault(),
+                _db.EventShifts.Where(s => s.Id == a.ShiftId).Select(s => (DateTime?)s.StartAt).FirstOrDefault(),
+                _db.EventShifts.Where(s => s.Id == a.ShiftId).Select(s => s.EndAt).FirstOrDefault()))
             .ToListAsync(ct);
 
         return Result.Success(PagedResult<ManagerApprovalItemDto>.Create(

@@ -95,6 +95,11 @@
                                 <p class="font-semibold text-indigo-800">📅 @item.EventTitle</p>
                                 <p class="text-indigo-600">📍 @item.EventVenue</p>
                                 <p class="text-indigo-500">🗓 @item.EventStartAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")</p>
+                                @{ var shiftLbl = BuildShiftLabel(item); }
+                                @if (shiftLbl is not null)
+                                {
+                                    <p class="text-indigo-700 font-semibold mt-1">🎯 @shiftLbl</p>
+                                }
                             </div>
                         </div>
 
@@ -351,12 +356,38 @@
     private static string DisciplineColor(decimal score) =>
         score >= 80 ? "text-green-600" : score >= 50 ? "text-amber-600" : "text-red-600";
 
+    /// <summary>Phase D step 12: shift chip text "Box Office · 18:00–23:00 · 5h".</summary>
+    private static string? BuildShiftLabel(ManagerApprovalItemDto a)
+    {
+        if (string.IsNullOrWhiteSpace(a.ShiftScopeName) && a.ShiftStartAt is null) return null;
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(a.ShiftScopeName)) parts.Add(a.ShiftScopeName!);
+        if (a.ShiftStartAt is { } st)
+        {
+            var ls = st.ToLocalTime();
+            if (a.ShiftEndAt is { } et)
+            {
+                var le = et.ToLocalTime();
+                parts.Add($"{ls:HH:mm}–{le:HH:mm}");
+                var hrs = (le - ls).TotalHours;
+                if (hrs > 0) parts.Add($"{hrs:0.#}h");
+            }
+            else parts.Add($"from {ls:HH:mm}");
+        }
+        return parts.Count > 0 ? string.Join(" · ", parts) : null;
+    }
+
     private sealed record ManagerApprovalItemDto(
         Guid AssignmentId, Guid EventId, string EventTitle, string EventVenue, DateTime EventStartAt,
         Guid CrewId, string CrewName, string CrewMobile,
         decimal DisciplineScore, int EventsAttended,
         Guid VendorId, string VendorName,
-        DateTime CrewRespondedAt, DateTime? VendorReviewedAt, string Status);
+        DateTime CrewRespondedAt, DateTime? VendorReviewedAt, string Status,
+        // Phase D step 12: per-shift approval context.
+        Guid? ShiftId = null,
+        string? ShiftScopeName = null,
+        DateTime? ShiftStartAt = null,
+        DateTime? ShiftEndAt = null);
 
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
