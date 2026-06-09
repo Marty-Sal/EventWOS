@@ -785,13 +785,52 @@
 
                                     @if (isOpen)
                                     {
-                                        <div class="bg-white p-2 space-y-2">
-                                            @foreach (var a in group.Rows)
+                                        <div class="bg-white p-2 space-y-3">
+                                            @* Phase D step 5: rows are grouped by shift inside each
+                                               vendor. When every row in a shift bucket is an empty-crew
+                                               "Invited" placeholder, the whole bucket collapses to a
+                                               single summary line ("Box Office × 5 - Invited / Revoke
+                                               Invite"). Mixed buckets render rows individually. *@
+                                            @foreach (var bucket in BucketByShift(group.Rows))
                                             {
-                                                var isPlaceholder    = string.IsNullOrEmpty(a.CrewName) && !string.IsNullOrEmpty(a.VendorName);
-                                                var canRevoke        = _canWrite && isPlaceholder && a.Status == "Invited" && !_isEventLocked;
-                                                var canReinvite      = _canWrite && isPlaceholder && a.Status == "RejectedByVendor" && !_isEventLocked;
-                                                var rowBusy          = _placeholderBusy == a.Id;
+                                                var allPlaceholders = IsAllInvitedPlaceholders(bucket);
+                                                var bucketBusy      = bucket.All.Any(x => _placeholderBusy == x.Id);
+
+                                                <div class="border border-gray-100 rounded-xl overflow-hidden">
+                                                    <div class="bg-indigo-50/40 px-3 py-1.5 flex items-center justify-between">
+                                                        <span class="text-[11px] font-semibold text-indigo-900 uppercase tracking-wide">@bucket.ScopeLabel</span>
+                                                        <span class="text-[10px] text-indigo-700/70">@bucket.All.Count seat@(bucket.All.Count == 1 ? "" : "s")</span>
+                                                    </div>
+
+                                                    @if (allPlaceholders)
+                                                    {
+                                                        <div class="bg-gray-50 px-4 py-2.5 flex items-center justify-between">
+                                                            <div>
+                                                                <p class="text-sm font-medium text-gray-800">@bucket.ScopeLabel — @bucket.All.Count slot@(bucket.All.Count == 1 ? "" : "s")</p>
+                                                                <p class="text-xs text-gray-400 italic">Waiting for vendor to invite crew</p>
+                                                            </div>
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="text-xs px-2.5 py-1 rounded-full font-semibold bg-amber-100 text-amber-700">Invited</span>
+                                                                @if (_canWrite && !_isEventLocked)
+                                                                {
+                                                                    <button @onclick="() => RevokeBucket(bucket)"
+                                                                            disabled="@bucketBusy"
+                                                                            class="px-3 py-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-[11px] font-semibold disabled:opacity-50 transition">
+                                                                        @(bucketBusy ? "Revoking…" : "✕ Revoke Invite")
+                                                                    </button>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="p-2 space-y-2">
+                                                            @foreach (var a in bucket.All)
+                                                            {
+                                                                var isPlaceholder    = string.IsNullOrEmpty(a.CrewName) && !string.IsNullOrEmpty(a.VendorName);
+                                                                var canRevoke        = _canWrite && isPlaceholder && a.Status == "Invited" && !_isEventLocked;
+                                                                var canReinvite      = _canWrite && isPlaceholder && a.Status == "RejectedByVendor" && !_isEventLocked;
+                                                                var rowBusy          = _placeholderBusy == a.Id;
 
                                                 <div class="bg-gray-50 rounded-xl px-4 py-2.5 space-y-2">
                                                     <div class="flex items-center justify-between">
@@ -855,6 +894,10 @@
                                                                     @(rowBusy ? "Re-inviting…" : "↻ Re-invite")
                                                                 </button>
                                                             }
+                                                        </div>
+                                                    }
+                                                            </div>
+                                                        }
                                                         </div>
                                                     }
                                                 </div>
@@ -1362,6 +1405,47 @@ else
     // because it's a view-model concern — the API returns a flat list and the
     // grouping is purely a presentation choice.
     private sealed record VendorGroup(string Key, string? VendorName, List<EventAssignmentDto> Rows);
+
+    /// <summary>
+    /// One shift's worth of assignments under a single vendor. The UI renders
+    /// this as ONE collapsed row when every assignment is an empty-crew
+    /// "Invited" placeholder ("Box Office × 5 — Invited / Revoke Invite").
+    /// As soon as the vendor invites real named crew, those rows show
+    /// individually alongside any remaining placeholders.
+    /// </summary>
+    private sealed record ShiftBucket(
+        Guid?   ShiftId,
+        string  ScopeLabel,
+        List<EventAssignmentDto> All);
+
+    /// <summary>
+    /// Group a vendor's assignments by ShiftId. Buckets are ordered by scope
+    /// label for stable rendering. Rows with no ShiftId (legacy data) land
+    /// in a synthetic "Unassigned shift" bucket.
+    /// </summary>
+    private static IEnumerable<ShiftBucket> BucketByShift(IEnumerable<EventAssignmentDto> rows)
+    {
+        return rows
+            .GroupBy(a => new { a.ShiftId, a.ShiftScopeName })
+            .OrderBy(g => g.Key.ShiftScopeName ?? "~unassigned", StringComparer.OrdinalIgnoreCase)
+            .Select(g => new ShiftBucket(
+                ShiftId:    g.Key.ShiftId,
+                ScopeLabel: g.Key.ShiftScopeName ?? "Unassigned shift",
+                All:        g.ToList()));
+    }
+
+    /// <summary>
+    /// Returns true when every row in the bucket is an empty-crew placeholder
+    /// (vendor not yet filled the seat) AND all share the same Invited status.
+    /// In that case the UI collapses the bucket into a single "× N" row.
+    /// </summary>
+    private static bool IsAllInvitedPlaceholders(ShiftBucket bucket)
+    {
+        if (bucket.All.Count == 0) return false;
+        return bucket.All.All(a =>
+            string.IsNullOrEmpty(a.CrewName) &&
+            a.Status == "Invited");
+    }
 
     private static IEnumerable<VendorGroup> GroupAssignmentsByVendor(IEnumerable<EventAssignmentDto> rows)
     {
@@ -2283,6 +2367,34 @@ else
             _multiShiftSubmitting = true;
             try
             {
+                // Step 1: keep VendorShiftAllocations in sync with what the admin
+                // is about to assign. Otherwise the "Vendor Quotas" panel reads
+                // 0 even though there are 10 active EventAssignments — confusing.
+                // For each picked shift:
+                //   - if the vendor already has an active allocation row, bump
+                //     its quota by the new count (UpdateAsync).
+                //   - otherwise create a fresh one with that quota.
+                var allocErrors = new List<string>();
+                foreach (var (shiftId, row) in picks)
+                {
+                    // Ensure we have the latest allocation snapshot for this shift.
+                    await ReloadShiftAllocations(shiftId);
+                    var existing = _allocationsByShift.GetValueOrDefault(shiftId)
+                                    ?.FirstOrDefault(r => !r.IsArchived && r.VendorId == _assignSelectedVendor.Id);
+                    if (existing is null)
+                    {
+                        var (aOk, aErr, _) = await AllocApi.CreateAsync(shiftId, _assignSelectedVendor.Id, row.Count);
+                        if (!aOk) allocErrors.Add(aErr ?? "alloc create failed");
+                    }
+                    else
+                    {
+                        var newQuota = existing.Quota + row.Count;
+                        var (uOk, uErr, _) = await AllocApi.UpdateAsync(existing.Id, newQuota);
+                        if (!uOk) allocErrors.Add(uErr ?? "alloc update failed");
+                    }
+                }
+
+                // Step 2: actually create the EventAssignment seats (one per crew slot).
                 int totalCreated = 0;
                 var errors = new List<string>();
                 foreach (var (shiftId, row) in picks)
@@ -2309,11 +2421,15 @@ else
                     _assignVendorSearch   = "";
                     _assignments          = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
                     _selectedEventShifts  = await EventApi.GetEventShiftsAsync(_selectedEvent.Id) ?? new List<EventShiftDto>();
+                    // Refresh allocations for every picked shift so the panel reflects new quotas.
+                    foreach (var (shiftId, _) in picks)
+                        await ReloadShiftAllocations(shiftId);
                     CloseMultiShiftModal();
                 }
-                if (errors.Count > 0)
+                var allMsgs = errors.Concat(allocErrors).Distinct().ToList();
+                if (allMsgs.Count > 0)
                 {
-                    _multiShiftError = $"Created {totalCreated} but hit: {string.Join("; ", errors.Distinct())}";
+                    _multiShiftError = $"Created {totalCreated} but hit: {string.Join("; ", allMsgs)}";
                 }
             }
             finally { _multiShiftSubmitting = false; }
@@ -2426,6 +2542,37 @@ else
             {
                 _error = "Couldn't revoke invitation: " + await resp.Content.ReadAsStringAsync();
             }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _placeholderBusy = Guid.Empty; StateHasChanged(); }
+    }
+
+    /// <summary>
+    /// Phase D step 5: revoke an entire shift bucket of empty-crew vendor invites
+    /// in one click. Iterates over each row, mirroring RevokeVendorInvite but
+    /// batching the UI refresh to the end. Errors accumulate; partial success
+    /// is reported.
+    /// </summary>
+    private async Task RevokeBucket(ShiftBucket bucket)
+    {
+        var ids = bucket.All.Select(x => x.Id).ToList();
+        int revoked = 0;
+        var errors = new List<string>();
+        try
+        {
+            foreach (var id in ids)
+            {
+                _placeholderBusy = id; StateHasChanged();
+                var resp = await Http.DeleteAsync($"api/v1/events/vendor-invitations/{id}");
+                if (resp.IsSuccessStatusCode) revoked++;
+                else errors.Add(await resp.Content.ReadAsStringAsync());
+            }
+            if (revoked > 0)
+                _success = $"Revoked {revoked} of {ids.Count} invites for {bucket.ScopeLabel}.";
+            if (errors.Count > 0)
+                _error = "Some revokes failed: " + string.Join("; ", errors.Distinct().Take(3));
+            if (_selectedEvent is not null)
+                _assignments = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _placeholderBusy = Guid.Empty; StateHasChanged(); }

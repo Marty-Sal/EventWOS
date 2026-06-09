@@ -35,7 +35,9 @@ public sealed record EventAssignmentDto(
     DateTime? ConfirmedAt,
     DateTime? DeclinedAt,
     DateTime  CreatedAt,
-    string?   AttendanceNote   // admin override audit note (e.g. "Marked attended by Admin Saly on 2026-06-06")
+    string?   AttendanceNote,   // admin override audit note
+    Guid?     ShiftId,          // FK to EventShift — used for grouping rows by shift in the admin UI
+    string?   ShiftScopeName    // denormalised scope name ("Box Office" etc.) for header label
 );
 
 public sealed record AttendanceRecordDto(

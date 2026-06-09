@@ -131,6 +131,13 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             }, ct);
         }
 
+        // Phase D step 5: surface shift + scope name on the returned DTO so the
+        // admin UI can group rows by shift without a re-fetch.
+        var shiftScopeName = await _db.EventShifts
+            .Where(s => s.Id == assignment.ShiftId)
+            .Select(s => s.ScopeOfWork.Name)
+            .FirstOrDefaultAsync(ct);
+
         return Result.Success(new EventAssignmentDto(
             assignment.Id, ev.Id, ev.Title, ev.Status.ToString(),
             crew?.Id ?? Guid.Empty,
@@ -148,6 +155,7 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             assignment.ManagerReviewedAt,
             assignment.ConfirmedAt, assignment.DeclinedAt,
             assignment.CreatedAt,
-            assignment.VendorRating, assignment.RatedAt, assignment.AttendanceNote));
+            assignment.VendorRating, assignment.RatedAt, assignment.AttendanceNote,
+            assignment.ShiftId, shiftScopeName));
     }
 }

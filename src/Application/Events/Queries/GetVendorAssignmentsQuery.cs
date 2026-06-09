@@ -67,7 +67,7 @@ public sealed class GetVendorAssignmentsHandler
                 a.VendorReviewedAt,
                 a.ManagerReviewedAt,
                 a.ConfirmedAt, a.DeclinedAt, a.CreatedAt,
-                a.VendorRating, a.RatedAt, a.AttendanceNote))
+                a.VendorRating, a.RatedAt, a.AttendanceNote, a.ShiftId, _db.EventShifts.Where(s => s.Id == a.ShiftId).Select(s => s.ScopeOfWork.Name).FirstOrDefault()))
             .ToListAsync(ct);
 
         return Result.Success(new PagedAssignmentResult(items, total, req.Page, req.PageSize));
