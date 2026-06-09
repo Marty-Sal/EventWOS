@@ -90,66 +90,12 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
         if (crew.VendorId != req.VendorUserId)
             return Result.Failure<EventAssignmentDto>(new Error("Crew.NotInRoster", "That crew member is not in your roster."));
 
-        // Look for any existing row for this (event, crew) pair. We treat
-        // terminal-rejected rows as "spent" — they get resurrected with a
-        // fresh Invited status so the vendor's "Re-invite" button actually
-        // sends a new invite instead of being blocked by the dead row.
-        var existing = await _db.EventAssignments
-            .FirstOrDefaultAsync(a => a.EventId == req.EventId && a.CrewId == req.CrewId, ct);
-
-        bool isResurrection = false;
-        if (existing is not null)
-        {
-            // Active rows still block — can't double-invite someone who's
-            // already pending or working the event.
-            var isTerminal = existing.Status is
-                AssignmentStatus.Declined         or
-                AssignmentStatus.RejectedByVendor or
-                AssignmentStatus.RejectedByManager or
-                AssignmentStatus.NoShow;
-            if (!isTerminal)
-                return Result.Failure<EventAssignmentDto>(new Error(
-                    "Assignment.Duplicate", "That crew is already on this event."));
-
-            isResurrection = true;
-        }
-
-        // Capacity check — uses centralised rule (excludes declined,
-        // rejected, no-show, placeholders, soft-deleted).
-        if (ev.MaxCrew > 0)
-        {
-            var current = await _db.EventAssignments
-                .Where(a => a.EventId == req.EventId)
-                .Where(AssignmentCapacityRules.OccupiesSeat)
-                .CountAsync(ct);
-            if (current >= ev.MaxCrew)
-                return Result.Failure<EventAssignmentDto>(new Error("Assignment.MaxReached", $"Event is fully staffed (max {ev.MaxCrew})."));
-        }
-
-        var vendor = await _db.Users.FirstOrDefaultAsync(u => u.Id == req.VendorUserId, ct);
-
-        // Create the crew assignment, OR resurrect the previously-terminated
-        // row (Declined / RejectedByVendor / RejectedByManager / NoShow) by
-        // flipping status back to Invited. Resurrection keeps one row per
-        // (event, crew) pair so the badge logic on the picker stays simple.
-        EventAssignment assignment;
-        if (isResurrection && existing is not null)
-        {
-            existing.VendorReInvite(req.VendorUserId);
-            existing.UpdatedAt = DateTime.UtcNow;
-            existing.UpdatedBy = req.VendorUserId;
-            assignment = existing;
-        }
-        else
-        {
-                    // Phase B: every assignment must reference a shift. Until the
-        // multi-shift UI lands (Phase C) we auto-resolve to the event's
-        // single active shift via DefaultShiftResolver. Ambiguous events
-        // (somehow >1 shift) surface a clear error rather than picking
-        // one at random.
-        // Phase C step 6: if the caller (vendor portal) explicitly picked a
-        // shift, validate it belongs to this event and use it. Otherwise
-        // fall back to the auto-resolver (legacy single-shift path).
+        // Phase B / Phase C / Phase D step 19:
+        //   1. Resolve the target shift FIRST. The duplicate check needs
+        //      it because uniqueness is now (event, crew, shift) — same
+        //      crew on a different shift of the same event is allowed.
+        //   2. Then check for an existing row on THAT shift only.
+        //   3. Then capacity, vendor-quota, and finally create/resurrect.
         Guid? _shiftId;
         if (req.ShiftId is { } explicitShift)
         {
@@ -173,29 +119,86 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
                     "Event has no shifts — cannot assign crew."));
         }
 
+        // Look for any existing row for this (event, crew, SHIFT) tuple.
+        // Phase D step 19: scoped to the resolved shift so the same crew
+        // can be invited to a different shift of the same event.
+        // Terminal-rejected rows on this shift get resurrected so the
+        // "Re-invite" button works.
+        var existing = await _db.EventAssignments
+            .FirstOrDefaultAsync(a => a.EventId == req.EventId
+                                   && a.CrewId  == req.CrewId
+                                   && a.ShiftId == _shiftId, ct);
+
+        bool isResurrection = false;
+        if (existing is not null)
+        {
+            // Active rows on THIS shift still block — can't double-invite
+            // someone who's already pending or working this exact shift.
+            var isTerminal = existing.Status is
+                AssignmentStatus.Declined         or
+                AssignmentStatus.RejectedByVendor or
+                AssignmentStatus.RejectedByManager or
+                AssignmentStatus.NoShow;
+            if (!isTerminal)
+                return Result.Failure<EventAssignmentDto>(new Error(
+                    "Assignment.Duplicate", "That crew is already on this shift."));
+
+            isResurrection = true;
+        }
+
+        // Capacity check — uses centralised rule (excludes declined,
+        // rejected, no-show, placeholders, soft-deleted).
+        if (ev.MaxCrew > 0)
+        {
+            var current = await _db.EventAssignments
+                .Where(a => a.EventId == req.EventId)
+                .Where(AssignmentCapacityRules.OccupiesSeat)
+                .CountAsync(ct);
+            if (current >= ev.MaxCrew)
+                return Result.Failure<EventAssignmentDto>(new Error("Assignment.MaxReached", $"Event is fully staffed (max {ev.MaxCrew})."));
+        }
+
+        var vendor = await _db.Users.FirstOrDefaultAsync(u => u.Id == req.VendorUserId, ct);
+
         // Phase C step 3: vendor quota gate. Only fires for fresh-row
         // path (resurrections skip — they're refilling an already-counted
         // seat, blocking them would be a UX trap). Returns NotEnforcedYet
         // on shifts with zero allocations so legacy events still work.
-        var _quota = await VendorQuotaChecker.CheckAsync(_db, _shiftId.Value, req.VendorUserId, ct);
-        switch (_quota.Status)
+        if (!isResurrection)
         {
-            case VendorQuotaCheck.NoAllocation:
-                return Result.Failure<EventAssignmentDto>(new Error(
-                    "Vendor.NoAllocationOnShift",
-                    "You don't have an allocation on this shift. " +
-                    "Ask the event manager to grant you a quota first."));
-            case VendorQuotaCheck.QuotaExhausted:
-                return Result.Failure<EventAssignmentDto>(new Error(
-                    "Vendor.QuotaExhausted",
-                    $"Your allocation on this shift is full " +
-                    $"({_quota.CurrentlyAssigned}/{_quota.Quota}). " +
-                    "Ask the event manager to raise your quota, or remove a previously-invited crew."));
-            // Allowed and NotEnforcedYet both fall through to the assignment.
+            var _quota = await VendorQuotaChecker.CheckAsync(_db, _shiftId.Value, req.VendorUserId, ct);
+            switch (_quota.Status)
+            {
+                case VendorQuotaCheck.NoAllocation:
+                    return Result.Failure<EventAssignmentDto>(new Error(
+                        "Vendor.NoAllocationOnShift",
+                        "You don't have an allocation on this shift. " +
+                        "Ask the event manager to grant you a quota first."));
+                case VendorQuotaCheck.QuotaExhausted:
+                    return Result.Failure<EventAssignmentDto>(new Error(
+                        "Vendor.QuotaExhausted",
+                        $"Your allocation on this shift is full " +
+                        $"({_quota.CurrentlyAssigned}/{_quota.Quota}). " +
+                        "Ask the event manager to raise your quota, or remove a previously-invited crew."));
+                // Allowed and NotEnforcedYet both fall through.
+            }
         }
 
-        assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorUserId, req.VendorUserId);
-        assignment.AttachToShift(_shiftId.Value);
+        // Create the crew assignment, OR resurrect the previously-terminated
+        // row (Declined / RejectedByVendor / RejectedByManager / NoShow) on
+        // this shift by flipping status back to Invited.
+        EventAssignment assignment;
+        if (isResurrection && existing is not null)
+        {
+            existing.VendorReInvite(req.VendorUserId);
+            existing.UpdatedAt = DateTime.UtcNow;
+            existing.UpdatedBy = req.VendorUserId;
+            assignment = existing;
+        }
+        else
+        {
+            assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorUserId, req.VendorUserId);
+            assignment.AttachToShift(_shiftId.Value);
             _db.EventAssignments.Add(assignment);
         }
 

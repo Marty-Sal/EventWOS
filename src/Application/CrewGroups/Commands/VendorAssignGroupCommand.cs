@@ -103,13 +103,6 @@ public sealed class VendorAssignGroupHandler
                 Array.Empty<VendorAssignGroupFailureDto>()));
         }
 
-        // Existing assignments for the event so we can detect dupes in O(1).
-        var existingForEvent = await _db.EventAssignments
-            .Where(a => a.EventId == req.EventId && a.CrewId != null)
-            .Select(a => a.CrewId!.Value)
-            .ToListAsync(ct);
-        var existingSet = existingForEvent.ToHashSet();
-
         // Capacity once, then we just count up as we invite.
         var currentSeats = await _db.EventAssignments
             .Where(a => a.EventId == req.EventId)
@@ -145,6 +138,23 @@ public sealed class VendorAssignGroupHandler
                 return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.NoShift",
                     "Event has no shifts — cannot assign crew."));
         }
+
+        // Phase D step 19: dup detection is per-shift now. The same crew
+        // member CAN be invited to a different shift of the same event;
+        // the only collision is "already on THIS shift". Active statuses
+        // only — terminal-rejected rows on this shift don't count as
+        // duplicates (the vendor-assign command will resurrect them).
+        var existingForShift = await _db.EventAssignments
+            .Where(a => a.EventId == req.EventId
+                     && a.ShiftId == _shiftId.Value
+                     && a.CrewId != null
+                     && a.Status != AssignmentStatus.Declined
+                     && a.Status != AssignmentStatus.RejectedByVendor
+                     && a.Status != AssignmentStatus.RejectedByManager
+                     && a.Status != AssignmentStatus.NoShow)
+            .Select(a => a.CrewId!.Value)
+            .ToListAsync(ct);
+        var existingSet = existingForShift.ToHashSet();
 
         // Phase C step 3: resolve the vendor's quota ONCE before the loop.
         // We then decrement an in-memory counter as we invite, identical

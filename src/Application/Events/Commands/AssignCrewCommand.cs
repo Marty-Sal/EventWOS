@@ -55,13 +55,9 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             if (vendor is null) return Result.Failure<EventAssignmentDto>(new Error("Vendor.NotFound", "Vendor not found."));
         }
 
-        // Duplicate check (only meaningful when a crew member is specified)
-        if (req.CrewId.HasValue)
-        {
-            var exists = await _db.EventAssignments.AnyAsync(
-                a => a.EventId == req.EventId && a.CrewId == req.CrewId, ct);
-            if (exists) return Result.Failure<EventAssignmentDto>(new Error("Assignment.Duplicate", "Crew already assigned to this event."));
-        }
+        // Phase D step 19: duplicate check is now per-shift (see further
+        // below, after shift resolution). The same crew member may be
+        // assigned to multiple shifts of one event.
 
         // Check max crew — only count rows that genuinely occupy a seat
         // (real crew, not declined/rejected/no-show, not placeholder).
@@ -101,6 +97,28 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             if (_shiftId is null)
                 return Result.Failure<EventAssignmentDto>(new Error("Assignment.NoShift",
                     "Event has no shifts — cannot assign crew."));
+        }
+
+        // Phase D step 19: per-shift duplicate check. A crew member is
+        // allowed to work multiple shifts of the same event, but cannot
+        // hold two active rows on the same shift. Mirrors the index
+        // ix_event_assignments_event_crew_shift_unique. Placeholder
+        // requests (CrewId == null) skip this branch — multiple
+        // placeholders per shift are valid (each anchors a slot).
+        if (req.CrewId.HasValue)
+        {
+            var dupExists = await _db.EventAssignments.AnyAsync(
+                a => a.EventId == req.EventId
+                  && a.CrewId  == req.CrewId
+                  && a.ShiftId == _shiftId.Value
+                  && a.Status != AssignmentStatus.Declined
+                  && a.Status != AssignmentStatus.RejectedByVendor
+                  && a.Status != AssignmentStatus.RejectedByManager
+                  && a.Status != AssignmentStatus.NoShow, ct);
+            if (dupExists)
+                return Result.Failure<EventAssignmentDto>(new Error(
+                    "Assignment.Duplicate",
+                    "Crew is already assigned to this shift."));
         }
 
         // Phase D step 9: enforce per-shift capacity using TOTAL reserved

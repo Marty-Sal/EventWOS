@@ -42,11 +42,15 @@ public sealed class EventAssignmentConfiguration : IEntityTypeConfiguration<Even
         builder.Property(a => a.DeletedAt).HasColumnName("deleted_at");
         builder.Property(a => a.DeletedBy).HasColumnName("deleted_by");
 
-        // Prevent duplicate active assignment (crew can only be assigned once per event)
-        builder.HasIndex(a => new { a.EventId, a.CrewId })
+        // Phase D step 19: uniqueness is now per-shift. A crew member can
+        // be assigned to multiple shifts of the same event (e.g. Box Office
+        // 10:15-13:00 AND F&B 14:00-18:00), but cannot be double-booked on
+        // the SAME shift. Placeholder rows (crew_id IS NULL) are excluded
+        // from collision by Postgres' NULL-distinct semantics.
+        builder.HasIndex(a => new { a.EventId, a.CrewId, a.ShiftId })
                .IsUnique()
                .HasFilter("is_deleted = false")
-               .HasDatabaseName("ix_event_assignments_event_crew_unique");
+               .HasDatabaseName("ix_event_assignments_event_crew_shift_unique");
 
         // Relationships
         builder.HasOne(a => a.Event)
