@@ -774,6 +774,7 @@
                                             @foreach (var bucket in BucketByShift(group.Rows))
                                             {
                                                 var allPlaceholders = IsAllInvitedPlaceholders(bucket);
+                                                var allRejected     = IsAllRejectedPlaceholders(bucket);
                                                 var bucketBusy      = bucket.All.Any(x => _placeholderBusy == x.Id);
 
                                                 <div class="border border-gray-100 rounded-xl overflow-hidden">
@@ -797,6 +798,39 @@
                                                                             disabled="@bucketBusy"
                                                                             class="px-3 py-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-[11px] font-semibold disabled:opacity-50 transition">
                                                                         @(bucketBusy ? "Revoking…" : "✕ Revoke Invite")
+                                                                    </button>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else if (allRejected)
+                                                    {
+                                                        @* Phase D step 10: collapsed "vendor rejected" row.
+                                                           Surfaces the first row's RejectionReason (they're
+                                                           all the same when the vendor rejected the bucket
+                                                           in one click) and offers a single Re-invite All
+                                                           that fans out per-row server-side. *@
+                                                        var firstReason = bucket.All
+                                                            .Select(x => x.RejectionReason)
+                                                            .FirstOrDefault(r => !string.IsNullOrEmpty(r));
+                                                        <div class="bg-rose-50/40 px-4 py-2.5 flex items-center justify-between">
+                                                            @{
+                                                                var rejectedLabel = string.IsNullOrEmpty(firstReason)
+                                                                    ? "Rejected by vendor"
+                                                                    : "Rejected by vendor — " + firstReason;
+                                                            }
+                                                            <div class="min-w-0">
+                                                                <p class="text-sm font-medium text-gray-800">@bucket.ScopeLabel — @bucket.All.Count slot@(bucket.All.Count == 1 ? "" : "s")</p>
+                                                                <p class="text-xs text-rose-500 italic truncate">@rejectedLabel</p>
+                                                            </div>
+                                                            <div class="flex items-center gap-2 shrink-0">
+                                                                <span class="text-xs px-2.5 py-1 rounded-full font-semibold bg-rose-100 text-rose-700">RejectedByVendor</span>
+                                                                @if (_canWrite && !_isEventLocked)
+                                                                {
+                                                                    <button @onclick="() => ReinviteBucket(bucket)"
+                                                                            disabled="@bucketBusy"
+                                                                            class="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold disabled:opacity-50 transition">
+                                                                        @(bucketBusy ? "Re-inviting…" : "↻ Re-invite")
                                                                     </button>
                                                                 }
                                                             </div>
@@ -1425,6 +1459,23 @@ else
         return bucket.All.All(a =>
             string.IsNullOrEmpty(a.CrewName) &&
             a.Status == "Invited");
+    }
+
+    /// <summary>
+    /// Phase D step 10: counterpart to IsAllInvitedPlaceholders for the
+    /// post-rejection state. When a vendor rejects an invite, every row
+    /// in the shift bucket flips to RejectedByVendor but stays in the
+    /// list (no auto-delete) so the admin can see the rejection reason
+    /// and re-invite. Without this collapse, 6 rejected placeholders
+    /// turn into 6 noisy rows. With it, they collapse into a single
+    /// "× N — Rejected by vendor" summary with one Re-invite All button.
+    /// </summary>
+    private static bool IsAllRejectedPlaceholders(ShiftBucket bucket)
+    {
+        if (bucket.All.Count == 0) return false;
+        return bucket.All.All(a =>
+            string.IsNullOrEmpty(a.CrewName) &&
+            a.Status == "RejectedByVendor");
     }
 
     private static IEnumerable<VendorGroup> GroupAssignmentsByVendor(IEnumerable<EventAssignmentDto> rows)
@@ -2577,6 +2628,44 @@ else
                 _success = $"Revoked {revoked} of {ids.Count} invites for {bucket.ScopeLabel}.";
             if (errors.Count > 0)
                 _error = "Some revokes failed: " + string.Join("; ", errors.Distinct().Take(3));
+            if (_selectedEvent is not null)
+                _assignments = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _placeholderBusy = Guid.Empty; StateHasChanged(); }
+    }
+
+    /// <summary>
+    /// Phase D step 10: batch counterpart to ReinviteVendor. When every
+    /// placeholder in a bucket is RejectedByVendor (typical after a vendor
+    /// taps "Reject" on a whole shift), the UI collapses to a single row
+    /// with one Re-invite button. This loops the existing per-row
+    /// re-invite endpoint so backend semantics + audit trail stay intact.
+    /// </summary>
+    private async Task ReinviteBucket(ShiftBucket bucket)
+    {
+        var ids = bucket.All
+            .Where(x => x.Status == "RejectedByVendor")
+            .Select(x => x.Id)
+            .ToList();
+        if (ids.Count == 0) return;
+
+        int reinvited = 0;
+        var errors = new List<string>();
+        try
+        {
+            foreach (var id in ids)
+            {
+                _placeholderBusy = id; StateHasChanged();
+                var resp = await Http.PatchAsJsonAsync(
+                    $"api/v1/events/vendor-invitations/{id}/reinvite", new { });
+                if (resp.IsSuccessStatusCode) reinvited++;
+                else errors.Add(await resp.Content.ReadAsStringAsync());
+            }
+            if (reinvited > 0)
+                _success = $"Re-invited {reinvited} of {ids.Count} placeholder{(ids.Count == 1 ? "" : "s")} for {bucket.ScopeLabel}.";
+            if (errors.Count > 0)
+                _error = "Some re-invites failed: " + string.Join("; ", errors.Distinct().Take(3));
             if (_selectedEvent is not null)
                 _assignments = await EventApi.GetAssignmentsAsync(_selectedEvent.Id);
         }
