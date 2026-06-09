@@ -27,6 +27,86 @@
         }
     </div>
 
+    @* Phase D step 20: filter bar + view toggle. Same shape as the Events
+       page so it's visually consistent across the app. *@
+    <div class="flex flex-wrap gap-3 items-center bg-white rounded-2xl border border-gray-100 shadow-sm px-3 py-2.5">
+        <div class="relative">
+            <input @bind="_search" @bind:event="oninput"
+                   placeholder="Search crew or event…"
+                   class="w-64 pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+        </div>
+        <select @bind="_eventFilter"
+                class="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">All Events</option>
+            @foreach (var opt in EventOptions)
+            {
+                <option value="@opt.Id">@opt.Title</option>
+            }
+        </select>
+        <select @bind="_shiftFilter"
+                class="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">All Shifts</option>
+            @foreach (var opt in ShiftOptions)
+            {
+                <option value="@opt.Id">@opt.Label</option>
+            }
+        </select>
+        <select @bind="_vendorFilter"
+                class="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">All Vendors</option>
+            @foreach (var opt in VendorOptions)
+            {
+                <option value="@opt.Id">@opt.Name</option>
+            }
+        </select>
+
+        @if (HasActiveFilters)
+        {
+            <button @onclick="ClearFilters"
+                    class="px-3 py-2 rounded-xl border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition">
+                Clear filters
+            </button>
+        }
+
+        <div class="ml-auto inline-flex rounded-xl border border-gray-200 bg-white p-0.5">
+            <button @onclick='() => _viewMode = "cards"'
+                    class="px-3 py-1.5 text-xs font-semibold rounded-lg transition @(_viewMode == "cards" ? "bg-indigo-50 text-indigo-700" : "text-gray-500 hover:text-gray-700")">
+                🔲 Cards
+            </button>
+            <button @onclick='() => _viewMode = "list"'
+                    class="px-3 py-1.5 text-xs font-semibold rounded-lg transition @(_viewMode == "list" ? "bg-indigo-50 text-indigo-700" : "text-gray-500 hover:text-gray-700")">
+                ☰ List
+            </button>
+        </div>
+    </div>
+
+    @* Phase D step 20: sticky bulk-action bar. Shows up only when the
+       manager has selected at least one row. Approve runs the existing
+       per-assignment endpoint in parallel; Reject opens a shared reject
+       modal where one reason applies to all selected rows. *@
+    @if (_selectedIds.Count > 0)
+    {
+        <div class="sticky top-2 z-30 bg-indigo-600 text-white rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3">
+            <span class="font-semibold text-sm">@_selectedIds.Count selected</span>
+            <span class="text-indigo-200 text-xs">on this page</span>
+            <div class="ml-auto flex gap-2">
+                <button @onclick="ClearSelection"
+                        class="px-3 py-1.5 rounded-xl border border-indigo-400 text-xs font-semibold hover:bg-indigo-700 transition">
+                    Clear
+                </button>
+                <button @onclick="OpenBulkReject" disabled="@_bulkBusy"
+                        class="px-3 py-1.5 rounded-xl bg-white text-red-600 text-xs font-bold hover:bg-red-50 disabled:opacity-50 transition">
+                    ✕ Reject selected
+                </button>
+                <button @onclick="DoBulkApprove" disabled="@_bulkBusy"
+                        class="px-4 py-1.5 rounded-xl bg-green-500 text-white text-xs font-bold hover:bg-green-600 disabled:opacity-50 transition shadow">
+                    @(_bulkBusy && _bulkAction == "approve" ? "Approving…" : "✓ Approve selected")
+                </button>
+            </div>
+        </div>
+    }
+
     @if (_loading)
     {
         <div class="flex justify-center py-20">
@@ -40,15 +120,23 @@
     {
         <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">@_error</div>
     }
-    else if (!_items.Any())
+    else if (!Filtered.Any())
     {
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
             <p class="text-5xl mb-4">✅</p>
-            <p class="font-semibold text-gray-700 text-sm">All caught up!</p>
-            <p class="text-xs text-gray-400 mt-1">No crew members waiting for your approval.</p>
+            @if (_items.Any())
+            {
+                <p class="font-semibold text-gray-700 text-sm">No matches</p>
+                <p class="text-xs text-gray-400 mt-1">No assignments match your filters. Try clearing one.</p>
+            }
+            else
+            {
+                <p class="font-semibold text-gray-700 text-sm">All caught up!</p>
+                <p class="text-xs text-gray-400 mt-1">No crew members waiting for your approval.</p>
+            }
         </div>
     }
-    else
+    else if (_viewMode == "cards")
     {
         <div class="space-y-4">
             @{
@@ -58,13 +146,14 @@
                 // siblings. Only operates on the current page; sort order
                 // upstream (EventId → CrewId → ShiftStartAt) guarantees
                 // siblings are adjacent.
-                var groupRows = _items
+                var rowsForView = Filtered.ToList();
+                var groupRows = rowsForView
                     .GroupBy(i => (i.EventId, CrewKey: i.CrewId == Guid.Empty ? (Guid?)null : i.CrewId))
                     .ToDictionary(g => g.Key, g => g.Select(x => x.AssignmentId).ToList());
                 Guid lastEvt = Guid.Empty;
                 Guid lastCrew = Guid.Empty;
             }
-            @foreach (var item in _items)
+            @foreach (var item in rowsForView)
             {
                 var groupIds = groupRows[(item.EventId, item.CrewId == Guid.Empty ? (Guid?)null : item.CrewId)];
                 var posInGroup = groupIds.IndexOf(item.AssignmentId) + 1;
@@ -86,9 +175,13 @@
                     }
                     <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
 
-                        @* Left: crew + event info *@
+                        @* Left: crew + event info — checkbox for bulk select *@
                         <div class="flex-1 space-y-3">
                             <div class="flex items-center gap-3 flex-wrap">
+                                <input type="checkbox" checked="@_selectedIds.Contains(item.AssignmentId)"
+                                       @onchange="e => ToggleSelect(item.AssignmentId, (bool)(e.Value ?? false))"
+                                       class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                                       title="Select for bulk action" />
                                 <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm shrink-0">
                                     @(string.IsNullOrEmpty(item.CrewName) ? '?' : item.CrewName[0])
                                 </div>
@@ -151,6 +244,70 @@
                     </div>
                 </div>
             }
+        </div>
+    }
+    else
+    {
+        @* Phase D step 20: list view for Manager Approval Queue. Same data
+           as the cards branch but denser — table layout with checkbox column
+           for bulk operations. Selecting all = header checkbox; per-row
+           checkboxes toggle individual entries. Action buttons collapse to
+           icon form. *@
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-xs">
+                    <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+                        <tr>
+                            <th class="px-4 py-2.5">
+                                <input type="checkbox" checked="@AllSelected"
+                                       @onchange="e => ToggleSelectAll((bool)(e.Value ?? false))"
+                                       class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                            </th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Crew</th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Event</th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Shift</th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Vendor</th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Score</th>
+                            <th class="text-right px-4 py-2.5 font-semibold">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        @foreach (var item in Filtered)
+                        {
+                            var shiftLbl = BuildShiftLabel(item) ?? "—";
+                            <tr class="hover:bg-gray-50 transition @(_selectedIds.Contains(item.AssignmentId) ? "bg-indigo-50/30" : "")">
+                                <td class="px-4 py-2.5">
+                                    <input type="checkbox" checked="@_selectedIds.Contains(item.AssignmentId)"
+                                           @onchange="e => ToggleSelect(item.AssignmentId, (bool)(e.Value ?? false))"
+                                           class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                                </td>
+                                <td class="px-4 py-2.5">
+                                    <div class="font-semibold text-gray-800">@item.CrewName</div>
+                                    <div class="text-[11px] text-gray-400">@item.CrewMobile</div>
+                                </td>
+                                <td class="px-4 py-2.5 text-gray-700">@item.EventTitle</td>
+                                <td class="px-4 py-2.5 text-gray-600">@shiftLbl</td>
+                                <td class="px-4 py-2.5 text-gray-600">@item.VendorName</td>
+                                <td class="px-4 py-2.5">
+                                    <span class="font-semibold @DisciplineColor(item.DisciplineScore)">@item.DisciplineScore.ToString("F0")</span>
+                                </td>
+                                <td class="px-4 py-2.5">
+                                    <div class="flex gap-1.5 justify-end">
+                                        <button @onclick="() => OpenReject(item)" disabled="@(_busy == item.AssignmentId)"
+                                                class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">
+                                            ✕ Reject
+                                        </button>
+                                        <button @onclick="() => DoApprove(item.AssignmentId)" disabled="@(_busy == item.AssignmentId)"
+                                                class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
+                                            ✓ Approve
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         @* Pagination *@
@@ -219,6 +376,46 @@
     </div>
 }
 
+@* Phase D step 20: bulk reject modal. One reason applies to every
+   selected row. Cancel restores the picker; Confirm fans out the same
+   per-assignment endpoint in parallel and toasts a single summary. *@
+@if (_bulkRejectOpen)
+{
+    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <h3 class="font-bold text-gray-800 text-base">Reject @_selectedIds.Count crew @(_selectedIds.Count == 1 ? "assignment" : "assignments")</h3>
+            <p class="text-xs text-gray-500">
+                The same reason will be sent to every Vendor and Crew member affected.
+                Use this for clear, common rejections like "Event capacity reduced" or "Date conflict".
+            </p>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1.5">
+                    Rejection Reason <span class="text-red-500">*</span>
+                </label>
+                <textarea @bind="_bulkRejectReason" rows="4"
+                          class="w-full px-3 py-2 text-sm rounded-xl border @(_bulkReasonError ? "border-red-400 bg-red-50" : "border-gray-200")
+                                 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                          placeholder="e.g. Event capacity reduced, dates rescheduled, etc." />
+                @if (_bulkReasonError)
+                {
+                    <p class="text-xs text-red-500 mt-1">⚠ Rejection reason is mandatory.</p>
+                }
+            </div>
+            <div class="flex gap-3 pt-1">
+                <button @onclick="CancelBulkReject"
+                        class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition">
+                    Cancel
+                </button>
+                <button @onclick="DoBulkReject" disabled="@_bulkBusy"
+                        class="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold
+                               hover:bg-red-700 disabled:opacity-50 transition shadow-sm">
+                    @(_bulkBusy ? "Rejecting…" : $"Confirm reject ({_selectedIds.Count})")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<ManagerApprovalItemDto> _items = new();
     private bool    _loading = true;
@@ -226,6 +423,23 @@
     private int     _page = 1, _totalPages = 1, _pendingCount;
     private Guid?   _busy;
     private string? _busyAction;
+
+    // Phase D step 20: filter + view state.
+    private string  _search       = "";
+    private string  _eventFilter  = "";
+    private string  _shiftFilter  = "";
+    private string  _vendorFilter = "";
+    private string  _viewMode     = "cards"; // "cards" | "list"
+
+    // Bulk-action state. _selectedIds is the source of truth; checkboxes
+    // bind to membership. Bulk operations run the existing per-assignment
+    // endpoint in parallel — no new backend needed.
+    private HashSet<Guid> _selectedIds = new();
+    private bool          _bulkBusy;
+    private string?       _bulkAction; // "approve" | "reject"
+    private bool          _bulkRejectOpen;
+    private string        _bulkRejectReason = "";
+    private bool          _bulkReasonError;
 
     private ManagerApprovalItemDto? _rejectTarget;
     private string  _rejectReason = "";
@@ -418,6 +632,144 @@
         string? ShiftScopeName = null,
         DateTime? ShiftStartAt = null,
         DateTime? ShiftEndAt = null);
+
+    // ── Phase D step 20: filtering ───────────────────────────────────────
+    // Same shape as the VendorAssignments filter: search across crew + event,
+    // optional event / shift / vendor narrowing. All filters intersect.
+    private IEnumerable<ManagerApprovalItemDto> Filtered
+    {
+        get
+        {
+            IEnumerable<ManagerApprovalItemDto> src = _items;
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var q = _search.Trim();
+                src = src.Where(a =>
+                    (a.CrewName    ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    (a.EventTitle  ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    (a.VendorName  ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    (a.CrewMobile  ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!string.IsNullOrWhiteSpace(_eventFilter) && Guid.TryParse(_eventFilter, out var evId))
+                src = src.Where(a => a.EventId == evId);
+            if (!string.IsNullOrWhiteSpace(_shiftFilter) && Guid.TryParse(_shiftFilter, out var shId))
+                src = src.Where(a => a.ShiftId == shId);
+            if (!string.IsNullOrWhiteSpace(_vendorFilter) && Guid.TryParse(_vendorFilter, out var vnId))
+                src = src.Where(a => a.VendorId == vnId);
+            return src;
+        }
+    }
+
+    private IEnumerable<(Guid Id, string Title)> EventOptions =>
+        _items.Where(a => a.EventId != Guid.Empty)
+              .GroupBy(a => a.EventId)
+              .Select(g => (g.Key, g.First().EventTitle ?? "(untitled)"))
+              .OrderBy(t => t.Item2);
+
+    private IEnumerable<(Guid Id, string Label)> ShiftOptions =>
+        _items.Where(a => a.ShiftId.HasValue)
+              .GroupBy(a => a.ShiftId!.Value)
+              .Select(g => (g.Key, BuildShiftLabel(g.First()) ?? "(unnamed shift)"))
+              .OrderBy(t => t.Item2);
+
+    private IEnumerable<(Guid Id, string Name)> VendorOptions =>
+        _items.Where(a => a.VendorId != Guid.Empty)
+              .GroupBy(a => a.VendorId)
+              .Select(g => (g.Key, g.First().VendorName ?? "(unnamed)"))
+              .OrderBy(t => t.Item2);
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_search) ||
+        !string.IsNullOrWhiteSpace(_eventFilter) ||
+        !string.IsNullOrWhiteSpace(_shiftFilter) ||
+        !string.IsNullOrWhiteSpace(_vendorFilter);
+
+    private void ClearFilters()
+    {
+        _search = ""; _eventFilter = ""; _shiftFilter = ""; _vendorFilter = "";
+    }
+
+    // ── Phase D step 20: bulk selection ──────────────────────────────────
+    private bool AllSelected =>
+        Filtered.Any() && Filtered.All(i => _selectedIds.Contains(i.AssignmentId));
+
+    private void ToggleSelect(Guid id, bool isSelected)
+    {
+        if (isSelected) _selectedIds.Add(id); else _selectedIds.Remove(id);
+    }
+
+    private void ToggleSelectAll(bool isSelected)
+    {
+        if (isSelected)
+            foreach (var i in Filtered) _selectedIds.Add(i.AssignmentId);
+        else
+            foreach (var i in Filtered) _selectedIds.Remove(i.AssignmentId);
+    }
+
+    private void ClearSelection() => _selectedIds.Clear();
+
+    // ── Phase D step 20: bulk approve ────────────────────────────────────
+    // Fans out the existing single-approve endpoint in parallel. Reuses
+    // PatchWithAuthRetryAsync so the auth-refresh path still works on each
+    // request. Reports a one-line summary in the toast and reloads once at
+    // the end (Hub events will also poke us, idempotent).
+    private async Task DoBulkApprove()
+    {
+        if (_selectedIds.Count == 0) return;
+        _bulkBusy = true; _bulkAction = "approve"; StateHasChanged();
+        var ids = _selectedIds.ToList();
+        var tasks = ids.Select(id => PatchWithAuthRetryAsync(
+            $"api/v1/events/assignments/{id}/manager-approve", new { })).ToList();
+        await Task.WhenAll(tasks);
+        var ok   = tasks.Count(t => t.Result is not null && t.Result.IsSuccessStatusCode);
+        var fail = tasks.Count - ok;
+        ShowToast(fail == 0
+            ? $"✓ Approved {ok} crew."
+            : $"Approved {ok}, {fail} failed. Refresh to retry.",
+            isError: fail > 0);
+        _selectedIds.Clear();
+        _bulkBusy = false; _bulkAction = null;
+        await Load();
+    }
+
+    private void OpenBulkReject()
+    {
+        if (_selectedIds.Count == 0) return;
+        _bulkRejectReason = ""; _bulkReasonError = false; _bulkRejectOpen = true;
+    }
+
+    private void CancelBulkReject()
+    {
+        _bulkRejectOpen = false; _bulkReasonError = false;
+    }
+
+    // Bulk reject mirrors bulk approve — same fan-out, same retry helper,
+    // same toast shape. The shared rejection reason becomes each row's
+    // `reason` field.
+    private async Task DoBulkReject()
+    {
+        if (string.IsNullOrWhiteSpace(_bulkRejectReason))
+        {
+            _bulkReasonError = true; StateHasChanged(); return;
+        }
+        if (_selectedIds.Count == 0) { _bulkRejectOpen = false; return; }
+        _bulkBusy = true; _bulkAction = "reject"; StateHasChanged();
+        var ids = _selectedIds.ToList();
+        var body = new { reason = _bulkRejectReason };
+        var tasks = ids.Select(id => PatchWithAuthRetryAsync(
+            $"api/v1/events/assignments/{id}/manager-reject", body)).ToList();
+        await Task.WhenAll(tasks);
+        var ok   = tasks.Count(t => t.Result is not null && t.Result.IsSuccessStatusCode);
+        var fail = tasks.Count - ok;
+        ShowToast(fail == 0
+            ? $"✓ Rejected {ok} crew."
+            : $"Rejected {ok}, {fail} failed. Refresh to retry.",
+            isError: fail > 0);
+        _selectedIds.Clear();
+        _bulkBusy = false; _bulkAction = null;
+        _bulkRejectOpen = false;
+        await Load();
+    }
 
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);

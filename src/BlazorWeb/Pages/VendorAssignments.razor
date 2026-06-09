@@ -30,6 +30,55 @@
         }
     </div>
 
+    @* Phase D step 20: filter bar + view toggle. Mirrors the Events page
+       pattern: search input + Event dropdown + Shift dropdown + Cards/List
+       toggle. All three filters are populated from the current dataset so
+       they always reflect what's on screen. Tab filter (above) and these
+       filters stack — they intersect. *@
+    <div class="flex flex-wrap gap-3 items-center bg-white rounded-2xl border border-gray-100 shadow-sm px-3 py-2.5">
+        <div class="relative">
+            <input @bind="_search" @bind:event="oninput"
+                   placeholder="Search crew or event…"
+                   class="w-64 pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+        </div>
+        <select @bind="_eventFilter"
+                class="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">All Events</option>
+            @foreach (var opt in EventOptions)
+            {
+                <option value="@opt.Id">@opt.Title</option>
+            }
+        </select>
+        <select @bind="_shiftFilter"
+                class="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">All Shifts</option>
+            @foreach (var opt in ShiftOptions)
+            {
+                <option value="@opt.Id">@opt.Label</option>
+            }
+        </select>
+
+        @if (HasActiveFilters)
+        {
+            <button @onclick="ClearFilters"
+                    class="px-3 py-2 rounded-xl border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition">
+                Clear filters
+            </button>
+        }
+
+        <div class="ml-auto inline-flex rounded-xl border border-gray-200 bg-white p-0.5">
+            <button @onclick='() => _viewMode = "cards"'
+                    class="px-3 py-1.5 text-xs font-semibold rounded-lg transition @(_viewMode == "cards" ? "bg-indigo-50 text-indigo-700" : "text-gray-500 hover:text-gray-700")">
+                🔲 Cards
+            </button>
+            <button @onclick='() => _viewMode = "list"'
+                    class="px-3 py-1.5 text-xs font-semibold rounded-lg transition @(_viewMode == "list" ? "bg-indigo-50 text-indigo-700" : "text-gray-500 hover:text-gray-700")">
+                ☰ List
+            </button>
+        </div>
+    </div>
+
     @if (_loading)
     {
         <div class="flex justify-center py-20">
@@ -50,7 +99,7 @@
             <p class="font-semibold text-gray-700 text-sm">No assignments in this category</p>
         </div>
     }
-    else
+    else if (_viewMode == "cards")
     {
         <div class="space-y-3">
             @foreach (var a in Filtered)
@@ -162,6 +211,81 @@
             }
         </div>
     }
+    else
+    {
+        @* Phase D step 20: compact list view. Same filters / actions as the
+           card view, just denser. Mirrors Events page list style: white card,
+           thin border, table-like rows with hover. Action buttons are
+           condensed to icon-style for tighter horizontal space. *@
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-xs">
+                    <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+                        <tr>
+                            <th class="text-left px-4 py-2.5 font-semibold">Crew</th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Event</th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Shift</th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Score</th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Status</th>
+                            <th class="text-right px-4 py-2.5 font-semibold">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        @foreach (var a in Filtered)
+                        {
+                            var (lbl, badge, _) = AssignmentStatusDisplay.For(a.Status, a.EventStatus, a.AttendanceNote);
+                            var shiftLbl = BuildShiftLabel(a) ?? "—";
+                            <tr class="hover:bg-gray-50 transition">
+                                <td class="px-4 py-2.5">
+                                    <div class="font-semibold text-gray-800">@a.CrewName</div>
+                                    <div class="text-[11px] text-gray-400">@a.CrewMobile</div>
+                                </td>
+                                <td class="px-4 py-2.5 text-gray-700">@a.EventTitle</td>
+                                <td class="px-4 py-2.5 text-gray-600">@shiftLbl</td>
+                                <td class="px-4 py-2.5">
+                                    <span class="font-semibold @DisciplineColor(a.DisciplineScore)">@a.DisciplineScore.ToString("F0")</span>
+                                </td>
+                                <td class="px-4 py-2.5">
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold @badge">@lbl</span>
+                                </td>
+                                <td class="px-4 py-2.5">
+                                    <div class="flex gap-1.5 justify-end">
+                                        @if (a.Status == "VendorApproved")
+                                        {
+                                            <button @onclick="() => OpenReject(a)" disabled="@(_busy == a.Id)"
+                                                    class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">
+                                                ✕
+                                            </button>
+                                            <button @onclick="() => DoApprove(a.Id)" disabled="@(_busy == a.Id)"
+                                                    class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+                                                ✓ Send
+                                            </button>
+                                        }
+                                        else if (a.Status == "Invited")
+                                        {
+                                            <button @onclick="() => OpenReject(a)" disabled="@(_busy == a.Id)"
+                                                    class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">
+                                                ✕ Cancel
+                                            </button>
+                                            <button @onclick="() => DoDirectForward(a.Id)" disabled="@(_busy == a.Id)"
+                                                    class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
+                                                    title="Force forward to Manager without crew response">
+                                                ⚡ Forward
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-[11px] text-gray-300">—</span>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 
     @if (_toast is not null)
     {
@@ -212,6 +336,12 @@
     private readonly string[] _tabs = { "All", "Awaiting Review", "Forwarded", "Rejected", "Confirmed" };
     private string _activeTab = "All";
 
+    // Phase D step 20: new filter / view state.
+    private string  _search      = "";
+    private string  _eventFilter = "";
+    private string  _shiftFilter = "";
+    private string  _viewMode    = "cards"; // "cards" | "list"
+
     private List<AssignmentDto> _all = new();
     private bool    _loading = true;
     private string? _error;
@@ -228,14 +358,64 @@
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
         new() { PropertyNameCaseInsensitive = true };
 
-    private IEnumerable<AssignmentDto> Filtered => _activeTab switch
+    // Phase D step 20: filtered set used by both card and list views. The
+    // tab buckets the rows by status; then search / event / shift filters
+    // further narrow. Order: tab → search → event → shift. All filters
+    // intersect (AND).
+    private IEnumerable<AssignmentDto> Filtered
     {
-        "Awaiting Review" => _all.Where(a => a.Status is "Invited" or "VendorApproved"),
-        "Forwarded"       => _all.Where(a => a.Status is "PendingManagerApproval" or "ManagerApproved"),
-        "Rejected"        => _all.Where(a => a.Status is "RejectedByVendor" or "RejectedByManager" or "Declined"),
-        "Confirmed"       => _all.Where(a => a.Status is "ManagerApproved" or "Confirmed" or "Attended"),
-        _                 => _all
-    };
+        get
+        {
+            IEnumerable<AssignmentDto> src = _activeTab switch
+            {
+                "Awaiting Review" => _all.Where(a => a.Status is "Invited" or "VendorApproved"),
+                "Forwarded"       => _all.Where(a => a.Status is "PendingManagerApproval" or "ManagerApproved"),
+                "Rejected"        => _all.Where(a => a.Status is "RejectedByVendor" or "RejectedByManager" or "Declined"),
+                "Confirmed"       => _all.Where(a => a.Status is "ManagerApproved" or "Confirmed" or "Attended"),
+                _                 => _all
+            };
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var q = _search.Trim();
+                src = src.Where(a =>
+                    (a.CrewName    ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    (a.EventTitle  ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    (a.CrewMobile  ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!string.IsNullOrWhiteSpace(_eventFilter) && Guid.TryParse(_eventFilter, out var evId))
+                src = src.Where(a => a.EventId == evId);
+            if (!string.IsNullOrWhiteSpace(_shiftFilter) && Guid.TryParse(_shiftFilter, out var shId))
+                src = src.Where(a => a.ShiftId == shId);
+            return src;
+        }
+    }
+
+    // Event dropdown options — built from the rows currently loaded so it
+    // always reflects what's visible. Distinct + alphabetised.
+    private IEnumerable<(Guid Id, string Title)> EventOptions =>
+        _all.Where(a => a.EventId != Guid.Empty)
+            .GroupBy(a => a.EventId)
+            .Select(g => (g.Key, g.First().EventTitle ?? "(untitled)"))
+            .OrderBy(t => t.Item2);
+
+    // Shift dropdown — same approach. Label is the "Scope · time" string.
+    private IEnumerable<(Guid Id, string Label)> ShiftOptions =>
+        _all.Where(a => a.ShiftId.HasValue)
+            .GroupBy(a => a.ShiftId!.Value)
+            .Select(g => (g.Key, BuildShiftLabel(g.First()) ?? "(unnamed shift)"))
+            .OrderBy(t => t.Item2);
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_search) ||
+        !string.IsNullOrWhiteSpace(_eventFilter) ||
+        !string.IsNullOrWhiteSpace(_shiftFilter);
+
+    private void ClearFilters()
+    {
+        _search = "";
+        _eventFilter = "";
+        _shiftFilter = "";
+    }
 
     private string TabIcon => _activeTab switch
     {
