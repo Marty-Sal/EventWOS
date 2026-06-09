@@ -194,6 +194,13 @@ public sealed class PaymentsController : ControllerBase
     /// <summary>
     /// Returns the authenticated crew member's payment records.
     /// Requires payments:self permission (auto-assigned to Crew role).
+    ///
+    /// Phase D step 25: amounts are REDACTED in this response. Crew never
+    /// sees AgreedAmount, PaidAmount, BatchTotal or TransactionRef — they
+    /// only confirm receipt. Redaction happens here at the controller so a
+    /// curious crew member with browser devtools can't pull the numbers
+    /// from the JSON payload. The underlying entity/DTO is unchanged so
+    /// admin/manager/vendor queries through the same DTO are unaffected.
     /// </summary>
     [Permission("payments:self")]
     [HttpGet("my")]
@@ -210,7 +217,27 @@ public sealed class PaymentsController : ControllerBase
         var result = await _mediator.Send(
             new GetPaymentsQuery(eventId, null, crewId, status, page, pageSize), ct);
 
-        return Ok(ApiResponse<PagedResult<CrewPaymentDto>>.Ok(result.Value));
+        // Redact every amount before serialising. Strings & GUIDs & status
+        // & acknowledgement & method/date stay (crew needs them for ack flow).
+        // PagedResult<T> is a class (not a record), so we rebuild it via its
+        // Create factory rather than using `with`.
+        var redactedItems = result.Value!.Items
+            .Select(p => p with
+            {
+                AgreedAmount   = 0m,
+                PaidAmount     = null,
+                BatchTotal     = null,
+                TransactionRef = null
+            })
+            .ToList();
+
+        var redacted = PagedResult<CrewPaymentDto>.Create(
+            redactedItems,
+            result.Value.TotalCount,
+            result.Value.PageNumber,
+            result.Value.PageSize);
+
+        return Ok(ApiResponse<PagedResult<CrewPaymentDto>>.Ok(redacted));
     }
 }
 
