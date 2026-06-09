@@ -113,9 +113,28 @@
                         //       (admin just added F&B after Saly already accepted Box Office)
                         //   (b) an accepted shift where they can now staff crew
                         // Render both side-by-side instead of either/or.
-                        if (HasAcceptedInvite(ev.Id))
+                        @* Phase D step 14: per-shift "Assign My Crew" buttons.
+                           One button per accepted shift, each opening the modal
+                           pre-scoped to that single shift. If the vendor has
+                           accepted shifts but the list is empty (legacy data
+                           without ShiftId), fall back to a single event-wide
+                           button so old assignments still work. *@
+                        if (_acceptedShiftsByEventId.TryGetValue(ev.Id, out var acceptedShifts) && acceptedShifts.Count > 0)
                         {
-                            <button @onclick="() => OpenAssignPanel(ev)"
+                            <div class="mt-2 space-y-1.5">
+                                @foreach (var ash in acceptedShifts)
+                                {
+                                    var capturedShift = ash;
+                                    <button @onclick="() => OpenAssignPanel(ev, capturedShift.ShiftId)"
+                                            class="w-full px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
+                                        <span>👥</span> Assign My Crew — @capturedShift.ScopeLabel
+                                    </button>
+                                }
+                            </div>
+                        }
+                        else if (HasAcceptedInvite(ev.Id))
+                        {
+                            <button @onclick="() => OpenAssignPanel(ev, null)"
                                     class="mt-2 w-full px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
                                 <span>👥</span> Assign My Crew
                             </button>
@@ -199,6 +218,10 @@
                 <div>
                     <h3 class="font-bold text-gray-800">Assign Crew</h3>
                     <p class="text-xs text-gray-500 mt-0.5">@_assignTarget.Title</p>
+                    @if (!string.IsNullOrEmpty(_assignSingleShiftLabel))
+                    {
+                        <p class="text-sm font-semibold text-indigo-700 mt-1">For @_assignSingleShiftLabel</p>
+                    }
                 </div>
                 <button @onclick="CloseAssignPanel" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
             </div>
@@ -209,13 +232,11 @@
                     <div class="mb-3 p-3 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs">⚠️ @_assignError</div>
                 }
 
-                @* ── Phase C step 6: Shift picker ──────────────────────────
-                   Hidden for single-shift events (the only option is the
-                   default). For multi-shift events the vendor picks which
-                   shift each invite/group lands on; the quota label updates
-                   as they switch. If the vendor has NO allocations on ANY
-                   shift the picker is empty — we surface a friendly
-                   "ask your manager" banner instead of a broken control. *@
+                @* Phase D step 14: when modal is scoped to a single shift the
+                   "default-shift" dropdown and the multi-card list are gone.
+                   We keep the no-quota banner and surface one compact shift
+                   summary line + the new "Publish to All Crew Members" CTA
+                   right above Invite-a-Group. *@
                 @if (_shiftPickerOptions.Count == 0 && _assignTarget is not null)
                 {
                     <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
@@ -225,111 +246,91 @@
                 }
                 else
                 {
-                    @* Phase D step 11: per-shift summary cards. Each card shows
-                       counts (invited / accepted / approved / final), free seats,
-                       and a "Publish — Invite Active Crew" button that fills
-                       remaining seats with this vendor's roster. For multi-shift
-                       events the dropdown lets the vendor pick which shift each
-                       INDIVIDUAL invite/group lands on; the Publish button
-                       always targets ITS OWN card so the vendor can publish
-                       shift-by-shift without re-picking. *@
-                    @if (_shiftPickerOptions.Count > 1)
+                    var scopedOpt = _shiftPickerOptions.FirstOrDefault(o => o.ShiftId == _selectedShiftId)
+                                    ?? _shiftPickerOptions.FirstOrDefault();
+                    if (scopedOpt is not null)
                     {
-                        <div class="mb-3 p-3 rounded-xl border border-indigo-100 bg-white space-y-1.5">
-                            <label class="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
-                                Default shift for new invites
-                            </label>
-                            <select @bind="_selectedShiftId"
-                                    class="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                                @foreach (var opt in _shiftPickerOptions)
-                                {
-                                    <option value="@opt.ShiftId">@opt.Label</option>
-                                }
-                            </select>
-                            <p class="text-[11px] text-gray-500 italic">
-                                Individual "Invite" buttons below use this shift. Per-shift "Publish" buttons always use their own card.
-                            </p>
-                        </div>
-                    }
+                        var sum = scopedOpt.Summary;
+                        var freeSeats = sum.SeatsFree;
+                        var publishBusy = _publishingShiftId == scopedOpt.ShiftId;
+                        var canPublish  = freeSeats > 0 && (_roster?.Count ?? 0) > 0 && !_invitingGroup && !publishBusy;
 
-                    <div class="mb-4 space-y-2">
-                        @foreach (var opt in _shiftPickerOptions)
-                        {
-                            var sum   = opt.Summary;
-                            var busy  = _publishingShiftId == opt.ShiftId;
-                            var free  = sum.SeatsFree;
-                            var canPublish = free > 0 && (_roster?.Count ?? 0) > 0 && !_invitingGroup;
-                            <div class="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
-                                <div class="flex items-center justify-between gap-2">
-                                    <div class="min-w-0">
-                                        <p class="text-sm font-semibold text-gray-800 truncate">@sum.ScopeName</p>
-                                        <p class="text-[11px] text-gray-500">
-                                            @sum.StartAt.ToLocalTime().ToString("MMM d HH:mm")
-                                            @if (sum.EndAt is { } e) { <span> – @e.ToLocalTime().ToString("HH:mm")</span> }
-                                            @if (sum.Enforced)
-                                            {
-                                                <span> · <b class="@(free > 0 ? "text-emerald-700" : "text-rose-600")">@free</b> of @sum.Quota free</span>
-                                            }
-                                            else
-                                            {
-                                                <span> · <b class="@(free > 0 ? "text-emerald-700" : "text-rose-600")">@free</b> of @sum.ShiftCapacity free (shared)</span>
-                                            }
-                                        </p>
-                                    </div>
-                                    @if (canPublish)
-                                    {
-                                        <button @onclick="() => PublishShift(opt)"
-                                                disabled="@busy"
-                                                class="shrink-0 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold disabled:opacity-50 transition">
-                                            @(busy ? "Publishing…" : "📣 Publish")
-                                        </button>
-                                    }
-                                </div>
-
-                                @{
-                                    var placeholders = sum.Placeholders;
-                                    var invited      = sum.Invited;
-                                    var accepted     = sum.Accepted;
-                                    var approved     = sum.Approved;
-                                    var final        = sum.Final;
-                                    var declined     = sum.Declined + sum.NoShow;
-                                }
-                                @if (placeholders + invited + accepted + approved + final + declined > 0)
+                        @* Compact summary of THIS shift — line 1 = scope + time
+                           + free seats, line 2 = status chips so the vendor can
+                           still see "5 invited / 3 accepted" without the old
+                           bulky card. *@
+                        <div class="mb-3 px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-100 text-xs space-y-1.5">
+                            <p class="text-indigo-800">
+                                <span class="font-semibold">@sum.ScopeName</span>
+                                <span class="text-indigo-500"> · @sum.StartAt.ToLocalTime().ToString("MMM d HH:mm")</span>
+                                @if (sum.EndAt is { } se) { <span class="text-indigo-500"> – @se.ToLocalTime().ToString("HH:mm")</span> }
+                                <span class="text-indigo-500"> · </span>
+                                @if (sum.Enforced)
                                 {
-                                    <div class="flex flex-wrap gap-1.5 text-[10px]">
-                                        @if (placeholders > 0)
-                                        {
-                                            <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">@placeholders placeholder@(placeholders == 1 ? "" : "s")</span>
-                                        }
-                                        @if (invited > 0)
-                                        {
-                                            <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">@invited invited</span>
-                                        }
-                                        @if (accepted > 0)
-                                        {
-                                            <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">@accepted accepted</span>
-                                        }
-                                        @if (approved > 0)
-                                        {
-                                            <span class="px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-semibold">@approved awaiting manager</span>
-                                        }
-                                        @if (final > 0)
-                                        {
-                                            <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">@final confirmed</span>
-                                        }
-                                        @if (declined > 0)
-                                        {
-                                            <span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold">@declined declined/no-show</span>
-                                        }
-                                    </div>
+                                    <b class="@(freeSeats > 0 ? "text-emerald-700" : "text-rose-600")">@freeSeats</b>
+                                    <span class="text-indigo-500"> of @sum.Quota free</span>
                                 }
                                 else
                                 {
-                                    <p class="text-[11px] text-gray-400 italic">No invites sent on this shift yet.</p>
+                                    <b class="@(freeSeats > 0 ? "text-emerald-700" : "text-rose-600")">@freeSeats</b>
+                                    <span class="text-indigo-500"> of @sum.ShiftCapacity free (shared)</span>
                                 }
+                            </p>
+                            @{
+                                var phPh   = sum.Placeholders;
+                                var phInv  = sum.Invited;
+                                var phAcc  = sum.Accepted;
+                                var phAppr = sum.Approved;
+                                var phFin  = sum.Final;
+                                var phDec  = sum.Declined + sum.NoShow;
+                            }
+                            @if (phPh + phInv + phAcc + phAppr + phFin + phDec > 0)
+                            {
+                                <div class="flex flex-wrap gap-1.5 text-[10px]">
+                                    @if (phPh   > 0) { <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">@phPh placeholder@(phPh == 1 ? "" : "s")</span> }
+                                    @if (phInv  > 0) { <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">@phInv invited</span> }
+                                    @if (phAcc  > 0) { <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">@phAcc accepted</span> }
+                                    @if (phAppr > 0) { <span class="px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-semibold">@phAppr awaiting manager</span> }
+                                    @if (phFin  > 0) { <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">@phFin confirmed</span> }
+                                    @if (phDec  > 0) { <span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold">@phDec declined/no-show</span> }
+                                </div>
+                            }
+                        </div>
+
+                        @* ── 1. Publish to All Crew Members ──────────────────── *@
+                        <div class="mb-4 p-3 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-2">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-bold text-emerald-800 uppercase tracking-wide">Publish to All Crew Members</p>
+                                    <p class="text-[11px] text-emerald-700">
+                                        @if (canPublish)
+                                        {
+                                            var rosterCount = _roster?.Count ?? 0;
+                                            var willInvite  = Math.Min(rosterCount, freeSeats);
+                                            <span>Invite up to @willInvite from your roster of @rosterCount (best discipline first).</span>
+                                        }
+                                        else if (freeSeats <= 0)
+                                        {
+                                            <span>Shift is full — no free seats to publish to.</span>
+                                        }
+                                        else if ((_roster?.Count ?? 0) == 0)
+                                        {
+                                            <span>Your crew roster is empty — add crew first.</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Publishing…</span>
+                                        }
+                                    </p>
+                                </div>
+                                <button @onclick="() => PublishShift(scopedOpt)"
+                                        disabled="@(!canPublish)"
+                                        class="shrink-0 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition">
+                                    @(publishBusy ? "Publishing…" : "📣 Publish")
+                                </button>
                             </div>
-                        }
-                    </div>
+                        </div>
+                    }
                 }
                 @* ─── Invite a saved group ─────────────────────────────────────── *@
                 @if (_groupsForPicker is not null && _groupsForPicker.Count > 0)
@@ -558,6 +559,11 @@
     private List<EventAssignmentDto>            _pendingInvites    = new();
     private Dictionary<Guid, List<InviteShiftBucket>> _inviteBucketsByEventId = new();
     private HashSet<Guid>                        _acceptedEventIds = new();
+    // Phase D step 14: per-event list of accepted shifts so each card can
+    // render one "Assign My Crew" button per shift. Empty list = falls
+    // back to legacy single button via HasAcceptedInvite.
+    private Dictionary<Guid, List<AcceptedShift>>  _acceptedShiftsByEventId = new();
+    private sealed record AcceptedShift(Guid? ShiftId, string ScopeLabel);
     private Guid                                 _inviteBusyBucketKey = Guid.Empty;   // hash of bucket's first row id
     private Guid                                 _expandedInviteEventId = Guid.Empty;
     private InviteShiftBucket?                   _rejectInviteTargetBucket;
@@ -587,6 +593,13 @@
     private VendorAssignGroupResultDto? _groupInviteSummary;
     private bool  _invitingGroup;
     private Guid? _publishingShiftId;   // Phase D step 11: tracks active Publish call
+    // Phase D step 14: assign modal can be opened pre-scoped to one shift.
+    // _assignScopedShiftId drives shift-picker pruning in OpenAssignPanel;
+    // _assignSingleShiftLabel shows "For F&B" in the header. Both null means
+    // legacy "show all shifts" mode (only reachable on events without ShiftId
+    // metadata — e.g. pre-Phase-D data).
+    private Guid?  _assignScopedShiftId;
+    private string? _assignSingleShiftLabel;
     private Dictionary<Guid, string> _existingByCrewId = new(); // crewId → current Status
     private string _crewSearch = "";
     private string? _assignError;
@@ -762,6 +775,25 @@
                              && a.Status != "RejectedByManager")
                     .Select(a => a.EventId)
                     .ToHashSet();
+
+                // Phase D step 14: vendor card now shows one "Assign My Crew"
+                // button PER accepted shift instead of a single event-wide
+                // button. We need a per-event list of distinct (ShiftId,
+                // ScopeName) pairs the vendor has progressed past Invited on.
+                // Legacy rows without ShiftId fall back to a single null-shift
+                // entry so the old "Assign My Crew" path still works for them.
+                _acceptedShiftsByEventId = allRows
+                    .Where(a => a.Status != "Invited"
+                             && a.Status != "Declined"
+                             && a.Status != "RejectedByVendor"
+                             && a.Status != "RejectedByManager")
+                    .GroupBy(a => a.EventId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.GroupBy(r => new { r.ShiftId, Label = r.ShiftScopeName ?? "Shift" })
+                              .OrderBy(b => b.Key.Label, StringComparer.OrdinalIgnoreCase)
+                              .Select(b => new AcceptedShift(b.Key.ShiftId, b.Key.Label))
+                              .ToList());
             }
         }
         catch (Exception ex) { _error = "Could not load your events: " + ex.Message; }
@@ -864,9 +896,18 @@
     }
 
     // ─── Vendor: assign-crew panel ──────────────────────────────────────
-    private async Task OpenAssignPanel(EventListItemDto ev)
+    /// <summary>
+    /// Phase D step 14: open the assign-crew modal pre-scoped to ONE shift.
+    /// Pass <paramref name="shiftId"/> = null for legacy callers (event has
+    /// no shifts, or the single fallback button on legacy data). When a
+    /// shiftId is given, the modal's per-shift card list is pruned to just
+    /// that shift and the default-shift dropdown is hidden — the "For F&B"
+    /// subtitle in the header tells the vendor what scope they're staffing.
+    /// </summary>
+    private async Task OpenAssignPanel(EventListItemDto ev, Guid? shiftId)
     {
         _assignTarget   = ev;
+        _assignScopedShiftId = shiftId;
         _assignError    = null;
         _assignSuccess  = null;
         _assigningId    = Guid.Empty;
@@ -904,6 +945,29 @@
                 return new ShiftPickerOption(x.ShiftId, label, x);
             })
             .ToList();
+
+        // Phase D step 14: prune to the single scoped shift when the modal
+        // was opened from a per-shift button. Keeps Count==1 → the default
+        // shift dropdown hides automatically (existing > 1 check) and the
+        // per-shift card list shows only the relevant card. _assignSingleShiftLabel
+        // drives the "For F&B" header subtitle.
+        if (_assignScopedShiftId is { } sid)
+        {
+            var match = _shiftPickerOptions.FirstOrDefault(o => o.ShiftId == sid);
+            if (match is not null)
+            {
+                _shiftPickerOptions = new() { match };
+                _assignSingleShiftLabel = match.Summary.ScopeName;
+            }
+            else
+            {
+                _assignSingleShiftLabel = null;
+            }
+        }
+        else
+        {
+            _assignSingleShiftLabel = null;
+        }
         _selectedShiftId = _shiftPickerOptions.FirstOrDefault()?.ShiftId;
         _groupsForPicker = groups?.Items?.Where(g => g.MemberCount > 0).ToList() ?? new();
         _selectedGroupId    = "";
@@ -926,6 +990,8 @@
     private void CloseAssignPanel()
     {
         _assignTarget     = null;
+        _assignScopedShiftId = null;
+        _assignSingleShiftLabel = null;
         _roster           = null;
         _assignError      = null;
         _assignSuccess    = null;
