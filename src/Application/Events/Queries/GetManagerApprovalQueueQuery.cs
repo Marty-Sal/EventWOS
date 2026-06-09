@@ -52,8 +52,17 @@ public sealed class GetManagerApprovalQueueHandler
 
         var total = await query.CountAsync(ct);
 
+        // Phase D step 13: group multi-shift approvals for the same
+        // (Event + Crew) together so a manager reviewing Martin sees both
+        // his Box Office and F&B requests adjacent, never split across a
+        // page boundary. Primary sort by EventId then CrewId keeps the
+        // grouping deterministic; ShiftStartAt orders shifts chronologically
+        // within a crew member; VendorReviewedAt is the final tiebreaker.
         var items = await query
-            .OrderBy(a => a.VendorReviewedAt)
+            .OrderBy(a => a.EventId)
+            .ThenBy(a => a.CrewId)
+            .ThenBy(a => _db.EventShifts.Where(s => s.Id == a.ShiftId).Select(s => (DateTime?)s.StartAt).FirstOrDefault())
+            .ThenBy(a => a.VendorReviewedAt)
             .Skip((req.PageNumber - 1) * req.PageSize)
             .Take(req.PageSize)
             .Select(a => new ManagerApprovalItemDto(

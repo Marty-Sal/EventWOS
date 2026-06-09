@@ -51,9 +51,39 @@
     else
     {
         <div class="space-y-4">
+            @{
+                // Phase D step 13: compute (Event + Crew) group metadata once.
+                // groupKey → ordered list of AssignmentIds in this page so we
+                // can render "Shift 1 of N" badges and tighter spacing for
+                // siblings. Only operates on the current page; sort order
+                // upstream (EventId → CrewId → ShiftStartAt) guarantees
+                // siblings are adjacent.
+                var groupRows = _items
+                    .GroupBy(i => (i.EventId, CrewKey: i.CrewId == Guid.Empty ? (Guid?)null : i.CrewId))
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.AssignmentId).ToList());
+                Guid lastEvt = Guid.Empty;
+                Guid lastCrew = Guid.Empty;
+            }
             @foreach (var item in _items)
             {
-                <div class="bg-white rounded-2xl border border-blue-100 shadow-sm p-5">
+                var groupIds = groupRows[(item.EventId, item.CrewId == Guid.Empty ? (Guid?)null : item.CrewId)];
+                var posInGroup = groupIds.IndexOf(item.AssignmentId) + 1;
+                var totalInGroup = groupIds.Count;
+                var isFirstOfGroup = posInGroup == 1;
+                var isMidOfGroup = !isFirstOfGroup;
+                var cardClasses = isMidOfGroup
+                    ? "bg-white rounded-2xl border border-blue-100 border-t-2 border-t-indigo-300 shadow-sm p-5 -mt-2 ml-6"
+                    : "bg-white rounded-2xl border border-blue-100 shadow-sm p-5";
+                <div class="@cardClasses">
+                    @if (totalInGroup > 1)
+                    {
+                        <div class="flex items-center gap-2 mb-2 -mt-1">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                Shift @posInGroup of @totalInGroup
+                            </span>
+                            <span class="text-[10px] text-gray-400">Same crew · same event</span>
+                        </div>
+                    }
                     <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
 
                         @* Left: crew + event info *@
