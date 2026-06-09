@@ -507,19 +507,11 @@
                                 var totalQ  = rows?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
                                 var headroom = sh.CrewCount - totalQ;
                                 <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-2 space-y-2">
-                                    <div class="flex items-center justify-between">
-                                        <div class="min-w-0">
-                                            <p class="text-xs font-semibold text-gray-700 truncate">@sh.ScopeName</p>
-                                            <p class="text-[10px] text-gray-500">
-                                                Capacity @sh.CrewCount · Allocated @totalQ · Free <b class="@(headroom > 0 ? "text-emerald-700" : "text-gray-400")">@headroom</b>
-                                            </p>
-                                        </div>
-                                        <button type="button"
-                                                @onclick="() => OpenAllocCreate(shiftId)"
-                                                disabled="@(headroom <= 0)"
-                                                class="text-[11px] px-2 py-1 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition">
-                                            + Allocate
-                                        </button>
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-semibold text-gray-700 truncate">@sh.ScopeName</p>
+                                        <p class="text-[10px] text-gray-500">
+                                            Capacity @sh.CrewCount · Allocated @totalQ · Free <b class="@(headroom > 0 ? "text-emerald-700" : "text-gray-400")">@headroom</b>
+                                        </p>
                                     </div>
                                     @if (rows is null)
                                     {
@@ -527,7 +519,7 @@
                                     }
                                     else if (rows.Where(r => !r.IsArchived).ToList() is var active && active.Count == 0)
                                     {
-                                        <p class="text-[11px] text-gray-400 italic">No vendor allocations yet. The quota gate is off for this shift until you add one.</p>
+                                        <p class="text-[11px] text-gray-400 italic">No vendor allocations yet. Use the assign panel above to invite a vendor for this shift.</p>
                                     }
                                     else
                                     {
@@ -538,25 +530,6 @@
                                                     <div class="min-w-0">
                                                         <p class="text-[11px] font-semibold text-gray-800 truncate">@r.VendorName</p>
                                                         <p class="text-[10px] text-gray-500">@r.CurrentlyAssigned / @r.Quota assigned</p>
-                                                    </div>
-                                                    <div class="flex items-center gap-1 shrink-0">
-                                                        @if (_allocEditingId == r.Id)
-                                                        {
-                                                            <input type="number" min="@r.CurrentlyAssigned"
-                                                                   @bind="_allocEditQuota"
-                                                                   class="w-14 px-1.5 py-0.5 text-[11px] rounded border border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-400" />
-                                                            <button type="button" @onclick="() => SaveAllocEdit(r)"
-                                                                    class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">Save</button>
-                                                            <button type="button" @onclick="CancelAllocEdit"
-                                                                    class="text-[11px] px-1.5 py-0.5 rounded text-gray-500 hover:text-gray-700">✕</button>
-                                                        }
-                                                        else
-                                                        {
-                                                            <button type="button" @onclick="() => StartAllocEdit(r)"
-                                                                    class="text-[10px] text-indigo-600 hover:underline">Edit</button>
-                                                            <button type="button" @onclick="() => ArchiveAlloc(r)"
-                                                                    class="text-[10px] text-gray-400 hover:text-red-500">Remove</button>
-                                                        }
                                                     </div>
                                                 </div>
                                             }

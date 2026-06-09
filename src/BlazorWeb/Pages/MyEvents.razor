@@ -81,6 +81,12 @@
                     @* Vendor action: invite response → then assign crew *@
                     @if (_userRole == "Vendor" && ev.Status != "Completed" && ev.Status != "Cancelled")
                     {
+                        // Phase D step 7: Accept and Assign coexist. A vendor
+                        // can have BOTH:
+                        //   (a) pending shift buckets they haven't decided on yet
+                        //       (admin just added F&B after Saly already accepted Box Office)
+                        //   (b) an accepted shift where they can now staff crew
+                        // Render both side-by-side instead of either/or.
                         if (HasAcceptedInvite(ev.Id))
                         {
                             <button @onclick="() => OpenAssignPanel(ev)"
@@ -88,7 +94,7 @@
                                 <span>👥</span> Assign My Crew
                             </button>
                         }
-                        else if (_inviteBucketsByEventId.TryGetValue(ev.Id, out var pendingBuckets) && pendingBuckets.Count > 0)
+                        if (_inviteBucketsByEventId.TryGetValue(ev.Id, out var pendingBuckets) && pendingBuckets.Count > 0)
                         {
                             var open = _expandedInviteEventId == ev.Id;
                             var totalSeats = pendingBuckets.Sum(b => b.Seats);
