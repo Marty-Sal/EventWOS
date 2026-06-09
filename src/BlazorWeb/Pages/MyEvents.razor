@@ -600,7 +600,13 @@
     // metadata — e.g. pre-Phase-D data).
     private Guid?  _assignScopedShiftId;
     private string? _assignSingleShiftLabel;
-    private Dictionary<Guid, string> _existingByCrewId = new(); // crewId → current Status
+    private Dictionary<Guid, string> _existingByCrewId = new(); // crewId → current Status (any shift)
+    // Phase D step 15: per-shift status map so "Publish to All" can skip
+    // ONLY the crew already on the target shift, not crew on sibling shifts
+    // of the same event. Key = (ShiftId, CrewId). ShiftId is non-null —
+    // legacy rows without ShiftId are excluded (Publish always targets a
+    // specific shift now). Value = latest Status string.
+    private Dictionary<(Guid ShiftId, Guid CrewId), string> _existingByShiftAndCrew = new();
     private string _crewSearch = "";
     private string? _assignError;
     private string? _assignSuccess; // legacy — kept for the group-invite success path; per-row uses _justActedId
@@ -914,6 +920,7 @@
         _crewSearch     = "";
         _roster         = null;
         _existingByCrewId = new();
+        _existingByShiftAndCrew = new();
         StateHasChanged();
 
         if (_userId is null) { _assignError = "Couldn't identify your account."; return; }
@@ -983,6 +990,15 @@
                 .Where(a => a.CrewId.HasValue && a.VendorId == _userId)
                 .GroupBy(a => a.CrewId!.Value)
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CreatedAt).First().Status);
+
+            // Phase D step 15: per-(shift, crew) status for shift-scoped
+            // Publish filtering. Only include rows that have a ShiftId —
+            // legacy event-level rows (ShiftId null) can't be used for
+            // shift-aware decisions.
+            _existingByShiftAndCrew = assignments.Items
+                .Where(a => a.CrewId.HasValue && a.VendorId == _userId && a.ShiftId.HasValue)
+                .GroupBy(a => (a.ShiftId!.Value, a.CrewId!.Value))
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CreatedAt).First().Status);
         }
         StateHasChanged();
     }
@@ -996,6 +1012,7 @@
         _assignError      = null;
         _assignSuccess    = null;
         _existingByCrewId = new();
+        _existingByShiftAndCrew = new();
         _groupsForPicker  = null;
         _selectedGroupId  = "";
         _groupInviteSummary = null;
@@ -1162,14 +1179,40 @@
             return;
         }
 
-        // Skip crew already on this event in ANY active state. Declined /
-        // rejected / no-show crew are eligible to be re-invited.
+        // Phase D step 15: shift-scoped eligibility.
+        //   Skip crew who are already on THIS specific shift in an active
+        //   state. Crew on OTHER shifts of the same event remain eligible —
+        //   vendor explicitly chose to publish to this shift, so we trust
+        //   them to handle multi-shift staffing (e.g. split-shift crew).
+        //   "Active" = not-yet-final commitments + final attended. Declined
+        //   /rejected are re-invitable (circumstances change); NoShow is
+        //   NOT re-invitable (don't waste a seat on a confirmed flake).
+        //
+        // Falls back to the event-wide map for legacy assignments where
+        // ShiftId is null (pre-Phase-D data) — those still block, since we
+        // can't tell which shift they were intended for.
         var blockedStates = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         { "Invited", "VendorAccepted", "VendorApproved", "PendingManagerApproval",
-          "ManagerApproved", "Confirmed", "Attended" };
+          "ManagerApproved", "Confirmed", "Attended", "NoShow" };
+
+        bool IsBlocked(Guid crewId)
+        {
+            if (_existingByShiftAndCrew.TryGetValue((opt.ShiftId, crewId), out var shiftSt)
+                && blockedStates.Contains(shiftSt))
+                return true;
+            // Legacy fallback: row has no ShiftId at all but matches this crew.
+            // Only block if the event-wide map says active AND no per-shift
+            // row exists (means the row is shift-less and we can't safely
+            // re-invite to this shift without potentially double-booking).
+            if (_existingByCrewId.TryGetValue(crewId, out var evSt)
+                && blockedStates.Contains(evSt)
+                && !_existingByShiftAndCrew.Keys.Any(k => k.CrewId == crewId))
+                return true;
+            return false;
+        }
 
         var eligible = _roster
-            .Where(c => !_existingByCrewId.TryGetValue(c.Id, out var st) || !blockedStates.Contains(st))
+            .Where(c => !IsBlocked(c.Id))
             .Take(free)
             .ToList();
 
@@ -1193,6 +1236,7 @@
             if (ok)
             {
                 _existingByCrewId[c.Id] = "Invited";
+                _existingByShiftAndCrew[(opt.ShiftId, c.Id)] = "Invited";   // Phase D step 15
                 invited++;
             }
             else
