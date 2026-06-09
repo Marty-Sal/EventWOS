@@ -69,4 +69,23 @@ public static class AssignmentCapacityRules
           && a.Status != AssignmentStatus.RejectedByVendor
           && a.Status != AssignmentStatus.RejectedByManager
           && a.Status != AssignmentStatus.NoShow;
+
+    /// <summary>
+    /// EF-translatable predicate: does this assignment reserve a seat on
+    /// the given shift? Same status rules as <see cref="OccupiesSeatOnShift"/>
+    /// BUT also counts placeholder rows (CrewId == null) created by
+    /// vendor-only invites. Use this for shift-level CAPACITY checks —
+    /// otherwise admins can over-invite a shift by stacking placeholders
+    /// (each placeholder reserves a real seat the vendor will fill later).
+    ///
+    /// Rejected / declined / no-show rows are excluded because they've
+    /// freed their seat back to the pool.
+    /// </summary>
+    public static Expression<Func<EventAssignment, bool>> ReservesSeatOnShift(Guid shiftId) =>
+        a => a.ShiftId == shiftId
+          && !a.IsDeleted
+          && a.Status != AssignmentStatus.Declined
+          && a.Status != AssignmentStatus.RejectedByVendor
+          && a.Status != AssignmentStatus.RejectedByManager
+          && a.Status != AssignmentStatus.NoShow;
 }

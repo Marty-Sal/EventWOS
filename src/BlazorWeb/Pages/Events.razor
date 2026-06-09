@@ -657,7 +657,14 @@
                                 {
                                     @foreach (var sh in _selectedEventShifts)
                                     {
-                                        var free  = Math.Max(0, sh.CrewCount - sh.AssignedCrew);
+                                        // Phase D step 9: free seats must account for placeholder
+                                        // invites too — not just real crew. Total reserved =
+                                        // max(AssignedCrew, sum of active allocation quotas) since
+                                        // every allocation row reserves N placeholder seats.
+                                        var totalAlloc = _allocationsByShift.GetValueOrDefault(sh.Id)
+                                            ?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
+                                        var reserved = Math.Max(sh.AssignedCrew, totalAlloc);
+                                        var free  = Math.Max(0, sh.CrewCount - reserved);
                                         var row   = _multiShiftRows.GetValueOrDefault(sh.Id) ?? new MultiShiftRow();
                                         _multiShiftRows[sh.Id] = row;  // make sure dict has it
                                         var isVendorMode = _assignMode == "vendor";
@@ -2142,6 +2149,21 @@ else
         "ManagerApproved", "Confirmed", "Pending", "Attended"
     };
 
+    /// <summary>
+    /// Phase D step 9: per-shift free-seat math used everywhere capacity
+    /// matters (multi-shift modal, headroom warnings).
+    /// reserved = max(real crew on shift, sum of active allocation quotas)
+    /// because every allocation row reserves a placeholder seat the vendor
+    /// will fill later. Free = capacity - reserved (floored at 0).
+    /// </summary>
+    private int ShiftFreeSeats(EventShiftDto sh)
+    {
+        var totalAlloc = _allocationsByShift.GetValueOrDefault(sh.Id)
+            ?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
+        var reserved = Math.Max(sh.AssignedCrew, totalAlloc);
+        return Math.Max(0, sh.CrewCount - reserved);
+    }
+
     private string? DuplicateAssignWarning()
     {
         if (_assignments?.Items is null || _assignments.Items.Count == 0) return null;
@@ -2168,7 +2190,7 @@ else
             // (Capacity here = sh.CrewCount; assignments = sh.AssignedCrew.)
             if (_selectedEventShifts is { Count: > 0 })
             {
-                var anyHeadroom = _selectedEventShifts.Any(sh => sh.CrewCount - sh.AssignedCrew > 0);
+                var anyHeadroom = _selectedEventShifts.Any(sh => ShiftFreeSeats(sh) > 0);
                 if (!anyHeadroom)
                     return $"All shifts on this event are fully staffed — no seats left for {_assignSelectedVendor.FullName}.";
             }
@@ -2307,7 +2329,7 @@ else
         {
             foreach (var sh in _selectedEventShifts)
             {
-                var free = Math.Max(0, sh.CrewCount - sh.AssignedCrew);
+                var free = ShiftFreeSeats(sh);
                 _multiShiftRows[sh.Id] = new MultiShiftRow
                 {
                     Selected = false,

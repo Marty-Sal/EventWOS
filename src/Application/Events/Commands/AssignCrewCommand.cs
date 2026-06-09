@@ -103,6 +103,27 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
                     "Event has no shifts — cannot assign crew."));
         }
 
+        // Phase D step 9: enforce per-shift capacity using TOTAL reserved
+        // seats (real crew + placeholders), not just OccupiesSeat. The old
+        // code only checked event.MaxCrew, which let admins stack
+        // placeholders on a shift past its CrewCount as long as no real
+        // crew had been added yet. Bug surfaced when KASHISH Pride's Box
+        // Office shift (capacity 5) ended up with 6 placeholders under
+        // one vendor.
+        var shiftEntity = await _db.EventShifts
+            .FirstOrDefaultAsync(s => s.Id == _shiftId.Value, ct);
+        if (shiftEntity is null)
+            return Result.Failure<EventAssignmentDto>(new Error("Assignment.InvalidShift",
+                "Selected shift no longer exists."));
+
+        var shiftReserved = await _db.EventAssignments
+            .Where(AssignmentCapacityRules.ReservesSeatOnShift(_shiftId.Value))
+            .CountAsync(ct);
+        if (shiftReserved >= shiftEntity.CrewCount)
+            return Result.Failure<EventAssignmentDto>(new Error("Assignment.ShiftFull",
+                $"Shift is fully reserved ({shiftReserved}/{shiftEntity.CrewCount} seats). " +
+                "Revoke a placeholder or increase shift capacity first."));
+
         var assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorId, req.AssignedByUserId);
         assignment.AttachToShift(_shiftId.Value);
         _db.EventAssignments.Add(assignment);
