@@ -55,6 +55,25 @@
     </div>
 
     <script src="_framework/blazor.webassembly.js"></script>
+    <!-- Phase D step 22: helper for Excel downloads from Attendance page.
+         Builds a Blob from a base64 string and triggers an anchor click.
+         Defined globally so any page can call it via JSInterop. -->
+    <script>
+        window.downloadFileFromBytes = function (filename, mime, b64) {
+            const bytes = atob(b64);
+            const arr   = new Uint8Array(bytes.length);
+            for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+            const blob  = new Blob([arr], { type: mime });
+            const url   = URL.createObjectURL(blob);
+            const a     = document.createElement("a");
+            a.href      = url;
+            a.download  = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+    </script>
 
     <style>
         @keyframes load {
