@@ -2,6 +2,15 @@
 @attribute [Authorize]
 @inject HttpClient Http
 @inject IUserApiService UserApi
+@inject IEventApiService EventApi
+@inject IJSRuntime JS
+
+@*
+    Phase D step 22: rebuilt /attendance with two tabs, real filters,
+    sorting, and Excel download. Old behaviour (paste an event UUID
+    to filter) was kept on the backend but the UI now picks events
+    from a real dropdown.
+*@
 
 @if (_accessDenied)
 {
@@ -19,46 +28,107 @@
     <div class="flex items-center justify-between flex-wrap gap-3">
         <div>
             <h2 class="text-lg font-bold text-gray-800">Attendance</h2>
-            <p class="text-sm text-gray-500 mt-0.5">Check-in and check-out records for all events.</p>
+            <p class="text-sm text-gray-500 mt-0.5">Check-in / check-out records and per-event rollup across all events.</p>
         </div>
-        <button @onclick="LoadAsync" disabled="@_loading"
-                class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50">
-            🔄 Refresh
+        <div class="flex items-center gap-2">
+            <button @onclick="DownloadCurrentTabAsync" disabled="@_downloading"
+                    title="Download current tab as Excel — honours your filters"
+                    class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50">
+                @(_downloading ? "Preparing…" : "📥 Excel")
+            </button>
+            <button @onclick="RefreshAsync" disabled="@_loading"
+                    class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+
+    @* ── Tabs ─────────────────────────────────────────────────────── *@
+    <div class="flex border-b border-gray-200">
+        <button class="px-4 py-2.5 text-sm font-medium -mb-px border-b-2 @(_tab == "logs" ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700")"
+                @onclick='() => SwitchTab("logs")'>
+            📋 Logs
+        </button>
+        <button class="px-4 py-2.5 text-sm font-medium -mb-px border-b-2 @(_tab == "summary" ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700")"
+                @onclick='() => SwitchTab("summary")'>
+            📊 Summary by Event
         </button>
     </div>
 
-    @if (_summary is not null)
-    {
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p class="text-xs font-medium text-gray-500 mb-1">Total Assigned</p>
-                <p class="text-2xl font-bold text-gray-800">@_summary.TotalAssigned</p>
+    @* ── Filter bar (shared, conditional fields per tab) ───────────── *@
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Search</label>
+                <input @bind="_search" @bind:event="oninput"
+                       placeholder='@(_tab == "logs" ? "Crew or event…" : "Event title or venue…")'
+                       class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
             </div>
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p class="text-xs font-medium text-gray-500 mb-1">Confirmed</p>
-                <p class="text-2xl font-bold text-indigo-600">@_summary.TotalConfirmed</p>
-            </div>
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p class="text-xs font-medium text-gray-500 mb-1">Attended</p>
-                <p class="text-2xl font-bold text-green-600">@_summary.TotalAttended</p>
-            </div>
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p class="text-xs font-medium text-gray-500 mb-1">No Show</p>
-                <p class="text-2xl font-bold text-red-500">@_summary.TotalNoShow</p>
-            </div>
-        </div>
-    }
 
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3 items-end">
-        <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">Filter by Event ID</label>
-            <input @bind="_filterEventId" placeholder="Paste event UUID…"
-                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            @if (_tab == "logs")
+            {
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Event</label>
+                    <select @bind="_filterEventId"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                        <option value="">All events</option>
+                        @foreach (var e in _eventList)
+                        {
+                            <option value="@e.Id">@e.Title</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Action</label>
+                    <select @bind="_filterAction"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                        <option value="">All actions</option>
+                        <option value="CheckIn">Check In</option>
+                        <option value="CheckOut">Check Out</option>
+                        <option value="AdminOverride">Admin Override</option>
+                    </select>
+                </div>
+            }
+            else
+            {
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                    <select @bind="_filterStatus"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                        <option value="">All statuses</option>
+                        <option value="0">Draft</option>
+                        <option value="1">Published</option>
+                        <option value="2">In Progress</option>
+                        <option value="3">Completed</option>
+                        <option value="4">Cancelled</option>
+                    </select>
+                </div>
+                <div class="hidden lg:block"></div>
+            }
+
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">From</label>
+                <input type="date" @bind="_filterFrom"
+                       class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">To</label>
+                <input type="date" @bind="_filterTo"
+                       class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
         </div>
-        <button @onclick="ApplyFilters"
-                class="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition">Load Event</button>
-        <button @onclick="ClearFilters"
-                class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition">Clear</button>
+
+        <div class="flex items-center gap-2 mt-3">
+            <button @onclick="ApplyFilters"
+                    class="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition">Apply</button>
+            <button @onclick="ClearFilters"
+                    class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition">Clear</button>
+
+            @if (HasActiveFilter())
+            {
+                <span class="text-xs text-gray-500 ml-2">Filters active</span>
+            }
+        </div>
     </div>
 
     @if (_loading)
@@ -74,134 +144,390 @@
     {
         <div class="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-600 text-sm">⚠️ @_error</div>
     }
-    else if (_records.Count == 0)
+    else if (_tab == "logs")
     {
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-            <p class="text-4xl mb-3">📍</p>
-            <p class="text-gray-500 text-sm">No attendance records yet.</p>
-            <p class="text-gray-400 text-xs mt-1">Records appear when crew check in to InProgress events.</p>
-        </div>
+        @* ── LOGS TAB ─────────────────────────────────────────────── *@
+        @if (_records.Count == 0)
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+                <p class="text-4xl mb-3">📍</p>
+                <p class="text-gray-500 text-sm">No attendance records match these filters.</p>
+            </div>
+        }
+        else
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                            @SortHeader("Crew",        "CrewName")
+                            @SortHeader("Event",       "EventTitle")
+                            @SortHeader("Action",      "Action")
+                            @SortHeader("Time",        "RecordedAt")
+                            <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                            <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Recorded By</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @foreach (var r in _records)
+                        {
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-5 py-3.5 font-medium text-gray-800">@r.CrewName</td>
+                                <td class="px-5 py-3.5 text-gray-600 text-xs">@r.EventTitle</td>
+                                <td class="px-5 py-3.5">
+                                    @{
+                                        var (lbl, cls) = r.Action switch
+                                        {
+                                            "CheckIn"       => ("✅ Check In",       "bg-green-50 text-green-700 border border-green-100"),
+                                            "CheckOut"      => ("🚪 Check Out",      "bg-amber-50 text-amber-700 border border-amber-100"),
+                                            "AdminOverride" => ("🛡️ Admin Override", "bg-purple-50 text-purple-700 border border-purple-100"),
+                                            _               => (r.Action,            "bg-gray-50 text-gray-700 border border-gray-100")
+                                        };
+                                    }
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-medium @cls">@lbl</span>
+                                </td>
+                                <td class="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">@r.RecordedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                                <td class="px-5 py-3.5 text-gray-400 text-xs">@(r.Location ?? "—")</td>
+                                <td class="px-5 py-3.5 text-gray-500 text-xs">
+                                    @(r.RecordedByName ?? (r.RecordedBy is not null && r.RecordedBy.Length > 8 ? r.RecordedBy[..8] + "…" : (r.RecordedBy ?? "—")))
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex items-center justify-between text-sm text-gray-500">
+                <span>Showing @_records.Count of @_total records</span>
+                <div class="flex gap-2">
+                    <button @onclick="PrevPage" disabled="@(_page <= 1)"
+                            class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">← Prev</button>
+                    <span class="px-3 py-1.5 text-gray-700 font-medium">Page @_page</span>
+                    <button @onclick="NextPage" disabled="@(_records.Count < _pageSize)"
+                            class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">Next →</button>
+                </div>
+            </div>
+        }
     }
     else
     {
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-100">
-                    <tr>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Crew</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Event</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Recorded By</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-50">
-                    @foreach (var r in _records)
-                    {
-                        <tr class="hover:bg-gray-50 transition-colors">
-                            <td class="px-5 py-3.5 font-medium text-gray-800">@r.CrewName</td>
-                            <td class="px-5 py-3.5 text-gray-600 text-xs">@r.EventTitle</td>
-                            <td class="px-5 py-3.5">
-@{
-                                    // Three-way pill: CheckIn (green), CheckOut (amber),
-                                    // AdminOverride (purple). AdminOverride rows mean an
-                                    // admin retroactively marked a no-show as attended —
-                                    // the override note is surfaced in the Location cell.
-                                    var (actionLabel, actionClass) = r.Action switch
-                                    {
-                                        "CheckIn"       => ("✅ Check In",      "bg-green-50 text-green-700 border border-green-100"),
-                                        "CheckOut"      => ("🚪 Check Out",     "bg-amber-50 text-amber-700 border border-amber-100"),
-                                        "AdminOverride" => ("🛡️ Admin Override","bg-purple-50 text-purple-700 border border-purple-100"),
-                                        _               => (r.Action,           "bg-gray-50 text-gray-700 border border-gray-100")
-                                    };
-                                }
-                                <span class="px-2 py-0.5 rounded-full text-xs font-medium @actionClass">
-                                    @actionLabel
-                                </span>
-                            </td>
-                            <td class="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">@r.RecordedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
-                            <td class="px-5 py-3.5 text-gray-400 text-xs">@(r.Location ?? "—")</td>
-                            <td class="px-5 py-3.5 text-gray-400 text-xs font-mono">
-                                @(r.RecordedBy is not null && r.RecordedBy.Length > 8 ? r.RecordedBy[..8] + "…" : (r.RecordedBy ?? "—"))
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-
-        <div class="flex items-center justify-between text-sm text-gray-500">
-            <span>Showing @_records.Count of @_total records</span>
-            <div class="flex gap-2">
-                <button @onclick="PrevPage" disabled="@(_page <= 1)"
-                        class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">← Prev</button>
-                <span class="px-3 py-1.5 text-gray-700 font-medium">Page @_page</span>
-                <button @onclick="NextPage" disabled="@(_records.Count < _pageSize)"
-                        class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">Next →</button>
+        @* ── SUMMARY TAB ──────────────────────────────────────────── *@
+        @if (_summary.Count == 0)
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+                <p class="text-4xl mb-3">📊</p>
+                <p class="text-gray-500 text-sm">No events match these filters.</p>
             </div>
-        </div>
+        }
+        else
+        {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                            @SortHeader("Event",   "EventTitle")
+                            @SortHeader("Start",   "StartAt")
+                            <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Approved</th>
+                            <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Checked In</th>
+                            <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Checked Out</th>
+                            <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Override</th>
+                            @SortHeader("Attended",  "Attended",          align: "right")
+                            @SortHeader("No-Show",   "NoShows",           align: "right")
+                            @SortHeader("Attend %",  "AttendancePercent", align: "right")
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @foreach (var s in _summary)
+                        {
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-4 py-3 font-medium text-gray-800">
+                                    @s.EventTitle
+                                    <div class="text-[11px] text-gray-400">@s.Venue</div>
+                                </td>
+                                <td class="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">@s.StartAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                                <td class="px-4 py-3">
+                                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full @GetStatusClass(s.Status)">@s.Status</span>
+                                </td>
+                                <td class="px-4 py-3 text-right font-semibold text-indigo-700">@s.ConfirmedCrew@(s.MaxCrew > 0 ? $" / {s.MaxCrew}" : "")</td>
+                                <td class="px-4 py-3 text-right text-green-700 font-medium">@s.CheckedIn</td>
+                                <td class="px-4 py-3 text-right text-amber-700 font-medium">@s.CheckedOut</td>
+                                <td class="px-4 py-3 text-right text-purple-700 font-medium">@(s.AdminOverrides > 0 ? s.AdminOverrides.ToString() : "—")</td>
+                                <td class="px-4 py-3 text-right text-green-700 font-bold">@s.Attended</td>
+                                <td class="px-4 py-3 text-right @(s.NoShows > 0 ? "text-red-600 font-semibold" : "text-gray-400")">@s.NoShows</td>
+                                <td class="px-4 py-3 text-right font-bold @PercentColor(s.AttendancePercent, s.ConfirmedCrew)">
+                                    @(s.ConfirmedCrew == 0 ? "—" : $"{s.AttendancePercent:0.0}%")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex items-center justify-between text-sm text-gray-500">
+                <span>Showing @_summary.Count of @_summaryTotal events</span>
+                <div class="flex gap-2">
+                    <button @onclick="PrevPage" disabled="@(_page <= 1)"
+                            class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">← Prev</button>
+                    <span class="px-3 py-1.5 text-gray-700 font-medium">Page @_page</span>
+                    <button @onclick="NextPage" disabled="@(_summary.Count < _pageSize)"
+                            class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition">Next →</button>
+                </div>
+            </div>
+        }
     }
 </div>
 
 @code {
+    // ── State ────────────────────────────────────────────────────────
     private bool _accessDenied;
-    private List<AttendanceItemDto> _records = new();
-    private AttendanceSummaryDto? _summary;
-    private bool _loading = true;
+    private bool _loading;
+    private bool _downloading;
     private string? _error;
+    private string _tab = "logs";
+
+    private List<AttendanceItemDto>       _records = new();
+    private List<EventAttendanceSummaryRow> _summary = new();
+    private int _total;
+    private int _summaryTotal;
+
+    // Event dropdown for the Logs tab. Loaded once on init.
+    private List<EventOpt> _eventList = new();
+
+    // Filters
+    private string  _search        = "";
+    private string  _filterEventId = "";
+    private string  _filterAction  = "";
+    private string  _filterStatus  = "";
+    private DateTime? _filterFrom;
+    private DateTime? _filterTo;
+
+    // Sort
+    private string _sortBy   = "RecordedAt";
+    private bool   _sortDesc = true;
+
+    // Paging
     private int _page = 1;
     private const int _pageSize = 20;
-    private int _total;
-    private string _filterEventId = "";
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
         new() { PropertyNameCaseInsensitive = true };
 
+    // ── Lifecycle ────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
         var me = await UserApi.GetMeAsync();
         _accessDenied = me is null || !me.Permissions.Contains("attendance:read");
         if (_accessDenied) { StateHasChanged(); return; }
+
+        // Populate the event dropdown. We over-fetch a single page (200
+        // events) — admins usually want recent events; if they have more
+        // than that they can use the search filter instead.
+        await LoadEventOptionsAsync();
         await LoadAsync();
     }
 
+    private async Task LoadEventOptionsAsync()
+    {
+        try
+        {
+            // EventApiService caps pageSize at 20 server-side; for the
+            // dropdown we just iterate until we have a reasonable batch.
+            // Two pages = 40 most recent events is plenty for the picker.
+            var p1 = await EventApi.GetEventsAsync(1);
+            var p2 = await EventApi.GetEventsAsync(2);
+            var all = (p1?.Items ?? new List<EventListItemDto>())
+                .Concat(p2?.Items ?? new List<EventListItemDto>())
+                .Select(e => new EventOpt(e.Id, e.Title))
+                .ToList();
+            _eventList = all;
+        }
+        catch { _eventList = new(); }
+    }
+
+    // ── Loading ──────────────────────────────────────────────────────
     private async Task LoadAsync()
     {
         _loading = true; _error = null; StateHasChanged();
         try
         {
-            var qs = $"api/v1/attendance?page={_page}&pageSize={_pageSize}";
-            if (Guid.TryParse(_filterEventId, out var eid))
-            {
-                qs += $"&eventId={eid}";
-                try
-                {
-                    var sumR = await Http.GetFromJsonAsync<ApiResult<AttendanceSummaryDto>>(
-                        $"api/v1/attendance/events/{eid}/summary", JsonOpts);
-                    _summary = sumR?.Data;
-                }
-                catch { _summary = null; }
-            }
-            else { _summary = null; }
-
-            var result = await Http.GetFromJsonAsync<ApiResult<PagedResult<AttendanceItemDto>>>(qs, JsonOpts);
-            _records = result?.Data?.Items?.ToList() ?? new();
-            _total   = result?.Data?.TotalCount ?? 0;
+            if (_tab == "logs") await LoadLogsAsync();
+            else                await LoadSummaryAsync();
         }
-        catch (Exception ex) { _error = "Could not load attendance: " + ex.Message; }
+        catch (Exception ex) { _error = "Could not load: " + ex.Message; }
         finally { _loading = false; StateHasChanged(); }
     }
 
-    private async Task ApplyFilters() { _page = 1; await LoadAsync(); }
-    private async Task ClearFilters() { _filterEventId = ""; _page = 1; _summary = null; await LoadAsync(); }
-    private async Task PrevPage()     { if (_page > 1) { _page--; await LoadAsync(); } }
-    private async Task NextPage()     { _page++; await LoadAsync(); }
+    private async Task LoadLogsAsync()
+    {
+        var qs = $"api/v1/attendance?page={_page}&pageSize={_pageSize}&sortBy={_sortBy}&sortDesc={_sortDesc.ToString().ToLower()}";
+        if (!string.IsNullOrWhiteSpace(_search))        qs += $"&search={Uri.EscapeDataString(_search)}";
+        if (Guid.TryParse(_filterEventId, out var eid)) qs += $"&eventId={eid}";
+        if (!string.IsNullOrWhiteSpace(_filterAction))  qs += $"&action={Uri.EscapeDataString(_filterAction)}";
+        if (_filterFrom.HasValue) qs += $"&from={_filterFrom.Value:yyyy-MM-dd}";
+        if (_filterTo.HasValue)   qs += $"&to={_filterTo.Value:yyyy-MM-dd}";
 
-    private sealed record AttendanceItemDto(Guid RecordId, Guid AssignmentId, Guid EventId, string EventTitle,
-        Guid CrewId, string CrewName, string Action, DateTime RecordedAt, string? Location, string? RecordedBy);
-    private sealed record AttendanceSummaryDto(Guid EventId, string EventTitle,
-        int TotalAssigned, int TotalConfirmed, int TotalAttended, int TotalNoShow);
+        var result = await Http.GetFromJsonAsync<ApiResult<PagedResult<AttendanceItemDto>>>(qs, JsonOpts);
+        _records = result?.Data?.Items?.ToList() ?? new();
+        _total   = result?.Data?.TotalCount ?? 0;
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        var qs = $"api/v1/attendance/summary/all?page={_page}&pageSize={_pageSize}&sortBy={_sortBy}&sortDesc={_sortDesc.ToString().ToLower()}";
+        if (!string.IsNullOrWhiteSpace(_search))       qs += $"&search={Uri.EscapeDataString(_search)}";
+        if (!string.IsNullOrWhiteSpace(_filterStatus)) qs += $"&status={_filterStatus}";
+        if (_filterFrom.HasValue) qs += $"&from={_filterFrom.Value:yyyy-MM-dd}";
+        if (_filterTo.HasValue)   qs += $"&to={_filterTo.Value:yyyy-MM-dd}";
+
+        var result = await Http.GetFromJsonAsync<ApiResult<PagedResult<EventAttendanceSummaryRow>>>(qs, JsonOpts);
+        _summary      = result?.Data?.Items?.ToList() ?? new();
+        _summaryTotal = result?.Data?.TotalCount ?? 0;
+    }
+
+    // ── Actions ──────────────────────────────────────────────────────
+    private async Task RefreshAsync() => await LoadAsync();
+
+    private async Task SwitchTab(string tab)
+    {
+        if (_tab == tab) return;
+        _tab     = tab;
+        _page    = 1;
+        // Each tab has its own sort key default — reset to the natural one.
+        _sortBy  = tab == "logs" ? "RecordedAt" : "StartAt";
+        _sortDesc = true;
+        await LoadAsync();
+    }
+
+    private async Task ApplyFilters() { _page = 1; await LoadAsync(); }
+
+    private async Task ClearFilters()
+    {
+        _search = ""; _filterEventId = ""; _filterAction = ""; _filterStatus = "";
+        _filterFrom = null; _filterTo = null; _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { _page++; await LoadAsync(); }
+
+    private async Task ToggleSort(string column)
+    {
+        if (_sortBy == column) _sortDesc = !_sortDesc;
+        else { _sortBy = column; _sortDesc = true; }
+        _page = 1;
+        await LoadAsync();
+    }
+
+    // Download: build the same query string the current tab uses, swap
+    // the path to the export endpoint, fetch as bytes, save via JS interop.
+    // We don't reach into a download attribute on an <a> because the
+    // request needs the bearer token header — easier to do via fetch().
+    private async Task DownloadCurrentTabAsync()
+    {
+        _downloading = true; StateHasChanged();
+        try
+        {
+            string url;
+            string filename;
+            if (_tab == "logs")
+            {
+                url = $"api/v1/attendance/export?sortBy={_sortBy}&sortDesc={_sortDesc.ToString().ToLower()}";
+                if (!string.IsNullOrWhiteSpace(_search))        url += $"&search={Uri.EscapeDataString(_search)}";
+                if (Guid.TryParse(_filterEventId, out var eid)) url += $"&eventId={eid}";
+                if (!string.IsNullOrWhiteSpace(_filterAction))  url += $"&action={Uri.EscapeDataString(_filterAction)}";
+                if (_filterFrom.HasValue) url += $"&from={_filterFrom.Value:yyyy-MM-dd}";
+                if (_filterTo.HasValue)   url += $"&to={_filterTo.Value:yyyy-MM-dd}";
+                filename = $"attendance-logs-{DateTime.UtcNow:yyyyMMdd-HHmm}.xlsx";
+            }
+            else
+            {
+                url = $"api/v1/attendance/summary/all/export?sortBy={_sortBy}&sortDesc={_sortDesc.ToString().ToLower()}";
+                if (!string.IsNullOrWhiteSpace(_search))       url += $"&search={Uri.EscapeDataString(_search)}";
+                if (!string.IsNullOrWhiteSpace(_filterStatus)) url += $"&status={_filterStatus}";
+                if (_filterFrom.HasValue) url += $"&from={_filterFrom.Value:yyyy-MM-dd}";
+                if (_filterTo.HasValue)   url += $"&to={_filterTo.Value:yyyy-MM-dd}";
+                filename = $"attendance-summary-{DateTime.UtcNow:yyyyMMdd-HHmm}.xlsx";
+            }
+
+            var resp = await Http.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = $"Download failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+            var bytes = await resp.Content.ReadAsByteArrayAsync();
+            await JS.InvokeVoidAsync("downloadFileFromBytes", filename,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+        }
+        catch (Exception ex) { _error = "Download error: " + ex.Message; }
+        finally { _downloading = false; StateHasChanged(); }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────
+    private RenderFragment SortHeader(string label, string column, string align = "left") => builder =>
+    {
+        var isActive = _sortBy == column;
+        var arrow    = !isActive ? "" : (_sortDesc ? " ↓" : " ↑");
+        var alignCls = align == "right" ? "text-right" : "text-left";
+
+        builder.OpenElement(0, "th");
+        builder.AddAttribute(1, "class",
+            $"{alignCls} px-4 py-3 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none " +
+            (isActive ? "text-indigo-700" : "text-gray-500 hover:text-gray-700"));
+        builder.AddAttribute(2, "onclick",
+            EventCallback.Factory.Create(this, () => ToggleSort(column)));
+        builder.AddContent(3, label + arrow);
+        builder.CloseElement();
+    };
+
+    private bool HasActiveFilter() =>
+        !string.IsNullOrWhiteSpace(_search) ||
+        !string.IsNullOrWhiteSpace(_filterEventId) ||
+        !string.IsNullOrWhiteSpace(_filterAction) ||
+        !string.IsNullOrWhiteSpace(_filterStatus) ||
+        _filterFrom.HasValue || _filterTo.HasValue;
+
+    private static string GetStatusClass(string status) => status switch
+    {
+        "Draft"      => "bg-gray-100 text-gray-600",
+        "Published"  => "bg-blue-100 text-blue-700",
+        "InProgress" => "bg-yellow-100 text-yellow-700",
+        "Completed"  => "bg-green-100 text-green-700",
+        "Cancelled"  => "bg-red-100 text-red-700",
+        _            => "bg-gray-100 text-gray-600"
+    };
+
+    private static string PercentColor(decimal pct, int confirmed) =>
+        confirmed == 0 ? "text-gray-400"
+            : pct >= 90 ? "text-green-700"
+            : pct >= 70 ? "text-amber-700"
+            : "text-red-600";
+
+    // ── DTOs ─────────────────────────────────────────────────────────
+    private sealed record AttendanceItemDto(
+        Guid RecordId, Guid AssignmentId, Guid EventId, string EventTitle,
+        Guid CrewId, string CrewName, string Action, DateTime RecordedAt,
+        string? Location, string? RecordedBy, string? RecordedByName);
+
+    private sealed record EventAttendanceSummaryRow(
+        Guid     EventId,
+        string   EventTitle,
+        string   Venue,
+        DateTime StartAt,
+        DateTime EndAt,
+        string   Status,
+        int      MaxCrew,
+        int      ConfirmedCrew,
+        int      CheckedIn,
+        int      CheckedOut,
+        int      AdminOverrides,
+        int      Attended,
+        int      NoShows,
+        decimal  AttendancePercent);
+
+    private sealed record EventOpt(Guid Id, string Title);
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int PageNumber, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
 }
