@@ -21,7 +21,12 @@ public sealed record VendorAllocationDto(
     int      CurrentlyAssigned,
     bool     IsArchived,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    // Phase D step 18: latest placeholder-row Status for this vendor on
+    // this shift. Lets the Vendor Quotas panel render an "Accepted" /
+    // "Pending Invite" / "Rejected" badge per row without re-fetching
+    // assignments. Null when no placeholder row exists.
+    string?  InviteStatus = null);
 
 public interface IVendorAllocationApiService
 {

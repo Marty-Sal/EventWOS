@@ -55,6 +55,31 @@ public sealed class GetVendorAllocationsForShiftHandler
             .Select(g => new { VendorId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.VendorId, x => x.Count, ct);
 
+        // Phase D step 18: per-vendor placeholder invite status.
+        //   Surfaces "Pending Invite / Accepted / Rejected" in the
+        //   admin Vendor Quotas panel so the placeholder rows can be
+        //   hidden from the Crew Assignments list without losing the
+        //   vendor's response visibility.
+        //
+        //   We look at placeholder rows (CrewId == null) on THIS shift
+        //   for the vendors we care about, take the latest by CreatedAt
+        //   per (vendor) so re-invites win over old terminal rows.
+        var eventId = rows.First().Shift!.EventId;
+        var phRows = await _db.EventAssignments
+            .Where(a => a.EventId == eventId
+                     && a.ShiftId == req.ShiftId
+                     && a.CrewId == null
+                     && !a.IsDeleted
+                     && a.VendorId != null
+                     && vendorIds.Contains(a.VendorId.Value))
+            .Select(a => new { VendorId = a.VendorId!.Value, a.Status, a.CreatedAt })
+            .ToListAsync(ct);
+        var inviteStatus = phRows
+            .GroupBy(x => x.VendorId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.CreatedAt).First().Status.ToString());
+
         var dtos = rows.Select(a => new VendorShiftAllocationDto(
             a.Id,
             a.ShiftId, a.VendorId,
@@ -64,7 +89,8 @@ public sealed class GetVendorAllocationsForShiftHandler
             a.Shift.ScopeOfWork?.Name ?? "(unknown)",
             a.Quota,
             occupancy.GetValueOrDefault(a.VendorId, 0),
-            a.IsDeleted, a.CreatedAt, a.UpdatedAt)).ToList();
+            a.IsDeleted, a.CreatedAt, a.UpdatedAt,
+            inviteStatus.GetValueOrDefault(a.VendorId))).ToList();
 
         return Result.Success<IReadOnlyList<VendorShiftAllocationDto>>(dtos);
     }

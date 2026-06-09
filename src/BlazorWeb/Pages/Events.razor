@@ -526,9 +526,27 @@
                                         <div class="space-y-1.5">
                                             @foreach (var r in active.OrderBy(x => x.VendorName))
                                             {
+                                                @* Phase D step 18: surface placeholder invite status next
+                                                   to the vendor name. Mapping: VendorAccepted → green
+                                                   "Accepted"; Invited → amber "Pending Invite"; rejection
+                                                   states → rose "Rejected"; null/unknown → no badge. *@
+                                                var (vIsLbl, vIsClass) = r.InviteStatus switch
+                                                {
+                                                    "VendorAccepted"                  => ("Accepted",        "bg-emerald-50 text-emerald-700 border border-emerald-200"),
+                                                    "Invited"                         => ("Pending Invite",  "bg-amber-50 text-amber-700 border border-amber-200"),
+                                                    "RejectedByVendor"                => ("Rejected",        "bg-rose-50 text-rose-700 border border-rose-200"),
+                                                    "Declined" or "RejectedByManager" => ("Rejected",        "bg-rose-50 text-rose-700 border border-rose-200"),
+                                                    _                                 => ("",                ""),
+                                                };
                                                 <div class="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
                                                     <div class="min-w-0">
-                                                        <p class="text-[11px] font-semibold text-gray-800 truncate">@r.VendorName</p>
+                                                        <div class="flex items-center gap-1.5">
+                                                            <p class="text-[11px] font-semibold text-gray-800 truncate">@r.VendorName</p>
+                                                            @if (!string.IsNullOrEmpty(vIsLbl))
+                                                            {
+                                                                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full @vIsClass">@vIsLbl</span>
+                                                            }
+                                                        </div>
                                                         <p class="text-[10px] text-gray-500">@r.CurrentlyAssigned / @r.Quota assigned</p>
                                                     </div>
                                                 </div>
@@ -733,7 +751,7 @@
                             </svg>
                         </div>
                     }
-                    else if (_assignments?.Items.Count == 0)
+                    else if (!(_assignments?.Items.Any(a => a.CrewId.HasValue) ?? false))
                     {
                         <p class="text-xs text-gray-400 text-center py-4">No crew assigned yet.</p>
                     }
@@ -744,7 +762,14 @@
                            collapse into a synthetic "Direct (no vendor)" bucket
                            pinned at the bottom so it doesn't clutter the top. *@
                         <div class="space-y-2">
-                            @foreach (var group in GroupAssignmentsByVendor(_assignments!.Items))
+                            @* Phase D step 18: placeholder rows (vendor-acceptance
+                               anchors with CrewId == null) are hidden from Crew
+                               Assignments entirely — they belong in Vendor Quotas
+                               above, where each vendor's row carries an "Accepted"
+                               / "Pending Invite" badge and a "Used / Quota" count.
+                               This list now contains ONLY real-crew assignments,
+                               which matches what managers actually need to see. *@
+                            @foreach (var group in GroupAssignmentsByVendor(_assignments!.Items.Where(a => a.CrewId.HasValue)))
                             {
                                 var isOpen = _expandedVendorGroups.Contains(group.Key);
                                 var headerLabel = group.VendorName ?? "Direct (no vendor)";

@@ -23,5 +23,15 @@ public sealed record VendorShiftAllocationDto(
     int      CurrentlyAssigned,
     bool     IsArchived,
     DateTime CreatedAt,
-    DateTime? UpdatedAt
+    DateTime? UpdatedAt,
+    // Phase D step 18: invite-status of the placeholder row that anchors
+    // this vendor to this shift. Null when no placeholder row exists
+    // (extremely-legacy allocations without an assignment). Otherwise
+    // mirrors EventAssignment.Status of the most-recent placeholder
+    // (CrewId == null) for this (event, vendor) pair: "Invited",
+    // "VendorAccepted", "RejectedByVendor", "Declined", etc. The Manager
+    // UI surfaces this as "Accepted" / "Pending Invite" badges in the
+    // Vendor Quotas panel so admins can see who has confirmed without
+    // scrolling through the full Crew Assignments list.
+    string?  InviteStatus = null
 );
