@@ -13,15 +13,20 @@
     </div>
 
     @* Summary cards.
-       Phase D step 24: removed "Paid to Crew" / "Yet to Pay Out" totals
-       from the vendor view — those numbers expose the per-crew breakdown
-       which is the vendor's private business. Vendors now see what the
-       organiser owes them and how many records, plus a count of how many
-       payouts are still pending action on their side. *@
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+       Phase D step 26: restored the per-crew amount allocated by the manager.
+       The vendor NEEDS to know what they're contractually meant to pay each
+       crew member — that's the agreed amount the manager set on the batch.
+       What stays hidden is what the vendor ACTUALLY paid out (irrelevant to
+       the manager) and any totalling of outgoing flows. The vendor sees the
+       manager-side contract; the crew sees nothing. *@
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">From Organiser</p>
             <p class="mt-1 text-xl font-bold text-gray-800">₹@FormatMoney(_totalAgreed)</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Owed to Crew</p>
+            <p class="mt-1 text-xl font-bold text-emerald-600">₹@FormatMoney(_totalOwed)</p>
         </div>
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Pending Payouts</p>
@@ -77,6 +82,7 @@
                         <th class="text-left px-4 py-3 font-semibold">Crew</th>
                         <th class="text-left px-4 py-3 font-semibold">Event</th>
                         <th class="text-right px-4 py-3 font-semibold">From Organiser</th>
+                        <th class="text-right px-4 py-3 font-semibold">Per Crew (Agreed)</th>
                         <th class="text-center px-4 py-3 font-semibold">Status</th>
                         <th class="text-left px-4 py-3 font-semibold">Paid On</th>
                         <th class="text-center px-4 py-3 font-semibold">Action</th>
@@ -94,6 +100,13 @@
                             <td class="px-4 py-3 text-right font-mono text-gray-800">
                                 @if (p.BatchTotal.HasValue && p.BatchTotal.Value > 0) {
                                     <span class="text-slate-700">₹@FormatMoney(p.BatchTotal.Value)</span>
+                                } else {
+                                    <span class="text-gray-300">—</span>
+                                }
+                            </td>
+                            <td class="px-4 py-3 text-right font-mono">
+                                @if (p.AgreedAmount > 0m) {
+                                    <span class="text-emerald-700 font-semibold">₹@FormatMoney(p.AgreedAmount)</span>
                                 } else {
                                     <span class="text-gray-300">—</span>
                                 }
@@ -180,14 +193,15 @@
 
 
 @* ── Confirm Disbursement modal ──────────────────────────────────────────────
-   Phase D step 24: stripped-down modal. The vendor confirms they've paid
-   the crew member; the amount is whatever was already agreed and is
-   intentionally NOT shown — keeping the vendor's per-crew payout opaque
-   to the manager view (the manager only sees that disbursement happened).
+   Phase D step 26: the modal SHOWS the agreed amount (read-only) so the
+   vendor can sanity-check what they're confirming — this is the contract
+   the manager set, not the vendor's internal payout flow. The vendor
+   doesn't TYPE an amount (avoids drift from contract; locked-payout rule
+   from step 23 enforces it server-side either way), but they see what
+   they're committing to.
 
-   The server stamps PaidAmount = AgreedAmount automatically (the locked-payout
-   rule from step 23), so this just gathers the method + optional reference
-   for the vendor's own records and the crew acknowledgement message.
+   Crew side is unchanged: they get a "marked paid" notification and a
+   yes/no acknowledgement — never an amount.
    ────────────────────────────────────────────────────────────────────────── *@
 @if (_markPaid is not null)
 {
@@ -196,10 +210,18 @@
             <h3 class="text-lg font-bold text-gray-900 mb-1">Confirm Payment to Crew</h3>
             <p class="text-xs text-gray-500 mb-4">@_markPaid.CrewName · @_markPaid.EventTitle</p>
 
+            @if (_markPaid.AgreedAmount > 0m)
+            {
+                <div class="bg-emerald-50 border border-emerald-100 rounded-lg p-3 mb-4 flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-widest text-emerald-700">Agreed amount</span>
+                    <span class="text-lg font-bold text-emerald-700 font-mono">₹@FormatMoney(_markPaid.AgreedAmount)</span>
+                </div>
+            }
+
             <div class="bg-indigo-50 border border-indigo-100 rounded-lg p-3 mb-4">
                 <p class="text-[12px] text-indigo-800 leading-relaxed">
                     Confirming will notify @_markPaid.CrewName that you've paid them.
-                    They'll be asked to acknowledge receipt on their end.
+                    They'll be asked to acknowledge receipt — no amount is shown to them.
                 </p>
             </div>
 
@@ -283,8 +305,11 @@
     private string?                  _status; // null = all
 
     private decimal _totalAgreed;
-    // Phase D step 24: replaces _totalPaid/_totalPending — vendors don't see
-    // per-crew amount totals, just how many payouts still need their action.
+    // Phase D step 26: vendor sees what manager has allocated per crew (the
+    // contract). _totalOwed is the sum of AgreedAmounts across visible rows.
+    private decimal _totalOwed;
+    // Phase D step 24: payouts still requiring vendor action (Approved +
+    // either direct OR batch already Disbursed).
     private int     _pendingPayoutCount;
 
     private readonly List<(string? Key, string Label)> _filters = new()
@@ -342,6 +367,11 @@
                 var directTotal = _items.Where(p => !p.PayrollBatchId.HasValue)
                                         .Sum(p => p.AgreedAmount);
                 _totalAgreed = batchTotal + directTotal;
+                // Phase D step 26: "Owed to Crew" = sum of every crew's agreed
+                // contract on this vendor. Same number the manager sees on
+                // the parent batch detail; we surface it on the vendor side
+                // so they know their total disbursement obligation.
+                _totalOwed = _items.Sum(p => p.AgreedAmount);
                 // Pending payouts = Approved rows the vendor can act on right now.
                 // We mirror the "can mark paid" logic from the row:
                 //   • Approved status
