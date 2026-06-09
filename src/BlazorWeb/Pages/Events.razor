@@ -2157,10 +2157,21 @@ else
         }
         else if (_assignMode == "vendor" && _assignSelectedVendor is not null)
         {
-            // Vendor-only: this vendor already has a placeholder OR any active row on the event.
-            var dup = rows.FirstOrDefault(a => a.VendorId == _assignSelectedVendor.Id);
-            if (dup is not null)
-                return $"{_assignSelectedVendor.FullName} is already invited to this event ({dup.Status}).";
+            // Phase D step 8: vendor-mode is now per-shift. A vendor can legitimately
+            // be invited to multiple shifts on the same event (e.g. Saly on both
+            // Box Office and F&B), or have their existing shift quota grown. The
+            // multi-shift modal handles the per-shift "free" count and disables
+            // shifts that have no headroom — that's the real gate, not this one.
+            //
+            // Only block when there is literally nowhere to put new placeholders:
+            // every active shift on this event is already at full capacity.
+            // (Capacity here = sh.CrewCount; assignments = sh.AssignedCrew.)
+            if (_selectedEventShifts is { Count: > 0 })
+            {
+                var anyHeadroom = _selectedEventShifts.Any(sh => sh.CrewCount - sh.AssignedCrew > 0);
+                if (!anyHeadroom)
+                    return $"All shifts on this event are fully staffed — no seats left for {_assignSelectedVendor.FullName}.";
+            }
         }
         else if (_assignMode == "both" && _assignSelectedCrew is not null && _assignSelectedVendor is not null)
         {
