@@ -12,19 +12,20 @@
         <p class="text-sm text-gray-500 mt-0.5">Track what your crew has earned across events.</p>
     </div>
 
-    @* Summary cards *@
-    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+    @* Summary cards.
+       Phase D step 24: removed "Paid to Crew" / "Yet to Pay Out" totals
+       from the vendor view — those numbers expose the per-crew breakdown
+       which is the vendor's private business. Vendors now see what the
+       organiser owes them and how many records, plus a count of how many
+       payouts are still pending action on their side. *@
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">From Organiser</p>
             <p class="mt-1 text-xl font-bold text-gray-800">₹@FormatMoney(_totalAgreed)</p>
         </div>
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Paid to Crew</p>
-            <p class="mt-1 text-xl font-bold text-emerald-600">₹@FormatMoney(_totalPaid)</p>
-        </div>
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Yet to Pay Out</p>
-            <p class="mt-1 text-xl font-bold text-amber-600">₹@FormatMoney(_totalPending)</p>
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Pending Payouts</p>
+            <p class="mt-1 text-xl font-bold text-amber-600">@_pendingPayoutCount</p>
         </div>
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Records</p>
@@ -76,7 +77,6 @@
                         <th class="text-left px-4 py-3 font-semibold">Crew</th>
                         <th class="text-left px-4 py-3 font-semibold">Event</th>
                         <th class="text-right px-4 py-3 font-semibold">From Organiser</th>
-                        <th class="text-right px-4 py-3 font-semibold">Paid to Crew</th>
                         <th class="text-center px-4 py-3 font-semibold">Status</th>
                         <th class="text-left px-4 py-3 font-semibold">Paid On</th>
                         <th class="text-center px-4 py-3 font-semibold">Action</th>
@@ -94,13 +94,6 @@
                             <td class="px-4 py-3 text-right font-mono text-gray-800">
                                 @if (p.BatchTotal.HasValue && p.BatchTotal.Value > 0) {
                                     <span class="text-slate-700">₹@FormatMoney(p.BatchTotal.Value)</span>
-                                } else {
-                                    <span class="text-gray-300">—</span>
-                                }
-                            </td>
-                            <td class="px-4 py-3 text-right font-mono">
-                                @if (p.PaidAmount.HasValue) {
-                                    <span class="text-emerald-600 font-semibold">₹@FormatMoney(p.PaidAmount.Value)</span>
                                 } else {
                                     <span class="text-gray-300">—</span>
                                 }
@@ -138,7 +131,7 @@
                                 {
                                     <button class="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
                                             @onclick="() => OpenMarkPaid(p)">
-                                        @(p.AgreedAmount == 0 ? "Set Amount & Mark Paid" : "Mark Paid")
+                                        Mark Paid
                                     </button>
                                 }
                                 else if (p.Status == "Paid")
@@ -186,33 +179,33 @@
 
 
 
-@* ── Mark Paid modal ────────────────────────────────────────────────────────── *@
+@* ── Confirm Disbursement modal ──────────────────────────────────────────────
+   Phase D step 24: stripped-down modal. The vendor confirms they've paid
+   the crew member; the amount is whatever was already agreed and is
+   intentionally NOT shown — keeping the vendor's per-crew payout opaque
+   to the manager view (the manager only sees that disbursement happened).
+
+   The server stamps PaidAmount = AgreedAmount automatically (the locked-payout
+   rule from step 23), so this just gathers the method + optional reference
+   for the vendor's own records and the crew acknowledgement message.
+   ────────────────────────────────────────────────────────────────────────── *@
 @if (_markPaid is not null)
 {
     <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" @onclick="() => _markPaid = null">
         <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" @onclick:stopPropagation="true">
-            <h3 class="text-lg font-bold text-gray-900 mb-1">Mark Payment as Paid</h3>
+            <h3 class="text-lg font-bold text-gray-900 mb-1">Confirm Payment to Crew</h3>
             <p class="text-xs text-gray-500 mb-4">@_markPaid.CrewName · @_markPaid.EventTitle</p>
+
+            <div class="bg-indigo-50 border border-indigo-100 rounded-lg p-3 mb-4">
+                <p class="text-[12px] text-indigo-800 leading-relaxed">
+                    Confirming will notify @_markPaid.CrewName that you've paid them.
+                    They'll be asked to acknowledge receipt on their end.
+                </p>
+            </div>
 
             <div class="space-y-3">
                 <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Amount (₹)</label>
-                    @* Phase D step 23: AgreedAmount is the contract. If it's
-                       already > 0 (set when the batch was created), the
-                       payout is locked to that exact value. If it's 0
-                       (legacy batches), the vendor still types the amount. *@
-                    @if (_markPaid is not null && _markPaid.AgreedAmount > 0m)
-                    {
-                        <input type="number" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50" value="@_markPaid.AgreedAmount" disabled />
-                        <p class="text-[11px] text-gray-500 mt-1">Paid amount matches the agreed amount.</p>
-                    }
-                    else
-                    {
-                        <input type="number" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" min="0" step="1" @bind="_paidAmount" />
-                    }
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Payment method</label>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">How did you pay?</label>
                     <select class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" @bind="_paidMethod">
                         <option value="">Select…</option>
                         <option value="UPI">UPI</option>
@@ -222,7 +215,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Reference number (optional)</label>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Reference number <span class="text-gray-400 font-normal">(optional, for your records)</span></label>
                     <input type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="UTR / txn id" @bind="_paidRef" />
                 </div>
             </div>
@@ -236,7 +229,7 @@
                 <button class="px-4 py-2 rounded-lg text-sm bg-gray-100 hover:bg-gray-200 text-gray-700" @onclick="() => _markPaid = null">Cancel</button>
                 <button class="px-4 py-2 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50"
                         disabled="@_paySaving" @onclick="ConfirmMarkPaid">
-                    @(_paySaving ? "Saving…" : "Confirm")
+                    @(_paySaving ? "Sending…" : "✓ Confirm & Notify Crew")
                 </button>
             </div>
         </div>
@@ -245,9 +238,11 @@
 
 @code {
 
-    // ── Mark Paid modal state ────────────────────────────────────────────────
+    // ── Confirm Disbursement modal state ─────────────────────────────────────
+    // Phase D step 24: the modal no longer asks for or sends an amount. The
+    // server locks PaidAmount to AgreedAmount (step-23 rule), so the vendor
+    // just picks a method + an optional reference and confirms.
     private CrewPaymentDto? _markPaid;
-    private decimal         _paidAmount;
     private string?         _paidMethod;
     private string?         _paidRef;
     private bool            _paySaving;
@@ -256,7 +251,6 @@
     private void OpenMarkPaid(CrewPaymentDto p)
     {
         _markPaid    = p;
-        _paidAmount  = p.AgreedAmount;   // 0 for vendor flow → vendor types crew's cut
         _paidMethod  = null;
         _paidRef     = null;
         _payError    = null;
@@ -266,15 +260,17 @@
     {
         if (_markPaid is null) return;
         if (string.IsNullOrWhiteSpace(_paidMethod)) { _payError = "Select a payment method."; return; }
-        if (_paidAmount <= 0) { _payError = "Enter a valid amount."; return; }
 
         _paySaving = true; _payError = null;
+        // Send AgreedAmount as the paid amount; server will lock it anyway
+        // when AgreedAmount > 0. For any legacy zero-amount rows we'd
+        // otherwise need a separate UI flow — see admin /payments.
         var (ok, err) = await PaymentApi.UpdatePaymentStatusAsync(
-            _markPaid.Id, "pay", _paidAmount, _paidMethod, _paidRef);
+            _markPaid.Id, "pay", _markPaid.AgreedAmount, _paidMethod, _paidRef);
         _paySaving = false;
 
         if (ok) { _markPaid = null; await LoadAsync(); }
-        else _payError = err ?? "Failed to mark as paid.";
+        else _payError = err ?? "Failed to confirm.";
     }
 
     private List<CrewPaymentDto>     _items   = new();
@@ -287,8 +283,9 @@
     private string?                  _status; // null = all
 
     private decimal _totalAgreed;
-    private decimal _totalPaid;
-    private decimal _totalPending;
+    // Phase D step 24: replaces _totalPaid/_totalPending — vendors don't see
+    // per-crew amount totals, just how many payouts still need their action.
+    private int     _pendingPayoutCount;
 
     private readonly List<(string? Key, string Label)> _filters = new()
     {
@@ -344,10 +341,14 @@
                                         .Sum(g => g.First().BatchTotal ?? 0m);
                 var directTotal = _items.Where(p => !p.PayrollBatchId.HasValue)
                                         .Sum(p => p.AgreedAmount);
-                _totalAgreed    = batchTotal + directTotal;
-                _totalPaid    = _items.Where(p => p.Status.Equals("paid", StringComparison.OrdinalIgnoreCase))
-                                      .Sum(p => p.PaidAmount ?? 0m);
-                _totalPending = Math.Max(0m, _totalAgreed - _totalPaid);
+                _totalAgreed = batchTotal + directTotal;
+                // Pending payouts = Approved rows the vendor can act on right now.
+                // We mirror the "can mark paid" logic from the row:
+                //   • Approved status
+                //   • either direct (no batch) OR batch already Disbursed
+                _pendingPayoutCount = _items.Count(p =>
+                    p.Status.Equals("approved", StringComparison.OrdinalIgnoreCase)
+                    && (!p.PayrollBatchId.HasValue || p.BatchStatus == "Disbursed"));
             }
         }
         catch (Exception ex)
