@@ -12,11 +12,19 @@ namespace EventWOS.Application.Payments.Commands;
 /// <summary>
 /// Event-centric batch builder. Admin/Manager picks an event, sees every
 /// payable party (every vendor with attended crew + every direct-assigned
-/// crew member who attended), types per-party amounts, and submits.
+/// crew member who attended), types the <b>per-crew rate</b> for each party,
+/// and submits.
+///
+/// Phase D step 23: Amount semantics is now PER-CREW, not per-line. The
+/// total billed to the manager for a vendor line is
+/// <c>Amount × AttendedCrewCount</c>; for a direct-crew line the count is
+/// always 1, so total == amount. Each child <c>CrewPayment.AgreedAmount</c>
+/// is also set to the per-crew rate (previously 0 for vendor lines, forcing
+/// the vendor to type the amount again before paying).
 ///
 /// We create ONE PayrollBatch per non-zero line (one per vendor, plus one
-/// "direct crew" batch if any direct lines were filled). Each batch holds the
-/// CrewPayment rows for that party. This keeps vendor-level disbursement
+/// "direct crew" batch if any direct lines were filled). Each batch holds
+/// the CrewPayment rows for that party. This keeps vendor-level disbursement
 /// clean — every vendor sees only their own batch.
 /// </summary>
 public sealed record CreateEventPayrollBatchCommand(
@@ -137,11 +145,11 @@ public sealed class CreateEventPayrollBatchHandler
             if (lineAssignments.Count == 0)
                 continue;   // nothing left to pay for this line — silently skip
 
-            // Two flows:
-            //   • Vendor line  → the line.Amount is the total paid to the VENDOR.
-            //                    The vendor will later decide each crew's individual cut,
-            //                    so we create per-crew placeholder rows with AgreedAmount=0.
-            //   • Direct crew  → the line.Amount is paid straight to the crew member.
+            // Phase D step 23: Amount is now PER-CREW for both line kinds.
+            //   • Vendor line  → per-crew × attended-crew = total paid to vendor.
+            //                    Each child CrewPayment.AgreedAmount = per-crew rate
+            //                    (no more "vendor types amount at payout time").
+            //   • Direct crew  → per-crew × 1 = same as before. Single row.
             var isVendorLine = line.Kind == "Vendor";
 
             var batchRef = $"PAY-{cmd.EventId.ToString()[..6].ToUpper()}-{(isVendorLine ? "V" : "C")}-{line.PartyId.ToString()[..6].ToUpper()}-{DateTime.UtcNow:HHmmss}";
@@ -154,15 +162,17 @@ public sealed class CreateEventPayrollBatchHandler
             await _uow.SaveChangesAsync(ct);
 
             // Create one CrewPayment per attended crew on this line.
+            // Each row carries the SAME per-crew rate as AgreedAmount —
+            // vendor (or direct flow) just confirms the pre-filled number
+            // at payout time, no manual entry.
             foreach (var a in lineAssignments)
             {
-                var pmtAmount = isVendorLine ? 0m : line.Amount;
                 var pmt = new CrewPayment(
                     eventId:      cmd.EventId,
                     assignmentId: a.Id,
                     crewId:       a.CrewId,
                     vendorId:     a.VendorId,
-                    agreedAmount: pmtAmount,
+                    agreedAmount: line.Amount,  // per-crew rate, identical for every row in this line
                     notes:        cmd.Notes);
                 pmt.Approve();
                 pmt.AttachToPayroll(batch.Id);
@@ -170,10 +180,10 @@ public sealed class CreateEventPayrollBatchHandler
                 allCreatedPmt.Add(pmt);
             }
 
-            // Batch total = the amount the manager actually pays out:
-            //   vendor line  → the vendor-level total
-            //   direct crew  → line.Amount × 1 (always one row)
-            batch.SetTotal(line.Amount);
+            // Batch total = per-crew × crew count.
+            // (For direct-crew lines, crewCount == 1, so equals line.Amount.)
+            var lineTotal = line.Amount * lineAssignments.Count;
+            batch.SetTotal(lineTotal);
             allBatchIds.Add(batch.Id);
         }
 

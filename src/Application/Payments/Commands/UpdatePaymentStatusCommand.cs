@@ -81,11 +81,29 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
 
                 case "pay":
                     var method = Enum.Parse<PaymentMethod>(cmd.Method!, ignoreCase: true);
-                    // Vendor flow: amount was 0 placeholder until vendor sets it now.
-                    if (payment.VendorId is not null && payment.AgreedAmount == 0m)
+
+                    // Phase D step 23: AgreedAmount is the contract — Paid MUST equal it.
+                    // Two cases:
+                    //   1) Standard flow: payment was created via the event-centric batch
+                    //      builder with a real AgreedAmount > 0. The vendor (or direct
+                    //      payer) only confirms — we ignore whatever PaidAmount the
+                    //      client sent and pay exactly AgreedAmount. This guarantees
+                    //      the "Paid" column matches the "Agreed" column on every row.
+                    //   2) Legacy flow: pre-step-23 batches set AgreedAmount=0 for vendor
+                    //      rows; the vendor types the amount at payout. Preserve that
+                    //      behaviour for back-compat with existing in-flight batches.
+                    decimal payAmount;
+                    if (payment.AgreedAmount > 0m)
                     {
-                        // Require the parent batch to be Disbursed (manager has paid vendor)
-                        // before the vendor can pay crew out.
+                        // Lock to the agreed contract. Client-supplied amount is ignored
+                        // even if it tries to drift — admins can change AgreedAmount via
+                        // SetAgreedAmount before clicking Pay if they need to adjust.
+                        payAmount = payment.AgreedAmount;
+                    }
+                    else if (payment.VendorId is not null)
+                    {
+                        // Legacy vendor flow: vendor types the per-crew amount now.
+                        // Require the parent batch to be Disbursed first.
                         if (payment.PayrollBatchId is { } pbId)
                         {
                             var batch = await _db.PayrollBatches.FindAsync(new object[] { pbId }, ct);
@@ -94,8 +112,16 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
                                     "You can pay crew out only after the manager has disbursed the vendor batch."));
                         }
                         payment.SetAgreedAmountByVendor(cmd.PaidAmount!.Value);
+                        payAmount = cmd.PaidAmount!.Value;
                     }
-                    payment.MarkPaid(cmd.PaidAmount!.Value, method, cmd.TransactionRef);
+                    else
+                    {
+                        // Direct-pay row created outside the batch builder, no AgreedAmount yet.
+                        // Fall back to whatever the client sent (existing behaviour).
+                        payAmount = cmd.PaidAmount!.Value;
+                    }
+
+                    payment.MarkPaid(payAmount, method, cmd.TransactionRef);
                     break;
 
                 case "reject":

@@ -464,7 +464,19 @@
             <div class="space-y-4">
                 <div>
                     <label class="lbl">Paid Amount (₹)</label>
-                    <input class="inp" type="number" min="1" @bind="_paidAmount" />
+                    @* Phase D step 23: when there's an AgreedAmount on file, the
+                       paid amount is locked to it — the server enforces this
+                       too, so even if a user fiddles with DevTools the payment
+                       lands at AgreedAmount. Show it as read-only with a hint. *@
+                    @if (_markPaidPayment is not null && _markPaidPayment.AgreedAmount > 0m)
+                    {
+                        <input class="inp bg-gray-50" type="number" value="@_markPaidPayment.AgreedAmount" disabled />
+                        <p class="text-[11px] text-gray-500 mt-1">Paid amount matches the agreed amount.</p>
+                    }
+                    else
+                    {
+                        <input class="inp" type="number" min="1" @bind="_paidAmount" />
+                    }
                 </div>
                 <div>
                     <label class="lbl">Payment Method</label>
@@ -497,7 +509,7 @@
     <div class="modal-bg" @onclick="() => _showCreateBatch = false">
         <div class="modal max-w-3xl" @onclick:stopPropagation="true">
             <h3 class="text-lg font-bold text-gray-900 mb-1">New Payroll Batch</h3>
-            <p class="text-xs text-gray-500 mb-5">Pick a completed event, then enter the payout amount for each vendor and direct crew member who attended.</p>
+            <p class="text-xs text-gray-500 mb-5">Pick a completed event, then enter the <b>per-crew rate</b> for each vendor and direct crew member. The total billed is automatically <code class="bg-gray-100 px-1 rounded">per-crew × attended</code>.</p>
 
             <div class="space-y-4">
 
@@ -568,8 +580,9 @@
                                     <tr>
                                         <th class="px-3 py-2 text-left">Type</th>
                                         <th class="px-3 py-2 text-left">Party</th>
-                                        <th class="px-3 py-2 text-center">Attended Crew</th>
-                                        <th class="px-3 py-2 text-right">Amount (₹)</th>
+                                        <th class="px-3 py-2 text-center">Attended</th>
+                                        <th class="px-3 py-2 text-right">Per Crew (₹)</th>
+                                        <th class="px-3 py-2 text-right">Line Total (₹)</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
@@ -592,6 +605,22 @@
                                                     <input type="number" min="0" step="1" class="inp w-32 text-right inline-block"
                                                            value="@GetLineAmount(l)"
                                                            @oninput="e => SetLineAmount(l, e.Value)" />
+                                                }
+                                            </td>
+                                            <td class="px-3 py-2 text-right">
+                                                @if (l.AlreadyHasPayment)
+                                                {
+                                                    <span class="text-[11px] text-gray-400">—</span>
+                                                }
+                                                else
+                                                {
+                                                    var perCrew = GetLineAmount(l);
+                                                    var lineTot = perCrew * l.AttendedCrewCount;
+                                                    <span class="font-semibold text-gray-800">@(lineTot > 0 ? $"₹{lineTot:N0}" : "—")</span>
+                                                    @if (perCrew > 0 && l.AttendedCrewCount > 1)
+                                                    {
+                                                        <div class="text-[10px] text-gray-400">@l.AttendedCrewCount × ₹@perCrew.ToString("N0")</div>
+                                                    }
                                                 }
                                             </td>
                                         </tr>
@@ -617,19 +646,30 @@
                                                            @oninput="e => SetLineAmount(l, e.Value)" />
                                                 }
                                             </td>
+                                            <td class="px-3 py-2 text-right">
+                                                @if (l.AlreadyHasPayment)
+                                                {
+                                                    <span class="text-[11px] text-gray-400">—</span>
+                                                }
+                                                else
+                                                {
+                                                    var perCrew = GetLineAmount(l);
+                                                    <span class="font-semibold text-gray-800">@(perCrew > 0 ? $"₹{perCrew:N0}" : "—")</span>
+                                                }
+                                            </td>
                                         </tr>
                                     }
                                 </tbody>
                                 <tfoot class="bg-indigo-50 text-indigo-900 text-sm font-semibold">
                                     <tr>
-                                        <td colspan="3" class="px-3 py-2 text-right">Total</td>
+                                        <td colspan="4" class="px-3 py-2 text-right">Total</td>
                                         <td class="px-3 py-2 text-right">₹@RosterTotal().ToString("N0")</td>
                                     </tr>
                                 </tfoot>
                             </table>
                         </div>
                         <div class="text-[11px] text-gray-500 italic">
-                            For vendor rows, the amount is the total paid to the vendor and split evenly across their attended crew. Vendors can fine-tune per-crew amounts later.
+                            Enter the <b>per-crew rate</b>. The Line Total (per-crew × attended) is what the manager owes the vendor (or pays the direct crew). Each crew payment row will be created with this exact agreed amount.
                         </div>
                     }
                 }
@@ -1034,11 +1074,19 @@
 
     private decimal RosterTotal()
     {
+        // Phase D step 23: total is sum of (per-crew × attended count).
+        // Direct-crew lines have count = 1, so per-crew == line total — same
+        // result as before for that flow. Vendor lines now reflect the real
+        // amount the manager will hand over (per-crew × every crew).
         if (_roster is null) return 0m;
         decimal sum = 0m;
         foreach (var l in _roster.VendorLines.Concat(_roster.DirectCrewLines))
-            if (!l.AlreadyHasPayment && _lineAmounts.TryGetValue(LineKey(l), out var v))
-                sum += v;
+        {
+            if (l.AlreadyHasPayment) continue;
+            if (!_lineAmounts.TryGetValue(LineKey(l), out var perCrew)) continue;
+            var count = l.AttendedCrewCount > 0 ? l.AttendedCrewCount : 1;
+            sum += perCrew * count;
+        }
         return sum;
     }
 
