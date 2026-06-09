@@ -8,12 +8,18 @@ namespace EventWOS.BlazorWeb.Services;
 public sealed record EventListItemDto(
     Guid Id, string Title, string Venue,
     DateTime StartAt, DateTime EndAt,
-    string Status, int MaxCrew, int AssignedCrew, DateTime CreatedAt);
+    string Status, int MaxCrew, int AssignedCrew, DateTime CreatedAt,
+    // Phase D step 21: count of ManagerApproved / Confirmed / Attended only.
+    // The Events page card displays this as "N/MaxCrew" so admins see real
+    // fulfillment rather than total invites in flight.
+    int ConfirmedCrew = 0);
 
 public sealed record EventDetailDto(
     Guid Id, string Title, string? Description, string Venue, string? Address,
     DateTime StartAt, DateTime EndAt, string Status, int MaxCrew, int AssignedCrew,
-    Guid CreatedByUserId, string CreatedByName, DateTime CreatedAt);
+    Guid CreatedByUserId, string CreatedByName, DateTime CreatedAt,
+    // Phase D step 21: see EventListItemDto.ConfirmedCrew.
+    int ConfirmedCrew = 0);
 
 public sealed record EventAssignmentDto(
     Guid      Id,

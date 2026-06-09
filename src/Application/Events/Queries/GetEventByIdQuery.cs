@@ -30,6 +30,13 @@ public sealed class GetEventByIdHandler : IRequestHandler<GetEventByIdQuery, Res
             .Where(AssignmentCapacityRules.OccupiesSeat)
             .CountAsync(ct);
 
-        return Result.Success(CreateEventHandler.MapToDto(ev, assignedCrew, ev.Creator.FullName));
+        // Phase D step 21: confirmed-only count for the "X/Y crew" UI display.
+        var confirmedCrew = await _db.EventAssignments
+            .Where(a => a.EventId == req.Id)
+            .Where(AssignmentCapacityRules.IsConfirmed)
+            .CountAsync(ct);
+
+        return Result.Success(CreateEventHandler.MapToDto(
+            ev, assignedCrew, ev.Creator.FullName, confirmedCrew));
     }
 }

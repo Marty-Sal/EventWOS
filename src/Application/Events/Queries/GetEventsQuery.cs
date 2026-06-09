@@ -50,10 +50,22 @@ public sealed class GetEventsHandler : IRequestHandler<GetEventsQuery, Result<Pa
             .Select(g => new { EventId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.EventId, x => x.Count, ct);
 
+        // Phase D step 21: separate confirmed count for "X/Y crew" display.
+        // Two queries instead of one keeps each predicate dead-simple and
+        // EF-translatable (we tried a single grouped query with case-when
+        // and EF Core 9 still rejects mixed predicates inside GroupBy).
+        var confirmedCounts = await _db.EventAssignments
+            .Where(a => eventIds.Contains(a.EventId))
+            .Where(AssignmentCapacityRules.IsConfirmed)
+            .GroupBy(a => a.EventId)
+            .Select(g => new { EventId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.EventId, x => x.Count, ct);
+
         var items = events.Select(e => new EventListItemDto(
             e.Id, e.Title, e.Venue, e.StartAt, e.EndAt,
             e.Status.ToString(), e.MaxCrew,
-            crewCounts.GetValueOrDefault(e.Id, 0), e.CreatedAt
+            crewCounts.GetValueOrDefault(e.Id, 0), e.CreatedAt,
+            confirmedCounts.GetValueOrDefault(e.Id, 0)
         )).ToList();
 
         return Result.Success(new PagedEventResult(items, total, req.Page, req.PageSize));

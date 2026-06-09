@@ -42,6 +42,25 @@ public static class AssignmentCapacityRules
         && a.Status != AssignmentStatus.RejectedByManager
         && a.Status != AssignmentStatus.NoShow;
 
+    /// <summary>
+    /// Phase D step 21: confirmed-only predicate. "How many crew on this
+    /// event are actually approved and ready to show up?" Excludes
+    /// everything still in the pipeline (Invited / VendorApproved /
+    /// PendingManagerApproval) so the admin Events card can show
+    /// "2/40 crew" meaning "2 fully approved out of 40 needed", not
+    /// "8/40 invited (most still in review)".
+    ///
+    /// Confirmed = ManagerApproved (post-vendor admin approval) OR
+    ///             Confirmed (legacy explicit step, if used)        OR
+    ///             Attended (already showed up — implies confirmed).
+    /// </summary>
+    public static Expression<Func<EventAssignment, bool>> IsConfirmed => a =>
+        !a.IsDeleted
+        && a.CrewId != null
+        && (a.Status == AssignmentStatus.ManagerApproved
+         || a.Status == AssignmentStatus.Confirmed
+         || a.Status == AssignmentStatus.Attended);
+
     // ── Phase B (Scope-of-Work shifts) ───────────────────────────────────────
     //
     // Shift-aware occupancy predicate. Same semantics as OccupiesSeat — but

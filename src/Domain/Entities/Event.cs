@@ -65,8 +65,20 @@ public sealed class Event : BaseEntity
 
     public void Start()
     {
+        // Phase D step 21: the admin lifecycle was previously
+        // Draft → Publish → Start → Complete (four buttons). Field admins
+        // told us the "Publish" step added zero value: every Draft event
+        // they create is meant to go live; the manual Publish step was
+        // just a click tax. We now collapse Draft+Published into a single
+        // "Start" transition. The Published state is retained in the
+        // enum because dashboards / analytics still report on it (e.g.
+        // "upcoming active events" = Published + InProgress), and we
+        // pass through it for one tick of state to keep the audit trail
+        // accurate, then immediately progress to InProgress.
+        if (Status == EventStatus.Draft)
+            Status = EventStatus.Published; // transparent intermediate hop
         if (Status != EventStatus.Published)
-            throw new InvalidOperationException("Only Published events can be started.");
+            throw new InvalidOperationException("Only Draft or Published events can be started.");
         Status = EventStatus.InProgress;
     }
 

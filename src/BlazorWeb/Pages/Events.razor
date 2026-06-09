@@ -123,8 +123,9 @@
                             <p>🔚 @ev.EndAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</p>
                         </div>
                         <div class="flex items-center gap-2 text-xs">
-                            <span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-medium">
-                                👥 @ev.AssignedCrew @(ev.MaxCrew > 0 ? $"/ {ev.MaxCrew}" : "") Crew
+                            <span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-medium"
+                                  title="@($"Approved: {ev.ConfirmedCrew} · In pipeline (invited / pending review): {ev.AssignedCrew - ev.ConfirmedCrew}")">
+                                👥 @ev.ConfirmedCrew@(ev.MaxCrew > 0 ? $" / {ev.MaxCrew}" : "") Crew Approved
                             </span>
                         </div>
                         <div class="flex gap-2 pt-1 border-t border-gray-50">
@@ -139,14 +140,10 @@
                                     Edit
                                 </button>
                             }
-                            @if (ev.Status == "Draft")
-                            {
-                                <button @onclick='() => ChangeStatus(ev.Id, "publish")'
-                                        class="px-3 text-xs py-1.5 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 font-medium transition">
-                                    Publish
-                                </button>
-                            }
-                            @if (ev.Status == "Published")
+                            @* Phase D step 21: collapsed Draft+Published into one Start
+                               button. Domain still passes through Published as an
+                               intermediate state but admins see Draft → Start → Complete. *@
+                            @if (ev.Status == "Draft" || ev.Status == "Published")
                             {
                                 <button @onclick='() => ChangeStatus(ev.Id, "start")'
                                         class="px-3 text-xs py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium transition">
@@ -191,7 +188,7 @@
                                     <td class="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">@ev.EndAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</td>
                                     <td class="px-4 py-3 text-center text-xs">
                                         <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
-                                            @ev.AssignedCrew@(ev.MaxCrew > 0 ? $"/{ev.MaxCrew}" : "")
+                                            <span title="@($"Approved: {ev.ConfirmedCrew} · In pipeline: {ev.AssignedCrew - ev.ConfirmedCrew}")">@ev.ConfirmedCrew@(ev.MaxCrew > 0 ? $"/{ev.MaxCrew}" : "")</span>
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-center">
@@ -206,12 +203,7 @@
                                                 <button @onclick="() => OpenEditModal(ev)"
                                                         class="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium">Edit</button>
                                             }
-                                            @if (ev.Status == "Draft")
-                                            {
-                                                <button @onclick='() => ChangeStatus(ev.Id, "publish")'
-                                                        class="text-xs px-2.5 py-1 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 font-medium">Publish</button>
-                                            }
-                                            @if (ev.Status == "Published")
+                                            @if (ev.Status == "Draft" || ev.Status == "Published")
                                             {
                                                 <button @onclick='() => ChangeStatus(ev.Id, "start")'
                                                         class="text-xs px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium">Start</button>
@@ -293,8 +285,10 @@
                         <p class="text-xs text-gray-400">→ @_selectedEvent.EndAt.ToLocalTime().ToString("MMM dd HH:mm")</p>
                     </div>
                     <div class="bg-indigo-50 rounded-xl p-3">
-                        <p class="text-xs text-indigo-400 mb-1">Crew Assigned</p>
-                        <p class="font-bold text-indigo-700">@_selectedEvent.AssignedCrew @((_selectedEvent.MaxCrew > 0) ? $"/ {_selectedEvent.MaxCrew}" : "")</p>
+                        <p class="text-xs text-indigo-400 mb-1">Crew Approved</p>
+                        <p class="font-bold text-indigo-700" title="@($"Approved: {_selectedEvent.ConfirmedCrew} · In pipeline: {_selectedEvent.AssignedCrew - _selectedEvent.ConfirmedCrew}")">
+                            @_selectedEvent.ConfirmedCrew@((_selectedEvent.MaxCrew > 0) ? $" / {_selectedEvent.MaxCrew}" : "")
+                        </p>
                     </div>
                     <div class="bg-gray-50 rounded-xl p-3">
                         <p class="text-xs text-gray-400 mb-1">Created By</p>

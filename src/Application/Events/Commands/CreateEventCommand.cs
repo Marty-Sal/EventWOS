@@ -141,11 +141,15 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
         await _uow.SaveChangesAsync(ct);
 
         var creator = await _db.Users.FindAsync(new object[] { req.CreatedByUserId }, ct);
-        return Result.Success(MapToDto(ev, 0, creator?.FullName ?? "Unknown"));
+        return Result.Success(MapToDto(ev, 0, creator?.FullName ?? "Unknown", 0));
     }
 
-    internal static EventDto MapToDto(Domain.Entities.Event ev, int assignedCrew, string creatorName) => new(
+    // Phase D step 21: optional confirmedCrew param so callers that don't
+    // care (Create / Update — fresh event has 0 confirmed) can stay
+    // unchanged, while GetEventByIdQuery can pass the real number.
+    internal static EventDto MapToDto(
+        Domain.Entities.Event ev, int assignedCrew, string creatorName, int confirmedCrew = 0) => new(
         ev.Id, ev.Title, ev.Description, ev.Venue, ev.Address,
         ev.StartAt, ev.EndAt, ev.Status.ToString(), ev.MaxCrew,
-        assignedCrew, ev.CreatedByUserId, creatorName, ev.CreatedAt);
+        assignedCrew, ev.CreatedByUserId, creatorName, ev.CreatedAt, confirmedCrew);
 }

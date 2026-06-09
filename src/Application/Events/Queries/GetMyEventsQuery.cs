@@ -77,7 +77,17 @@ public sealed class GetMyEventsHandler : IRequestHandler<GetMyEventsQuery, Resul
                                               && a.Status != AssignmentStatus.RejectedByVendor
                                               && a.Status != AssignmentStatus.RejectedByManager
                                               && a.Status != AssignmentStatus.NoShow),
-                e.CreatedAt))
+                e.CreatedAt,
+                // Phase D step 21: confirmed-only count, inline so EF can
+                // translate it. Same predicate as
+                // AssignmentCapacityRules.IsConfirmed but EF in projection
+                // sub-queries doesn't accept the static Expression form.
+                _db.EventAssignments.Count(a => a.EventId == e.Id
+                                              && !a.IsDeleted
+                                              && a.CrewId != null
+                                              && (a.Status == AssignmentStatus.ManagerApproved
+                                               || a.Status == AssignmentStatus.Confirmed
+                                               || a.Status == AssignmentStatus.Attended))))
             .ToListAsync(ct);
 
         return Result.Success(new PagedEventResult(items, total, req.Page, req.PageSize));

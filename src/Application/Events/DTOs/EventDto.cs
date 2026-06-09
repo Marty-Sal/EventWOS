@@ -13,7 +13,12 @@ public sealed record EventDto(
     int    AssignedCrew,
     Guid   CreatedByUserId,
     string CreatedByName,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    // Phase D step 21: "approved & ready to work" subset of AssignedCrew.
+    // Includes only ManagerApproved / Confirmed / Attended statuses;
+    // excludes Invited / VendorApproved / PendingManagerApproval.
+    // Used by admin Events card to show real fulfillment.
+    int    ConfirmedCrew = 0
 );
 
 public sealed record EventListItemDto(
@@ -25,7 +30,10 @@ public sealed record EventListItemDto(
     string Status,
     int    MaxCrew,
     int    AssignedCrew,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    // Phase D step 21: see EventDto.ConfirmedCrew. Optional with default
+    // 0 so older code paths still compile (e.g. CreateEventCommand return).
+    int    ConfirmedCrew = 0
 );
 
 public sealed record EventAssignmentDto(
