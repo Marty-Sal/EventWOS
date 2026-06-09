@@ -418,7 +418,27 @@
                         @foreach (var c in FilteredRoster)
                         {
                             var busy           = _assigningId == c.Id;
-                            var existingStatus = _existingByCrewId.TryGetValue(c.Id, out var st) ? st : null;
+                            // Phase D step 16: shift-aware status pill.
+                            // When the modal is scoped to a specific shift
+                            // (_selectedShiftId set, which is the normal
+                            // path in step 14+), prefer the per-(shift,crew)
+                            // status so Martin shows as "Accepted" only on
+                            // the shift he actually accepted — and as a
+                            // clean "Invite" button on every other shift.
+                            // Fall back to the event-wide status only when
+                            // we somehow have no scoped shift (legacy /
+                            // edge case).
+                            string? existingStatus = null;
+                            if (_selectedShiftId is { } scopedShift
+                                && _existingByShiftAndCrew.TryGetValue((scopedShift, c.Id), out var shiftSt))
+                            {
+                                existingStatus = shiftSt;
+                            }
+                            else if (_selectedShiftId is null
+                                     && _existingByCrewId.TryGetValue(c.Id, out var evSt))
+                            {
+                                existingStatus = evSt;
+                            }
                             var blocksReinvite = existingStatus is
                                 "Invited" or "VendorApproved" or "PendingManagerApproval" or
                                 "ManagerApproved" or "Confirmed" or "Attended";
@@ -1027,13 +1047,20 @@
         _assigningId = c.Id;
         StateHasChanged();
 
-        var (ok, _, err) = await EventApi.VendorAssignCrewAsync(_assignTarget.Id, c.Id);
+        // Phase D step 16: per-row Invite now explicitly passes the scoped
+        // shift id so multi-shift modals invite to the RIGHT shift instead
+        // of relying on the server's DefaultShiftResolver fallback (which
+        // throws Assignment.AmbiguousShift on multi-shift events).
+        var (ok, _, err) = await EventApi.VendorAssignCrewAsync(_assignTarget.Id, c.Id, _selectedShiftId);
         _assigningId = Guid.Empty;
         if (ok)
         {
             // Status map flip → row renders the 'Invited' badge + ✕ Revoke
             // pair on the next StateHasChanged. Crew stays in _roster.
             _existingByCrewId[c.Id] = "Invited";
+            // Phase D step 16: keep the per-shift map in sync so the shift-
+            // aware pill flips correctly without a full re-fetch.
+            if (_selectedShiftId is { } sid) _existingByShiftAndCrew[(sid, c.Id)] = "Invited";
             // Brief inline ✓ pill on this row in place of the old top banner.
             _ = FlashJustActed(c.Id, "Invited");
             // Refresh event list to bump AssignedCrew count
@@ -1063,6 +1090,9 @@
             // Drop from the existing-status map so the row flips back to
             // a fresh 'Invite' button next render. Crew stays in _roster.
             _existingByCrewId.Remove(c.Id);
+            // Phase D step 16: also drop the per-shift entry so the
+            // shift-aware pill resets in sync.
+            if (_selectedShiftId is { } sid) _existingByShiftAndCrew.Remove((sid, c.Id));
             // Brief inline ✓ pill confirming the revoke happened.
             _ = FlashJustActed(c.Id, "Revoked");
             // Refresh event list so AssignedCrew count drops by 1
@@ -1111,7 +1141,14 @@
             foreach (var c in _roster)
             {
                 if (invitedSet.Contains(c.FullName))
+                {
                     _existingByCrewId[c.Id] = "Invited";
+                    // Phase D step 16: keep per-shift map in sync for the
+                    // group-invite path too — otherwise the pill stays
+                    // stale until the next OpenAssignPanel.
+                    if (_selectedShiftId is { } sid)
+                        _existingByShiftAndCrew[(sid, c.Id)] = "Invited";
+                }
             }
         }
 
