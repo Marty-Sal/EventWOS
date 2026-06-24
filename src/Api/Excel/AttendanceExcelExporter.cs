@@ -23,8 +23,9 @@ internal static class AttendanceExcelExporter
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("Attendance Logs");
 
-        // Header
-        string[] headers = { "Crew", "Event", "Action", "Recorded At (UTC)", "Location", "Recorded By" };
+        // Header. Phase D step 28: Shift column inserted between Event and
+        // Action so the export matches the on-screen ordering.
+        string[] headers = { "Crew", "Event", "Shift", "Action", "Recorded At (UTC)", "Location", "Recorded By" };
         for (int i = 0; i < headers.Length; i++)
         {
             var cell = ws.Cell(1, i + 1);
@@ -42,11 +43,12 @@ internal static class AttendanceExcelExporter
             var row = i + 2;
             ws.Cell(row, 1).Value = r.CrewName;
             ws.Cell(row, 2).Value = r.EventTitle;
-            ws.Cell(row, 3).Value = HumaniseAction(r.Action);
-            ws.Cell(row, 4).Value = r.RecordedAt;
-            ws.Cell(row, 4).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
-            ws.Cell(row, 5).Value = r.Location ?? "";
-            ws.Cell(row, 6).Value = r.RecordedByName
+            ws.Cell(row, 3).Value = FormatShift(r.ShiftScopeName, r.ShiftStartAt);
+            ws.Cell(row, 4).Value = HumaniseAction(r.Action);
+            ws.Cell(row, 5).Value = r.RecordedAt;
+            ws.Cell(row, 5).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+            ws.Cell(row, 6).Value = r.Location ?? "";
+            ws.Cell(row, 7).Value = r.RecordedByName
                                     ?? (r.RecordedBy is null ? "" : r.RecordedBy);
         }
 
@@ -110,6 +112,19 @@ internal static class AttendanceExcelExporter
         wb.SaveAs(ms);
         return (ms.ToArray(), MimeXlsx,
                 $"attendance-summary-{DateTime.UtcNow:yyyyMMdd-HHmm}.xlsx");
+    }
+
+    /// <summary>
+    /// Renders the shift cell as "ScopeName · dd MMM HH:mm". When ShiftId
+    /// was null on the assignment (legacy single-shift rows), both pieces
+    /// are missing and we return an empty string so the column stays clean.
+    /// </summary>
+    private static string FormatShift(string? scopeName, DateTime? startAt)
+    {
+        if (string.IsNullOrEmpty(scopeName) && !startAt.HasValue) return "";
+        if (string.IsNullOrEmpty(scopeName)) return startAt!.Value.ToString("dd MMM HH:mm");
+        if (!startAt.HasValue) return scopeName!;
+        return $"{scopeName} · {startAt.Value:dd MMM HH:mm}";
     }
 
     private static string HumaniseAction(string action) => action switch

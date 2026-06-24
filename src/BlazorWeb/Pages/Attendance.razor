@@ -162,6 +162,7 @@
                         <tr>
                             @SortHeader("Crew",        "CrewName")
                             @SortHeader("Event",       "EventTitle")
+                            <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift</th>
                             @SortHeader("Action",      "Action")
                             @SortHeader("Time",        "RecordedAt")
                             <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
@@ -174,6 +175,21 @@
                             <tr class="hover:bg-gray-50 transition-colors">
                                 <td class="px-5 py-3.5 font-medium text-gray-800">@r.CrewName</td>
                                 <td class="px-5 py-3.5 text-gray-600 text-xs">@r.EventTitle</td>
+                                <td class="px-5 py-3.5 text-xs">
+                                    @if (!string.IsNullOrEmpty(r.ShiftScopeName))
+                                    {
+                                        <span class="font-medium text-indigo-700">@r.ShiftScopeName</span>
+                                        @if (r.ShiftStartAt.HasValue)
+                                        {
+                                            <span class="text-gray-400 block text-[10px]">@r.ShiftStartAt.Value.ToLocalTime().ToString("dd MMM HH:mm")</span>
+                                        }
+                                    }
+                                    else if (r.ShiftStartAt.HasValue)
+                                    {
+                                        <span class="text-gray-500">@r.ShiftStartAt.Value.ToLocalTime().ToString("dd MMM HH:mm")</span>
+                                    }
+                                    else { <span class="text-gray-300">—</span> }
+                                </td>
                                 <td class="px-5 py-3.5">
                                     @{
                                         var (lbl, cls) = r.Action switch
@@ -509,7 +525,11 @@
     private sealed record AttendanceItemDto(
         Guid RecordId, Guid AssignmentId, Guid EventId, string EventTitle,
         Guid CrewId, string CrewName, string Action, DateTime RecordedAt,
-        string? Location, string? RecordedBy, string? RecordedByName);
+        string? Location, string? RecordedBy, string? RecordedByName,
+        // Phase D step 28: shift context. Nullable for legacy single-shift rows.
+        string? ShiftScopeName = null,
+        DateTime? ShiftStartAt = null,
+        DateTime? ShiftEndAt = null);
 
     private sealed record EventAttendanceSummaryRow(
         Guid     EventId,

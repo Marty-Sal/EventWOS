@@ -23,7 +23,15 @@ public sealed record CrewPaymentDto(
     string?  AcknowledgmentNote,
     string?  BatchStatus,            // "Draft" | "Submitted" | "Approved" | "Disbursed" — null if no batch
     decimal? BatchTotal,             // Parent batch's total — vendor-level amount sent by the organiser
-    DateTime CreatedDate
+    DateTime CreatedDate,
+    // ── Phase D step 28: shift context (nullable for legacy pre-multi-shift rows). ──
+    // Lets every Payments view distinguish two payments to the same crew
+    // for two different shifts at the same event — see the screenshots in
+    // the user feedback. Resolved via the assignment's Shift, not stored
+    // directly on CrewPayment.
+    string?  ShiftScopeName = null,
+    DateTime? ShiftStartAt  = null,
+    DateTime? ShiftEndAt    = null
 );
 
 public sealed record PayrollBatchDto(

@@ -43,6 +43,25 @@
                     <div class="bg-white rounded-xl border border-amber-100 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <p class="font-semibold text-gray-800">@a.EventTitle</p>
+                            @* Phase D step 28: shift line. Renders only when the assignment has a
+                               ShiftId — keeps legacy single-shift events clean. *@
+                            @if (!string.IsNullOrEmpty(a.ShiftScopeName) || a.ShiftStartAt.HasValue)
+                            {
+                                <p class="text-xs font-medium text-indigo-600 mt-0.5">
+                                    Shift:&nbsp;
+                                    @if (!string.IsNullOrEmpty(a.ShiftScopeName)) { <span>@a.ShiftScopeName</span> }
+                                    @if (a.ShiftStartAt.HasValue)
+                                    {
+                                        <span class="text-indigo-400 font-normal">
+                                            · @a.ShiftStartAt.Value.ToLocalTime().ToString("dd MMM HH:mm")
+                                            @if (a.ShiftEndAt.HasValue)
+                                            {
+                                                <span>– @a.ShiftEndAt.Value.ToLocalTime().ToString("HH:mm")</span>
+                                            }
+                                        </span>
+                                    }
+                                </p>
+                            }
                             <p class="text-xs text-gray-400 mt-0.5">@a.Venue - @a.EventStartAt.ToLocalTime().ToString("dd MMM HH:mm")</p>
                         </div>
                         <div class="flex gap-2 shrink-0 items-center">
@@ -115,6 +134,7 @@
                         <thead class="bg-gray-50 border-b border-gray-100">
                             <tr>
                                 <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Event</th>
+                                <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift</th>
                                 <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
                                 <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
                                 <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
@@ -125,6 +145,21 @@
                             {
                                 <tr class="hover:bg-gray-50 transition-colors">
                                     <td class="px-5 py-3.5 font-medium text-gray-800">@r.EventTitle</td>
+                                    <td class="px-5 py-3.5 text-xs text-gray-600">
+                                        @if (!string.IsNullOrEmpty(r.ShiftScopeName))
+                                        {
+                                            <span class="font-medium text-indigo-700">@r.ShiftScopeName</span>
+                                            @if (r.ShiftStartAt.HasValue)
+                                            {
+                                                <span class="text-gray-400"> · @r.ShiftStartAt.Value.ToLocalTime().ToString("dd MMM HH:mm")</span>
+                                            }
+                                        }
+                                        else if (r.ShiftStartAt.HasValue)
+                                        {
+                                            <span class="text-gray-500">@r.ShiftStartAt.Value.ToLocalTime().ToString("dd MMM HH:mm")</span>
+                                        }
+                                        else { <span class="text-gray-300">—</span> }
+                                    </td>
                                     <td class="px-5 py-3.5">
                                         @if (r.Action == "CheckIn")
                                         {
@@ -202,7 +237,8 @@
                     a.Id, a.EventId, a.EventTitle, a.Status,
                     evDict.TryGetValue(a.EventId, out var ev2) ? ev2.Status : "Unknown",
                     evDict.TryGetValue(a.EventId, out var ev3) ? ev3.Venue : "-",
-                    evDict.TryGetValue(a.EventId, out var ev4) ? ev4.StartAt : DateTime.MinValue))
+                    evDict.TryGetValue(a.EventId, out var ev4) ? ev4.StartAt : DateTime.MinValue,
+                    a.ShiftScopeName, a.ShiftStartAt, a.ShiftEndAt))
                 .ToList();
 
             // Determine which assignments have already been checked in
@@ -218,7 +254,9 @@
                     .Select(r => r.AssignmentId));
 
             _history = (histResp?.Data?.Items ?? Enumerable.Empty<AttendanceItemDto>())
-                .Select(r => new MyAttendanceRecord(r.EventTitle, r.Action, r.RecordedAt, r.Location))
+                .Select(r => new MyAttendanceRecord(
+                    r.EventTitle, r.Action, r.RecordedAt, r.Location,
+                    r.ShiftScopeName, r.ShiftStartAt))
                 .ToList();
         }
         catch (Exception ex)
@@ -281,16 +319,24 @@
     // Local models
     private sealed record MyAssignmentWithEvent(
         Guid Id, Guid EventId, string EventTitle, string Status,
-        string EventStatus, string Venue, DateTime EventStartAt);
+        string EventStatus, string Venue, DateTime EventStartAt,
+        string? ShiftScopeName, DateTime? ShiftStartAt, DateTime? ShiftEndAt);
 
     private sealed record MyAttendanceRecord(
-        string EventTitle, string Action, DateTime RecordedAt, string? Location);
+        string EventTitle, string Action, DateTime RecordedAt, string? Location,
+        string? ShiftScopeName, DateTime? ShiftStartAt);
 
     private sealed record AssignmentDto(
         Guid Id, Guid EventId, string EventTitle,
         Guid CrewId, string CrewName, string CrewMobile,
         Guid VendorId, string VendorName,
-        string Status, DateTime? ConfirmedAt, DateTime? DeclinedAt, DateTime CreatedAt);
+        string Status, DateTime? ConfirmedAt, DateTime? DeclinedAt, DateTime CreatedAt,
+        // Phase D step 28: shift fields. All nullable — legacy assignments
+        // may have no ShiftId. JSON deserialiser tolerates missing keys.
+        Guid? ShiftId = null,
+        string? ShiftScopeName = null,
+        DateTime? ShiftStartAt = null,
+        DateTime? ShiftEndAt = null);
 
     private sealed record EventItemDto(
         Guid Id, string Title, string Venue,
@@ -300,7 +346,12 @@
     private sealed record AttendanceItemDto(
         Guid RecordId, Guid AssignmentId, Guid EventId, string EventTitle,
         Guid CrewId, string CrewName, string Action, DateTime RecordedAt,
-        string? Location, string? RecordedBy);
+        string? Location, string? RecordedBy,
+        // Phase D step 28: shift context.
+        string? RecordedByName = null,
+        string? ShiftScopeName = null,
+        DateTime? ShiftStartAt = null,
+        DateTime? ShiftEndAt = null);
 
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);

@@ -17,7 +17,17 @@ public sealed record AttendanceListItemDto(
     DateTime RecordedAt,
     string?  Location,
     string?  RecordedBy,         // raw user id — kept for back-compat with existing UI
-    string?  RecordedByName = null // Phase D step 22: friendly name for export + filter UX
+    string?  RecordedByName = null, // Phase D step 22: friendly name for export + filter UX
+    // ── Phase D step 28: shift context. An assignment is tied to ONE
+    // EventShift (Scope of Work + start/end), so attendance rows can
+    // surface "which shift you checked into" — critical for events with
+    // multiple shifts (Box Office 14:00, F&B 18:00, etc.) where seeing
+    // just the event title is ambiguous. All three fields are nullable
+    // because legacy assignments from before multi-shift was introduced
+    // can still have ShiftId = null on the assignment.
+    string?  ShiftScopeName = null,  // "Box Office" / "F&B" / "Security"
+    DateTime? ShiftStartAt  = null,  // UTC
+    DateTime? ShiftEndAt    = null   // UTC; null if shift has no defined end
 );
 
 // ── Admin/Manager: filterable list ───────────────────────────────────────────
@@ -103,6 +113,10 @@ public sealed class GetAttendanceListHandler
         // RecordedByUserId is a string column. We join via the Users table to
         // surface a human name on the UI + Excel. Left-join semantics —
         // system-recorded rows (no user) just get null.
+        // Phase D step 28: subquery the shift via Assignment.ShiftId.
+        // EventAssignment has ShiftId as a scalar (no nav property) — so we
+        // join via _db.EventShifts in the projection. Matches the pattern
+        // already used in GetMyAssignmentsQuery.
         var items = await query
             .Select(r => new
             {
@@ -120,14 +134,39 @@ public sealed class GetAttendanceListHandler
                     ? null
                     : _db.Users.Where(u => u.Id.ToString() == r.RecordedByUserId)
                               .Select(u => u.FullName)
-                              .FirstOrDefault()
+                              .FirstOrDefault(),
+                ShiftScopeName = _db.EventAssignments
+                    .Where(a => a.Id == r.AssignmentId)
+                    .Select(a => a.ShiftId)
+                    .Where(sid => sid.HasValue)
+                    .SelectMany(sid => _db.EventShifts
+                        .Where(s => s.Id == sid!.Value)
+                        .Select(s => (string?)s.ScopeOfWork.Name))
+                    .FirstOrDefault(),
+                ShiftStartAt = _db.EventAssignments
+                    .Where(a => a.Id == r.AssignmentId)
+                    .Select(a => a.ShiftId)
+                    .Where(sid => sid.HasValue)
+                    .SelectMany(sid => _db.EventShifts
+                        .Where(s => s.Id == sid!.Value)
+                        .Select(s => (DateTime?)s.StartAt))
+                    .FirstOrDefault(),
+                ShiftEndAt = _db.EventAssignments
+                    .Where(a => a.Id == r.AssignmentId)
+                    .Select(a => a.ShiftId)
+                    .Where(sid => sid.HasValue)
+                    .SelectMany(sid => _db.EventShifts
+                        .Where(s => s.Id == sid!.Value)
+                        .Select(s => s.EndAt))
+                    .FirstOrDefault()
             })
             .ToListAsync(ct);
 
         var dtos = items.Select(x => new AttendanceListItemDto(
             x.Id, x.AssignmentId, x.EventId, x.EventTitle,
             x.CrewId, x.CrewName, x.Action,
-            x.RecordedAt, x.Location, x.RecordedByUserId, x.RecordedByName)).ToList();
+            x.RecordedAt, x.Location, x.RecordedByUserId, x.RecordedByName,
+            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt)).ToList();
 
         return Result.Success(PagedResult<AttendanceListItemDto>.Create(
             dtos, total, req.PageNumber, req.All ? Math.Max(dtos.Count, 1) : req.PageSize));
@@ -151,18 +190,53 @@ public sealed class GetMyAttendanceHandler
         GetMyAttendanceQuery req, CancellationToken ct)
     {
         var total = await _db.AttendanceRecords.Where(r => r.CrewId == req.UserId).CountAsync(ct);
-        var items = await _db.AttendanceRecords
+        // Phase D step 28: project shift fields via the same subquery
+        // pattern. Anonymous shape first because EF Core can't translate
+        // a record constructor with this many subqueries directly.
+        var raw = await _db.AttendanceRecords
             .Include(r => r.Event)
             .Include(r => r.Crew)
             .Where(r => r.CrewId == req.UserId)
             .OrderByDescending(r => r.RecordedAt)
             .Skip((req.PageNumber - 1) * req.PageSize)
             .Take(req.PageSize)
-            .Select(r => new AttendanceListItemDto(
-                r.Id, r.AssignmentId, r.EventId, r.Event.Title,
-                r.CrewId, r.Crew.FullName, r.Action.ToString(),
-                r.RecordedAt, r.Location, r.RecordedByUserId, null))
+            .Select(r => new
+            {
+                r.Id, r.AssignmentId, r.EventId, EventTitle = r.Event.Title,
+                r.CrewId, CrewName = r.Crew.FullName, Action = r.Action.ToString(),
+                r.RecordedAt, r.Location, r.RecordedByUserId,
+                ShiftScopeName = _db.EventAssignments
+                    .Where(a => a.Id == r.AssignmentId)
+                    .Select(a => a.ShiftId)
+                    .Where(sid => sid.HasValue)
+                    .SelectMany(sid => _db.EventShifts
+                        .Where(s => s.Id == sid!.Value)
+                        .Select(s => (string?)s.ScopeOfWork.Name))
+                    .FirstOrDefault(),
+                ShiftStartAt = _db.EventAssignments
+                    .Where(a => a.Id == r.AssignmentId)
+                    .Select(a => a.ShiftId)
+                    .Where(sid => sid.HasValue)
+                    .SelectMany(sid => _db.EventShifts
+                        .Where(s => s.Id == sid!.Value)
+                        .Select(s => (DateTime?)s.StartAt))
+                    .FirstOrDefault(),
+                ShiftEndAt = _db.EventAssignments
+                    .Where(a => a.Id == r.AssignmentId)
+                    .Select(a => a.ShiftId)
+                    .Where(sid => sid.HasValue)
+                    .SelectMany(sid => _db.EventShifts
+                        .Where(s => s.Id == sid!.Value)
+                        .Select(s => s.EndAt))
+                    .FirstOrDefault()
+            })
             .ToListAsync(ct);
+
+        var items = raw.Select(x => new AttendanceListItemDto(
+            x.Id, x.AssignmentId, x.EventId, x.EventTitle,
+            x.CrewId, x.CrewName, x.Action,
+            x.RecordedAt, x.Location, x.RecordedByUserId, null,
+            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt)).ToList();
 
         return Result.Success(PagedResult<AttendanceListItemDto>.Create(items, total, req.PageNumber, req.PageSize));
     }

@@ -39,6 +39,10 @@ public sealed class GetPaymentsHandler : IRequestHandler<GetPaymentsQuery, Resul
             .OrderByDescending(p => p.CreatedAt)
             .Skip((q.Page - 1) * q.PageSize)
             .Take(q.PageSize)
+            // Phase D step 28: project shift via Assignment.ShiftId subquery.
+            // Same pattern as GetMyAssignmentsQuery / GetAttendanceListQuery —
+            // EventAssignment has no Shift nav property, so we hop through
+            // _db.EventShifts manually. Translates to a LEFT JOIN under EF.
             .Select(p => new CrewPaymentDto(
                 p.Id,
                 p.EventId,
@@ -62,7 +66,31 @@ public sealed class GetPaymentsHandler : IRequestHandler<GetPaymentsQuery, Resul
                 p.AcknowledgmentNote,
                 p.PayrollBatch == null ? null : p.PayrollBatch.Status.ToString(),
                 p.PayrollBatch == null ? null : (decimal?)p.PayrollBatch.TotalAmount,
-                p.CreatedAt))
+                p.CreatedAt,
+                _db.EventAssignments
+                    .Where(a => a.Id == p.AssignmentId)
+                    .Select(a => a.ShiftId)
+                    .Where(sid => sid.HasValue)
+                    .SelectMany(sid => _db.EventShifts
+                        .Where(s => s.Id == sid!.Value)
+                        .Select(s => (string?)s.ScopeOfWork.Name))
+                    .FirstOrDefault(),
+                _db.EventAssignments
+                    .Where(a => a.Id == p.AssignmentId)
+                    .Select(a => a.ShiftId)
+                    .Where(sid => sid.HasValue)
+                    .SelectMany(sid => _db.EventShifts
+                        .Where(s => s.Id == sid!.Value)
+                        .Select(s => (DateTime?)s.StartAt))
+                    .FirstOrDefault(),
+                _db.EventAssignments
+                    .Where(a => a.Id == p.AssignmentId)
+                    .Select(a => a.ShiftId)
+                    .Where(sid => sid.HasValue)
+                    .SelectMany(sid => _db.EventShifts
+                        .Where(s => s.Id == sid!.Value)
+                        .Select(s => s.EndAt))
+                    .FirstOrDefault()))
             .ToListAsync(ct);
 
         return Result.Success(PagedResult<CrewPaymentDto>.Create(items, total, q.Page, q.PageSize));

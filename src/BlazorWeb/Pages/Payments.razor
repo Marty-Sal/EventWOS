@@ -140,7 +140,21 @@
                                     <div class="font-semibold text-gray-900 text-sm">@p.CrewName</div>
                                     <div class="text-xs text-gray-400">@p.CrewMobile</div>
                                 </td>
-                                <td class="td-cell text-sm text-gray-700">@p.EventTitle</td>
+                                <td class="td-cell text-sm text-gray-700">
+                                    <div>@p.EventTitle</div>
+                                    @* Phase D step 28: shift sub-line. Tells two sibling rows
+                                       apart when a crew is paid for multiple shifts at one event. *@
+                                    @if (!string.IsNullOrEmpty(p.ShiftScopeName) || p.ShiftStartAt.HasValue)
+                                    {
+                                        <div class="text-[11px] text-indigo-600 mt-0.5">
+                                            @if (!string.IsNullOrEmpty(p.ShiftScopeName)) { <span class="font-medium">@p.ShiftScopeName</span> }
+                                            @if (p.ShiftStartAt.HasValue)
+                                            {
+                                                <span class="text-indigo-400 font-normal"> · @p.ShiftStartAt.Value.ToLocalTime().ToString("dd MMM HH:mm")</span>
+                                            }
+                                        </div>
+                                    }
+                                </td>
                                 <td class="td-cell text-sm text-gray-700">@(string.IsNullOrEmpty(p.VendorName) ? "Direct" : p.VendorName)</td>
                                 <td class="td-cell text-sm font-semibold text-gray-900">@(p.AgreedAmount == 0 ? "—" : "₹" + p.AgreedAmount.ToString("N0"))</td>
                                 <td class="td-cell text-sm text-gray-600">@(p.PaidAmount.HasValue ? "₹" + p.PaidAmount.Value.ToString("N0") : "—")</td>

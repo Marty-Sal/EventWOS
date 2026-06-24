@@ -92,7 +92,22 @@
                                 <p class="font-semibold text-gray-800">@p.CrewName</p>
                                 <p class="text-[11px] text-gray-400">@p.CrewMobile</p>
                             </td>
-                            <td class="px-4 py-3 text-gray-700">@p.EventTitle</td>
+                            <td class="px-4 py-3 text-gray-700">
+                                <div>@p.EventTitle</div>
+                                @* Phase D step 28: shift sub-line. Vendor needs to know
+                                   WHICH shift each payment is for — same crew, same
+                                   event, two shifts = two distinct payouts. *@
+                                @if (!string.IsNullOrEmpty(p.ShiftScopeName) || p.ShiftStartAt.HasValue)
+                                {
+                                    <div class="text-[11px] text-indigo-600 mt-0.5">
+                                        @if (!string.IsNullOrEmpty(p.ShiftScopeName)) { <span class="font-medium">@p.ShiftScopeName</span> }
+                                        @if (p.ShiftStartAt.HasValue)
+                                        {
+                                            <span class="text-indigo-400 font-normal"> · @p.ShiftStartAt.Value.ToLocalTime().ToString("dd MMM HH:mm")</span>
+                                        }
+                                    </div>
+                                }
+                            </td>
                             @* Phase D step 27: "From Organiser" on a per-crew row
                                shows that crew member's share (AgreedAmount), not
                                the parent batch total. Repeating the ₹6,000 batch

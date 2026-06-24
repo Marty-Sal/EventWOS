@@ -78,6 +78,19 @@
                     <div class="flex items-start justify-between gap-4">
                         <div class="flex-1 min-w-0">
                             <p class="font-semibold text-gray-900 truncate">@p.EventTitle</p>
+                            @* Phase D step 28: shift line. Lets the crew tell apart
+                               two payment cards on the same event for different shifts
+                               (Box Office 14:00 vs F&B 18:00). Amounts stay redacted. *@
+                            @if (!string.IsNullOrEmpty(p.ShiftScopeName) || p.ShiftStartAt.HasValue)
+                            {
+                                <p class="text-[11px] text-indigo-600 mt-0.5">
+                                    @if (!string.IsNullOrEmpty(p.ShiftScopeName)) { <span class="font-medium">@p.ShiftScopeName</span> }
+                                    @if (p.ShiftStartAt.HasValue)
+                                    {
+                                        <span class="text-indigo-400 font-normal"> · @p.ShiftStartAt.Value.ToLocalTime().ToString("dd MMM HH:mm")</span>
+                                    }
+                                </p>
+                            }
                             @if (!string.IsNullOrEmpty(p.VendorName))
                             {
                                 <p class="text-xs text-gray-400 mt-0.5">Via vendor: @p.VendorName</p>
@@ -270,7 +283,13 @@
         string CrewAcknowledgment, DateTime? AcknowledgedAt, string? AcknowledgmentNote,
         string? BatchStatus,
         decimal? BatchTotal,
-        DateTime CreatedAt);
+        DateTime CreatedAt,
+        // Phase D step 28: shift context surfaced under the event title so
+        // crew can tell apart two payments on the same event for different
+        // shifts. Amounts on this DTO are still redacted server-side
+        // (step 25) — only the shift label/time is visible to the crew.
+        string? ShiftScopeName = null,
+        DateTime? ShiftStartAt = null);
 
     private sealed record LocalPagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
     private sealed record LocalApiResult<T>(bool Success, T? Data, string? Message);

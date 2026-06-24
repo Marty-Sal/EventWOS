@@ -92,7 +92,12 @@ public sealed record CrewPaymentDto(
     string?  AcknowledgmentNote,
     string?  BatchStatus,
     decimal? BatchTotal,
-    DateTime CreatedDate
+    DateTime CreatedDate,
+    // Phase D step 28: shift context. Nullable for legacy single-shift rows.
+    // Resolved server-side from Assignment.ShiftId — see GetPaymentsQuery.
+    string?  ShiftScopeName = null,
+    DateTime? ShiftStartAt  = null,
+    DateTime? ShiftEndAt    = null
 );
 
 public sealed record PayrollBatchDto(
