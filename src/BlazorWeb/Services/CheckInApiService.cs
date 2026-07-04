@@ -82,8 +82,22 @@ public sealed class CheckInApiService : ICheckInApiService
         var content = await resp.Content.ReadAsStringAsync();
         try
         {
-            return JsonSerializer.Deserialize<ApiResult<T>>(content, JsonOpts)
-                   ?? new ApiResult<T>(false, default, "Unexpected response.", null);
+            var parsed = JsonSerializer.Deserialize<ApiResult<T>>(content, JsonOpts)
+                         ?? new ApiResult<T>(false, default, "Unexpected response.", null);
+
+            // The server's ApiResponse envelope carries failure reasons in
+            // Errors[], not Message. Normalise so a caller reading .Message
+            // sees a useful string ("Event.NotInProgress: …") rather than
+            // null — which was making the modal fall back to its generic
+            // "Could not generate a check-in QR" for every real error.
+            if (!parsed.Success
+                && string.IsNullOrWhiteSpace(parsed.Message)
+                && parsed.Errors is { Count: > 0 })
+            {
+                return parsed with { Message = string.Join(" · ", parsed.Errors) };
+            }
+
+            return parsed;
         }
         catch
         {
