@@ -2,8 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>EventWOS</title>
+
+    <!-- ─── PWA / installability ─────────────────────────────────────────── -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#4f46e5" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+
+    <!-- iOS home-screen support (Safari doesn't read all of manifest.json) -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="EventWOS" />
+
+    <!-- Android/Chrome app-shell hints -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="EventWOS" />
     <base href="/" />
     <!-- Tailwind CDN (swap for compiled build in production) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -31,6 +46,33 @@
             margin: auto;
         }
         #blazor-error-ui .dismiss { float: right; cursor: pointer; font-weight: 700; }
+
+        /* iOS notch — reserve safe area on standalone launches. Only
+           applies inside the standalone display mode (i.e. after Add to
+           Home Screen), so browser tabs are unaffected. */
+        @media all and (display-mode: standalone) {
+            body {
+                padding-top: env(safe-area-inset-top);
+                padding-left: env(safe-area-inset-left);
+                padding-right: env(safe-area-inset-right);
+                padding-bottom: env(safe-area-inset-bottom);
+                background: #0f172a; /* prevents white flash under the notch */
+            }
+        }
+
+        /* "New version available" reload toast */
+        #pwa-update-toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: #1e293b; color: #fff; padding: 12px 20px; border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25); display: none;
+            font-family: system-ui, -apple-system, sans-serif; font-size: 14px;
+            align-items: center; gap: 12px; z-index: 9999;
+        }
+        #pwa-update-toast button {
+            background: #6366f1; color: #fff; border: 0; border-radius: 8px;
+            padding: 6px 14px; font-weight: 600; cursor: pointer;
+        }
+        #pwa-update-toast button:hover { background: #4f46e5; }
     </style>
 </head>
 <body class="antialiased text-gray-900">
@@ -85,5 +127,84 @@
             100% { transform: translateX(200%); }
         }
     </style>
+    <!-- PWA update-available toast -->
+    <div id="pwa-update-toast">
+        <span>New version available.</span>
+        <button id="pwa-update-reload">Reload</button>
+    </div>
+
+    <!-- ─── Service worker registration ─────────────────────────────────
+         Runs after Blazor boots — no rush, and we want the first paint
+         to be fast. Handles two flows:
+           1. First visit: install SW, take control on next navigation.
+           2. Return visit after deploy: fetch new sw.js, detect the
+              "waiting" state, show the reload toast. User taps → we
+              post SKIP_WAITING and reload once the new SW is active.
+    ─────────────────────────────────────────────────────────────────── -->
+    <script>
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", async () => {
+                try {
+                    const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+
+                    // A new worker was found — track it.
+                    reg.addEventListener("updatefound", () => {
+                        const newSw = reg.installing;
+                        if (!newSw) return;
+                        newSw.addEventListener("statechange", () => {
+                            // "installed" while there's an existing controller = update ready.
+                            if (newSw.state === "installed" && navigator.serviceWorker.controller) {
+                                showUpdateToast(newSw);
+                            }
+                        });
+                    });
+
+                    // Reload the tab as soon as the new worker takes control,
+                    // so the user sees the new version without a second refresh.
+                    let refreshing = false;
+                    navigator.serviceWorker.addEventListener("controllerchange", () => {
+                        if (refreshing) return;
+                        refreshing = true;
+                        window.location.reload();
+                    });
+
+                    // Belt-and-braces: if a worker is already waiting when we
+                    // load (e.g. user backgrounded the tab across a deploy),
+                    // surface the toast on next paint.
+                    if (reg.waiting && navigator.serviceWorker.controller) {
+                        showUpdateToast(reg.waiting);
+                    }
+                } catch (err) {
+                    console.warn("[pwa] SW registration failed:", err);
+                }
+            });
+
+            function showUpdateToast(worker) {
+                const toast = document.getElementById("pwa-update-toast");
+                if (!toast) return;
+                toast.style.display = "flex";
+                document.getElementById("pwa-update-reload").onclick = () => {
+                    worker.postMessage({ type: "SKIP_WAITING" });
+                    toast.style.display = "none";
+                };
+            }
+        }
+    </script>
+
+    <!-- ─── Optional: capture the beforeinstallprompt event so the app
+         can offer a custom "Install" button somewhere later. For now we
+         just stash it on window so we don't lose the one-shot event. ── -->
+    <script>
+        window.addEventListener("beforeinstallprompt", (e) => {
+            e.preventDefault();
+            window.__eventwosInstallPrompt = e;
+            // Broadcast to any interested UI (Dashboard install banner, etc.)
+            window.dispatchEvent(new CustomEvent("pwa-installable"));
+        });
+        window.addEventListener("appinstalled", () => {
+            window.__eventwosInstallPrompt = null;
+            console.log("[pwa] app installed");
+        });
+    </script>
 </body>
 </html>

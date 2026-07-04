@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EventWOS — Offline</title>
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <style>
+        html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+        body {
+            background: linear-gradient(180deg, #4f46e5 0%, #a855f7 100%);
+            color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            padding: 24px;
+        }
+        .card {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 24px;
+            padding: 32px 28px;
+            max-width: 380px; text-align: center;
+            backdrop-filter: blur(12px);
+        }
+        .bolt { font-size: 56px; margin-bottom: 8px; }
+        h1 { font-size: 22px; font-weight: 700; margin: 8px 0 6px; }
+        p  { font-size: 14px; opacity: 0.85; margin: 0 0 20px; line-height: 1.5; }
+        button {
+            background: #fff; color: #4f46e5; border: 0; border-radius: 12px;
+            padding: 12px 24px; font-weight: 700; font-size: 14px;
+            cursor: pointer; width: 100%;
+        }
+        button:hover { background: #eef; }
+        .tips { text-align: left; margin-top: 20px; font-size: 12px; opacity: 0.7; }
+        .tips li { margin: 4px 0; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="bolt">⚡</div>
+        <h1>You&rsquo;re offline</h1>
+        <p>EventWOS can&rsquo;t reach the server right now. Your device may be out of signal, or the venue Wi-Fi might be flaky.</p>
+        <button onclick="location.reload()">Try again</button>
+        <ul class="tips">
+            <li>Check Wi-Fi or mobile data.</li>
+            <li>Move to an area with better signal.</li>
+            <li>Your last check-in QR is still valid on the vendor&rsquo;s device if it was scanned before disconnect.</li>
+        </ul>
+    </div>
+</body>
+</html>
