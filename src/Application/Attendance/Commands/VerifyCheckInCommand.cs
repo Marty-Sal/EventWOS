@@ -178,6 +178,6 @@ public sealed class VerifyCheckInHandler
             EventId:        assignment.EventId,
             EventTitle:     assignment.Event.Title,
             ShiftScopeName: shiftScopeName,
-            CheckedInAt:    attendance.RecordedAt));
+            CheckedInAt:    new DateTimeOffset(DateTime.SpecifyKind(attendance.RecordedAt, DateTimeKind.Utc), TimeSpan.Zero)));
     }
 }

@@ -129,7 +129,7 @@
     /// <summary>Seconds remaining until _pending.ExpiresAt. Clamped to 0.</summary>
     private int SecondsLeft => _pending is null
         ? 0
-        : (int)Math.Max(0, (_pending.ExpiresAt - DateTime.UtcNow).TotalSeconds);
+        : (int)Math.Max(0, (_pending.ExpiresAt - DateTimeOffset.UtcNow).TotalSeconds);
 
     // ── Public API ─────────────────────────────────────────────────────
     public async Task OpenAsync(Guid assignmentId, string? eventTitle = null)
@@ -171,7 +171,7 @@
         }
 
         _loading      = false;
-        _expired      = _pending!.ExpiresAt <= DateTime.UtcNow;
+        _expired      = _pending!.ExpiresAt <= DateTimeOffset.UtcNow;
         _needsRender  = true;
         StartTicker();
         StateHasChanged();
@@ -220,7 +220,7 @@
                 {
                     await Task.Delay(1000, token);
                     if (_pending is null) continue;
-                    var expired = _pending.ExpiresAt <= DateTime.UtcNow;
+                    var expired = _pending.ExpiresAt <= DateTimeOffset.UtcNow;
                     if (expired != _expired)
                     {
                         _expired = expired;
@@ -287,7 +287,7 @@
             EventId:        Guid.Empty,
             EventTitle:     payload.EventTitle ?? _eventTitle ?? "",
             ShiftScopeName: null,
-            CheckedInAt:    DateTime.UtcNow);
+            CheckedInAt:    DateTimeOffset.UtcNow);
 
         // Marshal to the render thread — hub callbacks fire on a bg thread.
         _ = InvokeAsync(async () =>

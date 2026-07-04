@@ -101,7 +101,7 @@ public sealed class RequestCheckInHandler
         return Result.Success(new PendingCheckInDto(
             Id:           row.Id,
             Code:         row.Code,
-            ExpiresAt:    row.ExpiresAt,
+            ExpiresAt:    new DateTimeOffset(DateTime.SpecifyKind(row.ExpiresAt, DateTimeKind.Utc), TimeSpan.Zero),
             Status:       row.Status.ToString(),
             AssignmentId: assignment.Id,
             EventId:      assignment.EventId,

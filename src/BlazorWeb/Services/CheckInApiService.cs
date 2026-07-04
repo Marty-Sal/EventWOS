@@ -7,7 +7,7 @@ namespace EventWOS.BlazorWeb.Services;
 public sealed record PendingCheckInDto(
     Guid     Id,
     string   Code,
-    DateTime ExpiresAt,
+    DateTimeOffset ExpiresAt,
     string   Status,
     Guid     AssignmentId,
     Guid     EventId,
@@ -20,7 +20,7 @@ public sealed record CheckInVerifyResultDto(
     Guid     EventId,
     string   EventTitle,
     string?  ShiftScopeName,
-    DateTime CheckedInAt);
+    DateTimeOffset CheckedInAt);
 
 public interface ICheckInApiService
 {
