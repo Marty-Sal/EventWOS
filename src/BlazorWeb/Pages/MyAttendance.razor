@@ -71,17 +71,12 @@
                             }
                             @if (!alreadyIn)
                             {
-                                <button @onclick="() => RecordAttendance(a.Id, CheckIn)"
-                                        disabled="@(_actionId == a.Id)"
-                                        class="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition disabled:opacity-50">
-                                    @if (_actionId == a.Id && _actionType == CheckIn)
-                                    {
-                                        <span>Checking in...</span>
-                                    }
-                                    else
-                                    {
-                                        <span>Check In</span>
-                                    }
+                                @* Check-In no longer POSTs directly — it opens the QR modal, which
+                                   handles the whole handshake (mint code → vendor scans → server
+                                   commits attendance → SignalR closes the modal). *@
+                                <button @onclick="() => OpenQrAsync(a)"
+                                        class="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition inline-flex items-center gap-1.5">
+                                    <span>📱</span><span>Check In</span>
                                 </button>
                             }
                             else if (!alreadyOut)
@@ -182,7 +177,13 @@
     }
 </div>
 
+@* QR-verified check-in modal — opened when crew clicks Check In. *@
+<CheckInQrModal @ref="_qrModal"
+                OnVerified="OnQrVerified"
+                OnClosed="() => StateHasChanged()" />
+
 @code {
+
     private const string CheckIn  = "checkin";
     private const string CheckOut = "checkout";
 
@@ -192,6 +193,26 @@
     private string? _error;
     private Guid?  _actionId;
     private string? _actionType;
+
+    // QR-verified check-in — the modal handles the whole flow: minting
+    // the code, showing the QR, waiting for the vendor's scan (via
+    // SignalR), and firing OnQrVerified when the server commits. We keep
+    // RecordAttendance for CheckOut only.
+    private CheckInQrModal? _qrModal;
+
+    private async Task OpenQrAsync(EventWOS.BlazorWeb.Services.EventAssignmentDto a)
+    {
+        if (_qrModal is null) return;
+        await _qrModal.OpenAsync(a.Id, a.EventTitle);
+    }
+
+    private async Task OnQrVerified(EventWOS.BlazorWeb.Services.CheckInVerifyResultDto result)
+    {
+        // Vendor scanned successfully — the assignment is now Attended.
+        // Refresh the list so the button state flips to Check Out.
+        ShowToast("Checked in! Your vendor verified you.", false);
+        await LoadAsync();
+    }
     private HashSet<Guid> _checkedInAssignmentIds  = new();
     private HashSet<Guid> _checkedOutAssignmentIds = new();
     private string? _toast;

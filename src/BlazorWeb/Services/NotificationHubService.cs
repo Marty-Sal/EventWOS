@@ -23,6 +23,10 @@ public sealed class NotificationHubService : IAsyncDisposable
     public event Action<NotificationPayload>?  PendingManagerApprovalReceived;// → managers
     public event Action<NotificationPayload>?  ManagerApprovedReceived;       // → crew
     public event Action<NotificationPayload>?  ManagerRejectedReceived;       // → crew
+    // Fires when a vendor scans a crew's QR and the server has committed
+    // the actual AttendanceRecord. Payload = { assignmentId, eventId,
+    // eventTitle, checkedInAt }. Consumed by CheckInQrModal to auto-close.
+    public event Action<NotificationPayload>?  CheckInVerifiedReceived;       // → crew
     // Payments
     public event Action<NotificationPayload>?  PaymentChangedReceived;        // payment created / approved / paid / rejected / hold
     public event Action<NotificationPayload>?  PayrollChangedReceived;        // batch submitted / approved / disbursed / rejected
@@ -82,6 +86,11 @@ public sealed class NotificationHubService : IAsyncDisposable
             payload => ManagerApprovedReceived?.Invoke(payload));
         _connection.On<NotificationPayload>("ManagerRejectedYou",
             payload => ManagerRejectedReceived?.Invoke(payload));
+
+        // QR-verified check-in — server pushes this to the crew user's
+        // group once VerifyCheckInHandler commits the attendance row.
+        _connection.On<NotificationPayload>("CheckInVerified",
+            payload => CheckInVerifiedReceived?.Invoke(payload));
 
         // Payments — all payment-lifecycle events fold into a single subscription
         // so consumers just refetch the list. (crew owner + vendor + admins/managers)

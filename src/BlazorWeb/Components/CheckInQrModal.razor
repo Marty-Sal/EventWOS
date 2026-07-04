@@ -1,0 +1,340 @@
+@*
+    CheckInQrModal — crew's side of the QR-verified check-in handshake.
+
+    Usage from a parent page:
+        <CheckInQrModal @ref="_qr"
+                        OnVerified="HandleVerified"
+                        OnClosed="() => StateHasChanged()" />
+
+        // ...then open with:
+        await _qr.OpenAsync(assignment.Id, assignment.EventTitle);
+
+    Lifecycle:
+      1. OpenAsync mints (or rehydrates) a PendingCheckIn via the API.
+      2. QR is rendered client-side and a 1-second countdown ticks.
+      3. Component subscribes to the "CheckInVerified" SignalR push. When
+         the vendor's scan lands, the parent's OnVerified callback fires
+         and the modal auto-closes.
+      4. If the QR expires with no scan, we show a Regenerate button that
+         calls the mint endpoint again (server auto-cancels the old row).
+
+    The modal is deliberately dumb — it never talks to the AttendanceRecord
+    endpoint directly. All commit logic lives on the server verify path,
+    which is the only place the check-in can actually happen.
+*@
+@inject ICheckInApiService CheckInApi
+@inject NotificationHubService Hub
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (_isOpen)
+{
+    <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+         @onclick="CloseAsync">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+             @onclick:stopPropagation="true">
+
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900">Check-in QR</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                        Show this to your vendor to check in
+                    </p>
+                    @if (!string.IsNullOrEmpty(_eventTitle))
+                    {
+                        <p class="text-xs text-gray-400 mt-0.5">@_eventTitle</p>
+                    }
+                </div>
+                <button class="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                        @onclick="CloseAsync"
+                        aria-label="Close">✕</button>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="flex items-center justify-center py-14 text-gray-500 text-sm">
+                    <span class="animate-pulse">Generating your QR…</span>
+                </div>
+            }
+            else if (_error is not null)
+            {
+                <div class="p-3 rounded-lg bg-red-50 border border-red-100 text-red-700 text-sm">
+                    @_error
+                </div>
+                <button class="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+                        @onclick="RegenerateAsync">
+                    Try again
+                </button>
+            }
+            else if (_pending is not null)
+            {
+                @* ── The QR itself ───────────────────────────────────
+                   Rendered by checkin.js into #checkin-qr-host after
+                   OnAfterRender, because the div doesn't exist during
+                   the initial render pass. *@
+                <div class="bg-gray-50 rounded-xl p-4 flex items-center justify-center">
+                    <div id="checkin-qr-host" class="w-full"></div>
+                </div>
+
+                @* Countdown + status *@
+                @if (_expired)
+                {
+                    <div class="p-3 rounded-lg bg-amber-50 border border-amber-100 text-amber-800 text-sm text-center">
+                        This QR has expired. Regenerate to keep going.
+                    </div>
+                    <button class="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+                            @onclick="RegenerateAsync"
+                            disabled="@_regenerating">
+                        @(_regenerating ? "Regenerating…" : "Regenerate QR")
+                    </button>
+                }
+                else
+                {
+                    <div class="text-center">
+                        <p class="text-xs text-gray-500">Expires in</p>
+                        <p class="text-2xl font-bold @(SecondsLeft <= 60 ? "text-red-600" : "text-gray-800")">
+                            @($"{SecondsLeft / 60:00}:{SecondsLeft % 60:00}")
+                        </p>
+                    </div>
+
+                    <div class="text-center">
+                        <p class="text-[11px] uppercase tracking-wide text-gray-400">Fallback code</p>
+                        <p class="font-mono text-sm text-gray-700 tracking-widest">@FormatCode(_pending.Code)</p>
+                    </div>
+
+                    <button class="w-full py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-50"
+                            @onclick="RegenerateAsync"
+                            disabled="@_regenerating">
+                        @(_regenerating ? "Regenerating…" : "Regenerate QR")
+                    </button>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback<CheckInVerifyResultDto> OnVerified { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+
+    private bool _isOpen;
+    private bool _loading;
+    private bool _regenerating;
+    private bool _expired;
+    private string? _error;
+    private string? _eventTitle;
+    private Guid _assignmentId;
+
+    private PendingCheckInDto? _pending;
+    private CancellationTokenSource? _ticker;
+    private bool _hubHooked;
+    private bool _needsRender;
+
+    /// <summary>Seconds remaining until _pending.ExpiresAt. Clamped to 0.</summary>
+    private int SecondsLeft => _pending is null
+        ? 0
+        : (int)Math.Max(0, (_pending.ExpiresAt - DateTime.UtcNow).TotalSeconds);
+
+    // ── Public API ─────────────────────────────────────────────────────
+    public async Task OpenAsync(Guid assignmentId, string? eventTitle = null)
+    {
+        _assignmentId = assignmentId;
+        _eventTitle   = eventTitle;
+        _isOpen       = true;
+        _loading      = true;
+        _error        = null;
+        _pending      = null;
+        _expired      = false;
+        StateHasChanged();
+
+        // Hook the hub push exactly once — kept live across regenerations.
+        if (!_hubHooked)
+        {
+            Hub.CheckInVerifiedReceived += OnHubVerified;
+            _hubHooked = true;
+        }
+
+        // Prefer a live existing row so a browser refresh keeps the same
+        // countdown. Fall back to minting a fresh row.
+        var live = await CheckInApi.GetMyLiveAsync(assignmentId);
+        if (live.Success && live.Data is not null)
+        {
+            _pending = live.Data;
+        }
+        else
+        {
+            var minted = await CheckInApi.RequestAsync(assignmentId);
+            if (!minted.Success || minted.Data is null)
+            {
+                _error   = minted.Message ?? "Could not generate a check-in QR.";
+                _loading = false;
+                StateHasChanged();
+                return;
+            }
+            _pending = minted.Data;
+        }
+
+        _loading      = false;
+        _expired      = _pending!.ExpiresAt <= DateTime.UtcNow;
+        _needsRender  = true;
+        StartTicker();
+        StateHasChanged();
+    }
+
+    public async Task CloseAsync()
+    {
+        _isOpen = false;
+        StopTicker();
+        StateHasChanged();
+        if (OnClosed.HasDelegate) await OnClosed.InvokeAsync();
+    }
+
+    // ── Lifecycle ──────────────────────────────────────────────────────
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The #checkin-qr-host div only exists after the first render pass
+        // where _pending is set — draw into it then.
+        if (_needsRender && _pending is not null && !_expired)
+        {
+            _needsRender = false;
+            try
+            {
+                await JS.InvokeVoidAsync(
+                    "eventwosCheckin.renderQr", "checkin-qr-host", _pending.Code);
+            }
+            catch
+            {
+                // JS may be unavailable during prerender — just skip; the
+                // next render pass will retry.
+            }
+        }
+    }
+
+    // ── Countdown ticker ───────────────────────────────────────────────
+    private void StartTicker()
+    {
+        StopTicker();
+        _ticker = new CancellationTokenSource();
+        var token = _ticker.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    await Task.Delay(1000, token);
+                    if (_pending is null) continue;
+                    var expired = _pending.ExpiresAt <= DateTime.UtcNow;
+                    if (expired != _expired)
+                    {
+                        _expired = expired;
+                    }
+                    // InvokeAsync marshals back to the render thread — safe from a bg task.
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (TaskCanceledException) { /* normal on close */ }
+        }, token);
+    }
+
+    private void StopTicker()
+    {
+        try { _ticker?.Cancel(); } catch { }
+        _ticker?.Dispose();
+        _ticker = null;
+    }
+
+    // ── Regenerate ─────────────────────────────────────────────────────
+    private async Task RegenerateAsync()
+    {
+        if (_regenerating) return;
+        _regenerating = true;
+        _error        = null;
+        StateHasChanged();
+
+        var minted = await CheckInApi.RequestAsync(_assignmentId);
+        _regenerating = false;
+
+        if (!minted.Success || minted.Data is null)
+        {
+            _error = minted.Message ?? "Could not regenerate the QR.";
+            StateHasChanged();
+            return;
+        }
+
+        _pending     = minted.Data;
+        _expired     = false;
+        _needsRender = true;
+        StartTicker();
+        StateHasChanged();
+    }
+
+    // ── SignalR handler ────────────────────────────────────────────────
+    private void OnHubVerified(NotificationPayload payload)
+    {
+        // Fire the parent's callback with a synthesised result — the payload
+        // carries all the fields we need for a nice success toast.
+        var dto = new CheckInVerifyResultDto(
+            AssignmentId:   ReadGuid(payload.Data,  "assignmentId") ?? _assignmentId,
+            CrewId:         Guid.Empty,
+            CrewName:       "",
+            EventId:        ReadGuid(payload.Data,  "eventId")      ?? Guid.Empty,
+            EventTitle:     ReadStr(payload.Data,   "eventTitle")   ?? _eventTitle ?? "",
+            ShiftScopeName: null,
+            CheckedInAt:    ReadDate(payload.Data,  "checkedInAt")  ?? DateTime.UtcNow);
+
+        // Marshal to the render thread — hub callbacks fire on a bg thread.
+        _ = InvokeAsync(async () =>
+        {
+            if (OnVerified.HasDelegate) await OnVerified.InvokeAsync(dto);
+            await CloseAsync();
+        });
+    }
+
+    // Payloads travel as System.Text.Json objects (or JsonElement) — dig
+    // safely without exploding on shape changes.
+    private static Guid? ReadGuid(object? d, string key)
+    {
+        var s = ReadStr(d, key);
+        return Guid.TryParse(s, out var g) ? g : null;
+    }
+    private static DateTime? ReadDate(object? d, string key)
+    {
+        var s = ReadStr(d, key);
+        return DateTime.TryParse(s, out var dt) ? dt : null;
+    }
+    private static string? ReadStr(object? d, string key)
+    {
+        if (d is null) return null;
+        if (d is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Object
+            && je.TryGetProperty(key, out var v))
+            return v.ValueKind == System.Text.Json.JsonValueKind.String
+                   ? v.GetString()
+                   : v.ToString();
+        // Fallback for anonymous / dictionary-shaped payloads.
+        var prop = d.GetType().GetProperty(key,
+            System.Reflection.BindingFlags.IgnoreCase | System.Reflection.BindingFlags.Public
+            | System.Reflection.BindingFlags.Instance);
+        return prop?.GetValue(d)?.ToString();
+    }
+
+    /// <summary>Formats an opaque code as XXXX-XXXX-XXXX for the fallback line.</summary>
+    private static string FormatCode(string code)
+    {
+        if (string.IsNullOrEmpty(code) || code.Length <= 4) return code;
+        return string.Join("-", Enumerable.Range(0, (code.Length + 3) / 4)
+                                          .Select(i => code.Substring(i * 4,
+                                              Math.Min(4, code.Length - i * 4))));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        StopTicker();
+        if (_hubHooked)
+        {
+            Hub.CheckInVerifiedReceived -= OnHubVerified;
+            _hubHooked = false;
+        }
+        await ValueTask.CompletedTask;
+    }
+}

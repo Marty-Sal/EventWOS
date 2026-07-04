@@ -55,6 +55,9 @@
     </div>
 
     <script src="_framework/blazor.webassembly.js"></script>
+    <!-- QR-verified check-in helpers (renderQr / startScanner / stopScanner).
+         Their heavy deps are lazy-loaded from a CDN inside the module. -->
+    <script src="js/checkin.js"></script>
     <!-- Phase D step 22: helper for Excel downloads from Attendance page.
          Builds a Blob from a base64 string and triggers an anchor click.
          Defined globally so any page can call it via JSInterop. -->

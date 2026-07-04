@@ -28,6 +28,8 @@ public interface IAppDbContext
     DbSet<AttendanceRecord> AttendanceRecords { get; }
     DbSet<CrewPayment>      CrewPayments      { get; }
     DbSet<PayrollBatch>     PayrollBatches    { get; }
+    // QR-verified check-in handshake table.
+    DbSet<PendingCheckIn>   PendingCheckIns   { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

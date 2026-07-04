@@ -109,6 +109,7 @@ public sealed class DatabaseSeeder
         ("crew:approve",      "crew",        "approve", "Approve crew assignments"),
         ("attendance:read",   "attendance",  "read",    "View attendance"),
         ("attendance:write",  "attendance",  "write",   "Manage attendance"),
+        ("attendance:verify", "attendance",  "verify",  "Scan a crew QR to verify check-in"),
         ("payments:read",     "payments",    "read",    "View payments"),
         ("payments:write",    "payments",    "write",   "Process payments"),
         ("payments:self",     "payments",    "self",    "View own payment records (Crew)"),
@@ -214,7 +215,7 @@ public sealed class DatabaseSeeder
             foreach (var name in new[]
             {
                 "crew:read", "crew:write", "crew:invite", "events:read",
-                "crew:approve", "attendance:read", "profile:read", "profile:write",
+                "crew:approve", "attendance:read", "attendance:verify", "profile:read", "profile:write",
                 "payments:read", "payments:disburse",
                 // Phase C: vendor can SEE their own allocations on shifts so
                 // the portal can display the per-shift quota counter. They
@@ -265,7 +266,11 @@ public sealed class DatabaseSeeder
                 // both view and grant per-vendor quotas on event shifts.
                 // (Vendors only get :read; Admins implicitly get both via
                 // the "Admin owns everything" loop above.)
-                "vendor_allocations:read", "vendor_allocations:write"
+                "vendor_allocations:read", "vendor_allocations:write",
+                // QR check-in: managers can verify as a fallback when the
+                // assigned vendor isn't on site. Also gives ops a break-glass
+                // for stuck check-ins without granting attendance:write.
+                "attendance:verify"
             })
             {
                 var perm = GetPerm(name);

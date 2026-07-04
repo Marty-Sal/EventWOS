@@ -174,6 +174,80 @@ public sealed class AttendanceController : ControllerBase
             ? Ok(ApiResponse<PagedResult<AttendanceListItemDto>>.Ok(result.Value))
             : BadRequest(ApiResponse<PagedResult<AttendanceListItemDto>>.Fail(result.Error.Message));
     }
+
+    // ── QR-verified check-in ────────────────────────────────────────────
+    //
+    // Two-party handshake:
+    //   1. Crew POST /checkin/request      → mints a PendingCheckIn, returns
+    //      the code + expiry. Crew's UI encodes the code in a QR.
+    //   2. Vendor POST /checkin/verify     → validates the code, writes the
+    //      real AttendanceRecord, flips assignment to Attended.
+    //
+    // Regeneration = call /checkin/request again. The prior Pending row is
+    // auto-cancelled so only one live QR exists per assignment at a time.
+
+    /// <summary>Mint (or regenerate) a QR check-in code for the caller's own
+    /// assignment. Uses profile:write so a crew user can call it — same
+    /// permission the direct-record path uses (see EventsController).</summary>
+    [Permission("profile:write")]
+    [HttpPost("checkin/request")]
+    public async Task<IActionResult> RequestCheckIn(
+        [FromBody] CheckInRequestBody body, CancellationToken ct)
+    {
+        if (_currentUser.UserId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new RequestCheckInCommand(body.AssignmentId, _currentUser.UserId.Value), ct);
+
+        return result.IsSuccess
+            ? Ok(ApiResponse<PendingCheckInDto>.Ok(result.Value))
+            : BadRequest(ApiResponse<PendingCheckInDto>.Fail(result.Error.Message));
+    }
+
+    /// <summary>Return the caller's currently-live QR for an assignment, if
+    /// any — used by the modal after a page refresh.</summary>
+    [Permission("profile:write")]
+    [HttpGet("checkin/my/{assignmentId:guid}")]
+    public async Task<IActionResult> GetMyLiveCheckIn(
+        Guid assignmentId, CancellationToken ct)
+    {
+        if (_currentUser.UserId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new GetMyPendingCheckInQuery(assignmentId, _currentUser.UserId.Value), ct);
+
+        return result.IsSuccess
+            ? Ok(ApiResponse<PendingCheckInDto>.Ok(result.Value))
+            : NotFound(ApiResponse<PendingCheckInDto>.Fail(result.Error.Message));
+    }
+
+    /// <summary>Vendor (or Manager/Admin fallback) scans the QR and posts the
+    /// code back to verify + commit the check-in. Requires attendance:verify.</summary>
+    [Permission("attendance:verify")]
+    [HttpPost("checkin/verify")]
+    public async Task<IActionResult> VerifyCheckIn(
+        [FromBody] CheckInVerifyBody body, CancellationToken ct)
+    {
+        if (_currentUser.UserId is null || _currentUser.Role is null)
+            return Unauthorized();
+
+        var result = await _mediator.Send(new VerifyCheckInCommand(
+            body.Code,
+            _currentUser.UserId.Value,
+            _currentUser.Role.Value,
+            body.Location), ct);
+
+        return result.IsSuccess
+            ? Ok(ApiResponse<CheckInVerifyResultDto>.Ok(result.Value))
+            : BadRequest(ApiResponse<CheckInVerifyResultDto>.Fail(result.Error.Message));
+    }
 }
+
+/// <summary>Body for /checkin/request.</summary>
+public sealed record CheckInRequestBody(Guid AssignmentId);
+
+/// <summary>Body for /checkin/verify. Location is optional — the vendor's
+/// device may or may not share geolocation.</summary>
+public sealed record CheckInVerifyBody(string Code, string? Location = null);
 
 public sealed record AttendanceActionRequest(string Action, string? Location = null);
