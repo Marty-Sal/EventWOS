@@ -62,7 +62,6 @@
                     <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" />
                     <NavItem Href="/crew"     Icon="👷" Label="Crew" />
                     <NavItem Href="/attendance" Icon="📍" Label="Attendance" />
-                    <NavItem Href="/scan"     Icon="📷" Label="Scan Check-In" />
                     <NavItem Href="/payments" Icon="💰" Label="Payments" />
                     <NavItem Href="/sessions" Icon="🔌" Label="Sessions" />
                 </AuthorizeView>
@@ -73,7 +72,6 @@
                     @if (_perms.Contains("vendors:read"))  { <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" /> }
                     @if (_perms.Contains("crew:read"))     { <NavItem Href="/crew"     Icon="👷" Label="Crew" /> }
                     @if (_perms.Contains("attendance:read")) { <NavItem Href="/attendance" Icon="📍" Label="Attendance" /> }
-                    @if (_perms.Contains("attendance:verify")) { <NavItem Href="/scan"     Icon="📷" Label="Scan Check-In" /> }
                     @if (_perms.Contains("payments:read")) { <NavItem Href="/payments" Icon="💰" Label="Payments" /> }
                     @if (_perms.Contains("sessions:read")) { <NavItem Href="/sessions" Icon="🔌" Label="Sessions" /> }
                     @if (_perms.Contains("audit:read"))
@@ -104,7 +102,6 @@
                 <AuthorizeView Roles="Vendor">
                     <NavItem Href="/crew"               Icon="👷" Label="My Crew" />
                     <NavItem Href="/my-crew-groups"     Icon="🧑‍🤝‍🧑" Label="Crew Groups" />
-                    <NavItem Href="/scan"               Icon="📷" Label="Scan Check-In" />
                     <NavItem Href="/vendor-payments"     Icon="💸" Label="My Payments" />
                     <NavItem Href="/vendor-report"       Icon="📊" Label="My Report" />
                 </AuthorizeView>
