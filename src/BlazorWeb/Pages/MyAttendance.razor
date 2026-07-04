@@ -200,7 +200,10 @@
     // RecordAttendance for CheckOut only.
     private CheckInQrModal? _qrModal;
 
-    private async Task OpenQrAsync(EventWOS.BlazorWeb.Services.EventAssignmentDto a)
+    // Uses the page-local MyAssignmentWithEvent record — that's what
+    // the loop iterates over. Only Id + EventTitle are needed; the modal
+    // handles everything else.
+    private async Task OpenQrAsync(MyAssignmentWithEvent a)
     {
         if (_qrModal is null) return;
         await _qrModal.OpenAsync(a.Id, a.EventTitle);

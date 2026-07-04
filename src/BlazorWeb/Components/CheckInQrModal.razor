@@ -272,16 +272,26 @@
     // ── SignalR handler ────────────────────────────────────────────────
     private void OnHubVerified(NotificationPayload payload)
     {
-        // Fire the parent's callback with a synthesised result — the payload
-        // carries all the fields we need for a nice success toast.
+        // NotificationPayload is a flat record — the server serialises
+        // { assignmentId, eventId, eventTitle, checkedInAt } into its
+        // named fields (AssignmentId + EventTitle are declared; the rest
+        // are ignored on the wire, which is fine because we only need
+        // AssignmentId to correlate this push with the modal that's open).
+        //
+        // Belt-and-braces: only close the modal if the push is actually
+        // for THIS assignment. Otherwise a second-tab check-in for a
+        // different event would clobber this modal's state.
+        if (payload.AssignmentId is Guid pushedId && pushedId != _assignmentId)
+            return;
+
         var dto = new CheckInVerifyResultDto(
-            AssignmentId:   ReadGuid(payload.Data,  "assignmentId") ?? _assignmentId,
+            AssignmentId:   payload.AssignmentId ?? _assignmentId,
             CrewId:         Guid.Empty,
             CrewName:       "",
-            EventId:        ReadGuid(payload.Data,  "eventId")      ?? Guid.Empty,
-            EventTitle:     ReadStr(payload.Data,   "eventTitle")   ?? _eventTitle ?? "",
+            EventId:        Guid.Empty,
+            EventTitle:     payload.EventTitle ?? _eventTitle ?? "",
             ShiftScopeName: null,
-            CheckedInAt:    ReadDate(payload.Data,  "checkedInAt")  ?? DateTime.UtcNow);
+            CheckedInAt:    DateTime.UtcNow);
 
         // Marshal to the render thread — hub callbacks fire on a bg thread.
         _ = InvokeAsync(async () =>
@@ -289,33 +299,6 @@
             if (OnVerified.HasDelegate) await OnVerified.InvokeAsync(dto);
             await CloseAsync();
         });
-    }
-
-    // Payloads travel as System.Text.Json objects (or JsonElement) — dig
-    // safely without exploding on shape changes.
-    private static Guid? ReadGuid(object? d, string key)
-    {
-        var s = ReadStr(d, key);
-        return Guid.TryParse(s, out var g) ? g : null;
-    }
-    private static DateTime? ReadDate(object? d, string key)
-    {
-        var s = ReadStr(d, key);
-        return DateTime.TryParse(s, out var dt) ? dt : null;
-    }
-    private static string? ReadStr(object? d, string key)
-    {
-        if (d is null) return null;
-        if (d is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Object
-            && je.TryGetProperty(key, out var v))
-            return v.ValueKind == System.Text.Json.JsonValueKind.String
-                   ? v.GetString()
-                   : v.ToString();
-        // Fallback for anonymous / dictionary-shaped payloads.
-        var prop = d.GetType().GetProperty(key,
-            System.Reflection.BindingFlags.IgnoreCase | System.Reflection.BindingFlags.Public
-            | System.Reflection.BindingFlags.Instance);
-        return prop?.GetValue(d)?.ToString();
     }
 
     /// <summary>Formats an opaque code as XXXX-XXXX-XXXX for the fallback line.</summary>
