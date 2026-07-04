@@ -290,19 +290,19 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="stat-card bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
                     <div class="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl">🛡️</div>
-                    <div><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Role</p><p class="text-lg font-bold text-gray-800">@(_profile?.Role ?? "—")</p></div>
+                    <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Role</p><p class="text-lg font-bold text-gray-800 truncate">@(_profile?.Role ?? "—")</p></div>
                 </div>
                 <div class="stat-card bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
                     <div class="w-11 h-11 rounded-xl bg-green-50 flex items-center justify-center text-2xl">✅</div>
-                    <div><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Status</p><p class="text-lg font-bold text-gray-800">@(_profile?.Status ?? "—")</p></div>
+                    <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Status</p><p class="text-lg font-bold text-gray-800 truncate">@(_profile?.Status ?? "—")</p></div>
                 </div>
                 <div class="stat-card bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
                     <div class="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center text-2xl">🔑</div>
-                    <div><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Permissions</p><p class="text-lg font-bold text-gray-800">@(_profile?.Permissions.Count ?? 0)</p></div>
+                    <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Permissions</p><p class="text-lg font-bold text-gray-800 truncate">@(_profile?.Permissions.Count ?? 0)</p></div>
                 </div>
                 <div class="stat-card bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
                     <div class="w-11 h-11 rounded-xl bg-sky-50 flex items-center justify-center text-2xl">📱</div>
-                    <div><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Mobile</p><p class="text-lg font-bold text-gray-800">@(_profile?.Mobile ?? "—")</p></div>
+                    <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Mobile</p><p class="text-lg font-bold text-gray-800 truncate">@(_profile?.Mobile ?? "—")</p></div>
                 </div>
             </div>
 

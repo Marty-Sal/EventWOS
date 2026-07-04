@@ -8,8 +8,24 @@
 
 <div class="flex h-screen bg-gray-50 overflow-hidden">
 
-    <!-- Sidebar -->
-    <aside class="hidden md:flex md:flex-shrink-0">
+    <!-- Mobile backdrop (only visible when the drawer is open on <md) -->
+    @if (_sidebarOpen)
+    {
+        <div class="fixed inset-0 z-30 bg-black/50 md:hidden"
+             @onclick="() => _sidebarOpen = false"></div>
+    }
+
+    <!--
+        Sidebar
+        On <md: fixed off-canvas drawer, slides in from the left when
+                _sidebarOpen is true. z-40 to sit above the backdrop.
+        On md+: normal in-flow flex sidebar (unchanged behaviour).
+        The `transform` transition applies only on mobile — desktop
+        rules override with `md:relative md:translate-x-0`.
+    -->
+    <aside class="@(_sidebarOpen ? "translate-x-0" : "-translate-x-full") md:translate-x-0
+                  fixed inset-y-0 left-0 z-40 flex md:flex md:flex-shrink-0
+                  md:relative md:inset-auto transition-transform duration-200 ease-in-out">
         <div class="flex flex-col w-64 bg-gray-900 text-white">
             <!-- Logo -->
             <div class="flex items-center h-16 px-6 border-b border-gray-700">
@@ -17,7 +33,7 @@
             </div>
 
             <!-- Nav Items -->
-            <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+            <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto" @onclick="() => _sidebarOpen = false">
 
                 @* Dashboard — everyone *@
                 <NavItem Href="/dashboard" Icon="🏠" Label="Dashboard" />
@@ -166,16 +182,28 @@
     </aside>
 
     <!-- Main content -->
-    <div class="flex flex-col flex-1 overflow-hidden">
-        <header class="flex items-center justify-between h-16 px-6 bg-white border-b border-gray-200 shadow-sm">
-            <h1 class="text-lg font-semibold text-gray-800">@PageTitle</h1>
+    <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <header class="flex items-center justify-between h-16 px-4 md:px-6 bg-white border-b border-gray-200 shadow-sm">
+            <div class="flex items-center gap-3 min-w-0">
+                <!-- Mobile hamburger — hidden on md+ where the sidebar is always visible -->
+                <button type="button" @onclick="() => _sidebarOpen = !_sidebarOpen"
+                        class="md:hidden -ml-1 p-2 rounded-md text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        aria-label="Toggle navigation">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6"
+                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="@(_sidebarOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16")" />
+                    </svg>
+                </button>
+                <h1 class="text-lg font-semibold text-gray-800 truncate">@PageTitle</h1>
+            </div>
             <div class="flex items-center gap-3">
                 <div class="w-2 h-2 rounded-full @(Hub.IsConnected ? "bg-green-400" : "bg-red-400")"
                      title="@(Hub.IsConnected ? "Live" : "Reconnecting…")"></div>
                 <span class="text-xs text-gray-400">@(Hub.IsConnected ? "Live" : "Reconnecting…")</span>
             </div>
         </header>
-        <main class="flex-1 overflow-y-auto p-6">@Body</main>
+        <main class="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">@Body</main>
     </div>
 </div>
 
@@ -210,6 +238,10 @@
             };
         }
     }
+
+    // Mobile drawer visibility. Ignored on md+ where the sidebar is
+    // permanently visible (Tailwind's md:translate-x-0 short-circuits us).
+    private bool _sidebarOpen;
 
     // Current Manager's effective permissions (loaded from JWT claims)
     private HashSet<string> _perms = new(StringComparer.OrdinalIgnoreCase);
