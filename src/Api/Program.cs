@@ -249,6 +249,7 @@ try
     {
         options.AddPolicy("perm:attendance:read",   policy => policy.Requirements.Add(new PermissionRequirement("attendance:read")));
         options.AddPolicy("perm:attendance:write",  policy => policy.Requirements.Add(new PermissionRequirement("attendance:write")));
+        options.AddPolicy("perm:attendance:verify", policy => policy.Requirements.Add(new PermissionRequirement("attendance:verify")));
         options.AddPolicy("perm:audit:read",        policy => policy.Requirements.Add(new PermissionRequirement("audit:read")));
         options.AddPolicy("perm:crew:approve",      policy => policy.Requirements.Add(new PermissionRequirement("crew:approve")));
         options.AddPolicy("perm:crew:invite",       policy => policy.Requirements.Add(new PermissionRequirement("crew:invite")));
@@ -1110,6 +1111,47 @@ BEGIN
         CREATE INDEX ix_vendor_shift_allocations_vendor_id
             ON vendor_shift_allocations (vendor_id);
         RAISE NOTICE 'Created vendor_shift_allocations table';
+    END IF;
+
+    -- ═══ pending_checkins (Phase E — QR-verified check-in handshake) ═════════
+    -- Crew mints a code with a 10-min TTL, vendor scans → server flips it to
+    -- Consumed and writes the real attendance_records row in one transaction.
+    -- No FK on assignment_id/crew_id (matches this project's convention of
+    -- keeping soft-delete tables free of hard FKs so records survive vendor
+    -- rejig without cascading nightmares). All three indexes are used by
+    -- the app: code lookups (verify path), (assignment_id, status) for the
+    -- "already-live?" check and regenerate-cancels-prior, expires_at for
+    -- future sweepers.
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'pending_checkins') THEN
+        CREATE TABLE pending_checkins (
+            id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            assignment_id         uuid NOT NULL,
+            crew_id               uuid NOT NULL,
+            event_id              uuid NOT NULL,
+            shift_id              uuid,
+            code                  varchar(32) NOT NULL,
+            expires_at            timestamptz NOT NULL,
+            status                integer NOT NULL DEFAULT 0,
+            consumed_by_vendor_id uuid,
+            consumed_at           timestamptz,
+            created_at            timestamptz NOT NULL DEFAULT now(),
+            created_by            uuid,
+            updated_at            timestamptz,
+            updated_by            uuid,
+            is_deleted            boolean NOT NULL DEFAULT false,
+            deleted_at            timestamptz,
+            deleted_by            uuid
+        );
+        CREATE INDEX ix_pending_checkins_code
+            ON pending_checkins (code)
+            WHERE is_deleted = false;
+        CREATE INDEX ix_pending_checkins_assignment_status
+            ON pending_checkins (assignment_id, status)
+            WHERE is_deleted = false;
+        CREATE INDEX ix_pending_checkins_expires
+            ON pending_checkins (expires_at)
+            WHERE is_deleted = false;
+        RAISE NOTICE 'Created pending_checkins table';
     END IF;
 
 END $$;
