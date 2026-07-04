@@ -97,10 +97,6 @@
                         </p>
                     </div>
 
-                    <div class="text-center">
-                        <p class="text-[11px] uppercase tracking-wide text-gray-400">Fallback code</p>
-                        <p class="font-mono text-sm text-gray-700 tracking-widest">@FormatCode(_pending.Code)</p>
-                    </div>
 
                     <button class="w-full py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-50"
                             @onclick="RegenerateAsync"
@@ -301,14 +297,6 @@
         });
     }
 
-    /// <summary>Formats an opaque code as XXXX-XXXX-XXXX for the fallback line.</summary>
-    private static string FormatCode(string code)
-    {
-        if (string.IsNullOrEmpty(code) || code.Length <= 4) return code;
-        return string.Join("-", Enumerable.Range(0, (code.Length + 3) / 4)
-                                          .Select(i => code.Substring(i * 4,
-                                              Math.Min(4, code.Length - i * 4))));
-    }
 
     public async ValueTask DisposeAsync()
     {
