@@ -1120,7 +1120,7 @@ BEGIN
     -- keeping soft-delete tables free of hard FKs so records survive vendor
     -- rejig without cascading nightmares). All three indexes are used by
     -- the app: code lookups (verify path), (assignment_id, status) for the
-    -- "already-live?" check and regenerate-cancels-prior, expires_at for
+    -- already-live check and regenerate-cancels-prior, expires_at for
     -- future sweepers.
     IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'pending_checkins') THEN
         CREATE TABLE pending_checkins (
