@@ -302,6 +302,14 @@ try
     builder.Services.AddScoped<EventWOS.Application.Common.ISmsProvider, EventWOS.Infrastructure.Auth.StubSmsProvider>();
     builder.Services.AddSingleton<EventWOS.Application.Auth.Interfaces.IPasswordHasher, EventWOS.Infrastructure.Auth.BCryptPasswordHasher>();
 
+    // Reverse-geocoding for AttendanceRecord.Location. Singleton
+    // because the KD-tree is immutable and shared across all requests
+    // — loaded lazily on first Enrich() call. See
+    // src/Infrastructure/Geo/GeoLocationService.cs.
+    builder.Services.AddSingleton<
+        EventWOS.Application.Attendance.Geo.IGeoLocationService,
+        EventWOS.Infrastructure.Geo.GeoLocationService>();
+
     // ── Email service: SendGrid if API key is present, otherwise dev stub (logs only).
     //    Lets the app boot fine in environments without SendGrid configured.
     var sendGridKey = builder.Configuration["SendGrid:ApiKey"]

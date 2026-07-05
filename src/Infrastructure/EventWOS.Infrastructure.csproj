@@ -23,4 +23,10 @@
     <ProjectReference Include="..\Application\EventWOS.Application.csproj" />
     <ProjectReference Include="..\Persistence\EventWOS.Persistence.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Embedded GeoNames cities15000 dataset for offline reverse
+         geocoding. See Geo/GeoLocationService.cs. Adds ~700 KB to the
+         Infrastructure DLL — worth it for zero external dependencies. -->
+    <EmbeddedResource Include="Geo/geodata.tsv.gz" />
+  </ItemGroup>
 </Project>

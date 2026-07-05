@@ -128,60 +128,36 @@ window.eventwosCheckin.stopScanner = async function () {
 // crowded venues. maximumAge=60000 lets us reuse a fix from the last
 // minute across many scans (typical vendor scans 5-30 crew back-to-back).
 window.eventwosCheckin.getPosition = async function () {
+    // Returns "lat,lng" (6dp) on success, "unavailable:<code>" on
+    // failure. No reverse geocoding here — that happens server-side
+    // in EventWOS.Infrastructure.Geo.GeoLocationService, which uses
+    // an embedded GeoNames dataset (no third-party API). The server
+    // rewrites the string to "lat,lng|City, State, Country" before
+    // persisting, and the LocationPin component parses whatever
+    // storage format the row happens to be in.
+    //
+    // Options tuned for on-site vendor phones:
+    //   * enableHighAccuracy=false — battery-friendly, ~100 m is fine
+    //     for venue-level attendance auditing.
+    //   * timeout=8000 — mobile GPS cold-start can take 3-6 s in dense
+    //     venues; anything shorter produces false-negative fixes.
+    //   * maximumAge=60000 — reuse a fix from the last minute across
+    //     back-to-back scans of 5-30 crew.
     if (!("geolocation" in navigator)) return "unavailable:no-api";
-
-    // Step 1 — GPS fix (unchanged options; behaviour proven in prod).
-    const coords = await new Promise((resolve) => {
+    return await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
-            (pos) => resolve({
-                lat: pos.coords.latitude.toFixed(6),
-                lng: pos.coords.longitude.toFixed(6),
-            }),
-            (err) => resolve({ err: `unavailable:${err && err.code}` }),
+            (pos) => {
+                const lat = pos.coords.latitude.toFixed(6);
+                const lng = pos.coords.longitude.toFixed(6);
+                resolve(`${lat},${lng}`);
+            },
+            (err) => {
+                // 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
+                resolve(`unavailable:${err && err.code}`);
+            },
             { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
         );
     });
-    if (coords.err) return coords.err;
-
-    // Step 2 — Reverse-geocode to a short address. BigDataCloud's
-    // reverse-geocode-client endpoint is free, keyless, CORS-enabled,
-    // and returns a compact JSON with locality/city/principalSubdivision.
-    // Total latency is typically 150-400ms in India — negligible next to
-    // the GPS fix. If it fails (network hiccup, endpoint down, offline
-    // shell), we still return "lat,lng" so the pin link works — the
-    // label just won't be there.
-    //
-    // The 2.5s timeout is intentional: we don't want a slow geocoder
-    // holding up the vendor's next scan. Beyond that we ship the raw
-    // coords; a background retry would add complexity for little gain.
-    const url = `https://api.bigdatacloud.net/data/reverse-geocode-client`
-              + `?latitude=${coords.lat}&longitude=${coords.lng}&localityLanguage=en`;
-    try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 2500);
-        const resp = await fetch(url, { signal: ctrl.signal });
-        clearTimeout(t);
-        if (!resp.ok) return `${coords.lat},${coords.lng}`;
-        const j = await resp.json();
-
-        // Prefer the most human-recognisable pair — the neighbourhood /
-        // locality and the city. Fallbacks cover countries where those
-        // fields are empty (e.g. some rural GPS fixes only fill
-        // principalSubdivision).
-        const primary =
-            j.locality || j.city || j.localityInfo?.administrative?.[3]?.name || null;
-        const secondary =
-            j.city && j.city !== primary ? j.city
-            : j.principalSubdivision || j.countryName || null;
-
-        const label = [primary, secondary].filter(Boolean).join(", ");
-        return label
-            ? `${coords.lat},${coords.lng}|${label}`
-            : `${coords.lat},${coords.lng}`;
-    } catch {
-        // AbortError / network — degrade gracefully to raw coords.
-        return `${coords.lat},${coords.lng}`;
-    }
 };
 
 // ─── Role-based permission priming ─────────────────────────────────

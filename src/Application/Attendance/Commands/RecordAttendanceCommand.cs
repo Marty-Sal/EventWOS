@@ -1,6 +1,7 @@
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Attendance.DTOs;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Attendance.Geo;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
@@ -21,7 +22,11 @@ public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCo
 {
     private readonly IAppDbContext _db;
     private readonly IUnitOfWork   _uow;
-    public RecordAttendanceHandler(IAppDbContext db, IUnitOfWork uow) { _db = db; _uow = uow; }
+    private readonly IGeoLocationService _geo;
+    public RecordAttendanceHandler(IAppDbContext db, IUnitOfWork uow, IGeoLocationService geo)
+    {
+        _db  = db; _uow = uow; _geo = geo;
+    }
 
     public async Task<Result<AttendanceRecordDto>> Handle(RecordAttendanceCommand req, CancellationToken ct)
     {
@@ -70,9 +75,13 @@ public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCo
                 "Attendance.AlreadyCheckedOut",
                 "You have already checked out for this event."));
 
+        // Enrich "lat,lng" → "lat,lng|City, State, Country" using the
+        // embedded GeoNames dataset. See RecordAttendanceHandler for the
+        // matching enrichment on QR-verified check-ins.
+        var enrichedLocation = _geo.Enrich(req.Location);
         var record = new AttendanceRecord(
             assignment.Id, assignment.EventId, assignment.CrewId.Value,
-            action, req.Location, req.RecordedByUserId);
+            action, enrichedLocation, req.RecordedByUserId);
 
         _db.AttendanceRecords.Add(record);
 

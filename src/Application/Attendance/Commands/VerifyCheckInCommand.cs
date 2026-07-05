@@ -1,5 +1,6 @@
 using EventWOS.Application.Attendance.DTOs;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Attendance.Geo;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
@@ -36,12 +37,16 @@ public sealed class VerifyCheckInHandler
     private readonly IAppDbContext _db;
     private readonly IUnitOfWork   _uow;
     private readonly INotificationPusher _push;
+    private readonly IGeoLocationService _geo;
 
-    public VerifyCheckInHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    public VerifyCheckInHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
+        IGeoLocationService geo)
     {
         _db   = db;
         _uow  = uow;
         _push = push;
+        _geo  = geo;
     }
 
     public async Task<Result<CheckInVerifyResultDto>> Handle(
@@ -138,7 +143,11 @@ public sealed class VerifyCheckInHandler
             eventId:          assignment.EventId,
             crewId:           assignment.Crew.Id,
             action:           AttendanceAction.CheckIn,
-            location:         req.Location,
+            // Enrich "lat,lng" → "lat,lng|City, State, Country" via the
+            // embedded GeoNames cities15000 dataset. Idempotent: rows
+            // already carrying a "|address" tail pass through untouched;
+            // null / "unavailable:*" / unparseable inputs pass through too.
+            location:         _geo.Enrich(req.Location),
             recordedByUserId: req.VerifierUserId.ToString());
 
         _db.AttendanceRecords.Add(attendance);
