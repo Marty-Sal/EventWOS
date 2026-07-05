@@ -1164,17 +1164,17 @@ BEGIN
     END IF;
 
     -- ═══ attendance_records — location split (Phase F) ══════════════════════
-    -- Rationale: the single "location" column held one of:
-    --   * "lat,lng"           — raw fix, no address label
-    --   * "lat,lng|Address"   — coord + address (transient BigDataCloud era)
-    --   * "unavailable:<c>"   — GPS refused/failed
-    --   * NULL / ""           — no fix attempted (legacy rows)
+    -- Rationale: the single location column held one of:
+    --   * lat,lng           — raw fix, no address label
+    --   * lat,lng|Address   — coord + address (transient BigDataCloud era)
+    --   * unavailable:<c>   — GPS refused/failed
+    --   * NULL /            — no fix attempted (legacy rows)
     --
     -- Product decision: split into two typed columns:
-    --   * location_address (VARCHAR 200)  — human-readable, e.g. "Airoli, Navi Mumbai"
-    --   * location_coords  (VARCHAR 30)   — "lat,lng" for the map link
+    --   * location_address (VARCHAR 200)  — human-readable, e.g. Airoli, Navi Mumbai
+    --   * location_coords  (VARCHAR 30)   — lat,lng for the map link
     --
-    -- The old "location" column is KEPT (never dropped) so that any tool
+    -- The old location column is KEPT (never dropped) so that any tool
     -- that queried it historically still works during transition. Only
     -- the domain model unmaps it — reads/writes from EF now flow to the
     -- two new columns. A separate one-shot backfill (see below) copies
@@ -1191,14 +1191,14 @@ BEGIN
         RAISE NOTICE 'Added attendance_records.location_coords';
     END IF;
 
-    -- One-shot backfill from the legacy "location" column into
+    -- One-shot backfill from the legacy location column into
     -- location_coords / location_address. Only touches rows whose new
     -- columns are BOTH still null AND whose legacy column is non-empty
-    -- and non-"unavailable" — so the patch is safe to re-run every
+    -- and non-unavailable — so the patch is safe to re-run every
     -- startup (idempotent).
     IF EXISTS (SELECT 1 FROM information_schema.columns
                WHERE table_name='attendance_records' AND column_name='location') THEN
-        -- (a) "lat,lng|Address" — split on the pipe.
+        -- (a) lat,lng|Address — split on the pipe.
         UPDATE attendance_records
            SET location_coords  = split_part(location, '|', 1),
                location_address = NULLIF(split_part(location, '|', 2), '')
@@ -1207,7 +1207,7 @@ BEGIN
            AND location IS NOT NULL
            AND position('|' IN location) > 0;
 
-        -- (b) pure "lat,lng" (matches "num,num" with optional decimals) —
+        -- (b) pure lat,lng (matches num,num with optional decimals) —
         -- copy into coords, leave address NULL for a later geocode.
         UPDATE attendance_records
            SET location_coords = location
