@@ -1537,11 +1537,6 @@ else
     private bool                      _assigning;
     private string?                   _assignError;
     private string                    _assignMode = "both"; // "crew" | "vendor" | "both" 
-    // Phase D step 4 (UX): legacy field — kept for source compat with
-    // any reset paths. Multi-shift picking now happens in the dedicated
-    // modal (_multiShiftModalOpen) instead of an inline <select>.
-    private string                    _assignShiftId = "";
-
     // Modal
     private bool              _showEventModal;
     private EventListItemDto? _editingEvent;
@@ -1672,7 +1667,6 @@ else
         _allocSectionOpen = false;
         _allocError       = null;
         _selectedEventShifts = await EventApi.GetEventShiftsAsync(ev.Id);
-        _assignShiftId       = "";   // reset the shift picker for the new event
         if (_selectedEventShifts is not null)
         {
             foreach (var sh in _selectedEventShifts)

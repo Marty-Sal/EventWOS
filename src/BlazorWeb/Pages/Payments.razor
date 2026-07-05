@@ -801,7 +801,6 @@
     // Assignment auto-resolve
     private bool   _pmtAssignmentLoading;
     private Guid?  _pmtResolvedAssignmentId;
-    private bool   _pmtAssignmentAutoCreated;   // true when we created it on-the-fly
     private string _pmtManualAssignmentId = "";
 
     // Form fields
@@ -905,7 +904,6 @@
     {
         _pmtSelectedEvent            = null;
         _pmtResolvedAssignmentId     = null;
-        _pmtAssignmentAutoCreated    = false;
         _pmtManualAssignmentId       = "";
     }
 
@@ -939,7 +937,6 @@
         _pmtSelectedVendor           = null;
         _pmtSelectedCrew             = null;
         _pmtResolvedAssignmentId     = null;
-        _pmtAssignmentAutoCreated    = false;
         _pmtManualAssignmentId       = "";
     }
 
@@ -969,7 +966,6 @@
     {
         _pmtSelectedCrew             = null;
         _pmtResolvedAssignmentId     = null;
-        _pmtAssignmentAutoCreated    = false;
         _pmtManualAssignmentId       = "";
     }
 
@@ -981,7 +977,6 @@
 
         _pmtAssignmentLoading    = true;
         _pmtResolvedAssignmentId = null;
-        _pmtAssignmentAutoCreated = false;
         StateHasChanged();
 
         try
@@ -1006,7 +1001,6 @@
                 if (ok && assignmentId.HasValue)
                 {
                     _pmtResolvedAssignmentId  = assignmentId.Value;
-                    _pmtAssignmentAutoCreated = true;
                 }
             }
         }
@@ -1053,7 +1047,7 @@
         _pmtSelectedEvent        = null; _pmtEventSearch    = ""; _pmtEventResults.Clear();
         _pmtSelectedVendor       = null; _pmtVendorSearch   = ""; _pmtVendorResults.Clear();
         _pmtSelectedCrew         = null; _pmtCrewSearch     = ""; _pmtCrewResults.Clear();
-        _pmtResolvedAssignmentId = null; _pmtAssignmentAutoCreated = false; _pmtManualAssignmentId = "";
+        _pmtResolvedAssignmentId = null; _pmtManualAssignmentId = "";
         _pmtAmount = 0; _pmtNotes = null;
         _showCreatePayment = true;
     }
