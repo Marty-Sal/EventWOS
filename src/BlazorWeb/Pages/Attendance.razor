@@ -32,17 +32,20 @@
             <h2 class="text-lg font-bold text-gray-800">Attendance</h2>
             <p class="text-sm text-gray-500 mt-0.5">Check-in / check-out records and per-event rollup across all events.</p>
         </div>
-        <div class="flex items-center gap-2">
-            <button @onclick="DownloadCurrentTabAsync" disabled="@_downloading"
-                    title="Download current tab as Excel — honours your filters"
-                    class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50">
-                @(_downloading ? "Preparing…" : "📥 Excel")
-            </button>
-            <button @onclick="RefreshAsync" disabled="@_loading"
-                    class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50">
-                🔄 Refresh
-            </button>
-        </div>
+        @if (_tab != "scan")
+        {
+            <div class="flex items-center gap-2">
+                <button @onclick="DownloadCurrentTabAsync" disabled="@_downloading"
+                        title="Download current tab as Excel — honours your filters"
+                        class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50">
+                    @(_downloading ? "Preparing…" : "📥 Excel")
+                </button>
+                <button @onclick="RefreshAsync" disabled="@_loading"
+                        class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50">
+                    🔄 Refresh
+                </button>
+            </div>
+        }
     </div>
 
     @* ── Tabs ─────────────────────────────────────────────────────── *@
