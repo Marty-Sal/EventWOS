@@ -772,10 +772,35 @@
         _lastScanError = null;
         StateHasChanged();
 
-        // Opportunistic location send. If the first GPS fix hasn't landed
-        // yet (rare — usually resolves in <1s on warm mobile radios), we
-        // send null and the server just skips the column. Next scan
-        // benefits from the cache.
+        // Location send — with a bounded wait for the first GPS fix.
+        //
+        // Before: the background RefreshLocationAsync() kicked off when
+        // the scanner started, but on fast mobile hardware the vendor
+        // scans a QR within ~1 second, well before getCurrentPosition()
+        // returns. _lastLocation was still null, we sent null, and the
+        // Attendance row landed with location_coords = null — hence
+        // the em-dash in the Logs table.
+        //
+        // Now: if _lastLocation is still null when a scan lands, we
+        // wait for the pending GPS fix up to 4 s. Beyond that, ship
+        // the verify without a location rather than blocking the
+        // vendor. In practice mobile GPS resolves in 500-1500 ms
+        // with maximumAge=60s, so the wait is usually invisible.
+        if (string.IsNullOrWhiteSpace(_lastLocation))
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+                var loc = await JS.InvokeAsync<string?>(cts.Token,
+                    "eventwosCheckin.getPosition");
+                if (!string.IsNullOrWhiteSpace(loc)) _lastLocation = loc;
+            }
+            catch
+            {
+                // Timeout, prerender, or JS unavailable — proceed with null.
+            }
+        }
+
         var result = await CheckInApi.VerifyAsync(code, location: _lastLocation);
 
         if (result.Success && result.Data is not null)

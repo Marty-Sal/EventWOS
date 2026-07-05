@@ -16,6 +16,31 @@ COPY . .
 ARG API_BASE_URL=https://eventwos-production.up.railway.app
 RUN echo "{\"ApiBaseUrl\": \"${API_BASE_URL}\"}" > wwwroot/appsettings.json
 
+# ─── Version stamp ─────────────────────────────────────────────────────
+# Railway/CI passes GIT_COMMIT_SHA as a build arg (or leave blank for
+# local docker build → falls back to "dev"). The build timestamp is
+# always emitted. The Blazor sidebar reads /version.json at startup
+# and shows a small chip so we can visually confirm which build a
+# given browser session is running — invaluable when triaging
+# "did my fix deploy?" or "is the user on a stale cache?" reports.
+# Try in this order:
+#   1. Railway's builtin RAILWAY_GIT_COMMIT_SHA env (available at build)
+#   2. `git rev-parse HEAD` — works when .git is in the Docker context
+#   3. Fall back to a timestamp-derived 7-char pseudo-SHA
+# In every case a UTC ISO timestamp is emitted, so the chip is always
+# meaningful even without a real commit hash.
+ARG RAILWAY_GIT_COMMIT_SHA=""
+RUN BUILD_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
+    if [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
+        SHORT_SHA=$(echo "${RAILWAY_GIT_COMMIT_SHA}" | cut -c1-7); \
+    elif [ -d .git ] && command -v git >/dev/null 2>&1 && git rev-parse HEAD >/dev/null 2>&1; then \
+        SHORT_SHA=$(git rev-parse --short=7 HEAD); \
+    else \
+        SHORT_SHA=$(date -u +%s | sha256sum | cut -c1-7); \
+    fi && \
+    echo "{\"sha\":\"${SHORT_SHA}\",\"builtAt\":\"${BUILD_TS}\"}" > wwwroot/version.json && \
+    echo "Version stamp: ${SHORT_SHA} @ ${BUILD_TS}"
+
 # Publish Blazor WASM
 RUN dotnet publish EventWOS.BlazorWeb.csproj \
     -c Release \

@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@using System.Net.Http.Json
 @inject NavigationManager Nav
 @inject AppAuthStateProvider AuthState
 @inject IAuthApiService AuthApi
@@ -180,6 +181,21 @@
                     </Authorized>
                 </AuthorizeView>
             </div>
+
+            <!-- Build version chip — reads /version.json emitted by the
+                 Dockerfile. Tiny, unobtrusive, but decisive when
+                 triaging cache/deploy questions ("is the user on the
+                 fix?"). Shows short SHA + relative build time; the
+                 title tooltip carries the full ISO timestamp. -->
+            @if (!string.IsNullOrWhiteSpace(_buildSha))
+            {
+                <div class="px-4 pb-3 -mt-1">
+                    <div class="text-[10px] text-gray-500 font-mono tracking-wide"
+                         title="@($"Build {_buildSha} @ {_buildAt:u}")">
+                        build @_buildSha · @_buildAgo
+                    </div>
+                </div>
+            }
         </div>
     </aside>
 
@@ -263,6 +279,9 @@
         catch { }
         Hub.ConnectionStateChanged += () => InvokeAsync(StateHasChanged);
 
+        // Fire-and-forget the build-stamp fetch — never blocks layout render.
+        _ = LoadBuildStampAsync();
+
         // ── Role-based permission priming ─────────────────────────
         // Fire OS-level prompts right after login (calm moment) instead
         // of mid-scan (busy moment). One-shot per session using
@@ -325,6 +344,52 @@
     {
         _ = InvokeAsync(async () => { await LoadApprovalCountAsync(); StateHasChanged(); });
     }
+
+    // ── Build version chip state ─────────────────────────────────────
+    // Populated once at layout init from /version.json (produced by
+    // the Dockerfile). Silent-fail on 404 or malformed JSON — the
+    // chip just doesn't render, no user-visible error.
+    private string  _buildSha = "";
+    private DateTime _buildAt;
+    private string  _buildAgo = "";
+
+    private async Task LoadBuildStampAsync()
+    {
+        try
+        {
+            using var http = new HttpClient
+            {
+                BaseAddress = new Uri(Nav.BaseUri)
+            };
+            // Cache-bust so we always see the CURRENT deploy's version,
+            // never a stale one the browser cached from a previous visit.
+            var url = $"version.json?_cb={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+            var v = await http.GetFromJsonAsync<VersionStamp>(url);
+            if (v is not null && !string.IsNullOrWhiteSpace(v.Sha))
+            {
+                _buildSha = v.Sha;
+                _buildAt  = v.BuiltAt;
+                _buildAgo = FormatAgo(v.BuiltAt);
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // No version.json (local dev, or Dockerfile skipped) — no chip.
+        }
+    }
+
+    private static string FormatAgo(DateTime when)
+    {
+        var delta = DateTime.UtcNow - when.ToUniversalTime();
+        if (delta.TotalSeconds < 60)    return "just now";
+        if (delta.TotalMinutes < 60)    return $"{(int)delta.TotalMinutes}m ago";
+        if (delta.TotalHours < 24)      return $"{(int)delta.TotalHours}h ago";
+        if (delta.TotalDays < 30)       return $"{(int)delta.TotalDays}d ago";
+        return when.ToString("yyyy-MM-dd");
+    }
+
+    private sealed record VersionStamp(string Sha, DateTime BuiltAt);
 
     private async Task LogoutAsync()
     {
