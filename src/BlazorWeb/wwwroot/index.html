@@ -96,6 +96,71 @@
         <a class="dismiss">🗙</a>
     </div>
 
+    <!-- ═══ Stale-cache auto-recovery ══════════════════════════════════════
+         When Railway deploys a new build, browsers that cached the old
+         blazor.boot.json will download the new .wasm bytes and compute
+         a hash that doesn't match the old manifest's SRI value. Blazor
+         throws:
+           "Failed to find a valid digest in the 'integrity' attribute..."
+         and the whole app halts on the "An unhandled error" banner.
+
+         Nginx now serves blazor.boot.json with no-cache, so the FIRST
+         visit after deploy sees the new manifest. But for users who
+         still have the old boot.json in their browser cache from a
+         previous visit (or whose ISP caches it), we self-heal:
+
+           1. Listen for the SRI / fetch failure that Blazor raises.
+           2. Auto-reload with a cache-bust query string, exactly ONCE
+              per session (sessionStorage guard) so we can't loop.
+
+         The one-shot flag lives in sessionStorage — cleared on tab
+         close, so a genuinely broken deploy still surfaces the error
+         instead of looping the user forever.
+    -->
+    <script>
+        (function () {
+            const KEY = "eventwos-sri-recover";
+            const isSriOr504 = function (msg) {
+                if (!msg) return false;
+                const m = String(msg);
+                return m.includes("integrity") ||
+                       m.includes("SRI's integrity") ||
+                       m.includes("Failed to find a valid digest") ||
+                       m.includes("504") ||
+                       (m.includes("Failed to fetch") && m.includes("_framework/"));
+            };
+            const bustAndReload = function () {
+                if (sessionStorage.getItem(KEY) === "1") return; // already tried
+                sessionStorage.setItem(KEY, "1");
+                const url = new URL(window.location.href);
+                url.searchParams.set("_cb", Date.now().toString());
+                window.location.replace(url.toString());
+            };
+            window.addEventListener("error", function (e) {
+                if (isSriOr504(e && (e.message || (e.error && e.error.message)))) {
+                    bustAndReload();
+                }
+            }, true);
+            window.addEventListener("unhandledrejection", function (e) {
+                const msg = e && e.reason && (e.reason.message || e.reason.toString());
+                if (isSriOr504(msg)) bustAndReload();
+            });
+            // Clear the flag once Blazor has successfully started — from
+            // that point on, any *later* SRI failure is a real problem,
+            // not a stale-cache one, and the user should see the banner.
+            window.addEventListener("load", function () {
+                setTimeout(function () {
+                    // Blazor's "started" signal is the appearance of any
+                    // rendered content in <div id="app">. Simple check.
+                    const app = document.getElementById("app");
+                    if (app && app.children.length > 0 && !app.querySelector(".loader")) {
+                        sessionStorage.removeItem(KEY);
+                    }
+                }, 8000); // give WASM time to boot on slow devices
+            });
+        })();
+    </script>
+
     <script src="_framework/blazor.webassembly.js"></script>
     <!-- QR-verified check-in helpers (renderQr / startScanner / stopScanner).
          Their heavy deps are lazy-loaded from a CDN inside the module. -->
