@@ -1,39 +1,48 @@
 @*
-    LocationPin — renders an AttendanceRecord.Location value as a
-    tiny pin link that opens Google Maps in a new tab, plus the
-    reverse-geocoded label (if any).
+    LocationPin — renders the split AttendanceRecord location fields
+    (LocationAddress + LocationCoords) as a compact "📍 Address" link
+    that opens the exact coordinates on Google Maps.
 
-    Storage format (produced by wwwroot/js/checkin.js getPosition):
-      • "lat,lng|Short Address"   → pin link + label
-      • "lat,lng"                 → pin link, no label (legacy rows)
-      • "unavailable:<code>"      → em-dash (permission denied etc.)
-      • null / empty              → em-dash
+    Contract (from the two API endpoints that write the row):
 
-    Keeping the parsing entirely on the client means we never touched
-    the schema — Location stays a plain string column, and any old
-    "lat,lng" rows written before this commit still render a working
-    pin.
+      Address          Coords              Render
+      ───────────────  ──────────────────  ──────────────────────────────
+      "Airoli, ..."    "19.157020,73.02"   📍 Airoli, ... → maps?q=coords
+      null             "19.157020,73.02"   📍 View on map → maps?q=coords
+      "Airoli, ..."    null                📍 Airoli, ... (no link)
+      null             null                — (em-dash)
+
+    The middle two states occur when Nominatim was slow/rate-limited
+    (address null; coords present) or, in rare cases, when a legacy
+    row was hand-edited (address present; coords absent). Both must
+    render sensibly.
 *@
 
-@if (string.IsNullOrWhiteSpace(Value) || Value.StartsWith("unavailable"))
+@if (string.IsNullOrWhiteSpace(Address) && string.IsNullOrWhiteSpace(Coords))
 {
     <span class="text-gray-400">—</span>
 }
-else
+else if (!string.IsNullOrWhiteSpace(Coords))
 {
-    var parts    = Value.Split(''|'', 2);
-    var coords   = parts[0];
-    var label    = parts.Length > 1 ? parts[1] : null;
-    var mapsUrl  = $"https://www.google.com/maps?q={coords}";
-
+    var label = string.IsNullOrWhiteSpace(Address) ? "View on map" : Address;
+    var mapsUrl = $"https://www.google.com/maps?q={Coords}";
     <a href="@mapsUrl" target="_blank" rel="noopener"
        class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 hover:underline"
-       title="@coords">
+       title="@Coords">
         <span>📍</span>
-        <span>@(label ?? "View on map")</span>
+        <span>@label</span>
     </a>
+}
+else
+{
+    @* Coords absent — no map link, just the address text with the pin. *@
+    <span class="inline-flex items-center gap-1 text-gray-600" title="No coordinates recorded">
+        <span>📍</span>
+        <span>@Address</span>
+    </span>
 }
 
 @code {
-    [Parameter] public string? Value { get; set; }
+    [Parameter] public string? Address { get; set; }
+    [Parameter] public string? Coords  { get; set; }
 }

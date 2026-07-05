@@ -15,7 +15,8 @@ public sealed record AttendanceListItemDto(
     string   CrewName,
     string   Action,
     DateTime RecordedAt,
-    string?  Location,
+    string?  LocationAddress,
+    string?  LocationCoords,
     string?  RecordedBy,         // raw user id — kept for back-compat with existing UI
     string?  RecordedByName = null, // Phase D step 22: friendly name for export + filter UX
     // ── Phase D step 28: shift context. An assignment is tied to ONE
@@ -128,7 +129,8 @@ public sealed class GetAttendanceListHandler
                 CrewName   = r.Crew.FullName,
                 Action     = r.Action.ToString(),
                 r.RecordedAt,
-                r.Location,
+                r.LocationAddress,
+                r.LocationCoords,
                 r.RecordedByUserId,
                 RecordedByName = r.RecordedByUserId == null
                     ? null
@@ -165,7 +167,7 @@ public sealed class GetAttendanceListHandler
         var dtos = items.Select(x => new AttendanceListItemDto(
             x.Id, x.AssignmentId, x.EventId, x.EventTitle,
             x.CrewId, x.CrewName, x.Action,
-            x.RecordedAt, x.Location, x.RecordedByUserId, x.RecordedByName,
+            x.RecordedAt, x.LocationAddress, x.LocationCoords, x.RecordedByUserId, x.RecordedByName,
             x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt)).ToList();
 
         return Result.Success(PagedResult<AttendanceListItemDto>.Create(
@@ -204,7 +206,7 @@ public sealed class GetMyAttendanceHandler
             {
                 r.Id, r.AssignmentId, r.EventId, EventTitle = r.Event.Title,
                 r.CrewId, CrewName = r.Crew.FullName, Action = r.Action.ToString(),
-                r.RecordedAt, r.Location, r.RecordedByUserId,
+                r.RecordedAt, r.LocationAddress, r.LocationCoords, r.RecordedByUserId,
                 ShiftScopeName = _db.EventAssignments
                     .Where(a => a.Id == r.AssignmentId)
                     .Select(a => a.ShiftId)
@@ -235,7 +237,7 @@ public sealed class GetMyAttendanceHandler
         var items = raw.Select(x => new AttendanceListItemDto(
             x.Id, x.AssignmentId, x.EventId, x.EventTitle,
             x.CrewId, x.CrewName, x.Action,
-            x.RecordedAt, x.Location, x.RecordedByUserId, null,
+            x.RecordedAt, x.LocationAddress, x.LocationCoords, x.RecordedByUserId, null,
             x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt)).ToList();
 
         return Result.Success(PagedResult<AttendanceListItemDto>.Create(items, total, req.PageNumber, req.PageSize));

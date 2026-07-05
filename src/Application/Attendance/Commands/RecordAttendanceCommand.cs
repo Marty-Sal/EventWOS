@@ -75,13 +75,13 @@ public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCo
                 "Attendance.AlreadyCheckedOut",
                 "You have already checked out for this event."));
 
-        // Enrich "lat,lng" → "lat,lng|City, State, Country" using the
-        // embedded GeoNames dataset. See RecordAttendanceHandler for the
-        // matching enrichment on QR-verified check-ins.
-        var enrichedLocation = _geo.Enrich(req.Location);
+        // Reverse-geocode the client's "lat,lng" via Nominatim. Same
+        // pattern as VerifyCheckInHandler — awaited with a 2 s timeout;
+        // (coords, null) is the graceful-fallback on any hiccup.
+        var (coords, address) = await _geo.LookupAsync(req.Location, ct);
         var record = new AttendanceRecord(
             assignment.Id, assignment.EventId, assignment.CrewId.Value,
-            action, enrichedLocation, req.RecordedByUserId);
+            action, address, coords, req.RecordedByUserId);
 
         _db.AttendanceRecords.Add(record);
 
@@ -129,6 +129,7 @@ public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCo
 
         return Result.Success(new AttendanceRecordDto(
             record.Id, record.AssignmentId, record.EventId, record.CrewId,
-            assignment.Crew.FullName, action.ToString(), record.RecordedAt, record.Location));
+            assignment.Crew.FullName, action.ToString(), record.RecordedAt,
+            record.LocationAddress, record.LocationCoords));
     }
 }

@@ -47,7 +47,12 @@ internal static class AttendanceExcelExporter
             ws.Cell(row, 4).Value = HumaniseAction(r.Action);
             ws.Cell(row, 5).Value = r.RecordedAt;
             ws.Cell(row, 5).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
-            ws.Cell(row, 6).Value = r.Location ?? "";
+            // Phase F: prefer the human-readable address; fall back
+            // to raw coords when Nominatim didn't label the row. Empty
+            // string when neither exists (e.g. GPS was denied).
+            ws.Cell(row, 6).Value = r.LocationAddress
+                                    ?? r.LocationCoords
+                                    ?? "";
             ws.Cell(row, 7).Value = r.RecordedByName
                                     ?? (r.RecordedBy is null ? "" : r.RecordedBy);
         }

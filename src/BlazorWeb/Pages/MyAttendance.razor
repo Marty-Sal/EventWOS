@@ -167,7 +167,7 @@
                                         }
                                     </td>
                                     <td class="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">@r.RecordedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</td>
-                                    <td class="px-5 py-3.5 text-xs"><LocationPin Value="@r.Location" /></td>
+                                    <td class="px-5 py-3.5 text-xs"><LocationPin Address="@r.LocationAddress" Coords="@r.LocationCoords" /></td>
                                 </tr>
                             }
                         </tbody>
@@ -280,7 +280,8 @@
 
             _history = (histResp?.Data?.Items ?? Enumerable.Empty<AttendanceItemDto>())
                 .Select(r => new MyAttendanceRecord(
-                    r.EventTitle, r.Action, r.RecordedAt, r.Location,
+                    r.EventTitle, r.Action, r.RecordedAt,
+                    r.LocationAddress, r.LocationCoords,
                     r.ShiftScopeName, r.ShiftStartAt))
                 .ToList();
         }
@@ -362,7 +363,8 @@
         string? ShiftScopeName, DateTime? ShiftStartAt, DateTime? ShiftEndAt);
 
     private sealed record MyAttendanceRecord(
-        string EventTitle, string Action, DateTime RecordedAt, string? Location,
+        string EventTitle, string Action, DateTime RecordedAt,
+        string? LocationAddress, string? LocationCoords,
         string? ShiftScopeName, DateTime? ShiftStartAt);
 
     private sealed record AssignmentDto(
@@ -385,7 +387,9 @@
     private sealed record AttendanceItemDto(
         Guid RecordId, Guid AssignmentId, Guid EventId, string EventTitle,
         Guid CrewId, string CrewName, string Action, DateTime RecordedAt,
-        string? Location, string? RecordedBy,
+        // Phase F: location split into address + coords.
+        string? LocationAddress, string? LocationCoords,
+        string? RecordedBy,
         // Phase D step 28: shift context.
         string? RecordedByName = null,
         string? ShiftScopeName = null,

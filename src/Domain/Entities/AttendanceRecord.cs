@@ -16,14 +16,16 @@ public sealed class AttendanceRecord : BaseEntity
         Guid eventId,
         Guid crewId,
         AttendanceAction action,
-        string? location,
+        string? locationAddress,   // Human-readable, e.g. "Airoli, Navi Mumbai".
+        string? locationCoords,    // Raw "lat,lng" fix from the client, used for the map link.
         string? recordedByUserId)
     {
         AssignmentId     = assignmentId;
         EventId          = eventId;
         CrewId           = crewId;
         Action           = action;
-        Location         = location;
+        LocationAddress  = locationAddress;
+        LocationCoords   = locationCoords;
         RecordedAt       = DateTime.UtcNow;
         RecordedByUserId = recordedByUserId;
     }
@@ -33,8 +35,30 @@ public sealed class AttendanceRecord : BaseEntity
     public Guid             CrewId           { get; private set; }
     public AttendanceAction Action           { get; private set; }
     public DateTime         RecordedAt       { get; private set; }
-    public string?          Location         { get; private set; }
+
+    /// <summary>
+    /// Human-readable short address (e.g. "Airoli, Navi Mumbai"). Written
+    /// once at check-in by <c>INominatimGeoService</c>. Nullable — geocoding
+    /// may time out, be rate-limited, or the row may be a legacy pre-split row.
+    /// </summary>
+    public string?          LocationAddress  { get; private set; }
+
+    /// <summary>
+    /// Raw "lat,lng" (6 decimal places) from the client's
+    /// navigator.geolocation fix. Powers the "View on map" link. Nullable
+    /// when the browser refused location or the fix was "unavailable:*".
+    /// </summary>
+    public string?          LocationCoords   { get; private set; }
+
     public string?          RecordedByUserId { get; private set; }
+
+    /// <summary>
+    /// Backfills the address on an existing record — used by the one-shot
+    /// migration that geocodes any pre-split rows whose coords were stored
+    /// in the legacy <c>Location</c> column. Deliberately restricted to
+    /// address-only; coords, action, timestamps, and crew are immutable.
+    /// </summary>
+    public void SetLocationAddress(string? address) => LocationAddress = address;
 
     // Navigation
     public EventAssignment Assignment { get; private set; } = default!;

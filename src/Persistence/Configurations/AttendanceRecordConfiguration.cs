@@ -18,7 +18,15 @@ public sealed class AttendanceRecordConfiguration : IEntityTypeConfiguration<Att
         builder.Property(r => r.CrewId)          .HasColumnName("crew_id");
         builder.Property(r => r.Action)          .HasColumnName("action").HasConversion<int>();
         builder.Property(r => r.RecordedAt)      .HasColumnName("recorded_at");
-        builder.Property(r => r.Location)        .HasColumnName("location").HasMaxLength(500);
+        // ── Location (split into two columns; see AttendanceRecord.cs) ─
+        // The legacy "location" DB column still exists (idempotent
+        // startup patch keeps it around for older rows written before
+        // this split) but the domain no longer maps it — MSBuild would
+        // fail if we tried to map two properties to the same column.
+        // A one-shot migration copies any legacy values into the new
+        // columns; see Program.cs Location-Split patch.
+        builder.Property(r => r.LocationAddress).HasColumnName("location_address").HasMaxLength(200);
+        builder.Property(r => r.LocationCoords) .HasColumnName("location_coords") .HasMaxLength(30);
         builder.Property(r => r.RecordedByUserId).HasColumnName("recorded_by_user_id").HasMaxLength(100);
 
         // Audit

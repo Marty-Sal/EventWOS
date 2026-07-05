@@ -72,12 +72,19 @@ public sealed class AdminMarkAttendedHandler : IRequestHandler<AdminMarkAttended
 
         // Synthetic attendance log entry so /attendance reflects the correction.
         // Action = AdminOverride distinguishes it from real CheckIn/CheckOut events.
+        // Repurpose LocationAddress to carry the admin's override
+        // reason — AdminOverride rows have no GPS fix (they're not a
+        // real check-in), and it's convenient to surface the reason
+        // in the same Location column of the Logs UI. LocationCoords
+        // stays null so LocationPin renders as a plain "📍 reason"
+        // span with no map link.
         var record = new AttendanceRecord(
             assignmentId:     assignment.Id,
             eventId:          assignment.EventId,
             crewId:           assignment.CrewId!.Value,
             action:           AttendanceAction.AdminOverride,
-            location:         assignment.AttendanceNote, // the human-readable reason
+            locationAddress:  assignment.AttendanceNote,
+            locationCoords:   null,
             recordedByUserId: req.AdminUserId.ToString());
 
         _db.AttendanceRecords.Add(record);

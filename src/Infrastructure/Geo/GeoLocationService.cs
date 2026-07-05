@@ -1,184 +1,217 @@
+using System.Collections.Concurrent;
 using System.Globalization;
-using System.IO.Compression;
-using System.Reflection;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using EventWOS.Application.Attendance.Geo;
 using Microsoft.Extensions.Logging;
 
 namespace EventWOS.Infrastructure.Geo;
 
 /// <summary>
-/// In-process reverse geocoder backed by an embedded GeoNames
-/// cities15000 dataset (~34k cities worldwide, ~716 KB gzipped, ~1.6 MB
-/// in memory). Loads once at startup into a static 2-D KD-tree keyed
-/// by lat/lng; per-request lookups are pure CPU (typically &lt; 50µs)
-/// with no external network dependency.
+/// Reverse-geocodes coordinates via OpenStreetMap\'s Nominatim service.
 ///
-/// Why an embedded dataset and not a third-party API:
-///   • Deterministic latency — no 100-800 ms round-trip variability.
-///   • No rate limits, no attribution requirement to render at request
-///     time, no CORS concerns, no future-proofing risk if a vendor
-///     changes their terms.
-///   • Zero PII / coord leakage to third parties — user coordinates
-///     never leave our process.
-///   • Works offline (Railway deploys, on-prem, etc.).
+/// Nominatim usage policy summary (see
+/// https://operations.osmfoundation.org/policies/nominatim/):
+///   • Max 1 request per second per unique IP.
+///   • A valid identifying User-Agent is REQUIRED — no browsers, no
+///     "curl", no blanks. We send "EventWOS/1.0 (contact via
+///     admin@eventwos.local)". Update the contact if we ever ship a
+///     public support address.
+///   • No bulk / batch geocoding of large datasets. Our workload is
+///     one lookup per QR check-in — far under any reasonable interpretation.
+///   • Attribution: "© OpenStreetMap contributors" — surfaced in the
+///     app footer / about page separately (LocationPin does not need
+///     to render it at each row).
 ///
-/// Trade-off: only names the nearest populated place ≥ 15k population.
-/// This is coarser than a street-level reverse geocoder (we won\'t say
-/// "Prabhadevi" for a coord in that neighbourhood — we\'ll say
-/// "Mumbai"). Acceptable for attendance auditing: the question is
-/// "which venue / which city", not "which building".
-///
-/// The KD-tree uses squared-degree distance for comparison — no need
-/// to convert to metres or run Haversine because nearest-neighbour in
-/// degree space picks the same winner as nearest-neighbour in metres
-/// for the small local search radii involved.
+/// Design choices:
+///   • Sync (awaited) call on the check-in code path with a 2-second
+///     HTTP timeout. Nominatim is typically 300-600 ms; the 2 s cap
+///     protects the check-in UX during their slow moments. On timeout
+///     we persist coords only — the address stays NULL, the pin still
+///     works, and a background retry could fill it in later if we
+///     ever build one.
+///   • Per-second in-process throttle (SemaphoreSlim + interval gate).
+///     For a single API instance this suffices; if we ever run more
+///     than one replica, we would move the throttle to Redis. Not
+///     worth the complexity today.
+///   • 24-hour in-memory LRU cache keyed by "lat,lng" truncated to 4
+///     decimal places (~11 m grid). Repeat check-ins at the same
+///     venue skip the network entirely. Bounded at 5000 entries so
+///     the container memory footprint stays flat.
+///   • Never throws. Any transport / parse failure is logged at
+///     warning and returns Address = null. Coords come from the input,
+///     not from Nominatim, so they\'re always returned when parseable.
 /// </summary>
-public sealed class GeoLocationService : IGeoLocationService
+public sealed class GeoLocationService : IGeoLocationService, IDisposable
 {
-    // Static state — dataset is immutable and shared across all instances.
-    private static readonly Lazy<KdTree> _tree = new(LoadTree, isThreadSafe: true);
+    private static readonly HttpClient _http = CreateClient();
+
+    // Rate-limit gate (1 req/s). Combined with the cache this keeps our
+    // effective outbound rate well under Nominatim\'s ceiling even
+    // during a rush.
+    private static readonly SemaphoreSlim _gate = new(1, 1);
+    private static DateTime _lastCallUtc = DateTime.MinValue;
+    private static readonly TimeSpan _minInterval = TimeSpan.FromMilliseconds(1100);
+
+    // Tiny in-memory cache. ConcurrentDictionary + a naive size cap —
+    // when the dictionary crosses 5000 keys we just clear the oldest
+    // half by sampling. Good enough for our scale; simpler than a real
+    // LRU implementation and doesn\'t pull in a caching package.
+    private static readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
+    private const int CacheMaxSize = 5000;
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
     private readonly ILogger<GeoLocationService> _log;
     public GeoLocationService(ILogger<GeoLocationService> log) => _log = log;
 
-    public string Enrich(string? raw)
+    private static HttpClient CreateClient()
     {
-        if (string.IsNullOrWhiteSpace(raw)) return raw ?? string.Empty;
-        // Already enriched (idempotent — safe to double-call).
-        if (raw.Contains('|')) return raw;
-        // Client signalled "no fix" — pass through as-is; the frontend
-        // renders these as em-dash.
+        var c = new HttpClient
+        {
+            BaseAddress = new Uri("https://nominatim.openstreetmap.org/"),
+            Timeout     = TimeSpan.FromSeconds(2),
+        };
+        // Nominatim REQUIRES an identifying User-Agent. Requests without
+        // one are blocked with HTTP 403.
+        c.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "EventWOS/1.0 (contact: admin@eventwos.local)");
+        c.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en");
+        return c;
+    }
+
+    public async Task<(string? Coords, string? Address)> LookupAsync(string? raw, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return (null, null);
         if (raw.StartsWith("unavailable", StringComparison.OrdinalIgnoreCase))
-            return raw;
+            return (null, null);
 
-        // Parse "lat,lng" — must be exactly two doubles separated by
-        // a comma. Anything else we return verbatim to avoid corrupting
-        // whatever the caller had (defensive: some legacy paths may
-        // hand-write location strings we\'re not aware of).
-        var parts = raw.Split(',', 2);
-        if (parts.Length != 2) return raw;
-        if (!double.TryParse(parts[0].Trim(), NumberStyles.Float,
-                CultureInfo.InvariantCulture, out var lat)) return raw;
-        if (!double.TryParse(parts[1].Trim(), NumberStyles.Float,
-                CultureInfo.InvariantCulture, out var lng)) return raw;
-        if (lat is < -90 or > 90 || lng is < -180 or > 180) return raw;
+        // Accept both "lat,lng" and legacy "lat,lng|Address" (idempotent
+        // — if the address is already carried through, we honour it and
+        // skip the network hop entirely).
+        var pipeIdx = raw.IndexOf('|');
+        string coordsPart = pipeIdx >= 0 ? raw[..pipeIdx] : raw;
+        string? preExistingAddress = pipeIdx >= 0 ? raw[(pipeIdx + 1)..] : null;
 
+        var parts = coordsPart.Split(',', 2);
+        if (parts.Length != 2) return (null, null);
+        if (!double.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var lat)) return (null, null);
+        if (!double.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var lng)) return (null, null);
+        if (lat is < -90 or > 90 || lng is < -180 or > 180) return (null, null);
+
+        // Canonical coord string — 6 dp, no whitespace.
+        var coords = $"{lat.ToString("0.######", CultureInfo.InvariantCulture)}," +
+                     $"{lng.ToString("0.######", CultureInfo.InvariantCulture)}";
+
+        if (!string.IsNullOrWhiteSpace(preExistingAddress))
+            return (coords, preExistingAddress);
+
+        // Cache key at 4 dp → ~11 m grid. Two check-ins from adjacent
+        // corners of a venue hall share a key.
+        var cacheKey = $"{lat.ToString("0.####", CultureInfo.InvariantCulture)}," +
+                       $"{lng.ToString("0.####", CultureInfo.InvariantCulture)}";
+        if (_cache.TryGetValue(cacheKey, out var hit) && hit.ExpiresUtc > DateTime.UtcNow)
+            return (coords, hit.Address);
+
+        string? address = await CallNominatimAsync(lat, lng, ct);
+
+        // Store in cache even if null — avoids hammering Nominatim for
+        // known-bad or offline coords. The cache TTL is short enough
+        // that a genuinely transient error clears itself.
+        if (_cache.Count >= CacheMaxSize) EvictHalf();
+        _cache[cacheKey] = new CacheEntry(address, DateTime.UtcNow.Add(CacheTtl));
+
+        return (coords, address);
+    }
+
+    private async Task<string?> CallNominatimAsync(double lat, double lng, CancellationToken ct)
+    {
         try
         {
-            var hit = _tree.Value.Nearest(lat, lng);
-            if (hit is null) return raw;
+            // Rate-limit gate — serialises outbound calls to ~1/sec.
+            await _gate.WaitAsync(ct);
+            try
+            {
+                var wait = _minInterval - (DateTime.UtcNow - _lastCallUtc);
+                if (wait > TimeSpan.Zero) await Task.Delay(wait, ct);
+                _lastCallUtc = DateTime.UtcNow;
+            }
+            finally { _gate.Release(); }
 
-            // Format: "City, State, Country" — filter out blanks so we
-            // don\'t emit "Mumbai, , India" for records missing admin1.
-            var label = string.Join(", ",
-                new[] { hit.Name, hit.State, hit.Country }
-                    .Where(s => !string.IsNullOrWhiteSpace(s)));
+            var url = $"reverse?format=jsonv2" +
+                      $"&lat={lat.ToString("0.######", CultureInfo.InvariantCulture)}" +
+                      $"&lon={lng.ToString("0.######", CultureInfo.InvariantCulture)}" +
+                      $"&zoom=14&addressdetails=1";
 
-            return string.IsNullOrEmpty(label) ? raw : $"{raw}|{label}";
+            using var resp = await _http.GetAsync(url, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _log.LogWarning("Nominatim reverse returned {Status} for ({Lat},{Lng})",
+                    (int)resp.StatusCode, lat, lng);
+                return null;
+            }
+
+            using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+
+            if (!doc.RootElement.TryGetProperty("address", out var addr))
+                return null;
+
+            // Build "Locality, City" (or the best available pair) —
+            // Nominatim\'s address block has many optional fields; we
+            // pick the two most human-recognisable ones for India-ish
+            // usage. The suburb/neighbourhood field is preferred over
+            // any admin field because it matches how people describe
+            // where they are ("Airoli, Navi Mumbai" not "Airoli,
+            // Thane, Maharashtra").
+            string? primary   = TryGet(addr, "suburb", "neighbourhood", "hamlet", "village", "town", "quarter", "city_district");
+            string? secondary = TryGet(addr, "city", "town", "municipality", "county");
+
+            // If primary == secondary (small towns Nominatim reports
+            // twice), collapse and step out to the state.
+            if (!string.IsNullOrWhiteSpace(primary) &&
+                string.Equals(primary, secondary, StringComparison.OrdinalIgnoreCase))
+                secondary = TryGet(addr, "state_district", "state", "country");
+
+            var parts = new[] { primary, secondary }
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .ToArray();
+
+            return parts.Length > 0 ? string.Join(", ", parts) : null;
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // HttpClient timeout — expected under load. Log at info, not warn.
+            _log.LogInformation("Nominatim reverse timed out for ({Lat},{Lng})", lat, lng);
+            return null;
         }
         catch (Exception ex)
         {
-            // Never let a geocode failure block a check-in. Log and
-            // return the raw coords — the frontend will still render
-            // a working map pin, just without a label.
-            _log.LogWarning(ex, "GeoLocationService.Enrich failed for {Raw}", raw);
-            return raw;
+            _log.LogWarning(ex, "Nominatim reverse failed for ({Lat},{Lng})", lat, lng);
+            return null;
         }
     }
 
-    // ─── Dataset loading ────────────────────────────────────────────
-    private static KdTree LoadTree()
+    private static string? TryGet(JsonElement addr, params string[] keys)
     {
-        var asm = typeof(GeoLocationService).Assembly;
-
-        // Resource name convention: <DefaultNamespace>.<PathWithDots>
-        // Csproj embeds Infrastructure/Geo/geodata.tsv.gz →
-        // "EventWOS.Infrastructure.Geo.geodata.tsv.gz"
-        const string resourceName = "EventWOS.Infrastructure.Geo.geodata.tsv.gz";
-        using var raw = asm.GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException(
-                $"Embedded geodata resource not found: {resourceName}. " +
-                $"Available: {string.Join(", ", asm.GetManifestResourceNames())}");
-
-        using var gz = new GZipStream(raw, CompressionMode.Decompress);
-        using var reader = new StreamReader(gz);
-
-        var pts = new List<GeoPoint>(capacity: 40_000);
-        string? line;
-        while ((line = reader.ReadLine()) is not null)
-        {
-            // lat<TAB>lng<TAB>Name<TAB>State<TAB>Country
-            var f = line.Split('\t');
-            if (f.Length < 5) continue;
-            if (!double.TryParse(f[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var lat)) continue;
-            if (!double.TryParse(f[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var lng)) continue;
-            pts.Add(new GeoPoint(lat, lng, f[2], f[3], f[4]));
-        }
-
-        return new KdTree(pts);
+        foreach (var k in keys)
+            if (addr.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String)
+            {
+                var s = v.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) return s;
+            }
+        return null;
     }
 
-    internal sealed record GeoPoint(double Lat, double Lng, string Name, string State, string Country);
-
-    // ─── KD-tree — 2-D, alternates split axis (lat/lng) by depth. ──
-    private sealed class KdTree
+    private static void EvictHalf()
     {
-        private readonly Node? _root;
-
-        public KdTree(List<GeoPoint> points)
-            => _root = Build(points, 0, points.Count - 1, depth: 0);
-
-        // Recursive median-split build. We sort a *view* of the list
-        // in-place — O(n log² n) worst case but only runs once at boot.
-        private static Node? Build(List<GeoPoint> pts, int lo, int hi, int depth)
-        {
-            if (lo > hi) return null;
-            var axis = depth % 2;                       // 0 = lat, 1 = lng
-            pts.Sort(lo, hi - lo + 1, Comparer<GeoPoint>.Create(
-                (a, b) => (axis == 0 ? a.Lat : a.Lng)
-                    .CompareTo(axis == 0 ? b.Lat : b.Lng)));
-            var mid = (lo + hi) / 2;
-            return new Node(pts[mid],
-                Build(pts, lo, mid - 1, depth + 1),
-                Build(pts, mid + 1, hi, depth + 1));
-        }
-
-        public GeoPoint? Nearest(double lat, double lng)
-        {
-            if (_root is null) return null;
-            var best = new Best(null, double.MaxValue);
-            NearestRec(_root, lat, lng, 0, best);
-            return best.Point;
-        }
-
-        // Standard KD nearest-neighbour with axis-aligned bound-check pruning.
-        private static void NearestRec(Node node, double lat, double lng, int depth, Best best)
-        {
-            var d = SqrDist(node.Point, lat, lng);
-            if (d < best.Distance) { best.Point = node.Point; best.Distance = d; }
-
-            var axis = depth % 2;
-            var diff = axis == 0 ? lat - node.Point.Lat : lng - node.Point.Lng;
-            var near = diff < 0 ? node.Left : node.Right;
-            var far  = diff < 0 ? node.Right : node.Left;
-
-            if (near is not null) NearestRec(near, lat, lng, depth + 1, best);
-            // Only recurse into the far subtree if the splitting plane
-            // could contain a closer point. diff² is the min distance
-            // from the query point to that plane.
-            if (far is not null && diff * diff < best.Distance)
-                NearestRec(far, lat, lng, depth + 1, best);
-        }
-
-        private static double SqrDist(GeoPoint p, double lat, double lng)
-        {
-            var dLat = p.Lat - lat;
-            var dLng = p.Lng - lng;
-            return dLat * dLat + dLng * dLng;
-        }
-
-        private sealed record Node(GeoPoint Point, Node? Left, Node? Right);
-        private sealed class Best { public GeoPoint? Point; public double Distance;
-            public Best(GeoPoint? p, double d) { Point = p; Distance = d; } }
+        // Not a true LRU — just samples half the keys and drops them.
+        // Cheap, bounded, and preserves the hot set enough for our
+        // usage pattern (repeat check-ins from the same venue).
+        var toRemove = _cache.Keys.Take(_cache.Count / 2).ToList();
+        foreach (var k in toRemove) _cache.TryRemove(k, out _);
     }
+
+    public void Dispose() { /* _http is static; nothing per-instance. */ }
+
+    private sealed record CacheEntry(string? Address, DateTime ExpiresUtc);
 }

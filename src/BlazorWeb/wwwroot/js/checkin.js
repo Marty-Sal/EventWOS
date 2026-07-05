@@ -130,11 +130,13 @@ window.eventwosCheckin.stopScanner = async function () {
 window.eventwosCheckin.getPosition = async function () {
     // Returns "lat,lng" (6dp) on success, "unavailable:<code>" on
     // failure. No reverse geocoding here — that happens server-side
-    // in EventWOS.Infrastructure.Geo.GeoLocationService, which uses
-    // an embedded GeoNames dataset (no third-party API). The server
-    // rewrites the string to "lat,lng|City, State, Country" before
-    // persisting, and the LocationPin component parses whatever
-    // storage format the row happens to be in.
+    // in EventWOS.Infrastructure.Geo.GeoLocationService, which now
+    // uses OpenStreetMap's Nominatim (free, no key, 1 req/s rate-
+    // limited by the server). The server splits the value into two
+    // typed columns on the AttendanceRecord row:
+    //   * location_coords  — this same "lat,lng" for the map link
+    //   * location_address — the reverse-geocoded short address
+    //                        ("Airoli, Navi Mumbai") for display
     //
     // Options tuned for on-site vendor phones:
     //   * enableHighAccuracy=false — battery-friendly, ~100 m is fine

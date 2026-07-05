@@ -75,7 +75,8 @@ public sealed record AttendanceRecordDto(
     string   CrewName,
     string   Action,
     DateTime RecordedAt,
-    string?  Location
+    string?  LocationAddress,
+    string?  LocationCoords
 );
 
 public sealed record PagedEventResult(

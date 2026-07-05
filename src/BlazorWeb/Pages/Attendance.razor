@@ -219,7 +219,7 @@
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium @cls">@lbl</span>
                                 </td>
                                 <td class="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">@r.RecordedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
-                                <td class="px-5 py-3.5 text-xs"><LocationPin Value="@r.Location" /></td>
+                                <td class="px-5 py-3.5 text-xs"><LocationPin Address="@r.LocationAddress" Coords="@r.LocationCoords" /></td>
                                 <td class="px-5 py-3.5 text-gray-500 text-xs">
                                     @(r.RecordedByName ?? (r.RecordedBy is not null && r.RecordedBy.Length > 8 ? r.RecordedBy[..8] + "…" : (r.RecordedBy ?? "—")))
                                 </td>
@@ -640,7 +640,12 @@
     private sealed record AttendanceItemDto(
         Guid RecordId, Guid AssignmentId, Guid EventId, string EventTitle,
         Guid CrewId, string CrewName, string Action, DateTime RecordedAt,
-        string? Location, string? RecordedBy, string? RecordedByName,
+        // Phase F: location split into address + coords. Nullable — an
+        // in-flight geocode timeout, a denied GPS, or a legacy pre-split
+        // row can each leave one or both blank. LocationPin handles all
+        // combinations gracefully.
+        string? LocationAddress, string? LocationCoords,
+        string? RecordedBy, string? RecordedByName,
         // Phase D step 28: shift context. Nullable for legacy single-shift rows.
         string? ShiftScopeName = null,
         DateTime? ShiftStartAt = null,

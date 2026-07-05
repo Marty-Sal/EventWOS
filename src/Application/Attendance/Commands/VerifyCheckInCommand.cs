@@ -137,17 +137,20 @@ public sealed class VerifyCheckInHandler
                 "This crew is already checked in."));
         }
 
+        // Reverse-geocode the client's "lat,lng" via Nominatim. Awaited
+        // synchronously (typical latency 300-600 ms, 2 s HTTP timeout);
+        // on failure LookupAsync returns (coords, null) so we still
+        // persist the map pin — only the address label is missing.
+        var (coords, address) = await _geo.LookupAsync(req.Location, ct);
+
         // ── Commit: write the AttendanceRecord + flip assignment status ─
         var attendance = new AttendanceRecord(
             assignmentId:     assignment.Id,
             eventId:          assignment.EventId,
             crewId:           assignment.Crew.Id,
             action:           AttendanceAction.CheckIn,
-            // Enrich "lat,lng" → "lat,lng|City, State, Country" via the
-            // embedded GeoNames cities15000 dataset. Idempotent: rows
-            // already carrying a "|address" tail pass through untouched;
-            // null / "unavailable:*" / unparseable inputs pass through too.
-            location:         _geo.Enrich(req.Location),
+            locationAddress:  address,
+            locationCoords:   coords,
             recordedByUserId: req.VerifierUserId.ToString());
 
         _db.AttendanceRecords.Add(attendance);
