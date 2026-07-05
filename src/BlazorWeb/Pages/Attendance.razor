@@ -219,7 +219,7 @@
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium @cls">@lbl</span>
                                 </td>
                                 <td class="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">@r.RecordedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
-                                <td class="px-5 py-3.5 text-gray-400 text-xs">@(r.Location ?? "—")</td>
+                                <td class="px-5 py-3.5 text-xs"><LocationPin Value="@r.Location" /></td>
                                 <td class="px-5 py-3.5 text-gray-500 text-xs">
                                     @(r.RecordedByName ?? (r.RecordedBy is not null && r.RecordedBy.Length > 8 ? r.RecordedBy[..8] + "…" : (r.RecordedBy ?? "—")))
                                 </td>

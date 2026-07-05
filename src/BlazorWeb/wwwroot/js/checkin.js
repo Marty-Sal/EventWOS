@@ -129,18 +129,109 @@ window.eventwosCheckin.stopScanner = async function () {
 // minute across many scans (typical vendor scans 5-30 crew back-to-back).
 window.eventwosCheckin.getPosition = async function () {
     if (!("geolocation" in navigator)) return "unavailable:no-api";
-    return await new Promise((resolve) => {
+
+    // Step 1 — GPS fix (unchanged options; behaviour proven in prod).
+    const coords = await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const lat = pos.coords.latitude.toFixed(6);
-                const lng = pos.coords.longitude.toFixed(6);
-                resolve(`${lat},${lng}`);
-            },
-            (err) => {
-                // 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
-                resolve(`unavailable:${err && err.code}`);
-            },
+            (pos) => resolve({
+                lat: pos.coords.latitude.toFixed(6),
+                lng: pos.coords.longitude.toFixed(6),
+            }),
+            (err) => resolve({ err: `unavailable:${err && err.code}` }),
             { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
         );
     });
+    if (coords.err) return coords.err;
+
+    // Step 2 — Reverse-geocode to a short address. BigDataCloud's
+    // reverse-geocode-client endpoint is free, keyless, CORS-enabled,
+    // and returns a compact JSON with locality/city/principalSubdivision.
+    // Total latency is typically 150-400ms in India — negligible next to
+    // the GPS fix. If it fails (network hiccup, endpoint down, offline
+    // shell), we still return "lat,lng" so the pin link works — the
+    // label just won't be there.
+    //
+    // The 2.5s timeout is intentional: we don't want a slow geocoder
+    // holding up the vendor's next scan. Beyond that we ship the raw
+    // coords; a background retry would add complexity for little gain.
+    const url = `https://api.bigdatacloud.net/data/reverse-geocode-client`
+              + `?latitude=${coords.lat}&longitude=${coords.lng}&localityLanguage=en`;
+    try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 2500);
+        const resp = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!resp.ok) return `${coords.lat},${coords.lng}`;
+        const j = await resp.json();
+
+        // Prefer the most human-recognisable pair — the neighbourhood /
+        // locality and the city. Fallbacks cover countries where those
+        // fields are empty (e.g. some rural GPS fixes only fill
+        // principalSubdivision).
+        const primary =
+            j.locality || j.city || j.localityInfo?.administrative?.[3]?.name || null;
+        const secondary =
+            j.city && j.city !== primary ? j.city
+            : j.principalSubdivision || j.countryName || null;
+
+        const label = [primary, secondary].filter(Boolean).join(", ");
+        return label
+            ? `${coords.lat},${coords.lng}|${label}`
+            : `${coords.lat},${coords.lng}`;
+    } catch {
+        // AbortError / network — degrade gracefully to raw coords.
+        return `${coords.lat},${coords.lng}`;
+    }
+};
+
+// ─── Role-based permission priming ─────────────────────────────────
+// Called from MainLayout after login. For vendors (who verify crew via
+// QR scans) we want camera + geolocation prompts to fire NOW — not
+// mid-scan when they've already tapped "Start Scanner" and are staring
+// at a black rectangle wondering why nothing's happening.
+//
+// Prompts:
+//   * geolocation → getCurrentPosition() with short timeout
+//   * camera      → getUserMedia({video: true}), then immediately stop
+//                   all tracks so we don't hold the sensor
+//
+// Both are best-effort and independent. Denied? We move on. The
+// scanner and RecordAttendance flows both tolerate null location and
+// camera prompt errors, so this is purely a UX polish — surface the
+// browser's OS-level prompts in a calm moment (right after login)
+// rather than a busy one (mid check-in queue).
+//
+// The `permissions` object controls which prompts to fire:
+//   { location: true, camera: true }
+// Both default to false, so callers must opt in per role.
+window.eventwosCheckin.primePermissions = async function (permissions) {
+    const results = { location: null, camera: null };
+    permissions = permissions || {};
+
+    if (permissions.location && "geolocation" in navigator) {
+        try {
+            await new Promise((resolve) => {
+                navigator.geolocation.getCurrentPosition(
+                    () => { results.location = "granted"; resolve(); },
+                    (e) => { results.location = `denied:${e && e.code}`; resolve(); },
+                    { enableHighAccuracy: false, timeout: 6000, maximumAge: 300000 }
+                );
+            });
+        } catch { results.location = "error"; }
+    }
+
+    if (permissions.camera && navigator.mediaDevices?.getUserMedia) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment" }
+            });
+            // Immediately release the camera — we only wanted the prompt.
+            stream.getTracks().forEach((t) => t.stop());
+            results.camera = "granted";
+        } catch (e) {
+            results.camera = `denied:${e && e.name}`;
+        }
+    }
+
+    return results;
 };

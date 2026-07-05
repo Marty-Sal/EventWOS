@@ -5,6 +5,7 @@
 @inject NotificationHubService Hub
 @inject IEventApiService EventApi
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <div class="flex h-screen bg-gray-50 overflow-hidden">
 
@@ -261,6 +262,50 @@
         try { await Hub.StartAsync(); }
         catch { }
         Hub.ConnectionStateChanged += () => InvokeAsync(StateHasChanged);
+
+        // ── Role-based permission priming ─────────────────────────
+        // Fire OS-level prompts right after login (calm moment) instead
+        // of mid-scan (busy moment). One-shot per session using
+        // sessionStorage so users don't get re-prompted on every page
+        // load; browsers will silently return the cached answer anyway,
+        // but this saves the async JS round-trip.
+        //
+        // Vendors need BOTH camera (QR scanner) and location (tagging
+        // check-in venue). Managers/Admins with attendance:verify get
+        // the same treatment — they're the ones who might scan.
+        // Crew get location only (Check-Out geo-tag). Everyone else
+        // (approvers etc.) gets nothing.
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                var alreadyPrimed = await JS.InvokeAsync<string?>(
+                    "sessionStorage.getItem", "eventwos_perms_primed");
+                if (!string.IsNullOrEmpty(alreadyPrimed)) return;
+
+                var role = state.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                           ?? state.User.FindFirst("role")?.Value;
+
+                var wantsScan = role is "Vendor" or "Admin"
+                                || (role is "Manager" && _perms.Contains("attendance:verify"));
+                var wantsGeo  = wantsScan || role is "Crew";
+
+                if (!wantsScan && !wantsGeo) return;
+
+                await JS.InvokeVoidAsync(
+                    "eventwosCheckin.primePermissions",
+                    new { location = wantsGeo, camera = wantsScan });
+
+                await JS.InvokeVoidAsync(
+                    "sessionStorage.setItem", "eventwos_perms_primed", "1");
+            }
+            catch
+            {
+                // Prerender / JS not available / user closed the prompt.
+                // Never a blocker — every downstream flow tolerates
+                // missing permissions.
+            }
+        });
 
         // Keep sidebar counters live so the badge bumps without a refresh.
         Hub.AssignmentInviteReceived     += OnInviteCountChanged; // crew: new invite
