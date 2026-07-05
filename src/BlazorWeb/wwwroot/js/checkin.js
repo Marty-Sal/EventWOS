@@ -112,3 +112,35 @@ window.eventwosCheckin.stopScanner = async function () {
         _scanner = null;
     }
 };
+
+
+// ─── Geolocation ─────────────────────────────────────────────────────
+// One-shot GPS lookup for the Scan Check-In tab. The vendor's phone
+// pops the OS permission prompt once — we cache the result server-side
+// on the AttendanceRecord.location column ("lat,lng" string, or
+// "unavailable" if the browser refused/couldn't fix). Deliberately
+// resolves instead of rejecting on failure so the caller can just await
+// and get a value to send with every /verify — location is nice-to-have,
+// never a blocker for the check-in itself.
+//
+// Timeout is 8s: mobile GPS cold-start on the first tap of the day can
+// take 3-6s, so anything less produces false "unavailable" values in
+// crowded venues. maximumAge=60000 lets us reuse a fix from the last
+// minute across many scans (typical vendor scans 5-30 crew back-to-back).
+window.eventwosCheckin.getPosition = async function () {
+    if (!("geolocation" in navigator)) return "unavailable:no-api";
+    return await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const lat = pos.coords.latitude.toFixed(6);
+                const lng = pos.coords.longitude.toFixed(6);
+                resolve(`${lat},${lng}`);
+            },
+            (err) => {
+                // 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
+                resolve(`unavailable:${err && err.code}`);
+            },
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        );
+    });
+};

@@ -98,10 +98,14 @@
                     <NavItem Href="/my-payments"    Icon="💸" Label="My Payments" />
                 </AuthorizeView>
 
-                @* Vendor — My Crew + Crew Assignments + Approvals + Payments + Report *@
+                @* Vendor — My Crew + Crew Assignments + Attendance + Approvals + Payments + Report *@
                 <AuthorizeView Roles="Vendor">
                     <NavItem Href="/crew"               Icon="👷" Label="My Crew" />
                     <NavItem Href="/my-crew-groups"     Icon="🧑‍🤝‍🧑" Label="Crew Groups" />
+                    @* Attendance = Scan Check-In tab is the vendor's main
+                       job on this page. Also gives them access to Logs
+                       and per-event Summary for the crews they verified. *@
+                    <NavItem Href="/attendance"          Icon="📍" Label="Attendance" />
                     <NavItem Href="/vendor-payments"     Icon="💸" Label="My Payments" />
                     <NavItem Href="/vendor-report"       Icon="📊" Label="My Report" />
                 </AuthorizeView>
