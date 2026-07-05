@@ -1,26 +1,29 @@
 @*
-    LocationPin — renders the split AttendanceRecord location fields
-    (LocationAddress + LocationCoords) as a compact "📍 Address" link
-    that opens the exact coordinates on Google Maps.
+    LocationPin -- renders the split AttendanceRecord location fields
+    (LocationAddress + LocationCoords) as a compact pin link that
+    opens the exact coordinates on Google Maps.
 
-    Contract (from the two API endpoints that write the row):
+    Render matrix (see the two writers, VerifyCheckInHandler and
+    RecordAttendanceHandler):
 
-      Address          Coords              Render
-      ───────────────  ──────────────────  ──────────────────────────────
-      "Airoli, ..."    "19.157020,73.02"   📍 Airoli, ... → maps?q=coords
-      null             "19.157020,73.02"   📍 View on map → maps?q=coords
-      "Airoli, ..."    null                📍 Airoli, ... (no link)
-      null             null                — (em-dash)
+      Address    Coords     UI
+      -------    ------     ---------------------------------------
+      set        set        pin + Address, linked to maps?q=coords
+      null       set        pin + "View on map", linked
+      set        null       pin + Address (no link)
+      null       null       em-dash
 
-    The middle two states occur when Nominatim was slow/rate-limited
-    (address null; coords present) or, in rare cases, when a legacy
-    row was hand-edited (address present; coords absent). Both must
-    render sensibly.
+    ASCII-only in the razor tree because a previous build failed on
+    the Linux .NET SDK when the razor emitted a raw U+1F4CD pin
+    emoji + a U+2014 em-dash on the same line; the generator turned
+    the pair into an empty char literal in the code-behind. HTML
+    entities (&#128205; and &mdash;) render identically in the
+    browser and dodge that codegen bug entirely.
 *@
 
 @if (string.IsNullOrWhiteSpace(Address) && string.IsNullOrWhiteSpace(Coords))
 {
-    <span class="text-gray-400">—</span>
+    <span class="text-gray-400">&mdash;</span>
 }
 else if (!string.IsNullOrWhiteSpace(Coords))
 {
@@ -29,15 +32,16 @@ else if (!string.IsNullOrWhiteSpace(Coords))
     <a href="@mapsUrl" target="_blank" rel="noopener"
        class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 hover:underline"
        title="@Coords">
-        <span>📍</span>
+        <span>&#128205;</span>
         <span>@label</span>
     </a>
 }
 else
 {
-    @* Coords absent — no map link, just the address text with the pin. *@
-    <span class="inline-flex items-center gap-1 text-gray-600" title="No coordinates recorded">
-        <span>📍</span>
+    @* Coords absent: no map link, just address text with the pin. *@
+    <span class="inline-flex items-center gap-1 text-gray-600"
+          title="No coordinates recorded">
+        <span>&#128205;</span>
         <span>@Address</span>
     </span>
 }
