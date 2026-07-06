@@ -1,0 +1,206 @@
+@*
+  ────────────────────────────────────────────────────────────────────
+  <PwaInstallBanner /> — installable prompt / iOS hint / silent
+  ────────────────────────────────────────────────────────────────────
+  Renders one of three UIs depending on window.eventwosPwaInstall.getState():
+
+    • installable → dark pill at the bottom of the viewport with a
+      primary "Install" button + × dismiss. On click we call
+      promptInstall() which fires Chrome's native install dialog.
+
+    • ios-hint    → a slightly taller pill (needs the extra height
+      for the two-line instruction) that says
+      "Install EventWOS — Tap [share icon] then Add to Home Screen"
+      with a real inline share glyph so users immediately recognise
+      the button we're pointing to.
+
+    • installed / dismissed / not-eligible → nothing rendered.
+
+  Placement: rendered once at MainLayout level, so it appears above
+  every authenticated page. Fixed positioning + safe-area padding so
+  it doesn't collide with the bottom-tab-bar UIs on iOS PWAs later.
+
+  Dismissal state is stored in localStorage (7-day quiet period) —
+  see pwa-install.js. This component is stateless beyond a single
+  string it reads from JS on mount.
+*@
+@inject IJSRuntime JS
+@implements IDisposable
+
+@if (_state == "installable")
+{
+    <div class="fixed bottom-0 left-0 right-0 z-40 px-4 pb-[env(safe-area-inset-bottom,0px)] pointer-events-none"
+         role="dialog" aria-label="Install EventWOS">
+        <div class="mx-auto max-w-md mb-4 pointer-events-auto
+                    rounded-2xl shadow-2xl border border-indigo-500/30
+                    bg-gradient-to-r from-indigo-700 to-purple-700 text-white
+                    px-4 py-3 flex items-center gap-3">
+            <div class="flex-none w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-2xl">
+                ⚡
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold leading-tight">Install EventWOS</p>
+                <p class="text-xs text-indigo-100 leading-tight mt-0.5">
+                    Faster access, works offline, one-tap launch.
+                </p>
+            </div>
+            <button type="button"
+                    @onclick="OnInstallClickAsync"
+                    disabled="@_installing"
+                    class="flex-none rounded-lg bg-white text-indigo-700 text-sm font-semibold px-3 py-1.5
+                           hover:bg-indigo-50 active:scale-95 transition disabled:opacity-60">
+                @(_installing ? "Installing…" : "Install")
+            </button>
+            <button type="button"
+                    @onclick="OnDismissAsync"
+                    aria-label="Dismiss install prompt"
+                    class="flex-none w-8 h-8 rounded-lg text-indigo-200 hover:text-white hover:bg-white/10
+                           flex items-center justify-center transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+            </button>
+        </div>
+    </div>
+}
+else if (_state == "ios-hint")
+{
+    <div class="fixed bottom-0 left-0 right-0 z-40 px-4 pb-[env(safe-area-inset-bottom,0px)] pointer-events-none"
+         role="dialog" aria-label="Install EventWOS on iPhone">
+        <div class="mx-auto max-w-md mb-4 pointer-events-auto
+                    rounded-2xl shadow-2xl border border-indigo-500/30
+                    bg-gradient-to-r from-indigo-700 to-purple-700 text-white
+                    px-4 py-3 flex items-start gap-3">
+            <div class="flex-none w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-2xl">
+                ⚡
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold leading-tight">Install EventWOS</p>
+                <p class="text-xs text-indigo-100 leading-snug mt-1">
+                    Tap
+                    <span class="inline-flex items-center align-middle mx-0.5 px-1 py-0.5 rounded bg-white/15">
+                        @* iOS Share glyph — SF Symbols "square.and.arrow.up" recreated in SVG.
+                           An accurate inline glyph is much clearer to iOS users than the word
+                           "share" or any generic icon — they immediately recognise this shape. *@
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                            <polyline points="16 6 12 2 8 6"/>
+                            <line x1="12" y1="2" x2="12" y2="15"/>
+                        </svg>
+                    </span>
+                    in Safari's toolbar, then <span class="font-semibold text-white">Add to Home Screen</span>.
+                </p>
+            </div>
+            <button type="button"
+                    @onclick="OnDismissAsync"
+                    aria-label="Dismiss install hint"
+                    class="flex-none w-8 h-8 rounded-lg text-indigo-200 hover:text-white hover:bg-white/10
+                           flex items-center justify-center transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    // Current banner state: "installable" | "ios-hint" | anything else
+    // (installed / dismissed / not-eligible → we render nothing).
+    // We stash the raw JS-returned string here so we can compare with
+    // simple string equality in the .razor markup above.
+    private string _state = "";
+
+    // Guards the Install button while Chrome's native prompt is on
+    // screen — prevents a double-tap firing prompt() twice (which
+    // would throw, since the event object is single-use).
+    private bool _installing = false;
+
+    // A .NET-side reference to a DotNetObjectReference so JS can call
+    // back into us when the browser fires 'pwa-installable' or
+    // 'pwa-installed-now'. Held as a field so we can Dispose it.
+    private DotNetObjectReference<PwaInstallBanner>? _selfRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Read the initial state on mount.
+        await RefreshStateAsync();
+
+        // Subscribe to JS-side events so we react without polling:
+        //   'pwa-installable'   → the beforeinstallprompt fired late
+        //                         (some Chromiums delay it by a few
+        //                         seconds after service-worker
+        //                         installation).
+        //   'pwa-installed-now' → user just completed install; hide
+        //                         the banner without waiting for the
+        //                         next navigation.
+        _selfRef = DotNetObjectReference.Create(this);
+        try
+        {
+            // Ask the JS helper to wire our OnPwaEvent callback to
+            // the two window-level events we care about. Guarded on
+            // the JS side against duplicate binding across component
+            // re-mounts.
+            await JS.InvokeVoidAsync("eventwosPwaInstall.bindDotnet", _selfRef);
+        }
+        catch
+        {
+            // JS not ready on prerender — banner still works on
+            // first-mount state read; it just won't hot-refresh if
+            // beforeinstallprompt fires late.
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnPwaEvent()
+    {
+        await RefreshStateAsync();
+    }
+
+    private async Task RefreshStateAsync()
+    {
+        try
+        {
+            var s = await JS.InvokeAsync<string>("eventwosPwaInstall.getState");
+            if (s != _state)
+            {
+                _state = s ?? "";
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // Prerender / JS not ready yet — retry on next tick.
+        }
+    }
+
+    private async Task OnInstallClickAsync()
+    {
+        if (_installing) return;
+        _installing = true;
+        try
+        {
+            await JS.InvokeAsync<string?>("eventwosPwaInstall.promptInstall");
+        }
+        finally
+        {
+            _installing = false;
+            await RefreshStateAsync();
+        }
+    }
+
+    private async Task OnDismissAsync()
+    {
+        try { await JS.InvokeVoidAsync("eventwosPwaInstall.dismiss"); }
+        catch { /* ignore — worst case banner reappears next load */ }
+        _state = "dismissed";
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _selfRef?.Dispose();
+    }
+}

@@ -196,6 +196,11 @@
     <!-- QR-verified check-in helpers (renderQr / startScanner / stopScanner).
          Their heavy deps are lazy-loaded from a CDN inside the module. -->
     <script src="js/checkin.js"></script>
+    <!-- PWA install-banner helpers. Exposes window.eventwosPwaInstall
+         so <PwaInstallBanner /> can query state + fire Chrome's install
+         prompt. Registers a listener for the "appinstalled" event too,
+         to hide the banner instantly on successful install. -->
+    <script src="js/pwa-install.js"></script>
     <!-- Phase D step 22: helper for Excel downloads from Attendance page.
          Builds a Blob from a base64 string and triggers an anchor click.
          Defined globally so any page can call it via JSInterop. -->
