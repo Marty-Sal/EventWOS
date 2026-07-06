@@ -34,7 +34,7 @@
  * (check-in, ratings) still require network by design.
  */
 
-const CACHE_VERSION = 'v1-2026-07-05';
+const CACHE_VERSION = 'v2-2026-07-07-boot-json-never-cached';
 const SHELL_CACHE   = `eventwos-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `eventwos-runtime-${CACHE_VERSION}`;
 
@@ -75,6 +75,21 @@ self.addEventListener('activate', (event) => {
                 .filter((k) => k.startsWith('eventwos-') && !k.endsWith(CACHE_VERSION))
                 .map((k) => caches.delete(k))
         );
+
+        // Belt-and-braces: even within our CURRENT-version caches,
+        // evict any stale copy of the manifest / version stamp that
+        // a prior sw.js may have written. isImmutableAsset() now
+        // excludes both, so on next boot they will go straight to
+        // network — but if the prior SW cached them, they're still
+        // in the cache dictionary. Nuke them explicitly.
+        for (const cacheName of [SHELL_CACHE, RUNTIME_CACHE]) {
+            try {
+                const cache = await caches.open(cacheName);
+                await cache.delete('/_framework/blazor.boot.json');
+                await cache.delete('/version.json');
+            } catch { /* cache missing — nothing to evict */ }
+        }
+
         await self.clients.claim();
     })());
 });
@@ -118,6 +133,17 @@ self.addEventListener('fetch', (event) => {
 // ─── helpers ─────────────────────────────────────────────────────────
 
 function isImmutableAsset(pathname) {
+    // blazor.boot.json is the MANIFEST — it lists the fingerprinted
+    // filenames of every .wasm/.dll. It is itself NOT fingerprinted,
+    // so caching it across a deploy is what caused every SRI failure
+    // we've been chasing: the SW returned an old boot.json listing
+    // filenames that no longer exist on the server, Blazor requested
+    // those ghost files, nginx served a 404 HTML page, and the browser
+    // computed SHA-256 over the 404 body and reported "integrity
+    // mismatch" against every wasm asset. Same story for version.json.
+    if (pathname === '/_framework/blazor.boot.json') return false;
+    if (pathname === '/version.json')                return false;
+
     return pathname.startsWith('/_framework/')
         || pathname.startsWith('/_content/')
         || pathname.startsWith('/icons/')
@@ -129,17 +155,26 @@ async function cacheFirst(req) {
     const cached = await caches.match(req);
     if (cached) return cached;
 
+    // Cache miss — fetch fresh, cache ONLY if it succeeded. If the
+    // network hop returns 404/5xx (e.g. we're requesting a ghost
+    // fingerprint from a previous deploy), let that response
+    // propagate to the caller AS-IS. Do NOT synthesize a fake 504:
+    // that was the previous behaviour and it hid the real cause of
+    // failures ("offline" showing up in the log when the server was
+    // actually fine, just serving a 404 for a missing asset).
     try {
         const fresh = await fetch(req);
-        // Only cache good responses. `basic` = same-origin.
         if (fresh.ok && (fresh.type === 'basic' || fresh.type === 'default')) {
             const cache = await caches.open(RUNTIME_CACHE);
             cache.put(req, fresh.clone());
         }
         return fresh;
     } catch (err) {
-        // No cached copy and no network — return a lightweight failure.
-        return new Response('', { status: 504, statusText: 'offline' });
+        // Genuine network failure (offline / DNS). Surface it honestly.
+        return new Response(
+            'Service worker: network fetch failed for ' + req.url,
+            { status: 504, statusText: 'network-error' }
+        );
     }
 }
 

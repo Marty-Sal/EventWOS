@@ -129,9 +129,40 @@
                        m.includes("504") ||
                        (m.includes("Failed to fetch") && m.includes("_framework/"));
             };
-            const bustAndReload = function () {
+            const bustAndReload = async function () {
                 if (sessionStorage.getItem(KEY) === "1") return; // already tried
                 sessionStorage.setItem(KEY, "1");
+
+                // NUCLEAR RESET — required for stale-SW recovery.
+                //
+                // A cache-busting query alone doesn't help if the
+                // service worker is intercepting fetches: the SW's
+                // cache-first for /_framework/blazor.boot.json returns
+                // the old manifest regardless of the URL param.
+                //
+                // So on the recovery path we:
+                //   1. Unregister every service worker on this origin.
+                //   2. Delete every Cache Storage cache the SW owned.
+                // Only THEN reload. On next boot the browser goes
+                // straight to network for boot.json and picks up the
+                // new deploy's fingerprints. One extra reload cost,
+                // paid once per stuck user — worth it.
+                try {
+                    if ("serviceWorker" in navigator) {
+                        const regs = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(regs.map(r => r.unregister()));
+                    }
+                    if (typeof caches !== "undefined") {
+                        const keys = await caches.keys();
+                        await Promise.all(keys.map(k => caches.delete(k)));
+                    }
+                } catch (e) {
+                    // Recovery is best-effort — even if unregister/
+                    // deletion partially fails, the cache-bust reload
+                    // still gives us a chance to escape.
+                    console.warn("[recover] cache/SW cleanup failed:", e);
+                }
+
                 const url = new URL(window.location.href);
                 url.searchParams.set("_cb", Date.now().toString());
                 window.location.replace(url.toString());
@@ -210,7 +241,22 @@
         if ("serviceWorker" in navigator) {
             window.addEventListener("load", async () => {
                 try {
-                    const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+                    // updateViaCache:"none" tells the browser to bypass the
+                    // HTTP cache when fetching sw.js itself. Without it, some
+                    // browsers cache sw.js for up to 24h regardless of the
+                    // server's Cache-Control header (Chromium's historical
+                    // default). We already send no-cache from nginx, but this
+                    // makes the client behaviour explicit and belt-and-braces.
+                    const reg = await navigator.serviceWorker.register("/sw.js", {
+                        scope: "/",
+                        updateViaCache: "none",
+                    });
+
+                    // Force an update-check on every page load. Cheap
+                    // (single HEAD-ish request under normal SW rules) and
+                    // guarantees that a fresh deploy is picked up the very
+                    // next time the user opens the app — no 24h wait.
+                    try { await reg.update(); } catch { /* ignore */ }
 
                     // A new worker was found — track it.
                     reg.addEventListener("updatefound", () => {
