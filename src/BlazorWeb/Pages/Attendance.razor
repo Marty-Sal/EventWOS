@@ -791,8 +791,8 @@
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
-                var loc = await JS.InvokeAsync<string?>(cts.Token,
-                    "eventwosCheckin.getPosition");
+                var loc = await JS.InvokeAsync<string?>(
+                    "eventwosCheckin.getPosition", cts.Token);
                 if (!string.IsNullOrWhiteSpace(loc)) _lastLocation = loc;
             }
             catch
