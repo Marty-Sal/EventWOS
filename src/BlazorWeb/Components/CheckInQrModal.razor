@@ -120,6 +120,14 @@
     private string? _error;
     private string? _eventTitle;
     private Guid _assignmentId;
+    // Crew's "lat,lng" captured by the location gate on the parent page.
+    // Passed through to CheckInApi.RequestAsync so the server persists it
+    // on the PendingCheckIn row (see Phase G in RequestCheckInHandler).
+    // Also reused on RegenerateAsync so the fresh QR carries the same
+    // fix — the gate already proved it was current at the moment of
+    // the initial tap, and re-prompting on regenerate would be user-
+    // hostile.
+    private string? _crewLocation;
 
     private PendingCheckInDto? _pending;
     private CancellationTokenSource? _ticker;
@@ -132,10 +140,11 @@
         : (int)Math.Max(0, (_pending.ExpiresAt - DateTimeOffset.UtcNow).TotalSeconds);
 
     // ── Public API ─────────────────────────────────────────────────────
-    public async Task OpenAsync(Guid assignmentId, string? eventTitle = null)
+    public async Task OpenAsync(Guid assignmentId, string? eventTitle = null, string? crewLocation = null)
     {
-        _assignmentId = assignmentId;
-        _eventTitle   = eventTitle;
+        _assignmentId  = assignmentId;
+        _eventTitle    = eventTitle;
+        _crewLocation  = crewLocation;
         _isOpen       = true;
         _loading      = true;
         _error        = null;
@@ -159,7 +168,7 @@
         }
         else
         {
-            var minted = await CheckInApi.RequestAsync(assignmentId);
+            var minted = await CheckInApi.RequestAsync(assignmentId, _crewLocation);
             if (!minted.Success || minted.Data is null)
             {
                 _error   = minted.Message ?? "Could not generate a check-in QR.";
@@ -248,7 +257,7 @@
         _error        = null;
         StateHasChanged();
 
-        var minted = await CheckInApi.RequestAsync(_assignmentId);
+        var minted = await CheckInApi.RequestAsync(_assignmentId, _crewLocation);
         _regenerating = false;
 
         if (!minted.Success || minted.Data is null)

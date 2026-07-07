@@ -18,7 +18,8 @@ namespace EventWOS.Application.Attendance.Commands;
 /// </summary>
 public sealed record RequestCheckInCommand(
     Guid AssignmentId,
-    Guid CallerUserId
+    Guid CallerUserId,
+    string? CrewLocation
 ) : IRequest<Result<PendingCheckInDto>>;
 
 public sealed class RequestCheckInHandler
@@ -85,6 +86,25 @@ public sealed class RequestCheckInHandler
         foreach (var prior in priors)
             prior.MarkCancelled();
 
+        // ── Guard 4: crew location must be present ─────────────────────
+        // Product contract: attendance records must carry the crew's coords
+        // at the moment of Check In (not the vendor's scanning device).
+        // The client's LocationRequiredModal prevents the crew from getting
+        // this far without a fix, but we validate defensively so a rogue
+        // API call can't bypass the policy. The location shape is a lax
+        // "lat,lng" match — precision is set by checkin.js (6 dp) but we
+        // don't enforce that here; a future device rounding tweak
+        // shouldn't trigger a server-side reject.
+        var loc = (req.CrewLocation ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(loc)
+            || !System.Text.RegularExpressions.Regex.IsMatch(
+                loc, @"^-?\d{1,3}\.\d+,-?\d{1,3}\.\d+$"))
+        {
+            return Result.Failure<PendingCheckInDto>(new Error(
+                "CheckIn.LocationRequired",
+                "Location is required to check in. Please enable location access and try again."));
+        }
+
         // ── Mint the new row ───────────────────────────────────────────
         var code = GenerateCode();
         var row  = new PendingCheckIn(
@@ -93,6 +113,7 @@ public sealed class RequestCheckInHandler
             eventId:      assignment.EventId,
             shiftId:      assignment.ShiftId,
             code:         code,
+            crewLocation: loc,
             ttlMinutes:   TtlMinutes);
 
         _db.PendingCheckIns.Add(row);

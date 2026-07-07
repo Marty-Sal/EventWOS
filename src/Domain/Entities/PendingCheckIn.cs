@@ -36,13 +36,26 @@ public sealed class PendingCheckIn : BaseEntity
         Guid    eventId,
         Guid?   shiftId,
         string  code,
+        string  crewLocation,
         int     ttlMinutes = 10)
     {
+        // CrewLocation is REQUIRED by product policy — the whole point of
+        // this table is to capture WHERE THE CREW WAS the moment they hit
+        // Check In on their own device, so that the eventual
+        // AttendanceRecord's coords tell an auditor the crew's position
+        // (not the vendor's scanning phone, which may be at a different
+        // gate or booth). The command handler validates non-empty before
+        // constructing; we assert here so nothing else can bypass it.
+        if (string.IsNullOrWhiteSpace(crewLocation))
+            throw new ArgumentException(
+                "Crew location is required to mint a check-in.", nameof(crewLocation));
+
         AssignmentId = assignmentId;
         CrewId       = crewId;
         EventId      = eventId;
         ShiftId      = shiftId;
         Code         = code;
+        CrewLocation = crewLocation;
         ExpiresAt    = DateTime.UtcNow.AddMinutes(ttlMinutes);
         Status       = PendingCheckInStatus.Pending;
     }
@@ -66,6 +79,14 @@ public sealed class PendingCheckIn : BaseEntity
     /// generator picks fresh values each time, so collisions are astronomically
     /// unlikely.</summary>
     public string Code { get; private set; } = default!;
+
+    /// <summary>Raw geolocation of the crew's device at the moment they tapped
+    /// Check In — stored as "lat,lng" with 6 decimal places (roughly 10 cm
+    /// precision, way more than we need but matches what
+    /// checkin.js emits). Server-side reverse-geocoding happens later in
+    /// VerifyCheckInHandler (Nominatim call, cached). Required at construction
+    /// — see the ctor guard.</summary>
+    public string CrewLocation { get; private set; } = default!;
 
     public DateTime ExpiresAt { get; private set; }
     public PendingCheckInStatus Status { get; private set; }

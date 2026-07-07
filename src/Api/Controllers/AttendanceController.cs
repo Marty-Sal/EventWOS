@@ -197,7 +197,7 @@ public sealed class AttendanceController : ControllerBase
         if (_currentUser.UserId is null) return Unauthorized();
 
         var result = await _mediator.Send(
-            new RequestCheckInCommand(body.AssignmentId, _currentUser.UserId.Value), ct);
+            new RequestCheckInCommand(body.AssignmentId, _currentUser.UserId.Value, body.Location), ct);
 
         return result.IsSuccess
             ? Ok(ApiResponse<PendingCheckInDto>.Ok(result.Value))
@@ -244,7 +244,10 @@ public sealed class AttendanceController : ControllerBase
 }
 
 /// <summary>Body for /checkin/request.</summary>
-public sealed record CheckInRequestBody(Guid AssignmentId);
+/// <summary>Body for /checkin/request. Location is the crew's "lat,lng"
+/// captured on their own device — required by RequestCheckInHandler. The
+/// server rejects with CheckIn.LocationRequired if it's missing/malformed.</summary>
+public sealed record CheckInRequestBody(Guid AssignmentId, string? Location = null);
 
 /// <summary>Body for /checkin/verify. Location is optional — the vendor's
 /// device may or may not share geolocation.</summary>

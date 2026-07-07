@@ -1163,6 +1163,31 @@ BEGIN
         RAISE NOTICE 'Created pending_checkins table';
     END IF;
 
+    -- ═══ pending_checkins.crew_location (Phase G — crew-side location) ═════
+    -- Product policy: attendance records must carry the CREW's coords at
+    -- the moment they hit Check In, not the vendor's scanning phone.
+    -- We now capture the fix on the crew device up front and store it
+    -- on the pending row so the eventual verify-transaction can copy
+    -- it into attendance_records instead of trusting the vendor payload.
+    -- Idempotent: only adds the column if missing. Existing rows (which
+    -- were minted before this field existed) get an empty string so the
+    -- NOT NULL constraint holds — they'll never be redeemed in practice
+    -- because their TTL was 10 min from creation. The constraint is
+    -- deliberately NOT NULL because the domain contract is "required";
+    -- allowing NULL would let a future bug bypass the ctor guard.
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'pending_checkins' AND column_name = 'crew_location'
+    ) THEN
+        ALTER TABLE pending_checkins
+            ADD COLUMN crew_location varchar(40) NOT NULL DEFAULT '';
+        -- Drop the default after backfill so future INSERTs must supply it
+        -- (matches the domain's "required" contract; the empty-string
+        -- default is only there to satisfy NOT NULL on existing rows).
+        ALTER TABLE pending_checkins ALTER COLUMN crew_location DROP DEFAULT;
+        RAISE NOTICE 'Added crew_location column to pending_checkins';
+    END IF;
+
     -- ═══ attendance_records — location split (Phase F) ══════════════════════
     -- Rationale: the single location column held one of:
     --   * lat,lng           — raw fix, no address label

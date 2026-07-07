@@ -137,11 +137,16 @@ public sealed class VerifyCheckInHandler
                 "This crew is already checked in."));
         }
 
-        // Reverse-geocode the client's "lat,lng" via Nominatim. Awaited
-        // synchronously (typical latency 300-600 ms, 2 s HTTP timeout);
-        // on failure LookupAsync returns (coords, null) so we still
-        // persist the map pin — only the address label is missing.
-        var (coords, address) = await _geo.LookupAsync(req.Location, ct);
+        // Reverse-geocode the CREW's stored "lat,lng" via Nominatim. We
+        // deliberately ignore req.Location (the vendor's scanning phone)
+        // because attendance semantics are "where the crew was at Check In",
+        // not "where the vendor was standing at scan time". The crew's coords
+        // were captured on their own device at OpenQr / RequestCheckIn and
+        // persisted on pending.CrewLocation — see RequestCheckInHandler.
+        // LookupAsync tolerates coord shape variance and returns (coords, null)
+        // on lookup failure, so we still get the map pin even if the address
+        // label lookup times out.
+        var (coords, address) = await _geo.LookupAsync(pending.CrewLocation, ct);
 
         // ── Commit: write the AttendanceRecord + flip assignment status ─
         var attendance = new AttendanceRecord(

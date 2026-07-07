@@ -26,6 +26,11 @@ public sealed class PendingCheckInConfiguration : IEntityTypeConfiguration<Pendi
         b.Property(p => p.EventId).HasColumnName("event_id").IsRequired();
         b.Property(p => p.ShiftId).HasColumnName("shift_id");
         b.Property(p => p.Code).HasColumnName("code").HasMaxLength(32).IsRequired();
+        // Crew's "lat,lng" at the moment they minted the QR. 40 chars is
+        // plenty ("-12.345678,123.456789" = 21) but leaves headroom for
+        // future precision changes or accuracy tags.
+        b.Property(p => p.CrewLocation)
+            .HasColumnName("crew_location").HasMaxLength(40).IsRequired();
         b.Property(p => p.ExpiresAt).HasColumnName("expires_at").IsRequired();
         b.Property(p => p.Status).HasColumnName("status").IsRequired();
         b.Property(p => p.ConsumedByVendorId).HasColumnName("consumed_by_vendor_id");

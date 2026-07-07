@@ -214,16 +214,18 @@
     {
         if (_qrModal is null) return;
 
-        // Enforce location BEFORE minting the QR. The server-side
-        // location capture happens later on the vendor scan, but we
-        // want to fail fast on the CREW device so we never mint a
-        // QR that would produce an attendance row with no origin.
-        // Passing OpenQrAsync itself as the retry callback means
-        // "Try Again" in the modal resumes this exact flow.
+        // Enforce location BEFORE minting the QR. We now capture the
+        // crew's coords on THEIR device and thread them all the way
+        // down to the server so the eventual AttendanceRecord's
+        // location_coords column reflects where the crew was —
+        // not where the vendor's phone was pointed at scan time.
+        //
+        // Retry closure re-runs OpenQrAsync so "Try Again" resumes
+        // the whole flow after the user fixes their settings.
         var gate = await EnsureLocationOrPromptAsync("check in", () => OpenQrAsync(a));
-        if (!gate) return;
+        if (gate.Coords is null) return;   // Gate failed → modal already up.
 
-        await _qrModal.OpenAsync(a.Id, a.EventTitle);
+        await _qrModal.OpenAsync(a.Id, a.EventTitle, gate.Coords);
     }
 
     // ── Location gate ─────────────────────────────────────────────
@@ -235,49 +237,45 @@
     //
     // actionLabel is inserted into the modal headline ("we need to
     // know where you check IN from" / "OUT from").
-    private async Task<bool> EnsureLocationOrPromptAsync(
+    // Result shape returned to callers. Coords is non-null iff Ok — this
+    // is the "check-then-use" pattern that avoids a second JS round-trip
+    // on the happy path (previously RecordAttendance called
+    // eventwosCheckin.getPosition() a second time after the gate
+    // succeeded; now we just hand it the coords the gate already got).
+    private readonly record struct LocationGateOutcome(string? Coords);
+
+    private async Task<LocationGateOutcome> EnsureLocationOrPromptAsync(
         string actionLabel,
         Func<Task> retryAction)
     {
-        // If JS isn't available (prerender / test host) we can't
-        // enforce; be permissive so we don't break server tests.
-        // The server still has the pending row's existence check
-        // as its own guard.
         string reason;
+        string? coords = null;
         try
         {
             var res = await JS.InvokeAsync<LocationGateResult>(
                 "eventwosCheckin.requireLocation");
-            if (res is { Ok: true }) return true;
+            if (res is { Ok: true } && !string.IsNullOrWhiteSpace(res.Coords))
+                return new LocationGateOutcome(res.Coords);
             reason = res?.Reason ?? "unavailable";
         }
         catch
         {
-            // JS blew up entirely — treat as unavailable so the
-            // user sees the friendly "turn on location" message
-            // rather than a raw exception dialog.
             reason = "unavailable";
         }
 
-        // Show the modal. The retry closure re-invokes the ORIGINAL
-        // action — which itself calls back into EnsureLocation... —
-        // so a successful retry resumes the flow, and a repeated
-        // failure re-opens the modal with the (possibly different)
-        // new reason.
+        // Show the modal with a Retry closure that re-runs the original
+        // action — which itself calls back into this gate — so a
+        // successful retry resumes the flow and a repeated failure
+        // re-opens the modal with the current reason.
         if (_locModal is not null)
         {
             _locModal.Show(reason, actionLabel, async () =>
             {
                 await retryAction();
-                // We can't know from here whether the retry succeeded
-                // — the retryAction closes/reopens the modal on its
-                // own path. Returning true tells the modal to close
-                // itself; if retry failed, EnsureLocation... will
-                // have re-opened it in the same turn.
                 return true;
             });
         }
-        return false;
+        return new LocationGateOutcome(null);
     }
 
     // Matches the shape returned by requireLocation() in checkin.js.
@@ -384,32 +382,23 @@
 
     private async Task RecordAttendance(Guid assignmentId, string action)
     {
-        // Strict location gate — same policy as Check-In. If we can't
-        // get a fix we surface LocationRequiredModal instead of just
-        // POSTing with a null location column. Retry closure invokes
-        // THIS same method so "Try Again" resumes the check-out.
+        // Strict location gate — same policy as Check-In. On failure
+        // LocationRequiredModal takes over and the retry closure
+        // resumes this method from the top.
         var actionLabel = action == CheckOut ? "check out" : "check in";
         var gate = await EnsureLocationOrPromptAsync(actionLabel,
             () => RecordAttendance(assignmentId, action));
-        if (!gate) return;
+        if (gate.Coords is null) return;
 
         _actionId = assignmentId; _actionType = action; StateHasChanged();
         try
         {
-            // We already have a validated fix from the gate above.
-            // Capture it again here (fresh call) so the coords are
-            // as-current-as-possible at the moment of the POST — the
-            // gate's fix could be a few seconds stale if the user
-            // paused on the confirmation.
-            string? location = null;
-            try
-            {
-                var loc = await JS.InvokeAsync<string?>("eventwosCheckin.getPosition");
-                if (!string.IsNullOrWhiteSpace(loc)) location = loc;
-            }
-            catch { /* JS unavailable mid-flow — server accepts null,
-                       but we should never reach here since the gate
-                       above just succeeded. Belt-and-braces. */ }
+            // Use the coords the gate already captured — a fresh
+            // getPosition() call here would just re-query the browser
+            // for a fix that's at most seconds old, wasting a round-
+            // trip. If the crew truly stood still between tap and
+            // network response we'll get the same numbers back anyway.
+            string? location = gate.Coords;
 
             var resp = await Http.PostAsJsonAsync(
                 $"api/v1/events/assignments/{assignmentId}/attendance",
