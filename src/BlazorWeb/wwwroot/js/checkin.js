@@ -127,6 +127,64 @@ window.eventwosCheckin.stopScanner = async function () {
 // take 3-6s, so anything less produces false "unavailable" values in
 // crowded venues. maximumAge=60000 lets us reuse a fix from the last
 // minute across many scans (typical vendor scans 5-30 crew back-to-back).
+// ─── requireLocation(): STRICT location acquisition ─────────────────
+// Returns a structured result the Blazor caller can branch on cleanly:
+//   { ok: true,  coords: "lat,lng" }                             success
+//   { ok: false, reason: "no-api"           }   browser has no Geolocation API
+//   { ok: false, reason: "no-secure-context" } page is not HTTPS/localhost
+//   { ok: false, reason: "denied"           }   user rejected the prompt
+//   { ok: false, reason: "unavailable"      }   OS/hardware says "no fix"
+//   { ok: false, reason: "timeout"          }   8s elapsed with no fix
+//
+// Used to GATE the check-in / check-out UI entry points: the crew
+// screen calls this BEFORE opening the QR modal (or before firing the
+// check-out POST) and, on !ok, renders a "Location access is required"
+// card explaining exactly what to do next. This is stricter than
+// getPosition() above — that helper never rejects, callers just get a
+// magic string and usually plough on. requireLocation() gives the UI
+// a clean yes/no so we can enforce the "no location, no attendance"
+// policy consistently.
+//
+// The distinction between denied vs unavailable vs timeout matters:
+// "denied" means the crew needs to unblock the site in browser
+// settings (very different UX from "we couldn't get a fix — step
+// outside"). We surface the reason so the Razor component can show
+// the right guidance instead of a generic error.
+window.eventwosCheckin.requireLocation = async function () {
+    if (!("geolocation" in navigator)) {
+        return { ok: false, reason: "no-api" };
+    }
+    // Geolocation is silently blocked on non-secure origins by every
+    // modern browser (Chrome/Edge/Firefox/Safari). Detect explicitly
+    // so the error message can point at HTTPS instead of the user's
+    // permission settings.
+    if (typeof window.isSecureContext === "boolean" && !window.isSecureContext) {
+        return { ok: false, reason: "no-secure-context" };
+    }
+    return await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const lat = pos.coords.latitude.toFixed(6);
+                const lng = pos.coords.longitude.toFixed(6);
+                resolve({ ok: true, coords: `${lat},${lng}` });
+            },
+            (err) => {
+                // GeolocationPositionError codes:
+                //   1 = PERMISSION_DENIED
+                //   2 = POSITION_UNAVAILABLE (GPS off, no signal, etc.)
+                //   3 = TIMEOUT
+                const code = err && err.code;
+                const reason =
+                    code === 1 ? "denied" :
+                    code === 3 ? "timeout" :
+                    "unavailable";
+                resolve({ ok: false, reason });
+            },
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        );
+    });
+};
+
 window.eventwosCheckin.getPosition = async function () {
     // Returns "lat,lng" (6dp) on success, "unavailable:<code>" on
     // failure. No reverse geocoding here — that happens server-side

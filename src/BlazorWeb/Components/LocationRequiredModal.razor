@@ -1,0 +1,191 @@
+@*
+  ────────────────────────────────────────────────────────────────────
+  <LocationRequiredModal /> — blocks check-in / out until GPS is on
+  ────────────────────────────────────────────────────────────────────
+  Shown when the crew hits Check In or Check Out but the browser can\'t
+  produce a location fix. Renders a full-screen dimmed backdrop with a
+  centered card explaining exactly why we need location AND, tailored
+  to the failure reason, what to do next.
+
+  We treat this as BLOCKING because attendance without location is
+  not audit-safe — an event manager reviewing a paid check-in should
+  see where it happened, always. This modal is the enforcement point.
+
+  The parent page calls Show(reason) with one of:
+    "denied"           — user rejected the browser permission prompt
+    "no-secure-context"— page isn\'t HTTPS (dev-only situation, but
+                          worth its own message so we don\'t blame
+                          the user\'s settings)
+    "no-api"           — browser has no Geolocation API at all
+    "unavailable"      — OS refused / no GPS hardware fix
+    "timeout"          — 8s elapsed; likely dense venue with weak GPS
+    anything else      — generic fallback
+*@
+
+@if (_isOpen)
+{
+    <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+         role="dialog" aria-modal="true" aria-labelledby="locreq-title">
+        <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div class="bg-gradient-to-r from-red-500 to-orange-500 px-6 py-5 text-white">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-2xl">📍</div>
+                    <div>
+                        <h3 id="locreq-title" class="text-lg font-semibold leading-tight">
+                            Location access is required
+                        </h3>
+                        <p class="text-sm text-red-50 mt-0.5 leading-tight">
+                            We need to know where you @(_action) from.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-5">
+                <p class="text-sm text-gray-700 leading-relaxed">
+                    @Headline
+                </p>
+
+                @if (Steps.Any())
+                {
+                    <ol class="mt-4 space-y-2 text-sm text-gray-600 list-decimal list-inside">
+                        @foreach (var step in Steps)
+                        {
+                            <li>@((MarkupString)step)</li>
+                        }
+                    </ol>
+                }
+
+                <div class="mt-5 flex items-center gap-2 justify-end">
+                    <button type="button"
+                            @onclick="Close"
+                            class="px-4 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 transition">
+                        Cancel
+                    </button>
+                    <button type="button"
+                            @onclick="OnRetryAsync"
+                            disabled="@_retrying"
+                            class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition disabled:opacity-60">
+                        @(_retrying ? "Checking…" : "Try Again")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // The failure reason produced by checkin.js requireLocation(). Also
+    // used to pick the copy shown to the user.
+    private string _reason = "";
+
+    // "check in" / "check out" — cosmetic only, drives the subheadline.
+    private string _action = "check in";
+
+    // Retry-button spinner. We flip it while the parent\'s callback runs.
+    private bool _retrying = false;
+
+    // Modal visibility.
+    private bool _isOpen = false;
+
+    // The parent supplies a delegate that re-runs the whole gate
+    // (requireLocation + resume the original action). We invoke it on
+    // "Try Again" and close the modal if it succeeds.
+    private Func<Task<bool>>? _onRetry;
+
+    // ── Public API ─────────────────────────────────────────────────
+    // Show the modal for a specific failure. actionLabel drives the
+    // "we need to know where you check IN from" wording (vs "OUT").
+    // onRetry is called when the user hits Try Again — it should
+    // re-attempt the ORIGINAL flow (getLocation + open QR / POST
+    // checkout) and return true on success. We close the modal on
+    // success; on failure we stay open so the user can adjust.
+    public void Show(string reason, string actionLabel, Func<Task<bool>> onRetry)
+    {
+        _reason   = reason ?? "";
+        _action   = actionLabel;
+        _onRetry  = onRetry;
+        _isOpen   = true;
+        _retrying = false;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        _isOpen = false;
+        _retrying = false;
+        StateHasChanged();
+    }
+
+    private async Task OnRetryAsync()
+    {
+        if (_onRetry is null) { Close(); return; }
+        _retrying = true; StateHasChanged();
+        try
+        {
+            var ok = await _onRetry();
+            if (ok) Close();
+        }
+        finally
+        {
+            _retrying = false;
+            StateHasChanged();
+        }
+    }
+
+    // ── Copy per failure reason ─────────────────────────────────────
+    // These are computed properties so the modal re-renders correctly
+    // when Show() flips the reason.
+
+    private string Headline => _reason switch
+    {
+        "denied"            => "You\u2019ve blocked location access for this app in your browser. We can\u2019t check you in without it.",
+        "no-secure-context" => "This app must be accessed over HTTPS for location to work.",
+        "no-api"            => "Your browser doesn\u2019t support location services.",
+        "unavailable"       => "Your device couldn\u2019t get a GPS fix.",
+        "timeout"           => "It took too long to determine your location.",
+        _                    => "We couldn\u2019t determine your location."
+    };
+
+    private List<string> Steps => _reason switch
+    {
+        "denied" => new()
+        {
+            "Tap the <b>lock icon</b> in the browser\u2019s address bar.",
+            "Find <b>Location</b> and switch it to <b>Allow</b>.",
+            "Come back and tap <b>Try Again</b> below."
+        },
+
+        "no-secure-context" => new()
+        {
+            "Make sure the URL starts with <b>https://</b>.",
+            "If you\u2019re on a preview link, ask your admin for the production URL."
+        },
+
+        "no-api" => new()
+        {
+            "Try opening this page in <b>Chrome, Safari, or Edge</b>.",
+            "Make sure your browser is up to date."
+        },
+
+        "unavailable" => new()
+        {
+            "Turn <b>Location Services</b> on in your phone\u2019s settings.",
+            "Step outside or near a window so your device can find satellites.",
+            "Tap <b>Try Again</b>."
+        },
+
+        "timeout" => new()
+        {
+            "Move to an area with a clearer view of the sky.",
+            "Wait a few seconds and tap <b>Try Again</b>.",
+            "If you\u2019re indoors in a dense venue, walking near an entrance usually helps."
+        },
+
+        _ => new()
+        {
+            "Make sure location is enabled on your device.",
+            "Tap <b>Try Again</b>."
+        }
+    };
+}

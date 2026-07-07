@@ -183,6 +183,11 @@
                 OnVerified="OnQrVerified"
                 OnClosed="() => StateHasChanged()" />
 
+@* Blocking modal shown when Check In/Out is attempted without a
+   working browser location fix. Enforces the "no location, no
+   attendance" policy — see EnsureLocationOrPrompt() below. *@
+<LocationRequiredModal @ref="_locModal" />
+
 @code {
 
     private const string CheckIn  = "checkin";
@@ -199,7 +204,8 @@
     // the code, showing the QR, waiting for the vendor's scan (via
     // SignalR), and firing OnQrVerified when the server commits. We keep
     // RecordAttendance for CheckOut only.
-    private CheckInQrModal? _qrModal;
+    private CheckInQrModal?         _qrModal;
+    private LocationRequiredModal?  _locModal;
 
     // Uses the page-local MyAssignmentWithEvent record — that's what
     // the loop iterates over. Only Id + EventTitle are needed; the modal
@@ -207,7 +213,88 @@
     private async Task OpenQrAsync(MyAssignmentWithEvent a)
     {
         if (_qrModal is null) return;
+
+        // Enforce location BEFORE minting the QR. The server-side
+        // location capture happens later on the vendor scan, but we
+        // want to fail fast on the CREW device so we never mint a
+        // QR that would produce an attendance row with no origin.
+        // Passing OpenQrAsync itself as the retry callback means
+        // "Try Again" in the modal resumes this exact flow.
+        var gate = await EnsureLocationOrPromptAsync("check in", () => OpenQrAsync(a));
+        if (!gate) return;
+
         await _qrModal.OpenAsync(a.Id, a.EventTitle);
+    }
+
+    // ── Location gate ─────────────────────────────────────────────
+    // Calls checkin.js requireLocation(). On success: returns true,
+    // caller proceeds. On failure: pops LocationRequiredModal with
+    // the appropriate copy for the reason, wires the modal's Retry
+    // button to `retry` (which will re-run the whole gate + original
+    // action), and returns false so the caller aborts NOW.
+    //
+    // actionLabel is inserted into the modal headline ("we need to
+    // know where you check IN from" / "OUT from").
+    private async Task<bool> EnsureLocationOrPromptAsync(
+        string actionLabel,
+        Func<Task> retryAction)
+    {
+        // If JS isn't available (prerender / test host) we can't
+        // enforce; be permissive so we don't break server tests.
+        // The server still has the pending row's existence check
+        // as its own guard.
+        string reason;
+        try
+        {
+            var res = await JS.InvokeAsync<LocationGateResult>(
+                "eventwosCheckin.requireLocation");
+            if (res is { Ok: true }) return true;
+            reason = res?.Reason ?? "unavailable";
+        }
+        catch
+        {
+            // JS blew up entirely — treat as unavailable so the
+            // user sees the friendly "turn on location" message
+            // rather than a raw exception dialog.
+            reason = "unavailable";
+        }
+
+        // Show the modal. The retry closure re-invokes the ORIGINAL
+        // action — which itself calls back into EnsureLocation... —
+        // so a successful retry resumes the flow, and a repeated
+        // failure re-opens the modal with the (possibly different)
+        // new reason.
+        if (_locModal is not null)
+        {
+            _locModal.Show(reason, actionLabel, async () =>
+            {
+                await retryAction();
+                // We can't know from here whether the retry succeeded
+                // — the retryAction closes/reopens the modal on its
+                // own path. Returning true tells the modal to close
+                // itself; if retry failed, EnsureLocation... will
+                // have re-opened it in the same turn.
+                return true;
+            });
+        }
+        return false;
+    }
+
+    // Matches the shape returned by requireLocation() in checkin.js.
+    // Kept simple so System.Text.Json deserialises without custom
+    // converters. Property names lower-cased via JsonPropertyName
+    // attributes so the JS { ok, reason, coords } payload maps
+    // cleanly onto C# PascalCase properties.
+    private sealed class LocationGateResult
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("ok")]
+        public bool Ok { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("reason")]
+        public string? Reason { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("coords")]
+        public string? Coords { get; set; }
     }
 
     private async Task OnQrVerified(EventWOS.BlazorWeb.Services.CheckInVerifyResultDto result)
@@ -297,22 +384,32 @@
 
     private async Task RecordAttendance(Guid assignmentId, string action)
     {
+        // Strict location gate — same policy as Check-In. If we can't
+        // get a fix we surface LocationRequiredModal instead of just
+        // POSTing with a null location column. Retry closure invokes
+        // THIS same method so "Try Again" resumes the check-out.
+        var actionLabel = action == CheckOut ? "check out" : "check in";
+        var gate = await EnsureLocationOrPromptAsync(actionLabel,
+            () => RecordAttendance(assignmentId, action));
+        if (!gate) return;
+
         _actionId = assignmentId; _actionType = action; StateHasChanged();
         try
         {
-            // Best-effort location capture. Only reached for Check-Out
-            // now (Check-In routes through the QR modal → vendor scan).
-            // Reuses the same getPosition() helper the vendor scanner
-            // uses — 8s timeout, 60s cache, never rejects. If the crew
-            // denied GPS or is on desktop, we send null and the DB
-            // column stays empty; check-out still succeeds.
+            // We already have a validated fix from the gate above.
+            // Capture it again here (fresh call) so the coords are
+            // as-current-as-possible at the moment of the POST — the
+            // gate's fix could be a few seconds stale if the user
+            // paused on the confirmation.
             string? location = null;
             try
             {
                 var loc = await JS.InvokeAsync<string?>("eventwosCheckin.getPosition");
                 if (!string.IsNullOrWhiteSpace(loc)) location = loc;
             }
-            catch { /* prerender / JS unavailable — send null */ }
+            catch { /* JS unavailable mid-flow — server accepts null,
+                       but we should never reach here since the gate
+                       above just succeeded. Belt-and-braces. */ }
 
             var resp = await Http.PostAsJsonAsync(
                 $"api/v1/events/assignments/{assignmentId}/attendance",
