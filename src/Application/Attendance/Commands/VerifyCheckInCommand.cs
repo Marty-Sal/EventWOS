@@ -25,10 +25,9 @@ namespace EventWOS.Application.Attendance.Commands;
 /// AttendanceRecord (or vice-versa).
 /// </summary>
 public sealed record VerifyCheckInCommand(
-    string Code,
-    Guid   VerifierUserId,
-    UserRole VerifierRole,
-    string? Location
+    string   Code,
+    Guid     VerifierUserId,
+    UserRole VerifierRole
 ) : IRequest<Result<CheckInVerifyResultDto>>;
 
 public sealed class VerifyCheckInHandler
@@ -137,15 +136,15 @@ public sealed class VerifyCheckInHandler
                 "This crew is already checked in."));
         }
 
-        // Reverse-geocode the CREW's stored "lat,lng" via Nominatim. We
-        // deliberately ignore req.Location (the vendor's scanning phone)
-        // because attendance semantics are "where the crew was at Check In",
-        // not "where the vendor was standing at scan time". The crew's coords
-        // were captured on their own device at OpenQr / RequestCheckIn and
-        // persisted on pending.CrewLocation — see RequestCheckInHandler.
-        // LookupAsync tolerates coord shape variance and returns (coords, null)
-        // on lookup failure, so we still get the map pin even if the address
-        // label lookup times out.
+        // Reverse-geocode the CREW's stored "lat,lng" via Nominatim.
+        // Attendance semantics are "where the crew was at Check In",
+        // not "where the vendor was standing at scan time" — so the
+        // coords were captured on the crew's own device at
+        // /checkin/request and persisted on pending.CrewLocation. The
+        // scanning device never contributes location to the record.
+        // LookupAsync tolerates coord shape variance and returns
+        // (coords, null) on lookup failure, so we still get the map
+        // pin even if the address label lookup times out.
         var (coords, address) = await _geo.LookupAsync(pending.CrewLocation, ct);
 
         // ── Commit: write the AttendanceRecord + flip assignment status ─

@@ -237,11 +237,11 @@
     //
     // actionLabel is inserted into the modal headline ("we need to
     // know where you check IN from" / "OUT from").
-    // Result shape returned to callers. Coords is non-null iff Ok — this
-    // is the "check-then-use" pattern that avoids a second JS round-trip
-    // on the happy path (previously RecordAttendance called
-    // eventwosCheckin.getPosition() a second time after the gate
-    // succeeded; now we just hand it the coords the gate already got).
+    // Result shape returned to callers. Coords is non-null iff Ok — the
+    // "check-then-use" pattern avoids a second JS round-trip on the
+    // happy path (the gate already resolved the fix; we just hand it
+    // to the caller so RecordAttendance can POST it and OpenQrAsync
+    // can pass it to the modal).
     private readonly record struct LocationGateOutcome(string? Coords);
 
     private async Task<LocationGateOutcome> EnsureLocationOrPromptAsync(
@@ -393,11 +393,9 @@
         _actionId = assignmentId; _actionType = action; StateHasChanged();
         try
         {
-            // Use the coords the gate already captured — a fresh
-            // getPosition() call here would just re-query the browser
-            // for a fix that's at most seconds old, wasting a round-
-            // trip. If the crew truly stood still between tap and
-            // network response we'll get the same numbers back anyway.
+            // Use the coords the gate already captured. A fresh browser
+            // GPS call here would just re-query for a fix at most a
+            // few seconds old — same numbers, extra round-trip.
             string? location = gate.Coords;
 
             var resp = await Http.PostAsJsonAsync(

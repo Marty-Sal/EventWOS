@@ -697,15 +697,6 @@
     private string?  _lastCode;
     private DateTime _lastCodeAt = DateTime.MinValue;
 
-    // Cached GPS fix from navigator.geolocation. We ask the browser once
-    // when the vendor taps Start Scanner — the OS permission prompt is
-    // out of the way BEFORE the first QR is decoded, so /verify calls
-    // never stall waiting for a fix. maximumAge=60s inside the JS helper
-    // means we'll transparently refresh it if the vendor is walking
-    // through the venue. Null until the first fix arrives; we still
-    // verify without location in that window rather than blocking.
-    private string? _lastLocation;
-
     private async Task StartScannerAsync()
     {
         if (_scanStarting || _scannerRunning) return;
@@ -729,11 +720,6 @@
             else
             {
                 _scannerRunning = true;
-                // Kick off a background GPS lookup. First fix populates
-                // _lastLocation for subsequent /verify calls. Fire-and-
-                // forget — never blocks the scanner UI. Wrapped in _ =
-                // because Task.Run returns a Task we intentionally drop.
-                _ = RefreshLocationAsync();
             }
         }
         catch (Exception ex)
@@ -772,36 +758,11 @@
         _lastScanError = null;
         StateHasChanged();
 
-        // Location send — with a bounded wait for the first GPS fix.
-        //
-        // Before: the background RefreshLocationAsync() kicked off when
-        // the scanner started, but on fast mobile hardware the vendor
-        // scans a QR within ~1 second, well before getCurrentPosition()
-        // returns. _lastLocation was still null, we sent null, and the
-        // Attendance row landed with location_coords = null — hence
-        // the em-dash in the Logs table.
-        //
-        // Now: if _lastLocation is still null when a scan lands, we
-        // wait for the pending GPS fix up to 4 s. Beyond that, ship
-        // the verify without a location rather than blocking the
-        // vendor. In practice mobile GPS resolves in 500-1500 ms
-        // with maximumAge=60s, so the wait is usually invisible.
-        if (string.IsNullOrWhiteSpace(_lastLocation))
-        {
-            try
-            {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
-                var loc = await JS.InvokeAsync<string?>(
-                    "eventwosCheckin.getPosition", cts.Token);
-                if (!string.IsNullOrWhiteSpace(loc)) _lastLocation = loc;
-            }
-            catch
-            {
-                // Timeout, prerender, or JS unavailable — proceed with null.
-            }
-        }
-
-        var result = await CheckInApi.VerifyAsync(code, location: _lastLocation);
+        // The vendor's device location is no longer sent on verify — the
+        // AttendanceRecord's coords come from the crew's PendingCheckIn
+        // (captured on the crew's own device when they minted the QR).
+        // See RequestCheckInHandler / VerifyCheckInHandler for the flow.
+        var result = await CheckInApi.VerifyAsync(code);
 
         if (result.Success && result.Data is not null)
         {
@@ -829,26 +790,6 @@
     {
         await StopScannerAsync();
         _selfRef?.Dispose();
-    }
-
-    /// <summary>
-    /// Background GPS refresh. Called on scanner start and (implicitly,
-    /// via maximumAge inside checkin.js) reused for all subsequent
-    /// verifies. Silent on error — bad GPS never blocks a check-in.
-    /// </summary>
-    private async Task RefreshLocationAsync()
-    {
-        try
-        {
-            var loc = await JS.InvokeAsync<string?>("eventwosCheckin.getPosition");
-            if (!string.IsNullOrWhiteSpace(loc))
-                _lastLocation = loc;
-        }
-        catch
-        {
-            // Prerender or JS not available — no-op. _lastLocation stays
-            // whatever it was; verify will send null.
-        }
     }
 
     /// <summary>Shape returned by eventwosCheckin.startScanner.</summary>

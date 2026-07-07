@@ -285,16 +285,20 @@
 
         // ── Role-based permission priming ─────────────────────────
         // Fire OS-level prompts right after login (calm moment) instead
-        // of mid-scan (busy moment). One-shot per session using
-        // sessionStorage so users don't get re-prompted on every page
+        // of mid-scan / mid-check-in (busy moment). One-shot per session
+        // using sessionStorage so users aren't re-prompted on every page
         // load; browsers will silently return the cached answer anyway,
         // but this saves the async JS round-trip.
         //
-        // Vendors need BOTH camera (QR scanner) and location (tagging
-        // check-in venue). Managers/Admins with attendance:verify get
-        // the same treatment — they're the ones who might scan.
-        // Crew get location only (Check-Out geo-tag). Everyone else
-        // (approvers etc.) gets nothing.
+        // Who needs what, post-crew-location refactor:
+        //   * Vendors / Admins / Managers with attendance:verify
+        //       → CAMERA only. They scan crew QR codes but no longer
+        //         contribute location to the AttendanceRecord — the
+        //         crew's own device is the source of truth now.
+        //   * Crew
+        //       → LOCATION only. Required for Check-In (server rejects
+        //         missing coords) and Check-Out (same enforcement).
+        //   * Everyone else (approvers, etc.) → nothing.
         _ = InvokeAsync(async () =>
         {
             try
@@ -308,7 +312,7 @@
 
                 var wantsScan = role is "Vendor" or "Admin"
                                 || (role is "Manager" && _perms.Contains("attendance:verify"));
-                var wantsGeo  = wantsScan || role is "Crew";
+                var wantsGeo  = role is "Crew";
 
                 if (!wantsScan && !wantsGeo) return;
 

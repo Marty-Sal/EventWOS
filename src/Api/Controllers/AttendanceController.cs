@@ -234,8 +234,7 @@ public sealed class AttendanceController : ControllerBase
         var result = await _mediator.Send(new VerifyCheckInCommand(
             body.Code,
             _currentUser.UserId.Value,
-            _currentUser.Role.Value,
-            body.Location), ct);
+            _currentUser.Role.Value), ct);
 
         return result.IsSuccess
             ? Ok(ApiResponse<CheckInVerifyResultDto>.Ok(result.Value))
@@ -249,8 +248,9 @@ public sealed class AttendanceController : ControllerBase
 /// server rejects with CheckIn.LocationRequired if it's missing/malformed.</summary>
 public sealed record CheckInRequestBody(Guid AssignmentId, string? Location = null);
 
-/// <summary>Body for /checkin/verify. Location is optional — the vendor's
-/// device may or may not share geolocation.</summary>
-public sealed record CheckInVerifyBody(string Code, string? Location = null);
+/// <summary>Body for /checkin/verify. Only the code is sent — the
+/// AttendanceRecord's coords come from PendingCheckIn.CrewLocation
+/// (captured on the crew's device at /checkin/request time).</summary>
+public sealed record CheckInVerifyBody(string Code);
 
 public sealed record AttendanceActionRequest(string Action, string? Location = null);

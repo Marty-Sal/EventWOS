@@ -139,11 +139,11 @@ window.eventwosCheckin.stopScanner = async function () {
 // Used to GATE the check-in / check-out UI entry points: the crew
 // screen calls this BEFORE opening the QR modal (or before firing the
 // check-out POST) and, on !ok, renders a "Location access is required"
-// card explaining exactly what to do next. This is stricter than
-// getPosition() above — that helper never rejects, callers just get a
-// magic string and usually plough on. requireLocation() gives the UI
-// a clean yes/no so we can enforce the "no location, no attendance"
-// policy consistently.
+// card explaining exactly what to do next. Returns a structured
+// { ok, reason, coords } shape so the caller can both use the fresh
+// fix on the happy path AND branch on the failure code for tailored
+// user guidance — see LocationRequiredModal for the reason → copy
+// mapping.
 //
 // The distinction between denied vs unavailable vs timeout matters:
 // "denied" means the crew needs to unblock the site in browser
@@ -185,57 +185,28 @@ window.eventwosCheckin.requireLocation = async function () {
     });
 };
 
-window.eventwosCheckin.getPosition = async function () {
-    // Returns "lat,lng" (6dp) on success, "unavailable:<code>" on
-    // failure. No reverse geocoding here — that happens server-side
-    // in EventWOS.Infrastructure.Geo.GeoLocationService, which now
-    // uses OpenStreetMap's Nominatim (free, no key, 1 req/s rate-
-    // limited by the server). The server splits the value into two
-    // typed columns on the AttendanceRecord row:
-    //   * location_coords  — this same "lat,lng" for the map link
-    //   * location_address — the reverse-geocoded short address
-    //                        ("Airoli, Navi Mumbai") for display
-    //
-    // Options tuned for on-site vendor phones:
-    //   * enableHighAccuracy=false — battery-friendly, ~100 m is fine
-    //     for venue-level attendance auditing.
-    //   * timeout=8000 — mobile GPS cold-start can take 3-6 s in dense
-    //     venues; anything shorter produces false-negative fixes.
-    //   * maximumAge=60000 — reuse a fix from the last minute across
-    //     back-to-back scans of 5-30 crew.
-    if (!("geolocation" in navigator)) return "unavailable:no-api";
-    return await new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const lat = pos.coords.latitude.toFixed(6);
-                const lng = pos.coords.longitude.toFixed(6);
-                resolve(`${lat},${lng}`);
-            },
-            (err) => {
-                // 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
-                resolve(`unavailable:${err && err.code}`);
-            },
-            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
-        );
-    });
-};
-
 // ─── Role-based permission priming ─────────────────────────────────
-// Called from MainLayout after login. For vendors (who verify crew via
-// QR scans) we want camera + geolocation prompts to fire NOW — not
-// mid-scan when they've already tapped "Start Scanner" and are staring
-// at a black rectangle wondering why nothing's happening.
+// Called from MainLayout after login. Surfaces OS-level permission
+// prompts in a calm moment (right after login) instead of a busy one
+// (mid-scan / mid-check-in tap) so users don't stare at a black
+// camera rectangle or a stalled "Show QR" button wondering what's
+// happening.
+//
+// Role→prompt mapping is set by the caller in MainLayout:
+//   * Vendors / verifiers → camera (QR scanning). No location — the
+//     crew's device is the source of truth for attendance coords.
+//   * Crew → location (Check-In and Check-Out both require it).
 //
 // Prompts:
-//   * geolocation → getCurrentPosition() with short timeout
-//   * camera      → getUserMedia({video: true}), then immediately stop
-//                   all tracks so we don't hold the sensor
+//   * geolocation → getCurrentPosition() with short timeout, discarded
+//     — we only want the permission grant, not the fix itself.
+//   * camera      → getUserMedia({video: true}), tracks stopped
+//     immediately so we don't hold the sensor.
 //
-// Both are best-effort and independent. Denied? We move on. The
-// scanner and RecordAttendance flows both tolerate null location and
-// camera prompt errors, so this is purely a UX polish — surface the
-// browser's OS-level prompts in a calm moment (right after login)
-// rather than a busy one (mid check-in queue).
+// Both are best-effort and independent. Denied? We move on — the
+// downstream flows (LocationRequiredModal for crew, the "Could not
+// access the camera" state for vendors) surface the real reject
+// with proper guidance.
 //
 // The `permissions` object controls which prompts to fire:
 //   { location: true, camera: true }

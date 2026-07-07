@@ -35,8 +35,11 @@ public interface ICheckInApiService
     /// (used to rehydrate the modal after a page refresh).</summary>
     Task<ApiResult<PendingCheckInDto>>      GetMyLiveAsync(Guid assignmentId, CancellationToken ct = default);
 
-    /// <summary>Vendor / Manager / Admin verifies a scanned code.</summary>
-    Task<ApiResult<CheckInVerifyResultDto>> VerifyAsync(string code, string? location, CancellationToken ct = default);
+    /// <summary>Vendor / Manager / Admin verifies a scanned code. The
+    /// AttendanceRecord's coords come from the crew's PendingCheckIn
+    /// (captured on the crew's own device at request time), not from
+    /// the scanning device — so we don't send a vendor location here.</summary>
+    Task<ApiResult<CheckInVerifyResultDto>> VerifyAsync(string code, CancellationToken ct = default);
 }
 
 public sealed class CheckInApiService : ICheckInApiService
@@ -73,11 +76,11 @@ public sealed class CheckInApiService : ICheckInApiService
     }
 
     public async Task<ApiResult<CheckInVerifyResultDto>> VerifyAsync(
-        string code, string? location, CancellationToken ct = default)
+        string code, CancellationToken ct = default)
     {
         var resp = await _http.PostAsJsonAsync(
             "api/v1/attendance/checkin/verify",
-            new { code, location }, ct);
+            new { code }, ct);
         return await ParseAsync<CheckInVerifyResultDto>(resp);
     }
 
