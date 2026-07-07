@@ -1173,7 +1173,7 @@ BEGIN
     -- were minted before this field existed) get an empty string so the
     -- NOT NULL constraint holds — they'll never be redeemed in practice
     -- because their TTL was 10 min from creation. The constraint is
-    -- deliberately NOT NULL because the domain contract is "required";
+    -- deliberately NOT NULL because the domain contract is 'required';
     -- allowing NULL would let a future bug bypass the ctor guard.
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
@@ -1182,7 +1182,7 @@ BEGIN
         ALTER TABLE pending_checkins
             ADD COLUMN crew_location varchar(40) NOT NULL DEFAULT '';
         -- Drop the default after backfill so future INSERTs must supply it
-        -- (matches the domain's "required" contract; the empty-string
+        -- (matches the domain contract for a required field; the empty-string
         -- default is only there to satisfy NOT NULL on existing rows).
         ALTER TABLE pending_checkins ALTER COLUMN crew_location DROP DEFAULT;
         RAISE NOTICE 'Added crew_location column to pending_checkins';
