@@ -132,8 +132,8 @@ public sealed class UpdateEventShiftHandler
         return Result.Success(new EventShiftDto(
             shift.Id, shift.EventId, shift.ScopeOfWorkId, scope?.Name ?? "(unknown)",
             shift.CrewCount,
-            assignedCrew: seatsOnThisShift,
-            reservedCrew: reservedOnThisShift,
+            AssignedCrew: seatsOnThisShift,
+            ReservedCrew: reservedOnThisShift,
             shift.StartAt, shift.EndAt));
     }
 }

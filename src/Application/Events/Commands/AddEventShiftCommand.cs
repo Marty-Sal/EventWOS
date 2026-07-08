@@ -97,8 +97,8 @@ public sealed class AddEventShiftHandler
         return Result.Success(new EventShiftDto(
             shift.Id, shift.EventId, shift.ScopeOfWorkId, scope.Name,
             shift.CrewCount,
-            assignedCrew: 0,
-            reservedCrew: 0,
+            AssignedCrew: 0,
+            ReservedCrew: 0,
             shift.StartAt, shift.EndAt));
     }
 }
