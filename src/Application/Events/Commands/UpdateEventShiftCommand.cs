@@ -101,11 +101,24 @@ public sealed class UpdateEventShiftHandler
             return Result.Failure<EventShiftDto>(new Error("Shift.Invalid", ex.Message));
         }
 
-        // Recompute event MaxCrew. EF tracks the in-memory shift mutation,
-        // so SumAsync sees the new value.
-        var newTotal = await _db.EventShifts
-            .Where(s => s.EventId == shift.EventId)
-            .SumAsync(s => s.CrewCount, ct);
+        // Recompute event MaxCrew. Prior version tried SumAsync here
+        // with a comment claiming "EF tracks the in-memory shift
+        // mutation, so SumAsync sees the new value." That is FALSE —
+        // SumAsync translates to server-side SELECT SUM() and does
+        // NOT consult the change tracker, so it reads the pre-Update
+        // CrewCount for THIS shift. Result: every resize baked a
+        // stale total into MaxCrew (KASHISH Pride showed 21 while
+        // shifts totalled 22), and repeated resizes progressively
+        // drifted MaxCrew away from SUM(shift.CrewCount).
+        //
+        // Fix: load the parent event's Shifts collection into the
+        // change tracker (respects the !IsDeleted global query
+        // filter) and sum in-memory. The just-called shift.Update()
+        // mutated the tracked entity, so the in-memory Sum sees the
+        // new value. Same round-trip cost as before (one query
+        // vs. one aggregate) but correct.
+        await _db.Entry(ev).Collection(e => e.Shifts).LoadAsync(ct);
+        var newTotal = ev.Shifts.Sum(s => s.CrewCount);
 
         // Floor for event MaxCrew is total seats occupied across ALL shifts
         // on the event — same rule as Event.Update.

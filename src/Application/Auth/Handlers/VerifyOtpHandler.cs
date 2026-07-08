@@ -148,11 +148,16 @@ public sealed class VerifyOtpHandler : IRequestHandler<VerifyOtpCommand, Result<
 
         await _uow.SaveChangesAsync(cancellationToken);
 
+        // OTP verify is a login event — no bearer token on the request
+        // yet, so ICurrentUser.UserId is null. Pass user.Id explicitly
+        // so the audit trail correctly attributes the login instead of
+        // showing "System" in the log UI. Matches LoginWithPasswordHandler.
         await _audit.LogAsync(
             AuditAction.Login,
             nameof(User),
             user.Id.ToString(),
             additionalData: $"SessionId:{sessionId},IP:{request.IpAddress}",
+            actorUserId: user.Id,
             cancellationToken: cancellationToken);
 
         _logger.LogInformation("User {UserId} logged in via OTP. SessionId: {SessionId}", user.Id, sessionId);

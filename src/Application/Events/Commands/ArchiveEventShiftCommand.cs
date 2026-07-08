@@ -69,11 +69,19 @@ public sealed class ArchiveEventShiftHandler
             return Result.Failure<Unit>(new Error("Shift.HasActiveCrew", ex.Message));
         }
 
-        // Recompute event MaxCrew now that this shift is filtered out by
-        // the soft-delete query filter.
-        var newTotal = await _db.EventShifts
-            .Where(s => s.EventId == shift.EventId && s.Id != shift.Id)
-            .SumAsync(s => s.CrewCount, ct);
+        // Recompute event MaxCrew now that this shift is soft-deleted.
+        // Loading the collection respects the !IsDeleted global query
+        // filter but EF only re-evaluates the filter on materialisation,
+        // not on tracked-entity state changes. To be safe, load and
+        // then explicitly exclude the just-archived shift by Id — same
+        // as the previous DB query, but resilient to EF Core's change-
+        // tracker semantics (which don't evaluate query filters against
+        // in-memory mutations). See UpdateEventShiftCommand for the
+        // matching pattern and the long-form SumAsync explanation.
+        await _db.Entry(ev).Collection(e => e.Shifts).LoadAsync(ct);
+        var newTotal = ev.Shifts
+            .Where(s => s.Id != shift.Id && !s.IsDeleted)
+            .Sum(s => s.CrewCount);
 
         var totalSeatsOnEvent = await _db.EventAssignments
             .Where(a => a.EventId == shift.EventId)

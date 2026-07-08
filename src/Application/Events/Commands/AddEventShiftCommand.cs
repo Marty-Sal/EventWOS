@@ -82,12 +82,22 @@ public sealed class AddEventShiftHandler
         }
         _db.EventShifts.Add(shift);
 
-        // Auto-grow MaxCrew. SUM the existing active crew counts + the new
-        // shift. Global query filter already excludes archived rows.
-        var existingTotal = await _db.EventShifts
-            .Where(s => s.EventId == req.EventId)
-            .SumAsync(s => s.CrewCount, ct);
-        ev.RecomputeCapacityFromShifts(existingTotal + req.CrewCount);
+        // Auto-grow MaxCrew. Load the tracked shifts collection and sum
+        // in-memory — this way the just-Added shift is included via the
+        // change tracker without depending on whether EF Core's
+        // SumAsync happens to include Added-but-unsaved entities (it
+        // does NOT in current EF versions; server-side SUM only sees
+        // committed rows). Same pattern used by UpdateEventShiftCommand
+        // to keep MaxCrew consistent — see that file for the long-form
+        // explanation of why SumAsync is wrong here.
+        await _db.Entry(ev).Collection(e => e.Shifts).LoadAsync(ct);
+        var newTotal = ev.Shifts.Sum(s => s.CrewCount);
+        // ev.Shifts may or may not have picked up the just-Added entity
+        // depending on EF nav-fixup timing; add it explicitly if missing
+        // so the SUM is deterministic regardless.
+        if (!ev.Shifts.Any(s => s.Id == shift.Id))
+            newTotal += shift.CrewCount;
+        ev.RecomputeCapacityFromShifts(newTotal);
 
         await _uow.SaveChangesAsync(ct);
 

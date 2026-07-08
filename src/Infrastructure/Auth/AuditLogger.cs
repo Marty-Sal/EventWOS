@@ -28,11 +28,17 @@ public sealed class AuditLogger : IAuditLogger
         object? oldValues = null,
         object? newValues = null,
         string? additionalData = null,
+        Guid? actorUserId = null,
         CancellationToken cancellationToken = default)
     {
+        // Actor: explicit override wins (used by the LOGIN path, where
+        // the request has no bearer token yet so ICurrentUser.UserId is
+        // null even though we know exactly which user is being logged
+        // in). Falls back to the ambient current user for every other
+        // caller so nothing else in the codebase needs to change.
         var entry = new AuditLog(
             action,
-            _currentUser.UserId,
+            actorUserId ?? _currentUser.UserId,
             _currentUser.IpAddress,
             entityType,
             entityId,

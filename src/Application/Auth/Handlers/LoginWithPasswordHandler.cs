@@ -125,8 +125,15 @@ public sealed class LoginWithPasswordHandler : IRequestHandler<LoginWithPassword
             req.IpAddress ?? "unknown", req.UserAgent ?? "unknown"));
 
         await _uow.SaveChangesAsync(ct);
+        // Pass user.Id as the explicit actor — the request has no bearer
+        // token yet at this point (login IS the auth event), so
+        // ICurrentUser.UserId is null. Without the override the audit row
+        // would render as "System" in the log UI even though we know
+        // exactly which user just authenticated.
         await _audit.LogAsync(AuditAction.Login, nameof(User), user.Id.ToString(),
-            additionalData: $"Method:Password Session:{sessionId}", cancellationToken: ct);
+            additionalData: $"Method:Password Session:{sessionId}",
+            actorUserId: user.Id,
+            cancellationToken: ct);
 
         _logger.LogInformation("Password login OK: {UserId} portal={Portal}", user.Id, req.Portal);
 

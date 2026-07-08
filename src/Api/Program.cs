@@ -1241,6 +1241,40 @@ BEGIN
            AND location ~ '^-?[0-9]+(\.[0-9]+)?,-?[0-9]+(\.[0-9]+)?$';
     END IF;
 
+    -- ═══ MaxCrew drift backfill ═══════════════════════════════════════════
+    -- Historical bug in UpdateEventShiftCommand / AddEventShiftCommand:
+    -- they recomputed events.max_crew via a SumAsync() that translated to
+    -- server-side SELECT SUM(). That SUM only sees COMMITTED rows, not the
+    -- change-tracker's in-memory mutation of the shift about to be saved,
+    -- so every resize baked the STALE (pre-change) total into max_crew.
+    -- Symptom in the UI: an event card showed 13/21 while its active
+    -- shifts actually totalled 22 (KASHISH Pride: Box Office=5 + F&B=17).
+    --
+    -- Now that the handlers use in-memory Sum on the tracked collection,
+    -- new resizes will store the correct total — but existing rows that
+    -- drifted are still wrong. One-shot backfill: for every event whose
+    -- max_crew doesn't match SUM(shift.crew_count) over its active
+    -- (not-soft-deleted) shifts, correct it.
+    --
+    -- Idempotent: on subsequent boots there's nothing to fix so the
+    -- UPDATE affects zero rows.
+    IF EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_name = 'events')
+       AND EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_name = 'event_shifts') THEN
+        WITH shift_totals AS (
+            SELECT event_id, COALESCE(SUM(crew_count), 0) AS total
+              FROM event_shifts
+             WHERE is_deleted = FALSE
+             GROUP BY event_id
+        )
+        UPDATE events e
+           SET max_crew = st.total
+          FROM shift_totals st
+         WHERE e.id = st.event_id
+           AND e.max_crew IS DISTINCT FROM st.total;
+    END IF;
+
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");
