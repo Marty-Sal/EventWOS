@@ -669,13 +669,19 @@
                                 {
                                     @foreach (var sh in _selectedEventShifts)
                                     {
-                                        // Phase D step 9: free seats must account for placeholder
-                                        // invites too — not just real crew. Total reserved =
-                                        // max(AssignedCrew, sum of active allocation quotas) since
-                                        // every allocation row reserves N placeholder seats.
+                                        // Free seats must match what the server's capacity gate
+                                        // enforces (AssignmentCapacityRules.ReservesSeatOnShift on
+                                        // AssignCrewCommand). That count includes placeholder
+                                        // anchors, so we lean on sh.ReservedCrew directly rather
+                                        // than trying to recompute it from allocations — the DTO
+                                        // is now the single source of truth. We still fold in the
+                                        // active-allocation quota total as a floor: newly-created
+                                        // allocations that don't yet have placeholder rows minted
+                                        // (rare, transient) shouldn't let the modal briefly show
+                                        // extra headroom the server won't honour.
                                         var totalAlloc = _allocationsByShift.GetValueOrDefault(sh.Id)
                                             ?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
-                                        var reserved = Math.Max(sh.AssignedCrew, totalAlloc);
+                                        var reserved = Math.Max(sh.ReservedCrew, totalAlloc);
                                         var free  = Math.Max(0, sh.CrewCount - reserved);
                                         var row   = _multiShiftRows.GetValueOrDefault(sh.Id) ?? new MultiShiftRow();
                                         _multiShiftRows[sh.Id] = row;  // make sure dict has it
@@ -2222,9 +2228,14 @@ else
     /// </summary>
     private int ShiftFreeSeats(EventShiftDto sh)
     {
+        // Mirrors the modal's per-row math — see the render block for
+        // full rationale. Uses ReservedCrew (real + placeholder) so this
+        // agrees with the server-side capacity gate, and floors on the
+        // allocation-quota total to cover the transient window between
+        // creating an allocation and its placeholder rows landing.
         var totalAlloc = _allocationsByShift.GetValueOrDefault(sh.Id)
             ?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
-        var reserved = Math.Max(sh.AssignedCrew, totalAlloc);
+        var reserved = Math.Max(sh.ReservedCrew, totalAlloc);
         return Math.Max(0, sh.CrewCount - reserved);
     }
 
@@ -2251,7 +2262,8 @@ else
             //
             // Only block when there is literally nowhere to put new placeholders:
             // every active shift on this event is already at full capacity.
-            // (Capacity here = sh.CrewCount; assignments = sh.AssignedCrew.)
+            // (Capacity here = sh.CrewCount; reserved = sh.ReservedCrew,
+            // i.e. real crew + placeholder anchors, matching the server.)
             if (_selectedEventShifts is { Count: > 0 })
             {
                 var anyHeadroom = _selectedEventShifts.Any(sh => ShiftFreeSeats(sh) > 0);

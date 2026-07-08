@@ -67,9 +67,19 @@ public sealed class UpdateEventShiftHandler
         }
 
         // Count seats currently occupied on THIS shift — domain enforces
-        // the shrink rule using this value.
+        // the shrink rule using this value (real crew only; placeholders
+        // are ignored because they can be revoked by shrinking the
+        // vendor's allocation).
         var seatsOnThisShift = await _db.EventAssignments
             .Where(AssignmentCapacityRules.OccupiesSeatOnShift(shift.Id))
+            .CountAsync(ct);
+
+        // Count RESERVED seats — real crew + placeholder anchors — so the
+        // returned DTO exposes the same number the assign-crew capacity
+        // gate enforces. Without this the modal would go on displaying
+        // "N free" using AssignedCrew and disagree with the server.
+        var reservedOnThisShift = await _db.EventAssignments
+            .Where(AssignmentCapacityRules.ReservesSeatOnShift(shift.Id))
             .CountAsync(ct);
 
         var boundsCheck = ShiftTimeBounds.Validate(ev, req.StartAt, req.EndAt);
@@ -121,6 +131,9 @@ public sealed class UpdateEventShiftHandler
 
         return Result.Success(new EventShiftDto(
             shift.Id, shift.EventId, shift.ScopeOfWorkId, scope?.Name ?? "(unknown)",
-            shift.CrewCount, seatsOnThisShift, shift.StartAt, shift.EndAt));
+            shift.CrewCount,
+            assignedCrew: seatsOnThisShift,
+            reservedCrew: reservedOnThisShift,
+            shift.StartAt, shift.EndAt));
     }
 }

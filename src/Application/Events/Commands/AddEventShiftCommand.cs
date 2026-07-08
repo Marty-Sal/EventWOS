@@ -91,8 +91,14 @@ public sealed class AddEventShiftHandler
 
         await _uow.SaveChangesAsync(ct);
 
+        // Brand-new shift: both counts are zero — no assignments exist yet
+        // (assigned = OccupiesSeat count, reserved = ReservesSeatOnShift
+        // count, and the row has no children).
         return Result.Success(new EventShiftDto(
             shift.Id, shift.EventId, shift.ScopeOfWorkId, scope.Name,
-            shift.CrewCount, 0, shift.StartAt, shift.EndAt));
+            shift.CrewCount,
+            assignedCrew: 0,
+            reservedCrew: 0,
+            shift.StartAt, shift.EndAt));
     }
 }

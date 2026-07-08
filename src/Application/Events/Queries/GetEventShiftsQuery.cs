@@ -1,6 +1,7 @@
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Interfaces;
 using EventWOS.Domain.Rules;
+using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -44,20 +45,48 @@ public sealed class GetEventShiftsHandler
             return Result.Success<IReadOnlyList<EventShiftDto>>(Array.Empty<EventShiftDto>());
 
         var shiftIds = shifts.Select(s => s.Id).ToList();
+
+        // Two counts per shift: "assigned" (real crew only, OccupiesSeat)
+        // and "reserved" (real crew + placeholder anchors, same status
+        // filter as AssignmentCapacityRules.ReservesSeatOnShift).
+        //
+        // We build them from the same query — one .Where filters to the
+        // active statuses shared by both predicates, then we branch on
+        // CrewId server-side via a conditional Sum. Same round-trip cost
+        // as the previous single-count version, with the added benefit
+        // that the modal's "free" display will match the server's
+        // capacity gate exactly.
         var counts = await _db.EventAssignments
             .Where(a => a.ShiftId != null && shiftIds.Contains(a.ShiftId.Value))
-            .Where(AssignmentCapacityRules.OccupiesSeat)
+            .Where(a => !a.IsDeleted
+                     && a.Status != AssignmentStatus.Declined
+                     && a.Status != AssignmentStatus.RejectedByVendor
+                     && a.Status != AssignmentStatus.RejectedByManager
+                     && a.Status != AssignmentStatus.NoShow)
             .GroupBy(a => a.ShiftId!.Value)
-            .Select(g => new { ShiftId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.ShiftId, x => x.Count, ct);
+            .Select(g => new
+            {
+                ShiftId  = g.Key,
+                Assigned = g.Count(a => a.CrewId != null),
+                Reserved = g.Count()
+            })
+            .ToListAsync(ct);
 
-        var dtos = shifts.Select(s => new EventShiftDto(
-            s.Id, s.EventId, s.ScopeOfWorkId,
-            s.ScopeOfWork?.Name ?? "(unknown)",
-            s.CrewCount,
-            counts.GetValueOrDefault(s.Id, 0),
-            s.StartAt, s.EndAt
-        )).ToList();
+        var countsByShift = counts.ToDictionary(
+            x => x.ShiftId,
+            x => (Assigned: x.Assigned, Reserved: x.Reserved));
+
+        var dtos = shifts.Select(s =>
+        {
+            countsByShift.TryGetValue(s.Id, out var c);
+            return new EventShiftDto(
+                s.Id, s.EventId, s.ScopeOfWorkId,
+                s.ScopeOfWork?.Name ?? "(unknown)",
+                s.CrewCount,
+                c.Assigned,
+                c.Reserved,
+                s.StartAt, s.EndAt);
+        }).ToList();
 
         return Result.Success<IReadOnlyList<EventShiftDto>>(dtos);
     }

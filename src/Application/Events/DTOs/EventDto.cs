@@ -99,7 +99,19 @@ public sealed record EventShiftDto(
     Guid     ScopeOfWorkId,
     string   ScopeName,
     int      CrewCount,
-    int      AssignedCrew,     // current OccupiesSeat count on this shift
+    // Number of REAL crew rows currently occupying a seat on this shift
+    // (CrewId != null, active status). Used by the shift editor for the
+    // "N used" line and the "can't shrink below N" guard.
+    int      AssignedCrew,
+    // Total number of rows RESERVING a seat on this shift — real crew
+    // plus placeholder anchors created by vendor invites (CrewId ==
+    // null, active status). This is what the server's AssignCrew /
+    // VendorAssignCrew / VendorAcceptQuota capacity gates enforce
+    // against, so the assign modal MUST use this (not AssignedCrew) to
+    // compute "free seats" or its "1 free" display will disagree with
+    // the server's "17/15" reject. See AssignmentCapacityRules
+    // .ReservesSeatOnShift for the exact predicate.
+    int      ReservedCrew,
     DateTime StartAt,
     DateTime? EndAt
 );
