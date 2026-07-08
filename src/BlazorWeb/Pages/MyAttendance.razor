@@ -249,7 +249,6 @@
         Func<Task> retryAction)
     {
         string reason;
-        string? coords = null;
         try
         {
             var res = await JS.InvokeAsync<LocationGateResult>(

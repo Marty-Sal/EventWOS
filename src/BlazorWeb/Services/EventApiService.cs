@@ -119,10 +119,17 @@ public sealed record CreateEventRequest(
     DateTime StartAt, DateTime EndAt, int MaxCrew,
     IReadOnlyList<CreateEventShiftRequest>? Shifts = null);
 
-/// <summary>Phase B read-back shape — matches API EventShiftDto.</summary>
+/// <summary>
+/// Phase B read-back shape — matches API EventShiftDto exactly.
+/// AssignedCrew = REAL crew occupying seats on this shift (OccupiesSeat).
+/// ReservedCrew = real crew + placeholder anchors (ReservesSeatOnShift).
+/// Use ReservedCrew for capacity-gate math so the modal agrees with the
+/// server; use AssignedCrew for shift-editor "N used" / shrink guard.
+/// </summary>
 public sealed record EventShiftDto(
     Guid Id, Guid EventId, Guid ScopeOfWorkId, string ScopeName,
-    int CrewCount, int AssignedCrew, DateTime StartAt, DateTime? EndAt);
+    int CrewCount, int AssignedCrew, int ReservedCrew,
+    DateTime StartAt, DateTime? EndAt);
 
 /// <summary>Phase D step 11: mirror of API VendorShiftSummaryDto.</summary>
 public sealed record VendorShiftSummaryDto(
