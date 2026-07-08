@@ -95,7 +95,8 @@
                     <h3 class="font-bold text-gray-800 text-sm">Your Crew Roster</h3>
                     <p class="text-xs text-gray-400 mt-0.5">Top @(_report.TopCrew?.Count ?? 0) by discipline score</p>
                 </div>
-                <table class="w-full text-sm">
+                <div class="overflow-x-auto -mx-1 sm:mx-0">
+                <table class="min-w-full text-sm">
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Crew</th>
@@ -126,6 +127,7 @@
                         }
                     </tbody>
                 </table>
+                </div>
             </div>
         }
     }

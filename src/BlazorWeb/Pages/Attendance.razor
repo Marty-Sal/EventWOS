@@ -173,7 +173,8 @@
         else
         {
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <table class="w-full text-sm">
+                <div class="overflow-x-auto -mx-1 sm:mx-0">
+                <table class="min-w-full text-sm">
                     <thead class="bg-gray-50 border-b border-gray-100">
                         <tr>
                             @SortHeader("Crew",        "CrewName")
@@ -227,6 +228,7 @@
                         }
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <div class="flex items-center justify-between text-sm text-gray-500">
@@ -254,7 +256,8 @@
         else
         {
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <table class="w-full text-sm">
+                <div class="overflow-x-auto -mx-1 sm:mx-0">
+                <table class="min-w-full text-sm">
                     <thead class="bg-gray-50 border-b border-gray-100">
                         <tr>
                             @SortHeader("Event",   "EventTitle")
@@ -294,6 +297,7 @@
                         }
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <div class="flex items-center justify-between text-sm text-gray-500">

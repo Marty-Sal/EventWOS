@@ -81,7 +81,8 @@
     else
     {
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <table class="w-full text-sm">
+            <div class="overflow-x-auto -mx-1 sm:mx-0">
+            <table class="min-w-full text-sm">
                 <thead class="bg-gray-50 border-b border-gray-100 text-xs uppercase tracking-wider text-gray-500">
                     <tr>
                         <th class="px-5 py-3 text-left">Name</th>
@@ -137,6 +138,7 @@
                     }
                 </tbody>
             </table>
+            </div>
         </div>
 
         @if (_totalPages > 1)

@@ -73,7 +73,8 @@
     else
     {
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <table class="w-full text-sm">
+            <div class="overflow-x-auto -mx-1 sm:mx-0">
+            <table class="min-w-full text-sm">
                 <thead class="bg-gray-50 text-[11px] uppercase tracking-widest text-gray-500">
                     <tr>
                         <th class="text-left px-4 py-3 font-semibold">Crew</th>
@@ -183,6 +184,7 @@
                     }
                 </tbody>
             </table>
+            </div>
         </div>
 
         @if (_total > _pageSize)

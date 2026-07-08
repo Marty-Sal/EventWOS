@@ -111,14 +111,16 @@ public sealed class UpdateEventShiftHandler
         // shifts totalled 22), and repeated resizes progressively
         // drifted MaxCrew away from SUM(shift.CrewCount).
         //
-        // Fix: load the parent event's Shifts collection into the
-        // change tracker (respects the !IsDeleted global query
-        // filter) and sum in-memory. The just-called shift.Update()
-        // mutated the tracked entity, so the in-memory Sum sees the
-        // new value. Same round-trip cost as before (one query
-        // vs. one aggregate) but correct.
-        await _db.Entry(ev).Collection(e => e.Shifts).LoadAsync(ct);
-        var newTotal = ev.Shifts.Sum(s => s.CrewCount);
+        // Fix (clean-architecture-friendly): sum the OTHER active
+        // shifts on the event via SumAsync — those rows are unchanged
+        // and DB-accurate — then add the freshly-updated CrewCount
+        // for the shift we just mutated. Doesn't require _db.Entry()
+        // (which lives on DbContext, not IAppDbContext), so the
+        // Application layer stays on the interface.
+        var otherShiftsTotal = await _db.EventShifts
+            .Where(s => s.EventId == shift.EventId && s.Id != shift.Id)
+            .SumAsync(s => s.CrewCount, ct);
+        var newTotal = otherShiftsTotal + req.CrewCount;
 
         // Floor for event MaxCrew is total seats occupied across ALL shifts
         // on the event — same rule as Event.Update.
