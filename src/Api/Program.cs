@@ -1348,7 +1348,7 @@ END $$;
                         crew_group_members,
                         crew_groups,
                         vendor_crew_mappings,
-                        scopes_of_work,
+                        scope_of_work,
                         manager_permissions,
                         user_role_permissions,
                         refresh_tokens,
