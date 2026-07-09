@@ -1340,7 +1340,7 @@ END $$;
                         crew_payments,
                         payroll_batches,
                         attendance_records,
-                        pending_check_ins,
+                        pending_checkins,
                         event_assignments,
                         vendor_shift_allocations,
                         event_shifts,
