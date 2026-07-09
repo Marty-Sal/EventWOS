@@ -27,8 +27,7 @@ public sealed class DatabaseSeeder
         await SeedPermissionsAsync(ct);
         await SeedRolePermissionsAsync(ct);
         await SeedAdminUserAsync(ct);
-        // Test users (Sameer/Priya) permanently disabled — CleanReset era.
-        // await SeedTestUsersAsync(ct);
+        await SeedTestUsersAsync(ct);
         await SeedDefaultScopeOfWorkAsync(ct);
         _logger.LogInformation("Database seeding complete.");
     }
