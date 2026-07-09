@@ -1,3 +1,4 @@
+using EventWOS.Application.Auth.Interfaces;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -14,11 +15,20 @@ public sealed class DatabaseSeeder
 {
     private readonly AppDbContext _db;
     private readonly ILogger<DatabaseSeeder> _logger;
+    private readonly IPasswordHasher _hasher;
 
-    public DatabaseSeeder(AppDbContext db, ILogger<DatabaseSeeder> logger)
+    /// <summary>
+    /// Default seed password for the admin + test users. Documented here so
+    /// ops knows what to try on a fresh DB. In real deployments the admin
+    /// should change it on first login (the app doesn't force this — TODO).
+    /// </summary>
+    private const string SeedPassword = "admin123";
+
+    public DatabaseSeeder(AppDbContext db, ILogger<DatabaseSeeder> logger, IPasswordHasher hasher)
     {
         _db = db;
         _logger = logger;
+        _hasher = hasher;
     }
 
     public async Task SeedAsync(CancellationToken ct = default)
@@ -291,37 +301,113 @@ public sealed class DatabaseSeeder
     }
 
     // ─── Default Admin User ──────────────────────────────────────────────────
+    // Creates OR self-heals the default admin so a fresh DB always has a
+    // login-ready admin account with:
+    //   mobile   = +911234567890
+    //   username = admin
+    //   email    = admin@eventwos.local
+    //   password = admin123
+    // Self-heal path: if the row already exists but is missing username /
+    // email / password_hash (which was a bug in the original seeder), we
+    // patch those fields WITHOUT overwriting a hash the admin has already
+    // rotated to something else. Safe to run on every boot.
     private async Task SeedAdminUserAsync(CancellationToken ct)
     {
-        if (await _db.Users.IgnoreQueryFilters().AnyAsync(u => u.Role == UserRole.Admin, ct)) return;
+        const string mobile   = "+911234567890";
+        const string username = "admin";
+        const string email    = "admin@eventwos.local";
 
-        var admin = new User("+911234567890", "System Administrator", UserRole.Admin);
-        admin.Activate();
-        _db.Users.Add(admin);
-        await _db.SaveChangesAsync(ct);
-        _logger.LogInformation("Seeded default admin user (mobile: +911234567890)");
+        var admin = await _db.Users.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Mobile == mobile, ct);
+
+        if (admin is null)
+        {
+            admin = new User(mobile, "System Administrator", UserRole.Admin);
+            admin.Activate();
+            admin.SetUsername(username);
+            admin.Email = email;
+            admin.SetPassword(_hasher.Hash(SeedPassword));
+            _db.Users.Add(admin);
+            await _db.SaveChangesAsync(ct);
+            _logger.LogInformation("Seeded default admin user ({Mobile}, username={Username})", mobile, username);
+            return;
+        }
+
+        // Self-heal — only touch what's missing.
+        var patched = false;
+        if (string.IsNullOrWhiteSpace(admin.Username))
+        {
+            admin.SetUsername(username);
+            patched = true;
+        }
+        if (string.IsNullOrWhiteSpace(admin.Email))
+        {
+            admin.Email = email;
+            patched = true;
+        }
+        if (string.IsNullOrWhiteSpace(admin.PasswordHash))
+        {
+            admin.SetPassword(_hasher.Hash(SeedPassword));
+            patched = true;
+        }
+        if (patched)
+        {
+            await _db.SaveChangesAsync(ct);
+            _logger.LogInformation("Self-healed admin user ({Mobile}) — restored missing username/email/password", mobile);
+        }
     }
 
     // ─── Dev/Test Users ──────────────────────────────────────────────────────
+    // Same shape as the admin seeder: create-or-heal. Every test user gets
+    // a lowercase username + email + password (admin123) so username-login
+    // works out of the box. Safe to run on every boot.
     private async Task SeedTestUsersAsync(CancellationToken ct)
     {
-        var testMobiles = new[]
+        var testUsers = new (string Mobile, string Username, string Email, string Name, UserRole Role)[]
         {
-            ("+911233456789", "Sameer Khan",    UserRole.Crew),
-            ("+911223456789", "Priya Vendors",  UserRole.Vendor),
+            ("+911233456789", "sameer", "sameer@eventwos.local", "Sameer Khan",   UserRole.Crew),
+            ("+911223456789", "priya",  "priya@eventwos.local",  "Priya Vendors", UserRole.Vendor),
         };
 
-        foreach (var (mobile, name, role) in testMobiles)
+        foreach (var t in testUsers)
         {
-            var exists = await _db.Users.IgnoreQueryFilters()
-                .AnyAsync(u => u.Mobile == mobile, ct);
-            if (exists) continue;
+            var user = await _db.Users.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Mobile == t.Mobile, ct);
 
-            var user = new User(mobile, name, role);
-            user.Activate();
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync(ct);
-            _logger.LogInformation("Seeded test user {Name} ({Mobile}) as {Role}", name, mobile, role);
+            if (user is null)
+            {
+                user = new User(t.Mobile, t.Name, t.Role);
+                user.Activate();
+                user.SetUsername(t.Username);
+                user.Email = t.Email;
+                user.SetPassword(_hasher.Hash(SeedPassword));
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync(ct);
+                _logger.LogInformation("Seeded test user {Name} ({Mobile}) as {Role}", t.Name, t.Mobile, t.Role);
+                continue;
+            }
+
+            var patched = false;
+            if (string.IsNullOrWhiteSpace(user.Username))
+            {
+                user.SetUsername(t.Username);
+                patched = true;
+            }
+            if (string.IsNullOrWhiteSpace(user.Email))
+            {
+                user.Email = t.Email;
+                patched = true;
+            }
+            if (string.IsNullOrWhiteSpace(user.PasswordHash))
+            {
+                user.SetPassword(_hasher.Hash(SeedPassword));
+                patched = true;
+            }
+            if (patched)
+            {
+                await _db.SaveChangesAsync(ct);
+                _logger.LogInformation("Self-healed test user {Name} ({Mobile}) — restored missing username/email/password", t.Name, t.Mobile);
+            }
         }
     }
 }
