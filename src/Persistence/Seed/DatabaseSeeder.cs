@@ -37,7 +37,10 @@ public sealed class DatabaseSeeder
         await SeedPermissionsAsync(ct);
         await SeedRolePermissionsAsync(ct);
         await SeedAdminUserAsync(ct);
-        await SeedTestUsersAsync(ct);
+        // Test users (Sameer, Priya) intentionally NOT seeded — the operator
+        // creates real users themselves via the admin portal. Method kept for
+        // dev/local use; call it manually from a debug branch if needed.
+        // await SeedTestUsersAsync(ct);
         await SeedDefaultScopeOfWorkAsync(ct);
         _logger.LogInformation("Database seeding complete.");
     }
