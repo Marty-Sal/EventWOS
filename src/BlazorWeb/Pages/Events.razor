@@ -1842,7 +1842,11 @@ else
     private async Task OpenCreateModal()
     {
         _editingEvent = null;
-        _form = new EventForm { StartAt = DateTime.Now.AddDays(1), EndAt = DateTime.Now.AddDays(1).AddHours(4) };
+        // Seed reasonable defaults: tomorrow, 9am → 1pm local. Users can override.
+        var seedDate  = DateTime.Now.Date.AddDays(1);
+        var seedStart = seedDate.AddHours(9);
+        var seedEnd   = seedDate.AddHours(13);
+        _form = new EventForm { StartAt = seedStart, EndAt = seedEnd };
         _formError = null;
         _showEventModal = true;
         await EnsureScopeCatalogLoaded();
@@ -2079,11 +2083,33 @@ else
 
     private async Task SaveEvent()
     {
+        // ─── Client-side validation ─────────────────────────────────────────
+        // Mirrors CreateEventValidator + ShiftTimeBounds on the server so the
+        // user gets an immediate, contextual error instead of a round-trip.
+        // The server still re-validates authoritatively.
         if (string.IsNullOrWhiteSpace(_form.Title) || string.IsNullOrWhiteSpace(_form.Venue))
         {
             _formError = "Title and Venue are required.";
             return;
         }
+        if (_form.StartAt is null)
+        {
+            _formError = "Event start date/time is required.";
+            return;
+        }
+        if (_form.EndAt is null)
+        {
+            _formError = "Event end date/time is required.";
+            return;
+        }
+        if (_form.EndAt <= _form.StartAt)
+        {
+            _formError = "Event end must be after event start.";
+            return;
+        }
+        var evStart = _form.StartAt.Value;
+        var evEnd   = _form.EndAt.Value;
+
         if (_editingEvent is null)
         {
             if (_form.Shifts.Count == 0)
@@ -2101,6 +2127,41 @@ else
                 _formError = "Every shift needs at least 1 crew.";
                 return;
             }
+
+            // Per-shift bounds — mirrors ShiftTimeBounds (server) so users see
+            // problems before hitting Save. 48h load-in / teardown pads match
+            // the server's PreEventPad / PostEventPad constants.
+            var preEventPad  = TimeSpan.FromHours(48);
+            var postEventPad = TimeSpan.FromHours(48);
+            for (int i = 0; i < _form.Shifts.Count; i++)
+            {
+                var sh = _form.Shifts[i];
+                var shStart = sh.StartAt ?? evStart;
+
+                if (shStart < evStart - preEventPad)
+                {
+                    _formError = $"Shift {i + 1}: start can't be more than 48h before the event start.";
+                    return;
+                }
+                if (shStart >= evEnd)
+                {
+                    _formError = $"Shift {i + 1}: start must be before the event end.";
+                    return;
+                }
+                if (sh.EndAt is { } shEnd)
+                {
+                    if (shEnd <= shStart)
+                    {
+                        _formError = $"Shift {i + 1}: end must be after shift start.";
+                        return;
+                    }
+                    if (shEnd > evEnd + postEventPad)
+                    {
+                        _formError = $"Shift {i + 1}: end can't be more than 48h after the event end.";
+                        return;
+                    }
+                }
+            }
         }
         _saving = true;
         _formError = null;
@@ -2117,7 +2178,7 @@ else
                 .Select(s => new CreateEventShiftRequest(
                     s.ScopeOfWorkId,
                     Math.Max(s.CrewCount, 1),
-                    (s.StartAt ?? _form.StartAt).ToUniversalTime(),
+                    (s.StartAt ?? _form.StartAt!.Value).ToUniversalTime(),
                     s.EndAt?.ToUniversalTime()))
                 .ToArray();
             derivedMaxCrew = shifts.Sum(x => x.CrewCount);
@@ -2125,7 +2186,7 @@ else
 
         var req = new CreateEventRequest(
             _form.Title, _form.Description, _form.Venue, _form.Address,
-            _form.StartAt.ToUniversalTime(), _form.EndAt.ToUniversalTime(),
+            _form.StartAt!.Value.ToUniversalTime(), _form.EndAt!.Value.ToUniversalTime(),
             derivedMaxCrew, shifts);
 
         if (_editingEvent is null)
@@ -2775,8 +2836,12 @@ else
         public string?   Description { get; set; }
         public string    Venue       { get; set; } = "";
         public string?   Address     { get; set; }
-        public DateTime  StartAt     { get; set; } = DateTime.Now.AddDays(1);
-        public DateTime  EndAt       { get; set; } = DateTime.Now.AddDays(1).AddHours(4);
+        // Nullable so a fresh form renders empty ("mm/dd/yyyy --:--") instead
+        // of the DateTime.MinValue placeholder (01/01/0001) that a non-nullable
+        // DateTime would surface after Blazor's initial render. OpenCreateModal
+        // seeds sensible defaults; SaveEvent gates on non-null before submit.
+        public DateTime? StartAt     { get; set; }
+        public DateTime? EndAt       { get; set; }
         public int       MaxCrew     { get; set; } = 1;
 
         // Phase C step 4 (create-mode only): list of shift drafts. Each
