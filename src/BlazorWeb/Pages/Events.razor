@@ -2118,7 +2118,7 @@ else
                     s.ScopeOfWorkId,
                     Math.Max(s.CrewCount, 1),
                     (s.StartAt ?? _form.StartAt).ToUniversalTime(),
-                    s.EndAt == default ? null : s.EndAt.ToUniversalTime()))
+                    s.EndAt?.ToUniversalTime()))
                 .ToArray();
             derivedMaxCrew = shifts.Sum(x => x.CrewCount);
         }
@@ -2789,9 +2789,10 @@ else
 
     /// <summary>
     /// One row in the multi-shift editor. ScopeOfWorkId is required on
-    /// save; EndAt is a sentinel DateTime (MinValue = "unset" → null on
-    /// the wire). CrewCount has min=1 from the input element but the
-    /// save-time guard also floors it to 1.
+    /// save; StartAt and EndAt are both nullable — null means "use the
+    /// event's start" and "run until the event wraps" respectively, and
+    /// they're mapped straight through to the API. CrewCount has min=1
+    /// from the input element but the save-time guard also floors it to 1.
     /// </summary>
     public sealed class ShiftDraft
     {
@@ -2800,6 +2801,10 @@ else
         // Phase D step 2: optional per-shift start. Null = use event StartAt.
         // Stored as nullable local-time DateTime; converted to UTC at save.
         public DateTime? StartAt       { get; set; }
-        public DateTime  EndAt         { get; set; } = default;
+        // Optional per-shift end. Null = run until the event wraps. Kept
+        // nullable so the datetime-local input renders empty ("mm/dd/yyyy
+        // --:--") on a fresh row instead of the DateTime.MinValue placeholder
+        // (01/01/0001) that a non-nullable DateTime would surface.
+        public DateTime? EndAt         { get; set; }
     }
 }
