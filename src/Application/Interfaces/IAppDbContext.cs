@@ -31,5 +31,8 @@ public interface IAppDbContext
     // QR-verified check-in handshake table.
     DbSet<PendingCheckIn>   PendingCheckIns   { get; }
 
+    // File & Image Storage module
+    DbSet<FileDocument>     FileDocuments     { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

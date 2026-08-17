@@ -143,6 +143,12 @@ public sealed class DatabaseSeeder
         // Phase C — Vendor shift allocations (per-vendor quota on a shift)
         ("vendor_allocations:read",  "vendor_allocations", "read",
             "View vendor allocations on event shifts"),
+
+        // File & Image Storage module
+        ("files:upload",        "files", "upload",        "Upload own files (profile photo, ID proof, documents)"),
+        ("files:read",          "files", "read",           "Download own files"),
+        ("files:read_identity", "files", "read_identity",  "View any user's identification documents (sensitive PII — Admin/Manager)"),
+        ("files:manage",        "files", "manage",         "Upload/delete files for any owner; manage vendor & event documents (Admin/Manager)"),
         ("vendor_allocations:write", "vendor_allocations", "write",
             "Create, update, or archive vendor allocations on shifts"),
     };
@@ -233,7 +239,8 @@ public sealed class DatabaseSeeder
                 // Phase C: vendor can SEE their own allocations on shifts so
                 // the portal can display the per-shift quota counter. They
                 // cannot grant themselves more — write is Admin/Manager only.
-                "vendor_allocations:read"
+                "vendor_allocations:read",
+                "files:upload", "files:read"
             })
             {
                 var perm = GetPerm(name);
@@ -248,7 +255,8 @@ public sealed class DatabaseSeeder
             foreach (var name in new[]
             {
                 "profile:read", "profile:write", "events:read",
-                "attendance:read", "payments:self", "payments:acknowledge"
+                "attendance:read", "payments:self", "payments:acknowledge",
+                "files:upload", "files:read"
             })
             {
                 var perm = GetPerm(name);
@@ -283,7 +291,8 @@ public sealed class DatabaseSeeder
                 // QR check-in: managers can verify as a fallback when the
                 // assigned vendor isn't on site. Also gives ops a break-glass
                 // for stuck check-ins without granting attendance:write.
-                "attendance:verify"
+                "attendance:verify",
+                "files:upload", "files:read", "files:read_identity", "files:manage"
             })
             {
                 var perm = GetPerm(name);

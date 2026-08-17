@@ -16,5 +16,11 @@ public enum AuditAction
     SessionRevoked,
     AdminOverride,
     TokenRefreshed,
-    PasswordChanged
+    PasswordChanged,
+
+    // File & Image Storage module
+    FileUploaded,
+    FileDeleted,
+    /// <summary>Any read of a CrewIdentificationProof file — including the owner viewing their own. Required by policy: sensitive PII access is always logged.</summary>
+    SensitiveDocumentAccessed
 }

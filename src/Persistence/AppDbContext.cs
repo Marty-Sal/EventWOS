@@ -53,6 +53,9 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     // QR-verified check-in handshake — feature-flagged via presence of table.
     public DbSet<PendingCheckIn>   PendingCheckIns   => Set<PendingCheckIn>();
 
+    // File & Image Storage module
+    public DbSet<FileDocument>     FileDocuments     => Set<FileDocument>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

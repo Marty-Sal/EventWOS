@@ -18,6 +18,10 @@
     <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
     <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <!-- File & Image Storage module -->
+    <PackageReference Include="AWSSDK.S3" Version="3.7.415.11" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.24.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Application\EventWOS.Application.csproj" />

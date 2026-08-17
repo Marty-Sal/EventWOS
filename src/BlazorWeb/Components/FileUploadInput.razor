@@ -1,0 +1,102 @@
+@*
+    Generic reusable file-upload control for the File & Image Storage
+    module. Used for any DocumentType (crew profile photo, ID proof,
+    vendor documents, event documents) — just point it at a different
+    DocumentType/OwnerId/EntityId and accept string.
+
+    Client-side size/type checks here are a UX nicety ONLY — the server
+    (FileValidationPolicy, re-checked in UploadFileHandler) is the
+    authoritative gate and never trusts what this component sends.
+*@
+@inject IFilesApiService FilesApi
+
+<div class="space-y-2">
+    @if (!string.IsNullOrWhiteSpace(Label))
+    {
+        <label class="block text-sm font-medium text-gray-700">@Label @(Required ? "*" : "")</label>
+    }
+
+    <InputFile OnChange="HandleFileSelected" accept="@Accept"
+               class="block w-full text-sm text-gray-600 border border-gray-300 rounded-md
+                      cursor-pointer file:mr-3 file:py-2 file:px-3 file:border-0
+                      file:bg-indigo-50 file:text-indigo-700 file:font-medium hover:file:bg-indigo-100" />
+
+    @if (_isUploading)
+    {
+        <p class="text-sm text-indigo-600">Uploading...</p>
+    }
+    else if (_uploaded is not null)
+    {
+        <p class="text-sm text-green-600">Uploaded: @_uploaded.OriginalFileName (@FormatSize(_uploaded.FileSizeBytes))</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <p class="text-sm text-red-600">@_error</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(HelpText))
+    {
+        <p class="text-xs text-gray-400">@HelpText</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int DocumentType { get; set; }
+    [Parameter] public Guid? OwnerId { get; set; }
+    [Parameter] public Guid? EntityId { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? HelpText { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public string Accept { get; set; } = "image/jpeg,image/png,image/webp";
+    [Parameter] public long MaxSizeBytes { get; set; } = 5 * 1024 * 1024;
+    [Parameter] public EventCallback<FileDocumentDto> OnUploaded { get; set; }
+
+    private bool _isUploading;
+    private string? _error;
+    private FileDocumentDto? _uploaded;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _uploaded = null;
+        var file = e.File;
+
+        if (file.Size > MaxSizeBytes)
+        {
+            _error = $"File exceeds the {MaxSizeBytes / (1024 * 1024)}MB limit.";
+            return;
+        }
+
+        _isUploading = true;
+        try
+        {
+            using var stream = file.OpenReadStream(MaxSizeBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+
+            var (ok, uploaded, error) = await FilesApi.UploadAsync(
+                ms.ToArray(), file.Name, file.ContentType, DocumentType, OwnerId, EntityId);
+
+            if (ok && uploaded is not null)
+            {
+                _uploaded = uploaded;
+                await OnUploaded.InvokeAsync(uploaded);
+            }
+            else
+            {
+                _error = error ?? "Upload failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _isUploading = false;
+        }
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes < 1024 * 1024 ? $"{bytes / 1024.0:F0} KB" : $"{bytes / (1024.0 * 1024):F1} MB";
+}

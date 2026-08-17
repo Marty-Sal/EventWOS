@@ -328,6 +328,33 @@ try
         Log.Information("Email: SENDGRID_API_KEY not set — using StubEmailService (logs only).");
     }
     builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+
+    // ── File & Image Storage module ────────────────────────────────────────
+    // Provider selected purely by config — Storage:Provider = "Local" (default,
+    // dev/MVP only) | "S3" (AWS S3 / Cloudflare R2 / MinIO) | "AzureBlob".
+    // Business/handler code depends only on IFileStorage — swapping providers
+    // here is the ONLY change needed to go from dev to production storage.
+    var storageProvider = builder.Configuration["Storage:Provider"] ?? "Local";
+    switch (storageProvider)
+    {
+        case "S3":
+            builder.Services.AddSingleton<EventWOS.Application.Common.IFileStorage,
+                                          EventWOS.Infrastructure.Storage.S3CompatibleFileStorage>();
+            Log.Information("Storage: S3CompatibleFileStorage registered (AWS S3 / R2 / MinIO).");
+            break;
+        case "AzureBlob":
+            builder.Services.AddSingleton<EventWOS.Application.Common.IFileStorage,
+                                          EventWOS.Infrastructure.Storage.AzureBlobFileStorage>();
+            Log.Information("Storage: AzureBlobFileStorage registered.");
+            break;
+        default:
+            builder.Services.AddSingleton<EventWOS.Application.Common.IFileStorage,
+                                          EventWOS.Infrastructure.Storage.LocalFileStorage>();
+            Log.Warning("Storage: LocalFileStorage registered (dev/MVP only — NOT durable in production containers).");
+            break;
+    }
+    builder.Services.AddSingleton<EventWOS.Application.Common.IImageProcessor,
+                                  EventWOS.Infrastructure.Storage.ImageSharpProcessor>();
     builder.Services.AddHttpContextAccessor();
 
     // ─── API Versioning ───────────────────────────────────────────────────────
