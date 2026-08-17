@@ -491,11 +491,15 @@ try
     // ─── Migrate + Seed ───────────────────────────────────────────────────────
     using (var scope = app.Services.CreateScope())
     {
-        Log.Information("Running EF Core migrations...");
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        Log.Information("Running EF Core migrations...");
+        await db.Database.MigrateAsync();
+        Log.Information("Migrations complete.");
+
         // ── Emergency schema patch ─────────────────────────────────────────
-        // Runs BEFORE MigrateAsync. Fully idempotent — safe on every startup.
+        // Runs AFTER MigrateAsync so base tables always exist first (safe on a
+        // brand-new/empty database too). Fully idempotent — safe on every startup.
         // Uses '' (doubled single-quote) for SQL string literals inside C# @"..." verbatim strings.
         Log.Information("Applying emergency schema patch...");
         await db.Database.ExecuteSqlRawAsync(@"
@@ -1214,9 +1218,7 @@ BEGIN
 END $$;
 ");
         Log.Information("Emergency schema patch complete.");
-
-        await db.Database.MigrateAsync();
-        Log.Information("Migrations complete. Running seeder...");
+        Log.Information("Running seeder...");
         var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
         await seeder.SeedAsync();
         Log.Information("Seeding complete.");
