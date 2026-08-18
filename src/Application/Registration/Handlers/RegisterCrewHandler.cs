@@ -1,4 +1,5 @@
 using EventWOS.Application.Auth.Interfaces;
+using EventWOS.Application.Files;
 using EventWOS.Application.Interfaces;
 using EventWOS.Application.Registration.Commands;
 using EventWOS.Domain.Entities;
@@ -15,21 +16,31 @@ namespace EventWOS.Application.Registration.Handlers;
 /// Crew self-registration. Mirror of RegisterVendorHandler but resolves
 /// the optional ReferralCode against an Active Vendor and stamps VendorId
 /// on the crew record. Cool-down rules identical.
+///
+/// Also stores the mandatory ID-proof (and optional profile photo) via
+/// IFileUploadStorer. Order matters here: the User entity's Id is
+/// generated in-memory the moment the object is constructed (BaseEntity),
+/// so we build the User FIRST (without saving it), use its Id as the
+/// FileDocument OwnerId, store the file(s), and only then SaveChangesAsync
+/// once — User + FileDocument row(s) commit together in one transaction.
+/// If file storage fails, nothing has hit the database yet, so there's no
+/// orphaned Pending user blocking a retry on the unique mobile/email checks.
 /// </summary>
 public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, Result<RegistrationResponse>>
 {
     private readonly IAppDbContext _db;
     private readonly IPasswordHasher _hasher;
+    private readonly IFileUploadStorer _fileStorer;
     private readonly IUnitOfWork _uow;
     private readonly IAuditLogger _audit;
     private readonly ILogger<RegisterCrewHandler> _logger;
     private static readonly TimeSpan CoolDown = TimeSpan.FromHours(24);
 
     public RegisterCrewHandler(
-        IAppDbContext db, IPasswordHasher hasher, IUnitOfWork uow,
+        IAppDbContext db, IPasswordHasher hasher, IFileUploadStorer fileStorer, IUnitOfWork uow,
         IAuditLogger audit, ILogger<RegisterCrewHandler> logger)
     {
-        _db = db; _hasher = hasher; _uow = uow; _audit = audit; _logger = logger;
+        _db = db; _hasher = hasher; _fileStorer = fileStorer; _uow = uow; _audit = audit; _logger = logger;
     }
 
     public async Task<Result<RegistrationResponse>> Handle(RegisterCrewCommand req, CancellationToken ct)
@@ -86,7 +97,7 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
                 "That referral code is not valid. Please check it with your vendor."));
         Guid? resolvedVendorId = vendor.Id;
 
-        // 4. Create the Pending crew user.
+        // 4. Build the Pending crew user IN MEMORY (its Id already exists — see class doc).
         var hash = _hasher.Hash(req.Password);
         var user = User.SelfRegisterCrew(
             username:         usernameLower,
@@ -98,9 +109,32 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
             city:             req.City?.Trim(),
             skills:           req.Skills?.Trim(),
             experienceYears:  req.ExperienceYears,
-            bio:              req.Bio?.Trim());
+            bio:              req.Bio?.Trim(),
+            dateOfBirth:      req.DateOfBirth);
         if (resolvedVendorId.HasValue)
             user.JoinVendor(resolvedVendorId.Value);
+
+        // 5. Store identification proof (mandatory). Validated again here (signature
+        //    check included) — the FluentValidation rule is a fast-fail, this is the
+        //    authority. Nothing has been saved to the DB yet, so a failure here is a
+        //    clean no-op — no orphaned user row, no blocked retry.
+        var idProofResult = await _fileStorer.StoreAsync(
+            user.Id, entityId: null, DocumentType.CrewIdentificationProof,
+            req.IdentificationProof.Content, req.IdentificationProof.FileName, req.IdentificationProof.ContentType, ct);
+        if (idProofResult.IsFailure)
+            return Result.Failure<RegistrationResponse>(idProofResult.Error);
+
+        // 6. Store profile photo (optional). A failure here does NOT block registration —
+        //    it's a nice-to-have, not a compliance document. Logged and swallowed.
+        if (req.ProfilePhoto is not null)
+        {
+            var photoResult = await _fileStorer.StoreAsync(
+                user.Id, entityId: null, DocumentType.CrewProfilePhoto,
+                req.ProfilePhoto.Content, req.ProfilePhoto.FileName, req.ProfilePhoto.ContentType, ct);
+            if (photoResult.IsFailure)
+                _logger.LogWarning("Crew self-registration profile photo rejected for {Username}: {Error} — continuing without it.",
+                    usernameLower, photoResult.Error.Message);
+        }
 
         _db.Users.Add(user);
         await _uow.SaveChangesAsync(ct);

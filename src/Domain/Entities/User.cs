@@ -98,6 +98,23 @@ public sealed class User : BaseEntity
     public int?    ExperienceYears   { get; set; }
     /// <summary>For self-registered Crew — the referral code typed at registration. Kept for audit.</summary>
     public string? ReferralCodeUsed  { get; private set; }
+    /// <summary>Date of birth — collected at Crew self-registration to enforce the 18+ requirement. Nullable because it predates existing/Admin-created accounts.</summary>
+    public DateTime? DateOfBirth     { get; private set; }
+
+    /// <summary>Age in whole years as of today, or null if DateOfBirth was never captured.</summary>
+    public int? Age => DateOfBirth.HasValue ? CalculateAge(DateOfBirth.Value, DateTime.UtcNow.Date) : null;
+
+    /// <summary>
+    /// Standard "has the birthday happened yet this year" age calculation —
+    /// used both here and by RegisterCrewValidator's 18+ rule so the two can
+    /// never drift apart.
+    /// </summary>
+    public static int CalculateAge(DateTime dateOfBirth, DateTime asOf)
+    {
+        var age = asOf.Year - dateOfBirth.Year;
+        if (dateOfBirth.Date > asOf.AddYears(-age)) age--;
+        return age;
+    }
 
     // ── Navigation ───────────────────────────────────────────────────────────
     public User? Manager { get; private set; }
@@ -244,7 +261,8 @@ public sealed class User : BaseEntity
     public static User SelfRegisterCrew(
         string username, string mobile, string email, string fullName,
         string passwordHash, string? referralCodeUsed,
-        string? city, string? skills, int? experienceYears, string? bio)
+        string? city, string? skills, int? experienceYears, string? bio,
+        DateTime? dateOfBirth = null)
     {
         var u = new User(mobile, fullName, UserRole.Crew)
         {
@@ -258,6 +276,7 @@ public sealed class User : BaseEntity
         u.PasswordHash         = passwordHash;
         u.LastPasswordChangeAt = DateTime.UtcNow;
         u.ReferralCodeUsed     = referralCodeUsed?.Trim().ToUpperInvariant();
+        u.DateOfBirth          = dateOfBirth?.Date;
         return u;
     }
 

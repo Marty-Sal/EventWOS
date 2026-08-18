@@ -370,6 +370,9 @@ try
     }
     builder.Services.AddSingleton<EventWOS.Application.Common.IImageProcessor,
                                   EventWOS.Infrastructure.Storage.ImageSharpProcessor>();
+    // Scoped (not Singleton) - it depends on IAppDbContext, which is scoped per-request.
+    builder.Services.AddScoped<EventWOS.Application.Files.IFileUploadStorer,
+                                EventWOS.Application.Files.FileUploadStorer>();
     builder.Services.AddHttpContextAccessor();
 
     // ─── API Versioning ───────────────────────────────────────────────────────

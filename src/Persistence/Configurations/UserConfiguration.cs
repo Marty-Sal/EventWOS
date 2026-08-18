@@ -51,6 +51,9 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Bio).HasColumnName("bio").HasMaxLength(2000);
         builder.Property(u => u.Skills).HasColumnName("skills").HasMaxLength(500);
         builder.Property(u => u.ExperienceYears).HasColumnName("experience_years");
+        builder.Property(u => u.DateOfBirth).HasColumnName("date_of_birth").HasColumnType("date");
+        // Age is derived from DateOfBirth at read-time (get-only, no setter) — never a real column.
+        builder.Ignore(u => u.Age);
         builder.Property(u => u.ReferralCodeUsed).HasColumnName("referral_code_used").HasMaxLength(20);
 
         // Vendor-specific

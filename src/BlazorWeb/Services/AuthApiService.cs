@@ -21,8 +21,12 @@ public sealed record RegisterVendorRequest(
     string? Address, string? City, string? State, string? Website, string? Bio);
 public sealed record RegisterCrewRequest(
     string Username, string Email, string Mobile, string Password, string FullName,
-    string? ReferralCode, string? City, string? Skills, int? ExperienceYears, string? Bio);
+    DateTime DateOfBirth,
+    string? ReferralCode, string? City, string? Skills, int? ExperienceYears, string? Bio,
+    byte[] IdentificationProofContent, string IdentificationProofFileName, string IdentificationProofContentType,
+    byte[]? ProfilePhotoContent, string? ProfilePhotoFileName, string? ProfilePhotoContentType);
 public sealed record RegistrationResultDto(Guid UserId, string Status, string Message);
+public sealed record ReferralCodeCheckResultDto(bool IsValid, string? VendorBusinessName);
 
 public sealed record ForgotPasswordRequest(string UsernameEmailOrMobile);
 public sealed record ForgotPasswordResultDto(Guid? OtpRequestId, string MaskedDestination, string? DevOtp = null);
@@ -57,6 +61,8 @@ public interface IAuthApiService
     Task<ApiResult<LoginResultDto>> LoginAsync(string usernameOrEmail, string password, string portal, string deviceId, string deviceName, CancellationToken ct = default);
     Task<ApiResult<RegistrationResultDto>> RegisterVendorAsync(RegisterVendorRequest req, CancellationToken ct = default);
     Task<ApiResult<RegistrationResultDto>> RegisterCrewAsync(RegisterCrewRequest req, CancellationToken ct = default);
+    /// <summary>Live "is this vendor referral code valid" check — used for inline validation before form submit.</summary>
+    Task<ApiResult<ReferralCodeCheckResultDto>> CheckReferralCodeAsync(string code, CancellationToken ct = default);
     Task<ApiResult<ForgotPasswordResultDto>> RequestPasswordResetAsync(string usernameEmailOrMobile, CancellationToken ct = default);
     Task<ApiResult<object>> ResetPasswordAsync(ResetPasswordRequest req, CancellationToken ct = default);
     Task<ApiResult<object>> SetupPasswordAsync(SetupPasswordRequest req, CancellationToken ct = default);
@@ -148,8 +154,41 @@ public sealed class AuthApiService : IAuthApiService
     public async Task<ApiResult<RegistrationResultDto>> RegisterCrewAsync(
         RegisterCrewRequest req, CancellationToken ct = default)
     {
-        var resp = await _http.PostAsJsonAsync("api/v1/auth/register/crew", req, ct);
+        // multipart/form-data — this endpoint carries files (ID proof mandatory, photo optional)
+        // alongside the scalar fields, so it can't be JSON like the other auth endpoints.
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(req.Username), "Username");
+        form.Add(new StringContent(req.Email), "Email");
+        form.Add(new StringContent(req.Mobile), "Mobile");
+        form.Add(new StringContent(req.Password), "Password");
+        form.Add(new StringContent(req.FullName), "FullName");
+        form.Add(new StringContent(req.DateOfBirth.ToString("yyyy-MM-dd")), "DateOfBirth");
+        if (req.ReferralCode is not null) form.Add(new StringContent(req.ReferralCode), "ReferralCode");
+        if (req.City is not null) form.Add(new StringContent(req.City), "City");
+        if (req.Skills is not null) form.Add(new StringContent(req.Skills), "Skills");
+        if (req.ExperienceYears.HasValue) form.Add(new StringContent(req.ExperienceYears.Value.ToString()), "ExperienceYears");
+        if (req.Bio is not null) form.Add(new StringContent(req.Bio), "Bio");
+
+        var idProofContent = new ByteArrayContent(req.IdentificationProofContent);
+        idProofContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(req.IdentificationProofContentType);
+        form.Add(idProofContent, "IdentificationProof", req.IdentificationProofFileName);
+
+        if (req.ProfilePhotoContent is not null)
+        {
+            var photoContent = new ByteArrayContent(req.ProfilePhotoContent);
+            photoContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(req.ProfilePhotoContentType ?? "image/jpeg");
+            form.Add(photoContent, "ProfilePhoto", req.ProfilePhotoFileName ?? "photo.jpg");
+        }
+
+        var resp = await _http.PostAsync("api/v1/auth/register/crew", form, ct);
         return await ParseAsync<RegistrationResultDto>(resp);
+    }
+
+    public async Task<ApiResult<ReferralCodeCheckResultDto>> CheckReferralCodeAsync(
+        string code, CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync($"api/v1/auth/register/check-referral?code={Uri.EscapeDataString(code)}", ct);
+        return await ParseAsync<ReferralCodeCheckResultDto>(resp);
     }
 
     public async Task<ApiResult<ForgotPasswordResultDto>> RequestPasswordResetAsync(

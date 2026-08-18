@@ -21,7 +21,7 @@ public static class FileValidationPolicy
     public static Rule For(DocumentType type) => type switch
     {
         DocumentType.CrewProfilePhoto        => new Rule(5  * 1024 * 1024, ImageTypes,      ImageExts),
-        DocumentType.CrewIdentificationProof => new Rule(8  * 1024 * 1024, ImageOrPdfTypes, ImageOrPdfExts),
+        DocumentType.CrewIdentificationProof => new Rule(5  * 1024 * 1024, ImageOrPdfTypes, ImageOrPdfExts),
         DocumentType.VendorDocument          => new Rule(10 * 1024 * 1024, ImageOrPdfTypes, ImageOrPdfExts),
         DocumentType.EventDocument           => new Rule(15 * 1024 * 1024, ImageOrPdfTypes, ImageOrPdfExts),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown document type.")

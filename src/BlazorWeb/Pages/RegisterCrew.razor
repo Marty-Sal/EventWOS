@@ -1,5 +1,7 @@
 @page "/register/crew"
 @layout EventWOS.BlazorWeb.Layout.EmptyLayout
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text.RegularExpressions
 @inject IAuthApiService AuthApi
 @inject NavigationManager Nav
 
@@ -32,9 +34,13 @@
                         </div>
                     }
 
-                    <Field Label="Your full name" Required="true">
-                        <input @bind="_fullName" class="@Css" placeholder="Alex Roy" />
+                    <Field Label="Your full name" Required="true" Hint="Letters and spaces only">
+                        <input @bind="_fullName" @bind:event="oninput" class="@Css" placeholder="Alex Roy" />
                     </Field>
+                    @if (_fullName?.Length > 0 && !FullNamePattern.IsMatch(_fullName))
+                    {
+                        <p class="text-xs text-red-600 -mt-2">Full name can only contain letters and spaces.</p>
+                    }
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field Label="Username" Required="true" Hint="3–50 chars · letters, numbers, . _ -">
@@ -46,8 +52,9 @@
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Field Label="Mobile" Required="true">
-                            <input @bind="_mobile" type="tel" class="@Css" placeholder="+91 98765 43210" autocomplete="tel" />
+                        <Field Label="Mobile" Required="true" Hint="Exactly 10 digits">
+                            <input value="@_mobile" @oninput="OnMobileInput" type="tel" inputmode="numeric" maxlength="10"
+                                   class="@Css" placeholder="9876543210" autocomplete="tel" />
                         </Field>
                         <Field Label="Password" Required="true" Hint="Min 8 chars · 1 letter · 1 number">
                             <input @bind="_password" type="password" class="@Css" placeholder="••••••••" autocomplete="new-password" />
@@ -55,22 +62,68 @@
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Field Label="Date of birth" Required="true" Hint="@AgeHint">
+                            <input value="@_dobStr" @oninput="OnDobInput" type="date" max="@_maxDob" class="@Css" />
+                        </Field>
                         <Field Label="City">
                             <input @bind="_city" class="@Css" placeholder="Mumbai" />
                         </Field>
+                    </div>
+                    @if (_dob.HasValue && !IsAdult(_dob.Value))
+                    {
+                        <p class="text-xs text-red-600 -mt-2">You must be at least 18 years old to register.</p>
+                    }
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field Label="Years of experience">
                             <input @bind="_years" type="number" min="0" max="60" class="@Css" placeholder="3" />
                         </Field>
+                        <Field Label="Skills (comma-separated)" Hint="e.g. stage, lighting">
+                            <input @bind="_skills" class="@Css" placeholder="stage, lighting" />
+                        </Field>
                     </div>
 
-                    <Field Label="Skills (comma-separated)" Hint="e.g. stage, lighting, sound, security">
-                        <input @bind="_skills" class="@Css" placeholder="stage, lighting" />
+                    <Field Label="Profile photo (optional)" Hint="JPEG/PNG, up to 5MB">
+                        <InputFile OnChange="OnPhotoSelected" accept="image/jpeg,image/png,image/webp" class="@Css" />
                     </Field>
+                    @if (_photoError is not null)
+                    {
+                        <p class="text-xs text-red-600 -mt-2">@_photoError</p>
+                    }
+                    else if (_photoBytes is not null)
+                    {
+                        <p class="text-xs text-green-700 -mt-2">✓ @_photoFileName selected</p>
+                    }
+
+                    <Field Label="Identification proof" Required="true" Hint="Aadhaar / driving licence / voter ID — JPEG, PNG or PDF, up to 5MB">
+                        <InputFile OnChange="OnIdProofSelected" accept="image/jpeg,image/png,application/pdf" class="@Css" />
+                    </Field>
+                    @if (_idProofError is not null)
+                    {
+                        <p class="text-xs text-red-600 -mt-2">@_idProofError</p>
+                    }
+                    else if (_idProofBytes is not null)
+                    {
+                        <p class="text-xs text-green-700 -mt-2">✓ @_idProofFileName selected</p>
+                    }
 
                     <Field Label="Vendor referral code" Required="true"
                            Hint="Ask your vendor for this code — it's how we link you to their roster.">
-                        <input @bind="_ref" class="@Css uppercase" placeholder="ABC12345" disabled="@(_refLocked)" maxlength="20" />
+                        <input value="@_ref" @oninput="OnRefInput" @onblur="ValidateReferralAsync"
+                               class="@Css uppercase" placeholder="ABC12345" disabled="@(_refLocked)" maxlength="20" />
                     </Field>
+                    @if (_refChecking)
+                    {
+                        <p class="text-xs text-gray-500 -mt-2">Checking code…</p>
+                    }
+                    else if (_refValid == true)
+                    {
+                        <p class="text-xs text-green-700 -mt-2">✓ Valid — you'll join @(_refVendorName ?? "this vendor")</p>
+                    }
+                    else if (_refValid == false)
+                    {
+                        <p class="text-xs text-red-600 -mt-2">Not a valid vendor referral code.</p>
+                    }
 
                     <Field Label="About you (optional)">
                         <textarea @bind="_bio" rows="3" class="@Css" placeholder="A short intro about your event experience."></textarea>
@@ -97,6 +150,8 @@
 
 @code {
     private const string Css = "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm";
+    private const long MaxFileBytes = 5 * 1024 * 1024;
+    private static readonly Regex FullNamePattern = new(@"^[A-Za-z ]+$");
 
     /// <summary>?ref=ABC123 — prefills + locks the referral code field.</summary>
     [SupplyParameterFromQuery(Name = "ref")] public string? Ref { get; set; }
@@ -109,13 +164,103 @@
     private string? _error, _success;
     private bool _loading;
 
+    private DateTime? _dob;
+    private string _dobStr = "";
+    private readonly string _maxDob = DateTime.UtcNow.Date.ToString("yyyy-MM-dd");
+
+    private byte[]? _photoBytes;    private string? _photoFileName, _photoContentType, _photoError;
+    private byte[]? _idProofBytes;  private string? _idProofFileName, _idProofContentType, _idProofError;
+
+    private bool? _refValid;
+    private string? _refVendorName;
+    private bool _refChecking;
+
+    private string AgeHint => _dob switch
+    {
+        null => "Must be 18 or older",
+        { } d when IsAdult(d) => $"Age: {CalculateAge(d)} — OK ✓",
+        { } d => $"Age: {CalculateAge(d)} — must be 18+"
+    };
+
     protected override void OnInitialized()
     {
         if (!string.IsNullOrWhiteSpace(Ref))
         {
             _ref = Ref.Trim().ToUpperInvariant();
             _refLocked = true;
+            _refValid = null; // still validate it on load in case it's stale/expired
         }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_refLocked && !string.IsNullOrWhiteSpace(_ref))
+            await ValidateReferralAsync();
+    }
+
+    private static int CalculateAge(DateTime dob)
+    {
+        var today = DateTime.UtcNow.Date;
+        var age = today.Year - dob.Year;
+        if (dob.Date > today.AddYears(-age)) age--;
+        return age;
+    }
+    private static bool IsAdult(DateTime dob) => CalculateAge(dob) >= 18;
+
+    private void OnMobileInput(ChangeEventArgs e)
+    {
+        var digitsOnly = new string((e.Value?.ToString() ?? "").Where(char.IsDigit).ToArray());
+        _mobile = digitsOnly.Length > 10 ? digitsOnly[..10] : digitsOnly;
+    }
+
+    private void OnDobInput(ChangeEventArgs e)
+    {
+        _dobStr = e.Value?.ToString() ?? "";
+        _dob = DateTime.TryParse(_dobStr, out var d) ? d.Date : null;
+    }
+
+    private void OnRefInput(ChangeEventArgs e)
+    {
+        _ref = (e.Value?.ToString() ?? "").ToUpperInvariant();
+        _refValid = null;
+    }
+
+    private async Task ValidateReferralAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_ref)) { _refValid = null; return; }
+        _refChecking = true;
+        try
+        {
+            var result = await AuthApi.CheckReferralCodeAsync(_ref);
+            _refValid = result.Data?.IsValid ?? false;
+            _refVendorName = result.Data?.VendorBusinessName;
+        }
+        catch { _refValid = null; }
+        finally { _refChecking = false; }
+    }
+
+    private async Task OnPhotoSelected(InputFileChangeEventArgs e)
+    {
+        _photoError = null; _photoBytes = null;
+        var file = e.File;
+        if (file.Size > MaxFileBytes) { _photoError = "Profile photo must not exceed 5 MB."; return; }
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(MaxFileBytes + 1024).CopyToAsync(ms);
+        _photoBytes = ms.ToArray();
+        _photoFileName = file.Name;
+        _photoContentType = file.ContentType;
+    }
+
+    private async Task OnIdProofSelected(InputFileChangeEventArgs e)
+    {
+        _idProofError = null; _idProofBytes = null;
+        var file = e.File;
+        if (file.Size > MaxFileBytes) { _idProofError = "Identification proof must not exceed 5 MB."; return; }
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(MaxFileBytes + 1024).CopyToAsync(ms);
+        _idProofBytes = ms.ToArray();
+        _idProofFileName = file.Name;
+        _idProofContentType = file.ContentType;
     }
 
     private async Task SubmitAsync()
@@ -127,18 +272,46 @@
         {
             _error = "Please fill in all required fields."; return;
         }
+        if (!FullNamePattern.IsMatch(_fullName))
+        {
+            _error = "Full name can only contain letters and spaces."; return;
+        }
+        if (_mobile.Length != 10)
+        {
+            _error = "Mobile number must be exactly 10 digits."; return;
+        }
+        if (_dob is null)
+        {
+            _error = "Please enter your date of birth."; return;
+        }
+        if (!IsAdult(_dob.Value))
+        {
+            _error = "You must be at least 18 years old to register."; return;
+        }
         if (string.IsNullOrWhiteSpace(_ref))
         {
             _error = "A vendor referral code is required. Don't have one? Ask the vendor who invited you.";
             return;
         }
+        if (_refValid == false)
+        {
+            _error = "That vendor referral code isn't valid. Please double-check it."; return;
+        }
+        if (_idProofBytes is null)
+        {
+            _error = "Identification proof (Aadhaar card, driving licence, or voter ID) is required."; return;
+        }
+
         _loading = true;
         try
         {
             var req = new RegisterCrewRequest(
                 _username.Trim(), _email.Trim(), _mobile.Trim(), _password, _fullName.Trim(),
+                _dob.Value,
                 string.IsNullOrWhiteSpace(_ref) ? null : _ref!.Trim(),
-                _city, _skills, _years, _bio);
+                _city, _skills, _years, _bio,
+                _idProofBytes, _idProofFileName ?? "id-proof", _idProofContentType ?? "application/octet-stream",
+                _photoBytes, _photoFileName, _photoContentType);
             var result = await AuthApi.RegisterCrewAsync(req);
             if (!result.Success)
             {

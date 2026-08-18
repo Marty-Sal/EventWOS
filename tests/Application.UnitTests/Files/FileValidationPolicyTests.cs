@@ -41,11 +41,20 @@ public sealed class FileValidationPolicyTests
     }
 
     [Fact]
-    public void Identification_proof_accepts_pdf_up_to_8MB()
+    public void Identification_proof_accepts_pdf_up_to_5MB()
     {
         var (ok, _) = FileValidationPolicy.Validate(
-            DocumentType.CrewIdentificationProof, sizeBytes: 7 * 1024 * 1024, contentType: "application/pdf", originalFileName: "aadhaar.pdf");
+            DocumentType.CrewIdentificationProof, sizeBytes: 4 * 1024 * 1024, contentType: "application/pdf", originalFileName: "aadhaar.pdf");
         ok.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Identification_proof_over_5MB_is_rejected()
+    {
+        var (ok, error) = FileValidationPolicy.Validate(
+            DocumentType.CrewIdentificationProof, sizeBytes: 6 * 1024 * 1024, contentType: "application/pdf", originalFileName: "aadhaar.pdf");
+        ok.Should().BeFalse();
+        error.Should().Contain("5MB");
     }
 
     [Fact]
