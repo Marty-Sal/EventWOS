@@ -508,136 +508,167 @@ try
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        // ─── Schema / migration-history drift guard (self-healing) ────────────
-        // Failure mode this fixes: the database was wiped (tables DROPPED) but the
-        // __EFMigrationsHistory table survived. MigrateAsync() then sees every
-        // migration as already applied, does nothing, cheerfully logs
-        // "Migrations complete." - and the app runs against an EMPTY schema, so
-        // every request dies with: 42P01: relation "users" does not exist
-        // (which is exactly what the login screen was showing).
-        //
-        // Detection: the core `users` table is missing while migration history
-        // claims migrations were applied.
-        // Recovery: reset the public schema so the full migration set re-applies
-        // from scratch below. Safe by construction - if `users` is missing the
-        // database is already unusable and holds no reachable data (every table
-        // is rooted in users), and the seeder recreates the admin account.
-        var rebuildOnDrift = !string.Equals(
-            app.Configuration["Database:RebuildSchemaOnDrift"], "false",
-            StringComparison.OrdinalIgnoreCase);
-        try
+
+        // ─── Startup migration gate ─────────────────────────────────────────────
+        // EF migrations no longer auto-apply on every deploy. A code-only deploy
+        // (no schema change) now boots without touching the database at all - the
+        // drift-rebuild + MigrateAsync block below only runs when explicitly armed.
+        // Enable for exactly one deploy via Railway variable RUN_MIGRATIONS_ON_STARTUP=true
+        // (or config key Database:RunMigrationsOnStartup), then disable it again.
+        var runMigrationsOnStartup = string.Equals(
+            Environment.GetEnvironmentVariable("RUN_MIGRATIONS_ON_STARTUP")
+                ?? app.Configuration["Database:RunMigrationsOnStartup"],
+            "true", StringComparison.OrdinalIgnoreCase);
+
+        if (!runMigrationsOnStartup)
         {
-            var driftConn = db.Database.GetDbConnection();
-            if (driftConn.State != System.Data.ConnectionState.Open)
-                await driftConn.OpenAsync();
-
-            bool usersTableExists;
-            bool historyTableExists;
-            await using (var checkCmd = driftConn.CreateCommand())
+            var pendingCheck = (await db.Database.GetPendingMigrationsAsync()).ToList();
+            if (pendingCheck.Count > 0)
             {
-                checkCmd.CommandText =
-                    @"SELECT to_regclass('public.users') IS NOT NULL,
-                             to_regclass('public.""__EFMigrationsHistory""') IS NOT NULL";
-                await using var driftReader = await checkCmd.ExecuteReaderAsync();
-                await driftReader.ReadAsync();
-                usersTableExists   = driftReader.GetBoolean(0);
-                historyTableExists = driftReader.GetBoolean(1);
+                Log.Warning("SKIPPING EF migrations on startup (RUN_MIGRATIONS_ON_STARTUP is not 'true'). " +
+                    "{Count} migration(s) pending, starting with {First}. Set RUN_MIGRATIONS_ON_STARTUP=true " +
+                    "for one deploy to apply them, then unset it.",
+                    pendingCheck.Count, pendingCheck[0]);
             }
-
-            long historyRows = 0;
-            if (historyTableExists)
+            else
             {
-                await using var countCmd = driftConn.CreateCommand();
-                countCmd.CommandText = @"SELECT count(*) FROM ""__EFMigrationsHistory""";
-                historyRows = Convert.ToInt64(await countCmd.ExecuteScalarAsync());
+                Log.Information("EF migrations up to date ({Count} applied). Startup auto-migrate is disabled.",
+                    (await db.Database.GetAppliedMigrationsAsync()).Count());
             }
-
-            Log.Information("Schema check -> users table present: {UsersExists} | migration history rows: {HistoryRows}",
-                usersTableExists, historyRows);
-
-            if (!usersTableExists && historyRows > 0)
+        }
+        else
+        {
+            // ─── Schema / migration-history drift guard (self-healing) ────────────
+            // Failure mode this fixes: the database was wiped (tables DROPPED) but the
+            // __EFMigrationsHistory table survived. MigrateAsync() then sees every
+            // migration as already applied, does nothing, cheerfully logs
+            // "Migrations complete." - and the app runs against an EMPTY schema, so
+            // every request dies with: 42P01: relation "users" does not exist
+            // (which is exactly what the login screen was showing).
+            //
+            // Detection: the core `users` table is missing while migration history
+            // claims migrations were applied.
+            // Recovery: reset the public schema so the full migration set re-applies
+            // from scratch below. Safe by construction - if `users` is missing the
+            // database is already unusable and holds no reachable data (every table
+            // is rooted in users), and the seeder recreates the admin account.
+            var rebuildOnDrift = !string.Equals(
+                app.Configuration["Database:RebuildSchemaOnDrift"], "false",
+                StringComparison.OrdinalIgnoreCase);
+            try
             {
-                if (!rebuildOnDrift)
+                var driftConn = db.Database.GetDbConnection();
+                if (driftConn.State != System.Data.ConnectionState.Open)
+                    await driftConn.OpenAsync();
+
+                bool usersTableExists;
+                bool historyTableExists;
+                await using (var checkCmd = driftConn.CreateCommand())
                 {
-                    Log.Error("SCHEMA DRIFT DETECTED: migration history has {HistoryRows} rows but the `users` table does not exist. "
-                            + "Auto-rebuild is disabled (Database:RebuildSchemaOnDrift=false), so the app will start against an unusable schema.",
-                        historyRows);
+                    checkCmd.CommandText =
+                        @"SELECT to_regclass('public.users') IS NOT NULL,
+                                 to_regclass('public.""__EFMigrationsHistory""') IS NOT NULL";
+                    await using var driftReader = await checkCmd.ExecuteReaderAsync();
+                    await driftReader.ReadAsync();
+                    usersTableExists   = driftReader.GetBoolean(0);
+                    historyTableExists = driftReader.GetBoolean(1);
                 }
-                else
+
+                long historyRows = 0;
+                if (historyTableExists)
                 {
-                    Log.Warning("SCHEMA DRIFT DETECTED: migration history claims {HistoryRows} applied migrations but the `users` table is "
-                              + "missing -> the database was wiped without clearing __EFMigrationsHistory. Resetting the public schema so "
-                              + "every migration re-applies from scratch.", historyRows);
+                    await using var countCmd = driftConn.CreateCommand();
+                    countCmd.CommandText = @"SELECT count(*) FROM ""__EFMigrationsHistory""";
+                    historyRows = Convert.ToInt64(await countCmd.ExecuteScalarAsync());
+                }
 
-                    await using (var resetCmd = driftConn.CreateCommand())
-                    {
-                        resetCmd.CommandText = @"
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
-GRANT ALL ON SCHEMA public TO CURRENT_USER;
-GRANT ALL ON SCHEMA public TO public;";
-                        resetCmd.CommandTimeout = 120;
-                        await resetCmd.ExecuteNonQueryAsync();
-                    }
+                Log.Information("Schema check -> users table present: {UsersExists} | migration history rows: {HistoryRows}",
+                    usersTableExists, historyRows);
 
-                    // gen_random_uuid() is built in on PostgreSQL 13+; create pgcrypto
-                    // as a fallback for older servers. Failure is not fatal (it needs
-                    // elevated privileges on some hosts and isn't needed on PG13+).
-                    try
+                if (!usersTableExists && historyRows > 0)
+                {
+                    if (!rebuildOnDrift)
                     {
-                        await using var extCmd = driftConn.CreateCommand();
-                        extCmd.CommandText = "CREATE EXTENSION IF NOT EXISTS pgcrypto;";
-                        await extCmd.ExecuteNonQueryAsync();
+                        Log.Error("SCHEMA DRIFT DETECTED: migration history has {HistoryRows} rows but the `users` table does not exist. "
+                                + "Auto-rebuild is disabled (Database:RebuildSchemaOnDrift=false), so the app will start against an unusable schema.",
+                            historyRows);
                     }
-                    catch (Exception extEx)
+                    else
                     {
-                        Log.Warning("pgcrypto extension not created ({Message}) - fine on PostgreSQL 13+ where gen_random_uuid() is built in.",
-                            extEx.Message);
-                    }
+                        Log.Warning("SCHEMA DRIFT DETECTED: migration history claims {HistoryRows} applied migrations but the `users` table is "
+                                  + "missing -> the database was wiped without clearing __EFMigrationsHistory. Resetting the public schema so "
+                                  + "every migration re-applies from scratch.", historyRows);
 
-                    Log.Warning("Public schema reset complete. EF migrations will now rebuild the full schema from scratch.");
+                        await using (var resetCmd = driftConn.CreateCommand())
+                        {
+                            resetCmd.CommandText = @"
+    DROP SCHEMA public CASCADE;
+    CREATE SCHEMA public;
+    GRANT ALL ON SCHEMA public TO CURRENT_USER;
+    GRANT ALL ON SCHEMA public TO public;";
+                            resetCmd.CommandTimeout = 120;
+                            await resetCmd.ExecuteNonQueryAsync();
+                        }
+
+                        // gen_random_uuid() is built in on PostgreSQL 13+; create pgcrypto
+                        // as a fallback for older servers. Failure is not fatal (it needs
+                        // elevated privileges on some hosts and isn't needed on PG13+).
+                        try
+                        {
+                            await using var extCmd = driftConn.CreateCommand();
+                            extCmd.CommandText = "CREATE EXTENSION IF NOT EXISTS pgcrypto;";
+                            await extCmd.ExecuteNonQueryAsync();
+                        }
+                        catch (Exception extEx)
+                        {
+                            Log.Warning("pgcrypto extension not created ({Message}) - fine on PostgreSQL 13+ where gen_random_uuid() is built in.",
+                                extEx.Message);
+                        }
+
+                        Log.Warning("Public schema reset complete. EF migrations will now rebuild the full schema from scratch.");
+                    }
                 }
             }
-        }
-        catch (Exception driftEx)
-        {
-            Log.Error("Schema drift check FAILED (non-fatal, continuing to migrations) -> {ExType}: {Message}",
-                driftEx.GetType().Name, driftEx.Message.Replace('\n', ' '));
-        }
+            catch (Exception driftEx)
+            {
+                Log.Error("Schema drift check FAILED (non-fatal, continuing to migrations) -> {ExType}: {Message}",
+                    driftEx.GetType().Name, driftEx.Message.Replace('\n', ' '));
+            }
 
-        Log.Information("Running EF Core migrations...");
+            Log.Information("Running EF Core migrations...");
 
-        // Migration visibility check. EF only counts a migration class if it carries
-        // BOTH [Migration("id")] AND [DbContext(typeof(AppDbContext))] - a missing
-        // [DbContext] attribute silently drops it (that bug made all 21 invisible and
-        // left MigrateAsync applying nothing on every boot).
-        var allMigrations = db.Database.GetMigrations().ToList();
-        var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
-        Log.Information("Migration discovery -> discovered: {Total} | pending: {Pending} | first pending: {First}",
-            allMigrations.Count, pendingMigrations.Count,
-            pendingMigrations.Count == 0 ? "(none)" : pendingMigrations[0]);
+            // Migration visibility check. EF only counts a migration class if it carries
+            // BOTH [Migration("id")] AND [DbContext(typeof(AppDbContext))] - a missing
+            // [DbContext] attribute silently drops it (that bug made all 21 invisible and
+            // left MigrateAsync applying nothing on every boot).
+            var allMigrations = db.Database.GetMigrations().ToList();
+            var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
+            Log.Information("Migration discovery -> discovered: {Total} | pending: {Pending} | first pending: {First}",
+                allMigrations.Count, pendingMigrations.Count,
+                pendingMigrations.Count == 0 ? "(none)" : pendingMigrations[0]);
 
-        if (allMigrations.Count == 0)
-        {
-            Log.Error("No migrations discovered. Check that every migration class has "
-                    + "[Migration(\"id\")] AND [DbContext(typeof(AppDbContext))].");
-        }
+            if (allMigrations.Count == 0)
+            {
+                Log.Error("No migrations discovered. Check that every migration class has "
+                        + "[Migration(\"id\")] AND [DbContext(typeof(AppDbContext))].");
+            }
 
-        // Non-fatal: a single bad migration must not put the container in a crash loop.
-        // The emergency patch and seeder below are already non-fatal, and they can often
-        // repair whatever a partial migration left behind.
-        try
-        {
-            await db.Database.MigrateAsync();
-            var appliedAfter = (await db.Database.GetAppliedMigrationsAsync()).ToList();
-            Log.Information("Migrations complete. Applied now: {Count} | latest: {Latest}",
-                appliedAfter.Count,
-                appliedAfter.Count == 0 ? "(none)" : appliedAfter[^1]);
-        }
-        catch (Exception migEx)
-        {
-            Log.Error("MIGRATIONS FAILED (non-fatal, startup continues) -> {ExType}: {Message}",
-                migEx.GetType().Name, migEx.Message.Replace('\n', ' '));
+            // Non-fatal: a single bad migration must not put the container in a crash loop.
+            // The emergency patch and seeder below are already non-fatal, and they can often
+            // repair whatever a partial migration left behind.
+            try
+            {
+                await db.Database.MigrateAsync();
+                var appliedAfter = (await db.Database.GetAppliedMigrationsAsync()).ToList();
+                Log.Information("Migrations complete. Applied now: {Count} | latest: {Latest}",
+                    appliedAfter.Count,
+                    appliedAfter.Count == 0 ? "(none)" : appliedAfter[^1]);
+            }
+            catch (Exception migEx)
+            {
+                Log.Error("MIGRATIONS FAILED (non-fatal, startup continues) -> {ExType}: {Message}",
+                    migEx.GetType().Name, migEx.Message.Replace('\n', ' '));
+            }
         }
 
         // ── Emergency schema patch ─────────────────────────────────────────
