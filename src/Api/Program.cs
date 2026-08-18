@@ -57,7 +57,22 @@ try
     builder.Services.AddDbContext<AppDbContext>(opts =>
         opts.UseNpgsql(pgConn, npgsql =>
         {
-            npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName);
+            // NOTE: deliberately NOT calling npgsql.MigrationsAssembly(...) here.
+            // AppDbContext and all 21 Migration classes live in the SAME assembly
+            // (EventWOS.Persistence), so the correct behavior is EF Core's default:
+            // use context.GetType().Assembly directly (the already-loaded Type
+            // reference, no re-load).
+            // The removed call passed typeof(AppDbContext).Assembly.FullName as a
+            // STRING, which makes EF call Assembly.Load(new AssemblyName(...))
+            // internally to re-resolve the assembly by name at runtime. On this
+            // deployment that produced a second, distinct load of
+            // EventWOS.Persistence with its own Type identities - so EF's internal
+            // filter (`t.IsSubclassOf(typeof(Migration))`, comparing Types loaded
+            // from two different Assembly instances) matched none of the 21
+            // migration classes, even though plain reflection over
+            // typeof(AppDbContext).Assembly found all 21 correctly. That's why
+            // db.Database.GetMigrations() logged "total in assembly: 0" and
+            // MigrateAsync() silently did nothing on every boot.
             npgsql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorCodesToAdd: null);
         }));
 
