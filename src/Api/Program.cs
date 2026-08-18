@@ -493,6 +493,103 @@ try
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        // ─── Schema / migration-history drift guard (self-healing) ────────────
+        // Failure mode this fixes: the database was wiped (tables DROPPED) but the
+        // __EFMigrationsHistory table survived. MigrateAsync() then sees every
+        // migration as already applied, does nothing, cheerfully logs
+        // "Migrations complete." - and the app runs against an EMPTY schema, so
+        // every request dies with: 42P01: relation "users" does not exist
+        // (which is exactly what the login screen was showing).
+        //
+        // Detection: the core `users` table is missing while migration history
+        // claims migrations were applied.
+        // Recovery: reset the public schema so the full migration set re-applies
+        // from scratch below. Safe by construction - if `users` is missing the
+        // database is already unusable and holds no reachable data (every table
+        // is rooted in users), and the seeder recreates the admin account.
+        var rebuildOnDrift = !string.Equals(
+            app.Configuration["Database:RebuildSchemaOnDrift"], "false",
+            StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            var driftConn = db.Database.GetDbConnection();
+            if (driftConn.State != System.Data.ConnectionState.Open)
+                await driftConn.OpenAsync();
+
+            bool usersTableExists;
+            bool historyTableExists;
+            await using (var checkCmd = driftConn.CreateCommand())
+            {
+                checkCmd.CommandText =
+                    @"SELECT to_regclass('public.users') IS NOT NULL,
+                             to_regclass('public.""__EFMigrationsHistory""') IS NOT NULL";
+                await using var driftReader = await checkCmd.ExecuteReaderAsync();
+                await driftReader.ReadAsync();
+                usersTableExists   = driftReader.GetBoolean(0);
+                historyTableExists = driftReader.GetBoolean(1);
+            }
+
+            long historyRows = 0;
+            if (historyTableExists)
+            {
+                await using var countCmd = driftConn.CreateCommand();
+                countCmd.CommandText = @"SELECT count(*) FROM ""__EFMigrationsHistory""";
+                historyRows = Convert.ToInt64(await countCmd.ExecuteScalarAsync());
+            }
+
+            Log.Information("Schema check -> users table present: {UsersExists} | migration history rows: {HistoryRows}",
+                usersTableExists, historyRows);
+
+            if (!usersTableExists && historyRows > 0)
+            {
+                if (!rebuildOnDrift)
+                {
+                    Log.Error("SCHEMA DRIFT DETECTED: migration history has {HistoryRows} rows but the `users` table does not exist. "
+                            + "Auto-rebuild is disabled (Database:RebuildSchemaOnDrift=false), so the app will start against an unusable schema.",
+                        historyRows);
+                }
+                else
+                {
+                    Log.Warning("SCHEMA DRIFT DETECTED: migration history claims {HistoryRows} applied migrations but the `users` table is "
+                              + "missing -> the database was wiped without clearing __EFMigrationsHistory. Resetting the public schema so "
+                              + "every migration re-applies from scratch.", historyRows);
+
+                    await using (var resetCmd = driftConn.CreateCommand())
+                    {
+                        resetCmd.CommandText = @"
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO CURRENT_USER;
+GRANT ALL ON SCHEMA public TO public;";
+                        resetCmd.CommandTimeout = 120;
+                        await resetCmd.ExecuteNonQueryAsync();
+                    }
+
+                    // gen_random_uuid() is built in on PostgreSQL 13+; create pgcrypto
+                    // as a fallback for older servers. Failure is not fatal (it needs
+                    // elevated privileges on some hosts and isn't needed on PG13+).
+                    try
+                    {
+                        await using var extCmd = driftConn.CreateCommand();
+                        extCmd.CommandText = "CREATE EXTENSION IF NOT EXISTS pgcrypto;";
+                        await extCmd.ExecuteNonQueryAsync();
+                    }
+                    catch (Exception extEx)
+                    {
+                        Log.Warning("pgcrypto extension not created ({Message}) - fine on PostgreSQL 13+ where gen_random_uuid() is built in.",
+                            extEx.Message);
+                    }
+
+                    Log.Warning("Public schema reset complete. EF migrations will now rebuild the full schema from scratch.");
+                }
+            }
+        }
+        catch (Exception driftEx)
+        {
+            Log.Error("Schema drift check FAILED (non-fatal, continuing to migrations) -> {ExType}: {Message}",
+                driftEx.GetType().Name, driftEx.Message.Replace('\n', ' '));
+        }
+
         Log.Information("Running EF Core migrations...");
         await db.Database.MigrateAsync();
         Log.Information("Migrations complete.");
