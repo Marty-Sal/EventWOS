@@ -501,8 +501,13 @@ try
         // Runs AFTER MigrateAsync so base tables always exist first (safe on a
         // brand-new/empty database too). Fully idempotent — safe on every startup.
         // Uses '' (doubled single-quote) for SQL string literals inside C# @"..." verbatim strings.
+        // NON-FATAL by design: executed on a raw Npgsql connection (so EF Core
+        // never dumps the whole script into the logs on failure, which used to
+        // flood Railway's 500 logs/sec cap and hide the real error) and wrapped
+        // in try/catch so a patch failure can never brick startup. The schema of
+        // record is EF migrations, which already ran above.
         Log.Information("Applying emergency schema patch...");
-        await db.Database.ExecuteSqlRawAsync(@"
+        string emergencySchemaPatchSql = @"
 DO $$
 BEGIN
     -- ═══ users ═══════════════════════════════════════════════════════════════
@@ -1216,12 +1221,59 @@ BEGIN
     END IF;
 
 END $$;
-");
-        Log.Information("Emergency schema patch complete.");
+";
+        try
+        {
+            // Raw ADO.NET command on the underlying connection: EF Core does not
+            // intercept (and therefore cannot log) commands it did not create.
+            var patchConn = db.Database.GetDbConnection();
+            if (patchConn.State != System.Data.ConnectionState.Open)
+                await patchConn.OpenAsync();
+
+            await using var patchCmd = patchConn.CreateCommand();
+            patchCmd.CommandText = emergencySchemaPatchSql;
+            patchCmd.CommandTimeout = 180;
+            await patchCmd.ExecuteNonQueryAsync();
+
+            Log.Information("Emergency schema patch complete.");
+        }
+        catch (Exception patchEx)
+        {
+            // Reflection keeps this free of a compile-time Npgsql dependency while
+            // still surfacing PostgresException.Where / .Detail, which name the
+            // exact SQL statement that failed. ex.Message already carries SqlState.
+            var t = patchEx.GetType();
+            var pgWhere = t.GetProperty("Where")?.GetValue(patchEx) as string;
+            var pgDetail = t.GetProperty("Detail")?.GetValue(patchEx) as string;
+
+            Log.Error("Emergency schema patch SKIPPED (non-fatal, startup continues) -> {ExType}: {Message} | Where={Where} | Detail={Detail} | Inner={Inner}",
+                t.Name,
+                patchEx.Message.Replace('\n', ' '),
+                string.IsNullOrWhiteSpace(pgWhere) ? "(none)" : pgWhere.Replace('\n', ' '),
+                string.IsNullOrWhiteSpace(pgDetail) ? "(none)" : pgDetail.Replace('\n', ' '),
+                patchEx.InnerException?.Message?.Replace('\n', ' ') ?? "(none)");
+        }
+        // NON-FATAL: a seeding hiccup must not put the container into a
+        // crash-restart loop (Railway then gives up and the whole deploy fails).
+        // Boot anyway and log a concise, greppable error instead.
         Log.Information("Running seeder...");
-        var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
-        await seeder.SeedAsync();
-        Log.Information("Seeding complete.");
+        try
+        {
+            var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+            await seeder.SeedAsync();
+            Log.Information("Seeding complete.");
+        }
+        catch (Exception seedEx)
+        {
+            var st = seedEx.GetType();
+            var seedWhere = st.GetProperty("Where")?.GetValue(seedEx) as string;
+
+            Log.Error("Seeding FAILED (non-fatal, startup continues) -> {ExType}: {Message} | Where={Where} | Inner={Inner}",
+                st.Name,
+                seedEx.Message.Replace('\n', ' '),
+                string.IsNullOrWhiteSpace(seedWhere) ? "(none)" : seedWhere.Replace('\n', ' '),
+                seedEx.InnerException?.Message?.Replace('\n', ' ') ?? "(none)");
+        }
 
         // ─── One-time data repair: restore vendor anchor placeholders ─────────
         // History: earlier code deleted a vendor's placeholder row
