@@ -18,7 +18,8 @@ public sealed record LoginResultDto(bool RequiresPasswordSetup, string? Mobile, 
 public sealed record RegisterVendorRequest(
     string Username, string Email, string Mobile, string Password, string FullName,
     string BusinessName, string? ContactPersonName, string? GstNumber,
-    string? Address, string? City, string? State, string? Website, string? Bio);
+    string? Address, string? City, string? State, string? Website, string? Bio,
+    byte[]? ProfilePhotoContent, string? ProfilePhotoFileName, string? ProfilePhotoContentType);
 public sealed record RegisterCrewRequest(
     string Username, string Email, string Mobile, string Password, string FullName,
     DateTime DateOfBirth,
@@ -147,7 +148,31 @@ public sealed class AuthApiService : IAuthApiService
     public async Task<ApiResult<RegistrationResultDto>> RegisterVendorAsync(
         RegisterVendorRequest req, CancellationToken ct = default)
     {
-        var resp = await _http.PostAsJsonAsync("api/v1/auth/register/vendor", req, ct);
+        // multipart/form-data — carries the scalar fields plus an optional
+        // ProfilePhoto file. Mirrors RegisterCrewAsync's shape.
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(req.Username), "Username");
+        form.Add(new StringContent(req.Email), "Email");
+        form.Add(new StringContent(req.Mobile), "Mobile");
+        form.Add(new StringContent(req.Password), "Password");
+        form.Add(new StringContent(req.FullName), "FullName");
+        form.Add(new StringContent(req.BusinessName), "BusinessName");
+        if (req.ContactPersonName is not null) form.Add(new StringContent(req.ContactPersonName), "ContactPersonName");
+        if (req.GstNumber is not null) form.Add(new StringContent(req.GstNumber), "GstNumber");
+        if (req.Address is not null) form.Add(new StringContent(req.Address), "Address");
+        if (req.City is not null) form.Add(new StringContent(req.City), "City");
+        if (req.State is not null) form.Add(new StringContent(req.State), "State");
+        if (req.Website is not null) form.Add(new StringContent(req.Website), "Website");
+        if (req.Bio is not null) form.Add(new StringContent(req.Bio), "Bio");
+
+        if (req.ProfilePhotoContent is not null)
+        {
+            var photoContent = new ByteArrayContent(req.ProfilePhotoContent);
+            photoContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(req.ProfilePhotoContentType ?? "image/jpeg");
+            form.Add(photoContent, "ProfilePhoto", req.ProfilePhotoFileName ?? "photo.jpg");
+        }
+
+        var resp = await _http.PostAsync("api/v1/auth/register/vendor", form, ct);
         return await ParseAsync<RegistrationResultDto>(resp);
     }
 

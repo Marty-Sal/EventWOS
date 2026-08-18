@@ -12,5 +12,6 @@ public enum DocumentType
     CrewProfilePhoto = 1,
     CrewIdentificationProof = 2,
     VendorDocument = 3,
-    EventDocument = 4
+    EventDocument = 4,
+    VendorProfilePhoto = 5
 }

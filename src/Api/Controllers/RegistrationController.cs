@@ -26,18 +26,29 @@ public sealed class RegistrationController : ControllerBase
 
     public RegistrationController(IMediator mediator) => _mediator = mediator;
 
+    /// <summary>
+    /// multipart/form-data — carries the scalar fields plus an optional
+    /// ProfilePhoto file. Switched from JSON since the photo field was added;
+    /// mirrors the Crew endpoint's shape.
+    /// </summary>
     [HttpPost("vendor")]
     [AllowAnonymous]
+    [RequestSizeLimit(MaxUploadBytes)]
     [ProducesResponseType(typeof(ApiResponse<RegistrationResponse>), 200)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 409)]
     public async Task<IActionResult> RegisterVendor(
-        [FromBody] RegisterVendorDto dto, CancellationToken ct)
+        [FromForm] RegisterVendorForm form, CancellationToken ct)
     {
+        if (form.ProfilePhoto is not null && form.ProfilePhoto.Length > MaxUploadBytes)
+            return BadRequest(ApiResponse.Fail("Profile photo must not exceed 5 MB."));
+
+        var photo = form.ProfilePhoto is { Length: > 0 } ? await ReadUploadAsync(form.ProfilePhoto, ct) : null;
+
         var cmd = new RegisterVendorCommand(
-            dto.Username, dto.Email, dto.Mobile, dto.Password, dto.FullName,
-            dto.BusinessName, dto.ContactPersonName, dto.GstNumber,
-            dto.Address, dto.City, dto.State, dto.Website, dto.Bio);
+            form.Username, form.Email, form.Mobile, form.Password, form.FullName,
+            form.BusinessName, form.ContactPersonName, form.GstNumber,
+            form.Address, form.City, form.State, form.Website, form.Bio, photo);
 
         var result = await _mediator.Send(cmd, ct);
         if (result.IsFailure)
@@ -48,6 +59,8 @@ public sealed class RegistrationController : ControllerBase
                 "Registration.MobileTaken"   => 409,
                 "Registration.EmailTaken"    => 409,
                 "Registration.CoolDown"      => 429,
+                "Files.InvalidFile"          => 400,
+                "Files.StorageError"         => 500,
                 _ => 400
             };
             return StatusCode(status, ApiResponse<RegistrationResponse>.Fail(result.Error.Message));
@@ -126,10 +139,24 @@ public sealed class RegistrationController : ControllerBase
 }
 
 // ─── DTOs / form-binding models ────────────────────────────────────────────
-public sealed record RegisterVendorDto(
-    string Username, string Email, string Mobile, string Password, string FullName,
-    string BusinessName, string? ContactPersonName, string? GstNumber,
-    string? Address, string? City, string? State, string? Website, string? Bio);
+/// <summary>A plain class (not a record) — ASP.NET Core's form binder needs settable properties, especially alongside IFormFile.</summary>
+public sealed class RegisterVendorForm
+{
+    public string Username { get; set; } = default!;
+    public string Email { get; set; } = default!;
+    public string Mobile { get; set; } = default!;
+    public string Password { get; set; } = default!;
+    public string FullName { get; set; } = default!;
+    public string BusinessName { get; set; } = default!;
+    public string? ContactPersonName { get; set; }
+    public string? GstNumber { get; set; }
+    public string? Address { get; set; }
+    public string? City { get; set; }
+    public string? State { get; set; }
+    public string? Website { get; set; }
+    public string? Bio { get; set; }
+    public IFormFile? ProfilePhoto { get; set; }
+}
 
 /// <summary>A plain class (not a record) — ASP.NET Core's form binder needs settable properties, especially alongside IFormFile.</summary>
 public sealed class RegisterCrewForm

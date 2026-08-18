@@ -81,8 +81,27 @@ public sealed class FileValidationPolicyTests
     [InlineData(DocumentType.CrewProfilePhoto, false)]
     [InlineData(DocumentType.VendorDocument, false)]
     [InlineData(DocumentType.EventDocument, false)]
+    [InlineData(DocumentType.VendorProfilePhoto, false)]
     public void Only_identification_proof_is_flagged_sensitive(DocumentType type, bool expectedSensitive)
         => FileValidationPolicy.IsSensitive(type).Should().Be(expectedSensitive);
+
+    [Theory]
+    [InlineData(DocumentType.CrewProfilePhoto, true)]
+    [InlineData(DocumentType.VendorProfilePhoto, true)]
+    [InlineData(DocumentType.CrewIdentificationProof, false)]
+    [InlineData(DocumentType.VendorDocument, false)]
+    [InlineData(DocumentType.EventDocument, false)]
+    public void Only_profile_photos_are_flagged_as_images_for_optimization(DocumentType type, bool expectedIsImage)
+        => FileValidationPolicy.IsImage(type).Should().Be(expectedIsImage);
+
+    [Fact]
+    public void VendorProfilePhoto_rejects_a_5MB_plus_file()
+    {
+        var (ok, error) = FileValidationPolicy.Validate(
+            DocumentType.VendorProfilePhoto, sizeBytes: 6 * 1024 * 1024, contentType: "image/jpeg", originalFileName: "logo.jpg");
+        ok.Should().BeFalse();
+        error.Should().Contain("5MB");
+    }
 
     [Theory]
     [InlineData("image/jpeg", ".jpg")]

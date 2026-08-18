@@ -1,9 +1,10 @@
 @page "/register/crew"
 @layout EventWOS.BlazorWeb.Layout.EmptyLayout
 @using Microsoft.AspNetCore.Components.Forms
-@using System.Text.RegularExpressions
+@using EventWOS.BlazorWeb.Validation
 @inject IAuthApiService AuthApi
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Crew sign-up — EventWOS</PageTitle>
 
@@ -35,41 +36,55 @@
                     }
 
                     <Field Label="Your full name" Required="true" Hint="Letters and spaces only">
-                        <input @bind="_fullName" @bind:event="oninput" class="@Css" placeholder="Alex Roy" />
+                        <input @bind="_fullName" @bind:event="oninput" class="@FieldCss(_touchedFullName && !NameOk)" placeholder="Alex Roy"
+                               @onblur='() => _touchedFullName = true' />
                     </Field>
-                    @if (_fullName?.Length > 0 && !FullNamePattern.IsMatch(_fullName))
+                    @if (_touchedFullName && !NameOk)
                     {
                         <p class="text-xs text-red-600 -mt-2">Full name can only contain letters and spaces.</p>
                     }
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field Label="Username" Required="true" Hint="3–50 chars · letters, numbers, . _ -">
-                            <input @bind="_username" class="@Css" placeholder="alexroy" autocomplete="username" />
+                            <input @bind="_username" @bind:event="oninput" class="@FieldCss(_touchedUsername && !UsernameOk)" placeholder="alexroy"
+                                   autocomplete="username" @onblur='() => _touchedUsername = true' />
                         </Field>
                         <Field Label="Email" Required="true">
-                            <input @bind="_email" type="email" class="@Css" placeholder="you@example.com" autocomplete="email" />
+                            <input @bind="_email" @bind:event="oninput" type="email" class="@FieldCss(_touchedEmail && !EmailOk)" placeholder="you@example.com"
+                                   autocomplete="email" @onblur='() => _touchedEmail = true' />
                         </Field>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 -mt-2">
+                        <div>@if (_touchedUsername && !UsernameOk) { <p class="text-xs text-red-600">Only letters, numbers, '.', '_' or '-', 3–50 chars.</p> }</div>
+                        <div>@if (_touchedEmail && !EmailOk) { <p class="text-xs text-red-600">Enter a valid email address.</p> }</div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field Label="Mobile" Required="true" Hint="Exactly 10 digits">
-                            <input value="@_mobile" @oninput="OnMobileInput" type="tel" inputmode="numeric" maxlength="10"
-                                   class="@Css" placeholder="9876543210" autocomplete="tel" />
+                            <input @ref="_mobileInputRef" value="@_mobile" @oninput="OnMobileInput" type="tel" inputmode="numeric" maxlength="10"
+                                   class="@FieldCss(_touchedMobile && !MobileOk)" placeholder="9876543210" autocomplete="tel"
+                                   @onblur='() => _touchedMobile = true' />
                         </Field>
                         <Field Label="Password" Required="true" Hint="Min 8 chars · 1 letter · 1 number">
-                            <input @bind="_password" type="password" class="@Css" placeholder="••••••••" autocomplete="new-password" />
+                            <input @bind="_password" @bind:event="oninput" type="password" class="@FieldCss(_touchedPassword && !PasswordOk)" placeholder="••••••••"
+                                   autocomplete="new-password" @onblur='() => _touchedPassword = true' />
                         </Field>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 -mt-2">
+                        <div>@if (_touchedMobile && !MobileOk) { <p class="text-xs text-red-600">Mobile number must be exactly 10 digits.</p> }</div>
+                        <div>@if (_touchedPassword && !PasswordOk) { <p class="text-xs text-red-600">@ClientValidation.PasswordDescription</p> }</div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field Label="Date of birth" Required="true" Hint="@AgeHint">
-                            <input value="@_dobStr" @oninput="OnDobInput" type="date" max="@_maxDob" class="@Css" />
+                            <input value="@_dobStr" @oninput="OnDobInput" type="date" max="@_maxDob" class="@FieldCss(_touchedDob && !DobOk)"
+                                   @onblur='() => _touchedDob = true' />
                         </Field>
                         <Field Label="City">
                             <input @bind="_city" class="@Css" placeholder="Mumbai" />
                         </Field>
                     </div>
-                    @if (_dob.HasValue && !IsAdult(_dob.Value))
+                    @if (_touchedDob && !DobOk)
                     {
                         <p class="text-xs text-red-600 -mt-2">You must be at least 18 years old to register.</p>
                     }
@@ -83,7 +98,7 @@
                         </Field>
                     </div>
 
-                    <Field Label="Profile photo (optional)" Hint="JPEG/PNG, up to 5MB">
+                    <Field Label="Profile photo (optional)" Hint="@ClientFileValidation.ProfilePhoto.Description">
                         <InputFile OnChange="OnPhotoSelected" accept="image/jpeg,image/png,image/webp" class="@Css" />
                     </Field>
                     @if (_photoError is not null)
@@ -95,7 +110,7 @@
                         <p class="text-xs text-green-700 -mt-2">✓ @_photoFileName selected</p>
                     }
 
-                    <Field Label="Identification proof" Required="true" Hint="Aadhaar / driving licence / voter ID — JPEG, PNG or PDF, up to 5MB">
+                    <Field Label="Identification proof" Required="true" Hint="@($"Aadhaar / driving licence / voter ID — {ClientFileValidation.IdentificationProof.Description}")">
                         <InputFile OnChange="OnIdProofSelected" accept="image/jpeg,image/png,application/pdf" class="@Css" />
                     </Field>
                     @if (_idProofError is not null)
@@ -134,7 +149,7 @@
                         <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">@_error</div>
                     }
 
-                    <button type="button" @onclick="SubmitAsync" disabled="@_loading"
+                    <button type="button" @onclick="SubmitAsync" disabled="@(_loading || !IsFormValid)"
                             class="w-full py-3 rounded-xl bg-orange-600 text-white font-medium shadow-md hover:bg-orange-700 disabled:opacity-50">
                         @(_loading ? "Submitting…" : "Submit registration")
                     </button>
@@ -150,8 +165,8 @@
 
 @code {
     private const string Css = "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm";
-    private const long MaxFileBytes = 5 * 1024 * 1024;
-    private static readonly Regex FullNamePattern = new(@"^[A-Za-z ]+$");
+    private const string CssError = "w-full px-3 py-2.5 border border-red-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 text-sm";
+    private static string FieldCss(bool hasError) => hasError ? CssError : Css;
 
     /// <summary>?ref=ABC123 — prefills + locks the referral code field.</summary>
     [SupplyParameterFromQuery(Name = "ref")] public string? Ref { get; set; }
@@ -164,6 +179,10 @@
     private string? _error, _success;
     private bool _loading;
 
+    private ElementReference _mobileInputRef;
+
+    private bool _touchedFullName, _touchedUsername, _touchedEmail, _touchedMobile, _touchedPassword, _touchedDob;
+
     private DateTime? _dob;
     private string _dobStr = "";
     private readonly string _maxDob = DateTime.UtcNow.Date.ToString("yyyy-MM-dd");
@@ -175,11 +194,25 @@
     private string? _refVendorName;
     private bool _refChecking;
 
+    // ── live validation state (mirrors server rules — see ClientValidation) ──
+    private bool NameOk     => ClientValidation.IsValidFullName(_fullName);
+    private bool UsernameOk => ClientValidation.IsValidUsername(_username);
+    private bool EmailOk    => ClientValidation.IsValidEmail(_email);
+    private bool MobileOk   => ClientValidation.IsValidMobile(_mobile);
+    private bool PasswordOk => ClientValidation.IsValidPassword(_password);
+    private bool DobOk      => _dob.HasValue && ClientValidation.IsAdult(_dob.Value);
+
+    private bool IsFormValid =>
+        NameOk && UsernameOk && EmailOk && MobileOk && PasswordOk && DobOk
+        && !string.IsNullOrWhiteSpace(_ref) && _refValid != false
+        && _idProofBytes is not null && _idProofError is null
+        && _photoError is null;
+
     private string AgeHint => _dob switch
     {
         null => "Must be 18 or older",
-        { } d when IsAdult(d) => $"Age: {CalculateAge(d)} — OK ✓",
-        { } d => $"Age: {CalculateAge(d)} — must be 18+"
+        { } d when ClientValidation.IsAdult(d) => $"Age: {ClientValidation.CalculateAge(d)} — OK ✓",
+        { } d => $"Age: {ClientValidation.CalculateAge(d)} — must be 18+"
     };
 
     protected override void OnInitialized()
@@ -198,25 +231,25 @@
             await ValidateReferralAsync();
     }
 
-    private static int CalculateAge(DateTime dob)
-    {
-        var today = DateTime.UtcNow.Date;
-        var age = today.Year - dob.Year;
-        if (dob.Date > today.AddYears(-age)) age--;
-        return age;
-    }
-    private static bool IsAdult(DateTime dob) => CalculateAge(dob) >= 18;
-
-    private void OnMobileInput(ChangeEventArgs e)
-    {
-        var digitsOnly = new string((e.Value?.ToString() ?? "").Where(char.IsDigit).ToArray());
-        _mobile = digitsOnly.Length > 10 ? digitsOnly[..10] : digitsOnly;
-    }
-
     private void OnDobInput(ChangeEventArgs e)
     {
         _dobStr = e.Value?.ToString() ?? "";
         _dob = DateTime.TryParse(_dobStr, out var d) ? d.Date : null;
+    }
+
+    /// <summary>
+    /// Filters to digits-only, then force-writes the result straight onto the
+    /// DOM node via JS interop. The plain C#-state round-trip alone doesn't
+    /// work here: if the filtered value happens to equal the PREVIOUS render
+    /// (e.g. every non-digit keystroke on an empty field filters back to
+    /// ""), Blazor's diffing sees no change and skips updating the real
+    /// input, leaving the raw unfiltered character visibly stuck in the box.
+    /// See wwwroot/js/forms.js for the interop function.
+    /// </summary>
+    private async Task OnMobileInput(ChangeEventArgs e)
+    {
+        _mobile = ClientValidation.FilterDigits(e.Value?.ToString(), 10);
+        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _mobileInputRef, _mobile);
     }
 
     private void OnRefInput(ChangeEventArgs e)
@@ -243,9 +276,11 @@
     {
         _photoError = null; _photoBytes = null;
         var file = e.File;
-        if (file.Size > MaxFileBytes) { _photoError = "Profile photo must not exceed 5 MB."; return; }
+        var (isValid, error) = ClientFileValidation.Validate(ClientFileValidation.ProfilePhoto, file.Size, file.ContentType, file.Name);
+        if (!isValid) { _photoError = error; return; }
+
         using var ms = new MemoryStream();
-        await file.OpenReadStream(MaxFileBytes + 1024).CopyToAsync(ms);
+        await file.OpenReadStream(ClientFileValidation.ProfilePhoto.MaxSizeBytes + 1024).CopyToAsync(ms);
         _photoBytes = ms.ToArray();
         _photoFileName = file.Name;
         _photoContentType = file.ContentType;
@@ -255,9 +290,11 @@
     {
         _idProofError = null; _idProofBytes = null;
         var file = e.File;
-        if (file.Size > MaxFileBytes) { _idProofError = "Identification proof must not exceed 5 MB."; return; }
+        var (isValid, error) = ClientFileValidation.Validate(ClientFileValidation.IdentificationProof, file.Size, file.ContentType, file.Name);
+        if (!isValid) { _idProofError = error; return; }
+
         using var ms = new MemoryStream();
-        await file.OpenReadStream(MaxFileBytes + 1024).CopyToAsync(ms);
+        await file.OpenReadStream(ClientFileValidation.IdentificationProof.MaxSizeBytes + 1024).CopyToAsync(ms);
         _idProofBytes = ms.ToArray();
         _idProofFileName = file.Name;
         _idProofContentType = file.ContentType;
@@ -266,40 +303,14 @@
     private async Task SubmitAsync()
     {
         _error = null;
-        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_email)
-            || string.IsNullOrWhiteSpace(_mobile) || string.IsNullOrWhiteSpace(_password)
-            || string.IsNullOrWhiteSpace(_fullName))
+        // Mark everything touched so any remaining issue shows inline, even
+        // if the button were somehow clicked before a field lost focus.
+        _touchedFullName = _touchedUsername = _touchedEmail = _touchedMobile = _touchedPassword = _touchedDob = true;
+
+        if (!IsFormValid)
         {
-            _error = "Please fill in all required fields."; return;
-        }
-        if (!FullNamePattern.IsMatch(_fullName))
-        {
-            _error = "Full name can only contain letters and spaces."; return;
-        }
-        if (_mobile.Length != 10)
-        {
-            _error = "Mobile number must be exactly 10 digits."; return;
-        }
-        if (_dob is null)
-        {
-            _error = "Please enter your date of birth."; return;
-        }
-        if (!IsAdult(_dob.Value))
-        {
-            _error = "You must be at least 18 years old to register."; return;
-        }
-        if (string.IsNullOrWhiteSpace(_ref))
-        {
-            _error = "A vendor referral code is required. Don't have one? Ask the vendor who invited you.";
+            _error = "Please fix the highlighted fields before submitting.";
             return;
-        }
-        if (_refValid == false)
-        {
-            _error = "That vendor referral code isn't valid. Please double-check it."; return;
-        }
-        if (_idProofBytes is null)
-        {
-            _error = "Identification proof (Aadhaar card, driving licence, or voter ID) is required."; return;
         }
 
         _loading = true;
@@ -307,10 +318,10 @@
         {
             var req = new RegisterCrewRequest(
                 _username.Trim(), _email.Trim(), _mobile.Trim(), _password, _fullName.Trim(),
-                _dob.Value,
+                _dob!.Value,
                 string.IsNullOrWhiteSpace(_ref) ? null : _ref!.Trim(),
                 _city, _skills, _years, _bio,
-                _idProofBytes, _idProofFileName ?? "id-proof", _idProofContentType ?? "application/octet-stream",
+                _idProofBytes!, _idProofFileName ?? "id-proof", _idProofContentType ?? "application/octet-stream",
                 _photoBytes, _photoFileName, _photoContentType);
             var result = await AuthApi.RegisterCrewAsync(req);
             if (!result.Success)

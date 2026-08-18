@@ -1,3 +1,4 @@
+using EventWOS.Application.Files;
 using EventWOS.Application.Registration.Commands;
 using EventWOS.Application.Registration.Validators;
 using FluentValidation.TestHelper;
@@ -14,30 +15,43 @@ namespace EventWOS.Application.UnitTests.Validators;
 /// the platform relies on. The validator AND the handler both enforce it
 /// (defence in depth), so this test ensures we never accidentally relax
 /// the validator side and fall back to handler-only enforcement.
+///
+/// Also locks in the newer rules added alongside file upload support:
+/// 18+ DateOfBirth and a mandatory IdentificationProof file.
 /// </summary>
 public sealed class RegisterCrewValidatorTests
 {
     private readonly RegisterCrewValidator _sut = new();
 
+    private static readonly FileUploadPayload ValidIdProof =
+        new(new byte[] { 1, 2, 3, 4 }, "aadhaar.jpg", "image/jpeg");
+
+    private static DateTime AdultDob => DateTime.UtcNow.Date.AddYears(-25);
+
     private static RegisterCrewCommand Valid(
         string? username = "crew_jane",
         string? email = "jane@example.com",
-        string? mobile = "+919876543210",
+        string? mobile = "9876543210",
         string? password = "Passw0rd1",
         string? fullName = "Jane Doe",
+        DateTime? dateOfBirth = null,
         string? referralCode = "ABC123",
-        int? experience = 3)
+        int? experience = 3,
+        FileUploadPayload? identificationProof = null)
         => new(
-            Username:        username!,
-            Email:           email!,
-            Mobile:          mobile!,
-            Password:        password!,
-            FullName:        fullName!,
-            ReferralCode:    referralCode,
-            City:            "Mumbai",
-            Skills:          "Rigging",
-            ExperienceYears: experience,
-            Bio:             null);
+            Username:            username!,
+            Email:               email!,
+            Mobile:              mobile!,
+            Password:            password!,
+            FullName:            fullName!,
+            DateOfBirth:         dateOfBirth ?? AdultDob,
+            ReferralCode:        referralCode,
+            City:                "Mumbai",
+            Skills:              "Rigging",
+            ExperienceYears:     experience,
+            Bio:                 null,
+            IdentificationProof: identificationProof ?? ValidIdProof,
+            ProfilePhoto:        null);
 
     // ── Baseline ─────────────────────────────────────────────────────────────
 
@@ -118,11 +132,36 @@ public sealed class RegisterCrewValidatorTests
         _sut.TestValidate(Valid(password: "Passw0rd1"))
             .ShouldNotHaveValidationErrorFor(x => x.Password);
 
-    // ── Mobile ───────────────────────────────────────────────────────────────
+    // ── FullName (letters and spaces only) ────────────────────────────────────
+
+    [Theory]
+    [InlineData("Jane123")]
+    [InlineData("Jane_Doe")]
+    [InlineData("Jane-Doe")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void FullName_invalid_fails(string fullName)
+    {
+        var result = _sut.TestValidate(Valid(fullName: fullName));
+        result.ShouldHaveValidationErrorFor(x => x.FullName);
+    }
+
+    [Theory]
+    [InlineData("Jane Doe")]
+    [InlineData("Jane")]
+    [InlineData("Mary Anne Smith")]
+    public void FullName_valid_passes(string fullName)
+    {
+        var result = _sut.TestValidate(Valid(fullName: fullName));
+        result.ShouldNotHaveValidationErrorFor(x => x.FullName);
+    }
+
+    // ── Mobile (exactly 10 digits — tightened, no +country code / separators) ──
 
     [Theory]
     [InlineData("123")]                  // too short
-    [InlineData("+12345678901234567")]   // too long
+    [InlineData("+919876543210")]        // has country code — no longer accepted
+    [InlineData("98765432100")]          // 11 digits
     [InlineData("abcdefghij")]           // letters
     public void Mobile_invalid_fails(string mobile)
     {
@@ -130,13 +169,76 @@ public sealed class RegisterCrewValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.Mobile);
     }
 
-    [Theory]
-    [InlineData("+919876543210")]
-    [InlineData("9876543210")]
-    public void Mobile_valid_passes(string mobile)
+    [Fact]
+    public void Mobile_valid_passes()
     {
-        var result = _sut.TestValidate(Valid(mobile: mobile));
+        var result = _sut.TestValidate(Valid(mobile: "9876543210"));
         result.ShouldNotHaveValidationErrorFor(x => x.Mobile);
+    }
+
+    // ── DateOfBirth (18+, no future/absurd dates) ─────────────────────────────
+
+    [Fact]
+    public void DateOfBirth_under_18_fails()
+    {
+        var result = _sut.TestValidate(Valid(dateOfBirth: DateTime.UtcNow.Date.AddYears(-17)));
+        result.ShouldHaveValidationErrorFor(x => x.DateOfBirth);
+    }
+
+    [Fact]
+    public void DateOfBirth_exactly_18_passes()
+    {
+        // Exactly 18 years ago today — should just clear the bar.
+        var result = _sut.TestValidate(Valid(dateOfBirth: DateTime.UtcNow.Date.AddYears(-18)));
+        result.ShouldNotHaveValidationErrorFor(x => x.DateOfBirth);
+    }
+
+    [Fact]
+    public void DateOfBirth_in_future_fails()
+    {
+        var result = _sut.TestValidate(Valid(dateOfBirth: DateTime.UtcNow.Date.AddDays(1)));
+        result.ShouldHaveValidationErrorFor(x => x.DateOfBirth);
+    }
+
+    [Fact]
+    public void DateOfBirth_absurdly_old_fails()
+    {
+        var result = _sut.TestValidate(Valid(dateOfBirth: DateTime.UtcNow.Date.AddYears(-101)));
+        result.ShouldHaveValidationErrorFor(x => x.DateOfBirth);
+    }
+
+    // ── IdentificationProof (mandatory) ────────────────────────────────────────
+
+    [Fact]
+    public void IdentificationProof_missing_fails()
+    {
+        var result = _sut.TestValidate(Valid(identificationProof: null!));
+        result.ShouldHaveValidationErrorFor(x => x.IdentificationProof)
+              .WithErrorMessage("Identification proof (Aadhaar card, driving licence, or voter ID) is required.");
+    }
+
+    [Fact]
+    public void IdentificationProof_wrong_content_type_fails()
+    {
+        var badFile = new FileUploadPayload(new byte[] { 1, 2 }, "sheet.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        var result = _sut.TestValidate(Valid(identificationProof: badFile));
+        result.ShouldHaveValidationErrorFor(x => x.IdentificationProof);
+    }
+
+    [Fact]
+    public void IdentificationProof_too_large_fails()
+    {
+        var bigFile = new FileUploadPayload(new byte[6 * 1024 * 1024], "id.jpg", "image/jpeg");
+        var result = _sut.TestValidate(Valid(identificationProof: bigFile));
+        result.ShouldHaveValidationErrorFor(x => x.IdentificationProof);
+    }
+
+    [Fact]
+    public void IdentificationProof_valid_passes()
+    {
+        var result = _sut.TestValidate(Valid(identificationProof: ValidIdProof));
+        result.ShouldNotHaveValidationErrorFor(x => x.IdentificationProof);
     }
 
     // ── ExperienceYears (optional, but bounded when provided) ────────────────

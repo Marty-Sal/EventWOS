@@ -1,7 +1,10 @@
 @page "/register/vendor"
 @layout EventWOS.BlazorWeb.Layout.EmptyLayout
+@using Microsoft.AspNetCore.Components.Forms
+@using EventWOS.BlazorWeb.Validation
 @inject IAuthApiService AuthApi
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Vendor sign-up — EventWOS</PageTitle>
 
@@ -27,29 +30,47 @@
                 <div class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field Label="Business name" Required="true">
-                            <input @bind="_businessName" class="@Css" placeholder="Acme Events Pvt Ltd" />
+                            <input @bind="_businessName" @bind:event="oninput" class="@Css" placeholder="Acme Events Pvt Ltd" />
                         </Field>
-                        <Field Label="Your full name" Required="true">
-                            <input @bind="_fullName" class="@Css" placeholder="Jane Doe" />
+                        <Field Label="Your full name" Required="true" Hint="Letters and spaces only">
+                            <input @bind="_fullName" @bind:event="oninput" class="@FieldCss(_touchedFullName && !NameOk)" placeholder="Jane Doe"
+                                   @onblur='() => _touchedFullName = true' />
                         </Field>
                     </div>
+                    @if (_touchedFullName && !NameOk)
+                    {
+                        <p class="text-xs text-red-600 -mt-2">Full name can only contain letters and spaces.</p>
+                    }
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field Label="Username" Required="true" Hint="3–50 chars · letters, numbers, . _ -">
-                            <input @bind="_username" class="@Css" placeholder="acmeevents" autocomplete="username" />
+                            <input @bind="_username" @bind:event="oninput" class="@FieldCss(_touchedUsername && !UsernameOk)" placeholder="acmeevents"
+                                   autocomplete="username" @onblur='() => _touchedUsername = true' />
                         </Field>
                         <Field Label="Email" Required="true">
-                            <input @bind="_email" type="email" class="@Css" placeholder="you@business.com" autocomplete="email" />
+                            <input @bind="_email" @bind:event="oninput" type="email" class="@FieldCss(_touchedEmail && !EmailOk)" placeholder="you@business.com"
+                                   autocomplete="email" @onblur='() => _touchedEmail = true' />
                         </Field>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 -mt-2">
+                        <div>@if (_touchedUsername && !UsernameOk) { <p class="text-xs text-red-600">Only letters, numbers, '.', '_' or '-', 3–50 chars.</p> }</div>
+                        <div>@if (_touchedEmail && !EmailOk) { <p class="text-xs text-red-600">Enter a valid email address.</p> }</div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Field Label="Mobile" Required="true">
-                            <input @bind="_mobile" type="tel" class="@Css" placeholder="+91 98765 43210" autocomplete="tel" />
+                        <Field Label="Mobile" Required="true" Hint="Exactly 10 digits">
+                            <input @ref="_mobileInputRef" value="@_mobile" @oninput="OnMobileInput" type="tel" inputmode="numeric" maxlength="10"
+                                   class="@FieldCss(_touchedMobile && !MobileOk)" placeholder="9876543210" autocomplete="tel"
+                                   @onblur='() => _touchedMobile = true' />
                         </Field>
                         <Field Label="Password" Required="true" Hint="Min 8 chars · 1 letter · 1 number">
-                            <input @bind="_password" type="password" class="@Css" placeholder="••••••••" autocomplete="new-password" />
+                            <input @bind="_password" @bind:event="oninput" type="password" class="@FieldCss(_touchedPassword && !PasswordOk)" placeholder="••••••••"
+                                   autocomplete="new-password" @onblur='() => _touchedPassword = true' />
                         </Field>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 -mt-2">
+                        <div>@if (_touchedMobile && !MobileOk) { <p class="text-xs text-red-600">Mobile number must be exactly 10 digits.</p> }</div>
+                        <div>@if (_touchedPassword && !PasswordOk) { <p class="text-xs text-red-600">@ClientValidation.PasswordDescription</p> }</div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -77,6 +98,18 @@
                         <input @bind="_address" class="@Css" placeholder="Street, area" />
                     </Field>
 
+                    <Field Label="Profile photo / business logo (optional)" Hint="@ClientFileValidation.ProfilePhoto.Description">
+                        <InputFile OnChange="OnPhotoSelected" accept="image/jpeg,image/png,image/webp" class="@Css" />
+                    </Field>
+                    @if (_photoError is not null)
+                    {
+                        <p class="text-xs text-red-600 -mt-2">@_photoError</p>
+                    }
+                    else if (_photoBytes is not null)
+                    {
+                        <p class="text-xs text-green-700 -mt-2">✓ @_photoFileName selected</p>
+                    }
+
                     <Field Label="About your business (optional)">
                         <textarea @bind="_bio" rows="3" class="@Css" placeholder="What kinds of events do you run?"></textarea>
                     </Field>
@@ -86,7 +119,7 @@
                         <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">@_error</div>
                     }
 
-                    <button type="button" @onclick="SubmitAsync" disabled="@_loading"
+                    <button type="button" @onclick="SubmitAsync" disabled="@(_loading || !IsFormValid)"
                             class="w-full py-3 rounded-xl bg-emerald-600 text-white font-medium shadow-md hover:bg-emerald-700 disabled:opacity-50">
                         @(_loading ? "Submitting…" : "Submit registration")
                     </button>
@@ -102,6 +135,8 @@
 
 @code {
     private const string Css = "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm";
+    private const string CssError = "w-full px-3 py-2.5 border border-red-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 text-sm";
+    private static string FieldCss(bool hasError) => hasError ? CssError : Css;
 
     private string _username="", _email="", _mobile="", _password="", _fullName="";
     private string _businessName="";
@@ -109,14 +144,52 @@
     private string? _error, _success;
     private bool _loading;
 
+    private ElementReference _mobileInputRef;
+    private bool _touchedFullName, _touchedUsername, _touchedEmail, _touchedMobile, _touchedPassword;
+
+    private byte[]? _photoBytes; private string? _photoFileName, _photoContentType, _photoError;
+
+    private bool NameOk     => ClientValidation.IsValidFullName(_fullName);
+    private bool UsernameOk => ClientValidation.IsValidUsername(_username);
+    private bool EmailOk    => ClientValidation.IsValidEmail(_email);
+    private bool MobileOk   => ClientValidation.IsValidMobile(_mobile);
+    private bool PasswordOk => ClientValidation.IsValidPassword(_password);
+    private bool BusinessNameOk => !string.IsNullOrWhiteSpace(_businessName);
+
+    private bool IsFormValid =>
+        NameOk && UsernameOk && EmailOk && MobileOk && PasswordOk && BusinessNameOk && _photoError is null;
+
+    /// <summary>Same fix as RegisterCrew.razor — see wwwroot/js/forms.js for why the
+    /// plain C#-state round-trip alone can leave a stale unfiltered value in the DOM.</summary>
+    private async Task OnMobileInput(ChangeEventArgs e)
+    {
+        _mobile = ClientValidation.FilterDigits(e.Value?.ToString(), 10);
+        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _mobileInputRef, _mobile);
+    }
+
+    private async Task OnPhotoSelected(InputFileChangeEventArgs e)
+    {
+        _photoError = null; _photoBytes = null;
+        var file = e.File;
+        var (isValid, error) = ClientFileValidation.Validate(ClientFileValidation.ProfilePhoto, file.Size, file.ContentType, file.Name);
+        if (!isValid) { _photoError = error; return; }
+
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(ClientFileValidation.ProfilePhoto.MaxSizeBytes + 1024).CopyToAsync(ms);
+        _photoBytes = ms.ToArray();
+        _photoFileName = file.Name;
+        _photoContentType = file.ContentType;
+    }
+
     private async Task SubmitAsync()
     {
         _error = null;
-        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_email)
-            || string.IsNullOrWhiteSpace(_mobile) || string.IsNullOrWhiteSpace(_password)
-            || string.IsNullOrWhiteSpace(_fullName) || string.IsNullOrWhiteSpace(_businessName))
+        _touchedFullName = _touchedUsername = _touchedEmail = _touchedMobile = _touchedPassword = true;
+
+        if (!IsFormValid)
         {
-            _error = "Please fill in all required fields."; return;
+            _error = "Please fix the highlighted fields before submitting.";
+            return;
         }
 
         _loading = true;
@@ -124,7 +197,8 @@
         {
             var req = new RegisterVendorRequest(
                 _username.Trim(), _email.Trim(), _mobile.Trim(), _password, _fullName.Trim(),
-                _businessName.Trim(), _contact, _gst, _address, _city, _state, _website, _bio);
+                _businessName.Trim(), _contact, _gst, _address, _city, _state, _website, _bio,
+                _photoBytes, _photoFileName, _photoContentType);
             var result = await AuthApi.RegisterVendorAsync(req);
             if (!result.Success)
             {

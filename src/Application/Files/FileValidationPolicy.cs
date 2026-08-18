@@ -24,6 +24,7 @@ public static class FileValidationPolicy
         DocumentType.CrewIdentificationProof => new Rule(5  * 1024 * 1024, ImageOrPdfTypes, ImageOrPdfExts),
         DocumentType.VendorDocument          => new Rule(10 * 1024 * 1024, ImageOrPdfTypes, ImageOrPdfExts),
         DocumentType.EventDocument           => new Rule(15 * 1024 * 1024, ImageOrPdfTypes, ImageOrPdfExts),
+        DocumentType.VendorProfilePhoto      => new Rule(5  * 1024 * 1024, ImageTypes,      ImageExts),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown document type.")
     };
 
@@ -31,7 +32,7 @@ public static class FileValidationPolicy
     public static bool IsSensitive(DocumentType type) => type == DocumentType.CrewIdentificationProof;
 
     /// <summary>Only image types get through IImageProcessor (thumbnail + re-encode).</summary>
-    public static bool IsImage(DocumentType type) => type == DocumentType.CrewProfilePhoto;
+    public static bool IsImage(DocumentType type) => type is DocumentType.CrewProfilePhoto or DocumentType.VendorProfilePhoto;
 
     public static string ExtensionForContentType(string contentType) => contentType switch
     {

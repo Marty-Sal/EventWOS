@@ -1,4 +1,5 @@
 using EventWOS.Application.Auth.Interfaces;
+using EventWOS.Application.Files;
 using EventWOS.Application.Interfaces;
 using EventWOS.Application.Registration.Commands;
 using EventWOS.Domain.Entities;
@@ -25,16 +26,17 @@ public sealed class RegisterVendorHandler : IRequestHandler<RegisterVendorComman
 {
     private readonly IAppDbContext _db;
     private readonly IPasswordHasher _hasher;
+    private readonly IFileUploadStorer _fileStorer;
     private readonly IUnitOfWork _uow;
     private readonly IAuditLogger _audit;
     private readonly ILogger<RegisterVendorHandler> _logger;
     private static readonly TimeSpan CoolDown = TimeSpan.FromHours(24);
 
     public RegisterVendorHandler(
-        IAppDbContext db, IPasswordHasher hasher, IUnitOfWork uow,
+        IAppDbContext db, IPasswordHasher hasher, IFileUploadStorer fileStorer, IUnitOfWork uow,
         IAuditLogger audit, ILogger<RegisterVendorHandler> logger)
     {
-        _db = db; _hasher = hasher; _uow = uow; _audit = audit; _logger = logger;
+        _db = db; _hasher = hasher; _fileStorer = fileStorer; _uow = uow; _audit = audit; _logger = logger;
     }
 
     public async Task<Result<RegistrationResponse>> Handle(RegisterVendorCommand req, CancellationToken ct)
@@ -89,6 +91,20 @@ public sealed class RegisterVendorHandler : IRequestHandler<RegisterVendorComman
             state:             req.State?.Trim(),
             website:           req.Website?.Trim(),
             bio:               req.Bio?.Trim());
+
+        // Profile photo is optional — a failure here does NOT block registration,
+        // same rationale as Crew's optional photo: nice-to-have, not a compliance
+        // document. Logged and swallowed rather than failing the whole signup.
+        if (req.ProfilePhoto is not null)
+        {
+            var photoResult = await _fileStorer.StoreAsync(
+                user.Id, entityId: null, DocumentType.VendorProfilePhoto,
+                req.ProfilePhoto.Content, req.ProfilePhoto.FileName, req.ProfilePhoto.ContentType, ct);
+            if (photoResult.IsFailure)
+                _logger.LogWarning("Vendor self-registration profile photo rejected for {Username}: {Error} — continuing without it.",
+                    usernameLower, photoResult.Error.Message);
+        }
+
         _db.Users.Add(user);
         await _uow.SaveChangesAsync(ct);
 
