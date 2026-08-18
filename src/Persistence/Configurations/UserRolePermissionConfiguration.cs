@@ -32,12 +32,12 @@ public sealed class UserRolePermissionConfiguration : IEntityTypeConfiguration<U
         builder.Property(urp => urp.DeletedBy).HasColumnName("deleted_by");
 
         builder.HasOne(urp => urp.User)
-            .WithMany()
-            .HasForeignKey(urp => urp.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .WithMany(u => u.RolePermissions)          // User.RolePermissions - must be named
+            .HasForeignKey(urp => urp.UserId)          // explicitly (see RolePermissionConfiguration
+            .OnDelete(DeleteBehavior.Cascade);         // for why a bare WithMany() is unsafe here).
 
         builder.HasOne(urp => urp.Permission)
-            .WithMany()
+            .WithMany(perm => perm.UserPermissions)    // Permission.UserPermissions
             .HasForeignKey(urp => urp.PermissionId)
             .OnDelete(DeleteBehavior.Cascade);
 

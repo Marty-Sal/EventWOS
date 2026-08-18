@@ -34,9 +34,11 @@ public sealed class RolePermissionConfiguration : IEntityTypeConfiguration<RoleP
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(rp => rp.Permission)
-            .WithMany()
-            .HasForeignKey(rp => rp.PermissionId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .WithMany(perm => perm.RolePermissions)   // Permission.RolePermissions - must be
+            .HasForeignKey(rp => rp.PermissionId)     // named explicitly, else EF's own convention
+            .OnDelete(DeleteBehavior.Cascade);        // discovery pairs it separately and creates
+                                                       // a duplicate shadow FK "PermissionId1".
+
 
         builder.HasIndex(rp => new { rp.RoleId, rp.PermissionId })
             .IsUnique()

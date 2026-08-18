@@ -33,7 +33,7 @@ public sealed class ManagerPermissionConfiguration : IEntityTypeConfiguration<Ma
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(mp => mp.Permission)
-            .WithMany()
+            .WithMany(perm => perm.ManagerPermissions)  // Permission.ManagerPermissions
             .HasForeignKey(mp => mp.PermissionId)
             .OnDelete(DeleteBehavior.Cascade);
 
