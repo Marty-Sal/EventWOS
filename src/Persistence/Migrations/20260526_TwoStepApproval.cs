@@ -6,6 +6,8 @@ namespace EventWOS.Persistence.Migrations;
 /// Migration: Adds 2-step approval columns to event_assignments table.
 /// Adds new AssignmentStatus enum values (stored as int — no schema change needed for enum).
 /// </summary>
+[Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
+[Migration("20260529000200_TwoStepApproval")]
 public partial class TwoStepApproval : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

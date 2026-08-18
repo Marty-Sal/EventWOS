@@ -13,6 +13,7 @@ namespace EventWOS.Persistence.Migrations
     /// Uses raw IF NOT EXISTS SQL to match the idempotent pattern used by
     /// every other migration in this project. Safe to re-run.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260606000100_AddAttendanceNote")]
     public partial class AddAttendanceNote : Migration
     {

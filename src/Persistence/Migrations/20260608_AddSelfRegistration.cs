@@ -18,6 +18,7 @@ namespace EventWOS.Persistence.Migrations
     ///
     /// Idempotent IF NOT EXISTS pattern — safe to re-run.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260608000100_AddSelfRegistration")]
     public partial class AddSelfRegistration : Migration
     {

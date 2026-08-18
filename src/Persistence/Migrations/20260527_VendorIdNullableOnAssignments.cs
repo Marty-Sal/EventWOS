@@ -13,7 +13,8 @@ namespace EventWOS.Persistence.Migrations
     ///
     /// Fully idempotent — safe to run multiple times.
     /// </summary>
-    [Migration("20260527120000_VendorIdNullableOnAssignments")]
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
+    [Migration("20260529000100_VendorIdNullableOnAssignments")]
     public partial class VendorIdNullableOnAssignments : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

@@ -8,6 +8,7 @@ namespace EventWOS.Persistence.Migrations
     /// Adds the crew acknowledgement columns to crew_payments so crew can mark
     /// a Paid payment as Received or Pending (Payment & Settlement Lifecycle step 5).
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260603000100_AddCrewAcknowledgment")]
     public partial class AddCrewAcknowledgment : Migration
     {

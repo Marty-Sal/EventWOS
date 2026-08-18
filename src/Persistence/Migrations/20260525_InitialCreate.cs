@@ -5,8 +5,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EventWOS.Persistence.Migrations
 {
-    [Migration("20260525000000_InitialCreate")]
     /// <inheritdoc />
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
+    [Migration("20260525000000_InitialCreate")]
     public partial class InitialCreate : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

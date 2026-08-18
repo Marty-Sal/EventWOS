@@ -11,6 +11,7 @@ namespace EventWOS.Persistence.Migrations
     ///
     /// Idempotent raw SQL, matching this project's existing migration style.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260817000000_AddFileDocuments")]
     public partial class AddFileDocuments : Migration
     {

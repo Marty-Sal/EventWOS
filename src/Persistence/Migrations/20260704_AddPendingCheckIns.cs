@@ -18,6 +18,7 @@ namespace EventWOS.Persistence.Migrations
     /// permission row here means the seeder never has to insert a new
     /// permission (it upserts role-grants only).
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260704000000_AddPendingCheckIns")]
     public partial class AddPendingCheckIns : Migration
     {

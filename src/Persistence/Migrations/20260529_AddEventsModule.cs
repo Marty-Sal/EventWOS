@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EventWOS.Persistence.Migrations
 {
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260529000000_AddEventsModule")]
     public partial class AddEventsModule : Migration
     {

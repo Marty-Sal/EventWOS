@@ -20,6 +20,8 @@ namespace EventWOS.Persistence.Migrations
     /// Idempotent raw SQL — safe to re-run on a DB that already has the
     /// table (e.g. Program.cs schema-patch ran first on cold start).
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
+    [Migration("20260609000300_AddVendorShiftAllocations")]
     public partial class AddVendorShiftAllocations : Migration
     {
         protected override void Up(MigrationBuilder mb)

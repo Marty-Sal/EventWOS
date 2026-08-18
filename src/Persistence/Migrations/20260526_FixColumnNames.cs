@@ -9,6 +9,7 @@ namespace EventWOS.Persistence.Migrations
     /// The initial migration SQL used different column names / omitted columns vs what the entities expect.
     /// All operations use idempotent IF EXISTS / IF NOT EXISTS guards — safe to re-run.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260526000000_FixColumnNames")]
     public partial class FixColumnNames : Migration
     {

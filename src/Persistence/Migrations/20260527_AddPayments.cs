@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EventWOS.Persistence.Migrations
 {
-    [Migration("20260527000100_AddPayments")]
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
+    [Migration("20260529000400_AddPayments")]
     public partial class AddPayments : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

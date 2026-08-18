@@ -10,6 +10,7 @@ namespace EventWOS.Persistence.Migrations
     /// data across, drops hashed_otp, and ensures all columns are present.
     /// Fully idempotent.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260528000000_FixOtpRequestsSchema")]
     public partial class FixOtpRequestsSchema : Migration
     {

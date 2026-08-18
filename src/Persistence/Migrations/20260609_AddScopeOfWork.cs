@@ -15,6 +15,7 @@ namespace EventWOS.Persistence.Migrations
     ///
     /// Idempotent raw SQL pattern (memory rule #26). Down() drops the table.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260609000100_AddScopeOfWork")]
     public partial class AddScopeOfWork : Migration
     {

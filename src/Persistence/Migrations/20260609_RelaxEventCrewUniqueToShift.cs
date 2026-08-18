@@ -30,6 +30,8 @@ namespace EventWOS.Persistence.Migrations
     /// Idempotent: drops the old index by name; creates the new one with
     /// IF NOT EXISTS. Safe to re-run.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
+    [Migration("20260609000400_RelaxEventCrewUniqueToShift")]
     public partial class RelaxEventCrewUniqueToShift : Migration
     {
         protected override void Up(MigrationBuilder mb)

@@ -28,6 +28,7 @@ namespace EventWOS.Persistence.Migrations
     /// than dropped rows — by design, a Phase B rollback returns the system
     /// to its Phase A state with shift data discarded.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260609000200_AddEventShifts")]
     public partial class AddEventShifts : Migration
     {

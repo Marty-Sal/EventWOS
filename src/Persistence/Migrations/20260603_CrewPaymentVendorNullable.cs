@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EventWOS.Persistence.Migrations
 {
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260603000300_CrewPaymentVendorNullable")]
     public partial class CrewPaymentVendorNullable : Migration
     {

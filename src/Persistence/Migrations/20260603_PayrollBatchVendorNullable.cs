@@ -9,6 +9,7 @@ namespace EventWOS.Persistence.Migrations
     /// direct-assigned crew (no intermediary vendor) under the event-centric
     /// "New Payroll Batch" flow.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260603000200_PayrollBatchVendorNullable")]
     public partial class PayrollBatchVendorNullable : Migration
     {

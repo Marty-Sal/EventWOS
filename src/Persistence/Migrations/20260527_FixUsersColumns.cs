@@ -9,6 +9,7 @@ namespace EventWOS.Persistence.Migrations
     /// The users table on the live DB was created before vendor/crew columns were added.
     /// This migration is fully idempotent — safe to run multiple times.
     /// </summary>
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(AppDbContext))]
     [Migration("20260527000000_FixUsersColumns")]
     public partial class FixUsersColumns : Migration
     {

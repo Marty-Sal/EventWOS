@@ -607,77 +607,38 @@ GRANT ALL ON SCHEMA public TO public;";
 
         Log.Information("Running EF Core migrations...");
 
-        // Raw reflection, bypassing EF's IMigrationsAssembly abstraction entirely,
-        // to see exactly why GetMigrations() came back empty on the previous boot
-        // (it logged "total in assembly: 0" despite 21 Migration-derived classes
-        // existing in source). This pinpoints whether the assembly itself lacks
-        // the types (a build/publish problem) or EF's own filtering is excluding
-        // them (e.g. missing [DbContext(typeof(AppDbContext))] attribute).
-        try
-        {
-            var pAsm = typeof(AppDbContext).Assembly;
-            var migrationBaseType = typeof(Microsoft.EntityFrameworkCore.Migrations.Migration);
-            var rawTypes = pAsm.GetTypes();
-            var rawMigrationTypes = rawTypes.Where(t => migrationBaseType.IsAssignableFrom(t) && !t.IsAbstract).ToList();
-            Log.Information("Raw reflection -> assembly: {AsmName} | location: {AsmLoc} | total types: {TotalTypes} | Migration-derived types: {MigTypes} | names: {Names}",
-                pAsm.FullName,
-                pAsm.Location,
-                rawTypes.Length,
-                rawMigrationTypes.Count,
-                rawMigrationTypes.Count == 0 ? "(none)" : string.Join(", ", rawMigrationTypes.Select(t => t.Name)));
-
-            var expectedAsm = typeof(AppDbContext).Assembly.FullName;
-            var loadedAsms = System.AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => a.FullName != null && a.FullName.Contains("EventWOS.Persistence"))
-                .Select(a => a.FullName)
-                .ToList();
-            Log.Information("AppDomain has {Count} loaded assembly(ies) matching EventWOS.Persistence: {Names}",
-                loadedAsms.Count, string.Join(" || ", loadedAsms));
-        }
-        catch (Exception reflEx)
-        {
-            Log.Error("Raw reflection diagnostic FAILED -> {ExType}: {Message}", reflEx.GetType().Name, reflEx.Message);
-        }
-
-        try
-        {
-            // NOTE: an earlier version of this diagnostic tried to resolve
-            // IMigrationsAssembly directly via a namespace that doesn't exist in
-            // the public API (build failure, never shipped) - dropped that call.
-            // The attribute dump below answers the same question (is EF's
-            // [DbContext]-based filtering why 21 known-present classes -> 0)
-            // using only plain, always-available reflection.
-            var pAsm = typeof(AppDbContext).Assembly;
-            var sampleType = pAsm.GetTypes().FirstOrDefault(t => t.Name == "InitialCreate");
-            if (sampleType != null)
-            {
-                var attrs = System.Attribute.GetCustomAttributes(sampleType);
-                Log.Information("InitialCreate type attributes ({Count}): {Attrs} | IsPublic={IsPublic} | IsNested={IsNested} | HasParameterlessCtor={HasCtor}",
-                    attrs.Length,
-                    string.Join(" | ", attrs.Select(a => a.ToString())),
-                    sampleType.IsPublic,
-                    sampleType.IsNested,
-                    sampleType.GetConstructor(System.Type.EmptyTypes) != null);
-            }
-            else
-            {
-                Log.Warning("Could not find type named InitialCreate via reflection for attribute dump.");
-            }
-        }
-        catch (Exception svcEx)
-        {
-            Log.Error("IMigrationsAssembly service diagnostic FAILED -> {ExType}: {Message}", svcEx.GetType().Name, svcEx.Message);
-        }
-
+        // Migration visibility check. EF only counts a migration class if it carries
+        // BOTH [Migration("id")] AND [DbContext(typeof(AppDbContext))] - a missing
+        // [DbContext] attribute silently drops it (that bug made all 21 invisible and
+        // left MigrateAsync applying nothing on every boot).
         var allMigrations = db.Database.GetMigrations().ToList();
-        var appliedMigrations = (await db.Database.GetAppliedMigrationsAsync()).ToList();
         var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
-        Log.Information("Migration discovery -> total in assembly: {Total} | already applied: {Applied} | pending: {Pending} | pending ids: {PendingIds}",
-            allMigrations.Count, appliedMigrations.Count, pendingMigrations.Count,
-            pendingMigrations.Count == 0 ? "(none)" : string.Join(", ", pendingMigrations));
-        await db.Database.MigrateAsync();
-        Log.Information("Migrations complete. Applied after run: {AppliedAfter}",
-            (await db.Database.GetAppliedMigrationsAsync()).Count());
+        Log.Information("Migration discovery -> discovered: {Total} | pending: {Pending} | first pending: {First}",
+            allMigrations.Count, pendingMigrations.Count,
+            pendingMigrations.Count == 0 ? "(none)" : pendingMigrations[0]);
+
+        if (allMigrations.Count == 0)
+        {
+            Log.Error("No migrations discovered. Check that every migration class has "
+                    + "[Migration(\"id\")] AND [DbContext(typeof(AppDbContext))].");
+        }
+
+        // Non-fatal: a single bad migration must not put the container in a crash loop.
+        // The emergency patch and seeder below are already non-fatal, and they can often
+        // repair whatever a partial migration left behind.
+        try
+        {
+            await db.Database.MigrateAsync();
+            var appliedAfter = (await db.Database.GetAppliedMigrationsAsync()).ToList();
+            Log.Information("Migrations complete. Applied now: {Count} | latest: {Latest}",
+                appliedAfter.Count,
+                appliedAfter.Count == 0 ? "(none)" : appliedAfter[^1]);
+        }
+        catch (Exception migEx)
+        {
+            Log.Error("MIGRATIONS FAILED (non-fatal, startup continues) -> {ExType}: {Message}",
+                migEx.GetType().Name, migEx.Message.Replace('\n', ' '));
+        }
 
         // ── Emergency schema patch ─────────────────────────────────────────
         // Runs AFTER MigrateAsync so base tables always exist first (safe on a
