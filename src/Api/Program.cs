@@ -591,6 +591,39 @@ GRANT ALL ON SCHEMA public TO public;";
         }
 
         Log.Information("Running EF Core migrations...");
+
+        // Raw reflection, bypassing EF's IMigrationsAssembly abstraction entirely,
+        // to see exactly why GetMigrations() came back empty on the previous boot
+        // (it logged "total in assembly: 0" despite 21 Migration-derived classes
+        // existing in source). This pinpoints whether the assembly itself lacks
+        // the types (a build/publish problem) or EF's own filtering is excluding
+        // them (e.g. missing [DbContext(typeof(AppDbContext))] attribute).
+        try
+        {
+            var pAsm = typeof(AppDbContext).Assembly;
+            var migrationBaseType = typeof(Microsoft.EntityFrameworkCore.Migrations.Migration);
+            var rawTypes = pAsm.GetTypes();
+            var rawMigrationTypes = rawTypes.Where(t => migrationBaseType.IsAssignableFrom(t) && !t.IsAbstract).ToList();
+            Log.Information("Raw reflection -> assembly: {AsmName} | location: {AsmLoc} | total types: {TotalTypes} | Migration-derived types: {MigTypes} | names: {Names}",
+                pAsm.FullName,
+                pAsm.Location,
+                rawTypes.Length,
+                rawMigrationTypes.Count,
+                rawMigrationTypes.Count == 0 ? "(none)" : string.Join(", ", rawMigrationTypes.Select(t => t.Name)));
+
+            var expectedAsm = typeof(AppDbContext).Assembly.FullName;
+            var loadedAsms = System.AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => a.FullName != null && a.FullName.Contains("EventWOS.Persistence"))
+                .Select(a => a.FullName)
+                .ToList();
+            Log.Information("AppDomain has {Count} loaded assembly(ies) matching EventWOS.Persistence: {Names}",
+                loadedAsms.Count, string.Join(" || ", loadedAsms));
+        }
+        catch (Exception reflEx)
+        {
+            Log.Error("Raw reflection diagnostic FAILED -> {ExType}: {Message}", reflEx.GetType().Name, reflEx.Message);
+        }
+
         var allMigrations = db.Database.GetMigrations().ToList();
         var appliedMigrations = (await db.Database.GetAppliedMigrationsAsync()).ToList();
         var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
