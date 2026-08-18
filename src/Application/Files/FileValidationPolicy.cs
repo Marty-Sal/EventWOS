@@ -46,6 +46,10 @@ public static class FileValidationPolicy
     /// Full server-side check: size, declared content-type, AND the actual
     /// file-extension the client sent (defense in depth — a mismatched
     /// extension/content-type pair is rejected rather than silently trusted).
+    /// Does NOT verify the real byte content — see the Content-taking
+    /// overload below, which is what UploadFileHandler actually calls.
+    /// Kept public/separate because it's cheap to run from FluentValidation
+    /// (which validates the command shape before the handler even runs).
     /// </summary>
     public static (bool IsValid, string? Error) Validate(DocumentType type, long sizeBytes, string contentType, string originalFileName)
     {
@@ -63,4 +67,49 @@ public static class FileValidationPolicy
 
         return (true, null);
     }
+
+    /// <summary>
+    /// Same checks as above PLUS a magic-byte signature check against the
+    /// actual file content. The client-declared Content-Type header and the
+    /// filename extension are BOTH attacker-controlled strings — without
+    /// this, uploading e.g. an HTML/script payload renamed "id.pdf" with a
+    /// spoofed "application/pdf" Content-Type would sail straight through.
+    /// This is the check UploadFileHandler actually relies on.
+    /// </summary>
+    public static (bool IsValid, string? Error) Validate(DocumentType type, long sizeBytes, string contentType, string originalFileName, ReadOnlySpan<byte> content)
+    {
+        var (isValid, error) = Validate(type, sizeBytes, contentType, originalFileName);
+        if (!isValid) return (isValid, error);
+
+        if (!FileSignatureValidator.MatchesSignature(contentType, content))
+            return (false, "File content does not match its declared type. The file may be corrupted or mislabeled.");
+
+        return (true, null);
+    }
+}
+
+/// <summary>
+/// Magic-byte (file-signature) checks. Extension and Content-Type are both
+/// client-supplied and trivially spoofable — this looks at the actual first
+/// bytes on the wire, which a client cannot fake without also breaking the
+/// file for its stated purpose.
+/// </summary>
+public static class FileSignatureValidator
+{
+    public static bool MatchesSignature(string contentType, ReadOnlySpan<byte> content) => contentType.ToLowerInvariant() switch
+    {
+        "image/jpeg" => content.Length >= 3 && content[0] == 0xFF && content[1] == 0xD8 && content[2] == 0xFF,
+        "image/png"  => content.Length >= 8 &&
+                         content[0] == 0x89 && content[1] == 0x50 && content[2] == 0x4E && content[3] == 0x47 &&
+                         content[4] == 0x0D && content[5] == 0x0A && content[6] == 0x1A && content[7] == 0x0A,
+        "image/webp" => content.Length >= 12 &&
+                         content[0] == 0x52 && content[1] == 0x49 && content[2] == 0x46 && content[3] == 0x46 && // "RIFF"
+                         content[8] == 0x57 && content[9] == 0x45 && content[10] == 0x42 && content[11] == 0x50, // "WEBP"
+        "application/pdf" => content.Length >= 5 &&
+                         content[0] == 0x25 && content[1] == 0x50 && content[2] == 0x44 && content[3] == 0x46 && content[4] == 0x2D, // "%PDF-"
+        // Unknown content-type — FileValidationPolicy.Validate() already rejected anything
+        // not in a DocumentType's AllowedContentTypes list before we'd ever get here, so
+        // there is no allow-listed type without a signature check above.
+        _ => false
+    };
 }

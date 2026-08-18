@@ -81,4 +81,57 @@ public sealed class FileValidationPolicyTests
     [InlineData("application/pdf", ".pdf")]
     public void Extension_is_derived_from_content_type_not_trusted_from_client(string contentType, string expectedExt)
         => FileValidationPolicy.ExtensionForContentType(contentType).Should().Be(expectedExt);
+
+    // ─── Magic-byte signature checks ────────────────────────────────────────
+    // Extension and Content-Type are both attacker-controlled strings. These
+    // pin the one check that actually looks at the bytes on the wire.
+
+    private static readonly byte[] RealJpegBytes = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10 };
+    private static readonly byte[] RealPdfBytes  = System.Text.Encoding.ASCII.GetBytes("%PDF-1.7
+rest of file");
+    private static readonly byte[] FakeHtmlBytes = System.Text.Encoding.ASCII.GetBytes("<html><script>evil()</script></html>");
+
+    [Fact]
+    public void Real_jpeg_bytes_with_matching_declared_type_is_accepted()
+    {
+        var (ok, _) = FileValidationPolicy.Validate(
+            DocumentType.CrewProfilePhoto, RealJpegBytes.Length, "image/jpeg", "selfie.jpg", RealJpegBytes);
+        ok.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Html_payload_disguised_as_pdf_is_rejected_by_signature_check()
+    {
+        // Attacker declares application/pdf and names it identity.pdf, but the
+        // actual bytes are an HTML/script payload — extension + Content-Type
+        // both "pass", so only the signature check can catch this.
+        var (ok, error) = FileValidationPolicy.Validate(
+            DocumentType.CrewIdentificationProof, FakeHtmlBytes.Length, "application/pdf", "identity.pdf", FakeHtmlBytes);
+        ok.Should().BeFalse();
+        error.Should().Contain("does not match its declared type");
+    }
+
+    [Fact]
+    public void Html_payload_disguised_as_jpeg_is_rejected_by_signature_check()
+    {
+        var (ok, _) = FileValidationPolicy.Validate(
+            DocumentType.CrewProfilePhoto, FakeHtmlBytes.Length, "image/jpeg", "selfie.jpg", FakeHtmlBytes);
+        ok.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Real_pdf_bytes_for_vendor_document_is_accepted()
+    {
+        var (ok, _) = FileValidationPolicy.Validate(
+            DocumentType.VendorDocument, RealPdfBytes.Length, "application/pdf", "contract.pdf", RealPdfBytes);
+        ok.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("image/jpeg")]
+    [InlineData("image/png")]
+    [InlineData("image/webp")]
+    [InlineData("application/pdf")]
+    public void Empty_content_never_matches_any_signature(string contentType)
+        => FileSignatureValidator.MatchesSignature(contentType, Array.Empty<byte>()).Should().BeFalse();
 }

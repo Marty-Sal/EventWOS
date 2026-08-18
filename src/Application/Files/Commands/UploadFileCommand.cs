@@ -36,8 +36,8 @@ public sealed class UploadFileValidator : AbstractValidator<UploadFileCommand>
         RuleFor(x => x.ContentType).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Content).NotNull();
         RuleFor(x => x)
-            .Must(x => FileValidationPolicy.Validate(x.DocumentType, x.Content.LongLength, x.ContentType, x.OriginalFileName).IsValid)
-            .WithMessage(x => FileValidationPolicy.Validate(x.DocumentType, x.Content.LongLength, x.ContentType, x.OriginalFileName).Error
+            .Must(x => FileValidationPolicy.Validate(x.DocumentType, x.Content.LongLength, x.ContentType, x.OriginalFileName, x.Content).IsValid)
+            .WithMessage(x => FileValidationPolicy.Validate(x.DocumentType, x.Content.LongLength, x.ContentType, x.OriginalFileName, x.Content).Error
                               ?? "File failed validation.");
     }
 }
@@ -62,7 +62,8 @@ public sealed class UploadFileHandler : IRequestHandler<UploadFileCommand, Resul
     public async Task<Result<FileDocumentDto>> Handle(UploadFileCommand req, CancellationToken ct)
     {
         // Defence in depth — FluentValidation already ran this, but never trust a single layer.
-        var (isValid, error) = FileValidationPolicy.Validate(req.DocumentType, req.Content.LongLength, req.ContentType, req.OriginalFileName);
+        // Includes the magic-byte signature check (content, not just the declared Content-Type/extension).
+        var (isValid, error) = FileValidationPolicy.Validate(req.DocumentType, req.Content.LongLength, req.ContentType, req.OriginalFileName, req.Content);
         if (!isValid)
             return Result.Failure<FileDocumentDto>(Error.Custom("Files.InvalidFile", error!));
 
