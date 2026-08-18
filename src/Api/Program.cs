@@ -591,8 +591,15 @@ GRANT ALL ON SCHEMA public TO public;";
         }
 
         Log.Information("Running EF Core migrations...");
+        var allMigrations = db.Database.GetMigrations().ToList();
+        var appliedMigrations = (await db.Database.GetAppliedMigrationsAsync()).ToList();
+        var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
+        Log.Information("Migration discovery -> total in assembly: {Total} | already applied: {Applied} | pending: {Pending} | pending ids: {PendingIds}",
+            allMigrations.Count, appliedMigrations.Count, pendingMigrations.Count,
+            pendingMigrations.Count == 0 ? "(none)" : string.Join(", ", pendingMigrations));
         await db.Database.MigrateAsync();
-        Log.Information("Migrations complete.");
+        Log.Information("Migrations complete. Applied after run: {AppliedAfter}",
+            (await db.Database.GetAppliedMigrationsAsync()).Count());
 
         // ── Emergency schema patch ─────────────────────────────────────────
         // Runs AFTER MigrateAsync so base tables always exist first (safe on a
