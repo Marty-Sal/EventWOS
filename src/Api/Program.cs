@@ -1079,7 +1079,9 @@ BEGIN
         ADD COLUMN IF NOT EXISTS bio                       VARCHAR(2000),
         ADD COLUMN IF NOT EXISTS skills                    VARCHAR(500),
         ADD COLUMN IF NOT EXISTS experience_years          INT,
-        ADD COLUMN IF NOT EXISTS referral_code_used        VARCHAR(20);
+        ADD COLUMN IF NOT EXISTS referral_code_used        VARCHAR(20),
+        ADD COLUMN IF NOT EXISTS date_of_birth              DATE,
+        ADD COLUMN IF NOT EXISTS invite_message_template   VARCHAR(500);
 
     -- Backfill: grandfather existing accounts. Username = lowercase mobile.
     -- They'll be forced through the OTP-driven password-setup flow on next login.
