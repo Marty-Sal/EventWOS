@@ -626,12 +626,12 @@ GRANT ALL ON SCHEMA public TO public;";
 
         try
         {
-            var migAsmSvc = Microsoft.EntityFrameworkCore.Infrastructure.InfrastructureExtensions.GetService<Microsoft.EntityFrameworkCore.Infrastructure.IMigrationsAssembly>(db);
-            var svcMigrations = migAsmSvc.Migrations;
-            Log.Information("IMigrationsAssembly service directly -> Migrations.Count: {Count} | keys: {Keys}",
-                svcMigrations.Count,
-                svcMigrations.Count == 0 ? "(none)" : string.Join(", ", svcMigrations.Keys));
-
+            // NOTE: an earlier version of this diagnostic tried to resolve
+            // IMigrationsAssembly directly via a namespace that doesn't exist in
+            // the public API (build failure, never shipped) - dropped that call.
+            // The attribute dump below answers the same question (is EF's
+            // [DbContext]-based filtering why 21 known-present classes -> 0)
+            // using only plain, always-available reflection.
             var pAsm = typeof(AppDbContext).Assembly;
             var sampleType = pAsm.GetTypes().FirstOrDefault(t => t.Name == "InitialCreate");
             if (sampleType != null)
