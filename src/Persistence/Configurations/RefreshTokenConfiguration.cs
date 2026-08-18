@@ -21,7 +21,12 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
         builder.Property(r => r.ReplacedByTokenHash).HasColumnName("replaced_by_token_hash").HasMaxLength(255);
         builder.Property(r => r.RevokeReason).HasColumnName("revoke_reason").HasMaxLength(100);
         builder.Property(r => r.CreatedAt).HasColumnName("created_at");
+        builder.Property(r => r.CreatedBy).HasColumnName("created_by");
+        builder.Property(r => r.UpdatedAt).HasColumnName("updated_at");
+        builder.Property(r => r.UpdatedBy).HasColumnName("updated_by");
         builder.Property(r => r.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
+        builder.Property(r => r.DeletedAt).HasColumnName("deleted_at");
+        builder.Property(r => r.DeletedBy).HasColumnName("deleted_by");
 
         builder.HasIndex(r => r.TokenHash).IsUnique().HasDatabaseName("ix_refresh_tokens_hash");
         builder.HasIndex(r => new { r.UserId, r.IsRevoked }).HasDatabaseName("ix_refresh_tokens_user_active");

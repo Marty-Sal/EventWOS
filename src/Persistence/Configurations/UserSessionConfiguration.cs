@@ -22,7 +22,12 @@ public sealed class UserSessionConfiguration : IEntityTypeConfiguration<UserSess
         builder.Property(s => s.TerminatedAt).HasColumnName("terminated_at");
         builder.Property(s => s.TerminationReason).HasColumnName("termination_reason").HasMaxLength(100);
         builder.Property(s => s.CreatedAt).HasColumnName("created_at");
+        builder.Property(s => s.CreatedBy).HasColumnName("created_by");
+        builder.Property(s => s.UpdatedAt).HasColumnName("updated_at");
+        builder.Property(s => s.UpdatedBy).HasColumnName("updated_by");
         builder.Property(s => s.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
+        builder.Property(s => s.DeletedAt).HasColumnName("deleted_at");
+        builder.Property(s => s.DeletedBy).HasColumnName("deleted_by");
 
         builder.HasIndex(s => s.SessionId).IsUnique().HasDatabaseName("ix_user_sessions_session_id");
         builder.HasIndex(s => new { s.UserId, s.IsActive }).HasDatabaseName("ix_user_sessions_user_active");

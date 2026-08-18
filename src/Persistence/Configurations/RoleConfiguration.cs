@@ -16,7 +16,12 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
         builder.Property(r => r.RoleType).HasColumnName("role_type").IsRequired();
         builder.Property(r => r.IsSystem).HasColumnName("is_system").HasDefaultValue(false);
         builder.Property(r => r.CreatedAt).HasColumnName("created_at");
+        builder.Property(r => r.CreatedBy).HasColumnName("created_by");
+        builder.Property(r => r.UpdatedAt).HasColumnName("updated_at");
+        builder.Property(r => r.UpdatedBy).HasColumnName("updated_by");
         builder.Property(r => r.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
+        builder.Property(r => r.DeletedAt).HasColumnName("deleted_at");
+        builder.Property(r => r.DeletedBy).HasColumnName("deleted_by");
 
         builder.HasIndex(r => r.RoleType).IsUnique().HasDatabaseName("ix_roles_role_type");
 
