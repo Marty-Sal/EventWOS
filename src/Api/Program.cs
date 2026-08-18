@@ -624,6 +624,36 @@ GRANT ALL ON SCHEMA public TO public;";
             Log.Error("Raw reflection diagnostic FAILED -> {ExType}: {Message}", reflEx.GetType().Name, reflEx.Message);
         }
 
+        try
+        {
+            var migAsmSvc = Microsoft.EntityFrameworkCore.Infrastructure.InfrastructureExtensions.GetService<Microsoft.EntityFrameworkCore.Infrastructure.IMigrationsAssembly>(db);
+            var svcMigrations = migAsmSvc.Migrations;
+            Log.Information("IMigrationsAssembly service directly -> Migrations.Count: {Count} | keys: {Keys}",
+                svcMigrations.Count,
+                svcMigrations.Count == 0 ? "(none)" : string.Join(", ", svcMigrations.Keys));
+
+            var pAsm = typeof(AppDbContext).Assembly;
+            var sampleType = pAsm.GetTypes().FirstOrDefault(t => t.Name == "InitialCreate");
+            if (sampleType != null)
+            {
+                var attrs = System.Attribute.GetCustomAttributes(sampleType);
+                Log.Information("InitialCreate type attributes ({Count}): {Attrs} | IsPublic={IsPublic} | IsNested={IsNested} | HasParameterlessCtor={HasCtor}",
+                    attrs.Length,
+                    string.Join(" | ", attrs.Select(a => a.ToString())),
+                    sampleType.IsPublic,
+                    sampleType.IsNested,
+                    sampleType.GetConstructor(System.Type.EmptyTypes) != null);
+            }
+            else
+            {
+                Log.Warning("Could not find type named InitialCreate via reflection for attribute dump.");
+            }
+        }
+        catch (Exception svcEx)
+        {
+            Log.Error("IMigrationsAssembly service diagnostic FAILED -> {ExType}: {Message}", svcEx.GetType().Name, svcEx.Message);
+        }
+
         var allMigrations = db.Database.GetMigrations().ToList();
         var appliedMigrations = (await db.Database.GetAppliedMigrationsAsync()).ToList();
         var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
