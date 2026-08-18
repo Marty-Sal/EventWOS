@@ -55,7 +55,7 @@ public sealed class UsersController : ControllerBase
     public async Task<IActionResult> UpdateMe([FromBody] UpdateProfileRequest dto, CancellationToken ct)
     {
         var command = new UpdateProfileCommand(
-            _currentUser.UserId!.Value, dto.FullName, dto.Email, dto.AvatarUrl);
+            _currentUser.UserId!.Value, dto.FullName, dto.Email, dto.AvatarUrl, dto.InviteMessageTemplate);
         var result = await _mediator.Send(command, ct);
         return result.IsSuccess
             ? Ok(ApiResponse.Ok("Profile updated."))

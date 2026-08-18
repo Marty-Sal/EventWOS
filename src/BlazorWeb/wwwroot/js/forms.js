@@ -23,3 +23,22 @@ window.eventwosForms.setInputValue = function (element, value) {
         element.value = value;
     }
 };
+
+// ── Native share sheet (Web Share API) ──────────────────────────────────────
+// Takes real JS parameters instead of interpolating values into an eval()
+// string (the previous approach was fragile — any stray quote/backslash in
+// a vendor-authored invite message would break the generated script).
+// Returns true if navigator.share ran (user may still cancel the sheet —
+// that's still "handled", not a fallback case), false if the API is
+// unavailable so the caller can fall back to clipboard copy.
+window.eventwosForms.share = async function (title, text, url) {
+    if (!navigator.share) return false;
+    try {
+        await navigator.share({ title, text, url });
+        return true;
+    } catch {
+        // AbortError (user dismissed the sheet) still counts as "handled" —
+        // only a missing API should trigger the clipboard fallback.
+        return true;
+    }
+};

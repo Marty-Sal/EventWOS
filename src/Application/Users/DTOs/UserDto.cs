@@ -30,6 +30,7 @@ public sealed record UserProfileDto(
     string? ReferralCode,
     string? BusinessName,
     decimal? Rating,
+    string? InviteMessageTemplate,
     // Crew-specific
     decimal? DisciplineScore,
     int? EventsAttended,
@@ -40,7 +41,8 @@ public sealed record UserProfileDto(
 public sealed record UpdateProfileRequest(
     string FullName,
     string? Email,
-    string? AvatarUrl
+    string? AvatarUrl,
+    string? InviteMessageTemplate = null
 );
 
 public sealed record UpdateUserStatusRequest(UserStatus Status);

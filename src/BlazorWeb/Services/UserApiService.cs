@@ -9,7 +9,7 @@ public sealed record UserProfileDto(
     string? AvatarUrl, string Role, string Status,
     IReadOnlyList<string> Permissions, DateTime? LastLoginAt,
     // Vendor fields
-    string? ReferralCode, string? BusinessName, decimal? Rating,
+    string? ReferralCode, string? BusinessName, decimal? Rating, string? InviteMessageTemplate,
     // Crew fields
     decimal? DisciplineScore, int? EventsAttended, Guid? VendorId, string? VendorName);
 
@@ -25,7 +25,7 @@ public interface IUserApiService
     Task<UserProfileDto?> GetMeAsync(CancellationToken ct = default);
     Task<PagedResult<UserListItemDto>?> GetUsersAsync(int page = 1, int pageSize = 20, string? search = null, CancellationToken ct = default);
     Task<bool> ChangeStatusAsync(Guid userId, string status, CancellationToken ct = default);
-    Task<bool> UpdateProfileAsync(string fullName, string? email, string? avatarUrl, CancellationToken ct = default);
+    Task<bool> UpdateProfileAsync(string fullName, string? email, string? avatarUrl, string? inviteMessageTemplate = null, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateVendorAsync(string mobile, string fullName, string? businessName, string? email, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateCrewAsync(string mobile, string fullName, string? email, string? referralCode, CancellationToken ct = default);
 }
@@ -84,11 +84,11 @@ public sealed class UserApiService : IUserApiService
         catch { return false; }
     }
 
-    public async Task<bool> UpdateProfileAsync(string fullName, string? email, string? avatarUrl, CancellationToken ct = default)
+    public async Task<bool> UpdateProfileAsync(string fullName, string? email, string? avatarUrl, string? inviteMessageTemplate = null, CancellationToken ct = default)
     {
         try
         {
-            var resp = await _http.PutAsJsonAsync("api/v1/users/me", new { fullName, email, avatarUrl }, ct);
+            var resp = await _http.PutAsJsonAsync("api/v1/users/me", new { fullName, email, avatarUrl, inviteMessageTemplate }, ct);
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }

@@ -100,6 +100,14 @@ public sealed class User : BaseEntity
     public string? ReferralCodeUsed  { get; private set; }
     /// <summary>Date of birth — collected at Crew self-registration to enforce the 18+ requirement. Nullable because it predates existing/Admin-created accounts.</summary>
     public DateTime? DateOfBirth     { get; private set; }
+    /// <summary>
+    /// Vendor-only. Custom message a Vendor writes to accompany their crew
+    /// invite link when sharing it (WhatsApp/SMS/etc). May contain the
+    /// literal token "{link}", which the UI substitutes with the actual
+    /// invite URL at share-time; if the token is absent the link is simply
+    /// appended. Null/empty falls back to the app's default share text.
+    /// </summary>
+    public string? InviteMessageTemplate { get; set; }
 
     /// <summary>Age in whole years as of today, or null if DateOfBirth was never captured.</summary>
     public int? Age => DateOfBirth.HasValue ? CalculateAge(DateOfBirth.Value, DateTime.UtcNow.Date) : null;

@@ -111,6 +111,17 @@
                     </div>
                     <p class="text-xs text-gray-400">Anyone who opens this link will see the sign-up form with your referral code already filled in.</p>
                 </div>
+
+                @* Custom invite message — used by Share/Copy above. {link} token
+                   gets swapped for the real invite URL; if omitted, the link is
+                   appended to the end of whatever the vendor writes. *@
+                <div class="space-y-2 pt-2 border-t border-gray-100">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Custom Invite Message</p>
+                    <textarea @bind="_inviteMessageTemplate" rows="3" maxlength="500"
+                              placeholder="Hey! Join my crew on EventWOS — sign up here: {link}"
+                              class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    <p class="text-xs text-gray-400">Optional. Use <code class="px-1 bg-gray-100 rounded">{link}</code> where you want the invite link to appear — leave blank to use the default message.</p>
+                </div>
             </div>
         }
 
@@ -244,6 +255,7 @@
 
     // Vendor referral copy
     private bool _copied;
+    private string? _inviteMessageTemplate;
 
     // Crew join vendor
     private string  _joinCode    = "";
@@ -270,6 +282,7 @@
             {
                 _fullName = _profile.FullName;
                 _email    = _profile.Email;
+                _inviteMessageTemplate = _profile.InviteMessageTemplate;
             }
         }
         catch (Exception ex) { _loadError = ex.Message; }
@@ -279,12 +292,12 @@
     private async Task SaveAsync()
     {
         _saving = true; _saveError = null; _saveSuccess = false; StateHasChanged();
-        var ok = await UserApi.UpdateProfileAsync(_fullName ?? "", _email, _profile?.AvatarUrl);
+        var ok = await UserApi.UpdateProfileAsync(_fullName ?? "", _email, _profile?.AvatarUrl, _inviteMessageTemplate ?? "");
         if (ok)
         {
             _saveSuccess = true;
             _profile = await UserApi.GetMeAsync();
-            if (_profile is not null) { _fullName = _profile.FullName; _email = _profile.Email; }
+            if (_profile is not null) { _fullName = _profile.FullName; _email = _profile.Email; _inviteMessageTemplate = _profile.InviteMessageTemplate; }
         }
         else { _saveError = "Failed to update profile. Please try again."; }
         _saving = false; StateHasChanged();
@@ -343,14 +356,35 @@
 
     /// <summary>Opens the OS share sheet on mobile (Web Share API) or
     /// falls back to copying + a toast on desktop.</summary>
+    /// <summary>
+    /// Builds the share text from the vendor's custom template (if set):
+    ///   - contains "{link}"  → token is replaced with the real URL, link
+    ///     is NOT also passed as a separate "url" field (avoids it
+    ///     appearing twice in share sheets that concatenate text+url).
+    ///   - no "{link}" token  → link is appended on its own line, "url"
+    ///     left empty for the same reason.
+    ///   - blank/unset        → falls back to the original default copy,
+    ///     with the link passed via the "url" field as before.
+    /// </summary>
+    private (string Text, string Url) BuildShareContent()
+    {
+        var template = _profile?.InviteMessageTemplate;
+        if (string.IsNullOrWhiteSpace(template))
+            return ("Sign up here to join my crew:", InviteLink);
+
+        return template.Contains("{link}")
+            ? (template.Replace("{link}", InviteLink), string.Empty)
+            : ($"{template}\n{InviteLink}", string.Empty);
+    }
+
     private async Task ShareInviteLink()
     {
         if (string.IsNullOrEmpty(InviteLink)) return;
+        var (text, url) = BuildShareContent();
         var shared = false;
         try
         {
-            shared = await JS.InvokeAsync<bool>("eval",
-                $"(async () => {{ if (navigator.share) {{ try {{ await navigator.share({{ title: 'Join my crew on EventWOS', text: 'Sign up here to join my crew:', url: '{InviteLink}' }}); return true; }} catch {{ return false; }} }} return false; }})()");
+            shared = await JS.InvokeAsync<bool>("eventwosForms.share", "Join my crew on EventWOS", text, url);
         }
         catch { }
         if (!shared)

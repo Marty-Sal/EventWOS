@@ -12,7 +12,8 @@ public sealed record UpdateProfileCommand(
     Guid UserId,
     string FullName,
     string? Email,
-    string? AvatarUrl
+    string? AvatarUrl,
+    string? InviteMessageTemplate = null
 ) : IRequest<Result>;
 
 public sealed class UpdateProfileValidator : AbstractValidator<UpdateProfileCommand>
@@ -26,6 +27,11 @@ public sealed class UpdateProfileValidator : AbstractValidator<UpdateProfileComm
         RuleFor(x => x.Email)
             .EmailAddress().WithMessage("Email must be a valid RFC email address.")
             .When(x => !string.IsNullOrWhiteSpace(x.Email));
+
+        // Vendor-only field, but harmless to validate length regardless of role —
+        // the column cap is 500 (see UserConfiguration).
+        RuleFor(x => x.InviteMessageTemplate)
+            .MaximumLength(500).WithMessage("Invite message cannot exceed 500 characters.");
     }
 }
 
@@ -45,14 +51,19 @@ public sealed class UpdateProfileHandler : IRequestHandler<UpdateProfileCommand,
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId && !u.IsDeleted, ct);
         if (user is null) return Result.Failure(Error.UserNotFound);
 
-        var oldSnapshot = new { user.FullName, user.Email, user.AvatarUrl };
+        var oldSnapshot = new { user.FullName, user.Email, user.AvatarUrl, user.InviteMessageTemplate };
         user.UpdateProfile(request.FullName, request.Email, request.AvatarUrl);
+
+        // Vendor-only, but stored regardless of role check here — non-vendors simply
+        // never see/set it from the UI, and GetCurrentUserQuery only surfaces it for Vendor.
+        if (request.InviteMessageTemplate is not null)
+            user.InviteMessageTemplate = request.InviteMessageTemplate.Trim() is { Length: > 0 } trimmed ? trimmed : null;
 
         await _uow.SaveChangesAsync(ct);
 
         await _audit.LogAsync(AuditAction.UserUpdated, "User", user.Id.ToString(),
             oldValues: oldSnapshot,
-            newValues: new { request.FullName, request.Email, request.AvatarUrl },
+            newValues: new { request.FullName, request.Email, request.AvatarUrl, request.InviteMessageTemplate },
             cancellationToken: ct);
 
         return Result.Success();
