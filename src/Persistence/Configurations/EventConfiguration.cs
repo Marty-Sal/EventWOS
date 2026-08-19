@@ -50,5 +50,10 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.HasIndex(e => e.Status).HasDatabaseName("ix_events_status");
         builder.HasIndex(e => e.StartAt).HasDatabaseName("ix_events_start_at");
         builder.HasIndex(e => e.CreatedByUserId).HasDatabaseName("ix_events_created_by_user_id");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

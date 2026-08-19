@@ -43,5 +43,10 @@ public sealed class UserRolePermissionConfiguration : IEntityTypeConfiguration<U
 
         builder.HasIndex(urp => new { urp.UserId, urp.PermissionId })
             .HasDatabaseName("ix_urp_user_perm");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(urp => !urp.IsDeleted);
     }
 }

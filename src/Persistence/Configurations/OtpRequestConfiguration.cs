@@ -33,5 +33,10 @@ public sealed class OtpRequestConfiguration : IEntityTypeConfiguration<OtpReques
         builder.HasIndex(o => o.Mobile).HasDatabaseName("ix_otp_requests_mobile");
         builder.HasIndex(o => o.ExpiresAt).HasDatabaseName("ix_otp_requests_expires");
         builder.HasIndex(o => new { o.Mobile, o.Status }).HasDatabaseName("ix_otp_requests_mobile_status");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(o => !o.IsDeleted);
     }
 }

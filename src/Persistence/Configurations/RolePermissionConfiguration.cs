@@ -44,5 +44,10 @@ public sealed class RolePermissionConfiguration : IEntityTypeConfiguration<RoleP
             .IsUnique()
             .HasDatabaseName("ix_rp_role_perm")
             .HasFilter("is_deleted = false");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(rp => !rp.IsDeleted);
     }
 }

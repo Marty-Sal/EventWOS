@@ -40,5 +40,10 @@ public sealed class CrewGroupConfiguration : IEntityTypeConfiguration<CrewGroup>
         builder.HasIndex(g => g.VendorId).HasDatabaseName("ix_crew_groups_vendor_id");
         builder.HasIndex(g => new { g.VendorId, g.Name })
             .HasDatabaseName("ix_crew_groups_vendor_name");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(g => !g.IsDeleted);
     }
 }

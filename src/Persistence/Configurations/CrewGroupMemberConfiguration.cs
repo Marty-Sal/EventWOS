@@ -39,5 +39,10 @@ public sealed class CrewGroupMemberConfiguration : IEntityTypeConfiguration<Crew
             .HasDatabaseName("ux_cgm_group_crew_active")
             .IsUnique()
             .HasFilter("is_deleted = false");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(m => !m.IsDeleted);
     }
 }

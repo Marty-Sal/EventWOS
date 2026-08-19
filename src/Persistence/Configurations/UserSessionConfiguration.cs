@@ -31,5 +31,10 @@ public sealed class UserSessionConfiguration : IEntityTypeConfiguration<UserSess
 
         builder.HasIndex(s => s.SessionId).IsUnique().HasDatabaseName("ix_user_sessions_session_id");
         builder.HasIndex(s => new { s.UserId, s.IsActive }).HasDatabaseName("ix_user_sessions_user_active");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(s => !s.IsDeleted);
     }
 }

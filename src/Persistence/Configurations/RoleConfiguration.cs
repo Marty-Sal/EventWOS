@@ -29,5 +29,10 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
             .WithOne(rp => rp.Role)
             .HasForeignKey(rp => rp.RoleId)
             .OnDelete(DeleteBehavior.Cascade);
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(r => !r.IsDeleted);
     }
 }

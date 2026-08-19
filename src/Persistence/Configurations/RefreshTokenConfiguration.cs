@@ -30,5 +30,10 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
 
         builder.HasIndex(r => r.TokenHash).IsUnique().HasDatabaseName("ix_refresh_tokens_hash");
         builder.HasIndex(r => new { r.UserId, r.IsRevoked }).HasDatabaseName("ix_refresh_tokens_user_active");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(r => !r.IsDeleted);
     }
 }

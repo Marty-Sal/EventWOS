@@ -25,5 +25,10 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
 
         builder.HasIndex(p => p.Name).IsUnique().HasDatabaseName("ix_permissions_name");
         builder.HasIndex(p => new { p.Resource, p.Action }).HasDatabaseName("ix_permissions_resource_action");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(p => !p.IsDeleted);
     }
 }

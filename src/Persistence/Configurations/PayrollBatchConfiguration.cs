@@ -52,5 +52,10 @@ public sealed class PayrollBatchConfiguration : IEntityTypeConfiguration<Payroll
         b.HasIndex(pb => pb.EventId)  .HasDatabaseName("ix_payroll_batches_event_id");
         b.HasIndex(pb => pb.Status)   .HasDatabaseName("ix_payroll_batches_status");
         b.HasIndex(pb => pb.BatchRef) .IsUnique().HasDatabaseName("ix_payroll_batches_batch_ref");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        b.HasQueryFilter(p => !p.IsDeleted);
     }
 }

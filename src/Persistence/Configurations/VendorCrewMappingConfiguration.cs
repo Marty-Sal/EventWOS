@@ -55,5 +55,10 @@ public sealed class VendorCrewMappingConfiguration : IEntityTypeConfiguration<Ve
         builder.HasIndex(v => v.CrewId).HasDatabaseName("ix_vcm_crew_id");
         builder.HasIndex(v => new { v.VendorId, v.CrewId, v.IsActive })
             .HasDatabaseName("ix_vcm_vendor_crew_active");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(v => !v.IsDeleted);
     }
 }

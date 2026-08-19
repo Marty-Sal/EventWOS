@@ -106,5 +106,10 @@ public sealed class EventAssignmentConfiguration : IEntityTypeConfiguration<Even
                .HasColumnName("attendance_note_at");
         builder.Property(a => a.AttendanceNoteByUserId)
                .HasColumnName("attendance_note_by_user_id");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(a => !a.IsDeleted);
     }
 }

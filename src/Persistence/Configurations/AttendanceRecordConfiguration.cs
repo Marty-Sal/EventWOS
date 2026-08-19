@@ -58,5 +58,10 @@ public sealed class AttendanceRecordConfiguration : IEntityTypeConfiguration<Att
         builder.HasIndex(r => r.EventId)     .HasDatabaseName("ix_attendance_records_event_id");
         builder.HasIndex(r => r.CrewId)      .HasDatabaseName("ix_attendance_records_crew_id");
         builder.HasIndex(r => r.RecordedAt)  .HasDatabaseName("ix_attendance_records_recorded_at");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(a => !a.IsDeleted);
     }
 }

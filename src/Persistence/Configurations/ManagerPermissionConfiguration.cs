@@ -38,5 +38,10 @@ public sealed class ManagerPermissionConfiguration : IEntityTypeConfiguration<Ma
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(mp => mp.ManagerId).HasDatabaseName("ix_mp_manager");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        builder.HasQueryFilter(m => !m.IsDeleted);
     }
 }

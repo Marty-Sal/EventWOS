@@ -74,5 +74,10 @@ public sealed class CrewPaymentConfiguration : IEntityTypeConfiguration<CrewPaym
         b.HasIndex(p => p.VendorId)       .HasDatabaseName("ix_crew_payments_vendor_id");
         b.HasIndex(p => p.Status)         .HasDatabaseName("ix_crew_payments_status");
         b.HasIndex(p => p.PayrollBatchId) .HasDatabaseName("ix_crew_payments_payroll_batch_id");
+
+
+        // Global soft-delete filter — matches every other entity in the project.
+        // List queries that need archived/deleted rows call IgnoreQueryFilters().
+        b.HasQueryFilter(c => !c.IsDeleted);
     }
 }
