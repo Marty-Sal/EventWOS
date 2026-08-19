@@ -45,12 +45,41 @@ public sealed class RequestOtpHandler : IRequestHandler<RequestOtpCommand, Resul
         RequestOtpCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Check if user exists
+        // 1. Check if user exists. OTP login is for EXISTING, approved accounts
+        // only — it must never be a back door that silently registers whoever
+        // types a random mobile number. Real registration always goes through
+        // RegisterCrewHandler / RegisterVendorHandler (validation, approval
+        // queue, referral checks, etc.). See VerifyOtpHandler for the matching
+        // guard on the verify side.
         var user = await _db.Users
             .FirstOrDefaultAsync(u => u.Mobile == request.Mobile && !u.IsDeleted, cancellationToken);
 
-        // 2. Check lock status
-        if (user is not null && user.IsLocked)
+        if (user is null)
+        {
+            _logger.LogWarning("OTP requested for unregistered mobile: {Mobile}", request.Mobile);
+            return Result.Failure<RequestOtpResponse>(Error.Custom(
+                "Auth.NotRegistered",
+                "No account found for this mobile number. Please register first."));
+        }
+
+        // 2. Check account status before sending any SMS — mirrors the gate
+        // LoginWithPasswordHandler applies before verifying a password.
+        switch (user.Status)
+        {
+            case UserStatus.Suspended:
+            case UserStatus.Deactivated:
+                return Result.Failure<RequestOtpResponse>(Error.AccountSuspended);
+            case UserStatus.Pending:
+                return Result.Failure<RequestOtpResponse>(Error.Custom(
+                    "Auth.PendingApproval",
+                    "Your account is awaiting approval. You'll receive an email once it's approved."));
+            case UserStatus.Rejected:
+                return Result.Failure<RequestOtpResponse>(Error.Custom(
+                    "Auth.Rejected",
+                    "Your registration was not approved."));
+        }
+
+        if (user.IsLocked)
         {
             _logger.LogWarning("OTP requested for locked account: {Mobile}", request.Mobile);
             return Result.Failure<RequestOtpResponse>(Error.AccountLocked);

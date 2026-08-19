@@ -95,19 +95,34 @@ public sealed class VerifyOtpHandler : IRequestHandler<VerifyOtpCommand, Result<
         // 4. Mark OTP verified
         otpRequest.MarkVerified();
 
-        // 5. Load or create user
+        // 5. Load the existing user. OTP login NEVER creates an account — it
+        // only re-authenticates someone who already went through
+        // RegisterCrewHandler / RegisterVendorHandler and got approved.
+        // RequestOtpHandler already blocks unregistered mobiles from getting
+        // an OTP at all, but this check stays as defense-in-depth (e.g. a
+        // user record deleted between OTP request and verify).
         var user = await _db.Users
             .FirstOrDefaultAsync(u => u.Mobile == request.Mobile && !u.IsDeleted, cancellationToken);
 
         if (user is null)
-        {
-            // Auto-create Crew user on first login (can be promoted later)
-            user = new User(request.Mobile, request.Mobile, UserRole.Crew);
-            _db.Users.Add(user);
-        }
+            return Result.Failure<AuthResponse>(Error.Custom(
+                "Auth.NotRegistered",
+                "No account found for this mobile number. Please register first."));
 
-        if (user.Status == UserStatus.Suspended)
-            return Result.Failure<AuthResponse>(Error.AccountSuspended);
+        switch (user.Status)
+        {
+            case UserStatus.Suspended:
+            case UserStatus.Deactivated:
+                return Result.Failure<AuthResponse>(Error.AccountSuspended);
+            case UserStatus.Pending:
+                return Result.Failure<AuthResponse>(Error.Custom(
+                    "Auth.PendingApproval",
+                    "Your account is awaiting approval. You'll receive an email once it's approved."));
+            case UserStatus.Rejected:
+                return Result.Failure<AuthResponse>(Error.Custom(
+                    "Auth.Rejected",
+                    "Your registration was not approved."));
+        }
 
         user.Activate();
         user.UpdateLoginMetadata(request.IpAddress ?? string.Empty, request.DeviceId);
