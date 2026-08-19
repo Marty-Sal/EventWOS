@@ -36,12 +36,25 @@ public static class ClientValidation
         return digitsOnly.Length > maxLength ? digitsOnly[..maxLength] : digitsOnly;
     }
 
+    public const int MinimumAge = 18;
+    public const int MaximumAge = 70; // must be strictly below this
+
+    /// <summary>
+    /// True only for a DOB that is not-in-the-future AND yields an age from
+    /// 18 up to (not including) 70. Mirrors RegisterCrewValidator's
+    /// DateOfBirth rule exactly. The upper bound is a real business rule,
+    /// and also incidentally catches nonsensical dates — a browser date
+    /// input with no `min` attribute happily accepts something like
+    /// 0001-01-01, which naively computes as "age 2025+" and would sail
+    /// through an age>=18-only check. Without this, the client showed a
+    /// green "OK" the server then rejected.
+    /// </summary>
     public static bool IsAdult(DateTime dob)
     {
         var today = DateTime.UtcNow.Date;
-        var age = today.Year - dob.Year;
-        if (dob.Date > today.AddYears(-age)) age--;
-        return age >= 18;
+        if (dob.Date > today) return false;
+        var age = CalculateAge(dob);
+        return age >= MinimumAge && age < MaximumAge;
     }
 
     public static int CalculateAge(DateTime dob)

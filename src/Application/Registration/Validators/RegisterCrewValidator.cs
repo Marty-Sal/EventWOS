@@ -7,6 +7,7 @@ namespace EventWOS.Application.Registration.Validators;
 public sealed class RegisterCrewValidator : AbstractValidator<RegisterCrewCommand>
 {
     private const int MinimumAge = 18;
+    private const int MaximumAge = 70; // must be strictly below this
     private const long MaxIdProofBytes = 5 * 1024 * 1024;
     private static readonly string[] AllowedIdProofTypes = { "image/jpeg", "image/png", "application/pdf" };
 
@@ -30,15 +31,17 @@ public sealed class RegisterCrewValidator : AbstractValidator<RegisterCrewComman
             .Matches(@"^[A-Za-z ]+$")
             .WithMessage("Full name can only contain letters and spaces.");
 
-        // 18+ only. Also rejects nonsensical dates (future, or absurdly old) so a
-        // client bug/typo can't silently create an unapprovable account.
+        // Age must be 18 up to (but not including) 70. The upper bound is a real
+        // business rule (not just a sanity check) — it also happens to reject
+        // nonsensical dates (e.g. a bare/blank date picker defaulting to
+        // 0001-01-01) since that computes to an age far past 70.
         RuleFor(x => x.DateOfBirth)
             .Must(dob => dob.Date <= DateTime.UtcNow.Date)
             .WithMessage("Date of birth cannot be in the future.")
-            .Must(dob => dob.Date >= DateTime.UtcNow.Date.AddYears(-100))
-            .WithMessage("Please enter a valid date of birth.")
             .Must(dob => User.CalculateAge(dob, DateTime.UtcNow.Date) >= MinimumAge)
-            .WithMessage($"You must be at least {MinimumAge} years old to register.");
+            .WithMessage($"You must be at least {MinimumAge} years old to register.")
+            .Must(dob => User.CalculateAge(dob, DateTime.UtcNow.Date) < MaximumAge)
+            .WithMessage($"Age must be below {MaximumAge} years to register.");
 
         // Crew self-registration MUST include a vendor referral code.
         // Direct (vendor-less) crew can only be created by Admin via the

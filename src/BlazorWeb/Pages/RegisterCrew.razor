@@ -77,7 +77,7 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field Label="Date of birth" Required="true" Hint="@AgeHint">
-                            <input value="@_dobStr" @oninput="OnDobInput" type="date" max="@_maxDob" class="@FieldCss(_touchedDob && !DobOk)"
+                            <input value="@_dobStr" @oninput="OnDobInput" type="date" min="@_minDob" max="@_maxDob" class="@FieldCss(_touchedDob && !DobOk)"
                                    @onblur='() => _touchedDob = true' />
                         </Field>
                         <Field Label="City">
@@ -86,7 +86,7 @@
                     </div>
                     @if (_touchedDob && !DobOk)
                     {
-                        <p class="text-xs text-red-600 -mt-2">You must be at least 18 years old to register.</p>
+                        <p class="text-xs text-red-600 -mt-2">You must be between @ClientValidation.MinimumAge and @(ClientValidation.MaximumAge - 1) years old to register.</p>
                     }
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -186,6 +186,11 @@
     private DateTime? _dob;
     private string _dobStr = "";
     private readonly string _maxDob = DateTime.UtcNow.Date.ToString("yyyy-MM-dd");
+    // Browser-level guard matching ClientValidation.MaximumAge — without a
+    // `min` attribute a date input happily accepts something like
+    // 0001-01-01, which is exactly what slipped an "Age: 2025 — OK" past
+    // the old age>=18-only check.
+    private readonly string _minDob = DateTime.UtcNow.Date.AddYears(-ClientValidation.MaximumAge).AddDays(1).ToString("yyyy-MM-dd");
 
     private byte[]? _photoBytes;    private string? _photoFileName, _photoContentType, _photoError;
     private byte[]? _idProofBytes;  private string? _idProofFileName, _idProofContentType, _idProofError;
@@ -210,9 +215,11 @@
 
     private string AgeHint => _dob switch
     {
-        null => "Must be 18 or older",
+        null => $"Must be {ClientValidation.MinimumAge}–{ClientValidation.MaximumAge - 1} years old",
         { } d when ClientValidation.IsAdult(d) => $"Age: {ClientValidation.CalculateAge(d)} — OK ✓",
-        { } d => $"Age: {ClientValidation.CalculateAge(d)} — must be 18+"
+        { } d when ClientValidation.CalculateAge(d) >= ClientValidation.MaximumAge
+            => $"Age: {ClientValidation.CalculateAge(d)} — must be below {ClientValidation.MaximumAge}",
+        { } d => $"Age: {ClientValidation.CalculateAge(d)} — must be at least {ClientValidation.MinimumAge}"
     };
 
     protected override void OnInitialized()
