@@ -315,17 +315,24 @@ public sealed class DatabaseSeeder
     // ─── Default Admin User ──────────────────────────────────────────────────
     // Creates OR self-heals the default admin so a fresh DB always has a
     // login-ready admin account with:
-    //   mobile   = +911234567890
+    //   mobile   = 1234567890
     //   username = admin
     //   email    = admin@eventwos.local
     //   password = admin123
+    // Mobile is bare 10 digits, no country code — same convention as
+    // self-registered Crew/Vendor (RegisterCrewValidator/RegisterVendorValidator)
+    // and the OTP login validators. It used to be seeded as "+911234567890"
+    // which meant this admin could never actually log in via OTP (the
+    // request/verify handlers look up by exact Mobile match) and, worse,
+    // let someone typing the bare 10 digits on the OTP screen fall through
+    // to "no user found" instead of finding the admin.
     // Self-heal path: if the row already exists but is missing username /
     // email / password_hash (which was a bug in the original seeder), we
     // patch those fields WITHOUT overwriting a hash the admin has already
     // rotated to something else. Safe to run on every boot.
     private async Task SeedAdminUserAsync(CancellationToken ct)
     {
-        const string mobile   = "+911234567890";
+        const string mobile   = "1234567890";
         const string username = "admin";
         const string email    = "admin@eventwos.local";
 
@@ -377,8 +384,8 @@ public sealed class DatabaseSeeder
     {
         var testUsers = new (string Mobile, string Username, string Email, string Name, UserRole Role)[]
         {
-            ("+911233456789", "sameer", "sameer@eventwos.local", "Sameer Khan",   UserRole.Crew),
-            ("+911223456789", "priya",  "priya@eventwos.local",  "Priya Vendors", UserRole.Vendor),
+            ("1233456789", "sameer", "sameer@eventwos.local", "Sameer Khan",   UserRole.Crew),
+            ("1223456789", "priya",  "priya@eventwos.local",  "Priya Vendors", UserRole.Vendor),
         };
 
         foreach (var t in testUsers)

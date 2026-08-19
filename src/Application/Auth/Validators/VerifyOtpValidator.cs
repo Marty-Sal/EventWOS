@@ -7,9 +7,11 @@ public sealed class VerifyOtpValidator : AbstractValidator<VerifyOtpCommand>
 {
     public VerifyOtpValidator()
     {
-        RuleFor(x => x.Mobile)
-            .NotEmpty().WithMessage("Mobile number is required.")
-            .Matches(@"^\+?[1-9]\d{9,14}$").WithMessage("Invalid mobile number format.");
+        // Same exactly-10-digits rule as RequestOtpValidator — both endpoints
+        // in the OTP flow must agree on format or verify would never find
+        // the OtpRequest row saved during request.
+        RuleFor(x => x.Mobile).NotEmpty().Matches(@"^\d{10}$")
+            .WithMessage("Mobile number must be exactly 10 digits.");
 
         RuleFor(x => x.Otp)
             .NotEmpty().WithMessage("OTP is required.")

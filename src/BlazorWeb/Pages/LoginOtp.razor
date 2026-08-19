@@ -1,8 +1,10 @@
 @page "/login/otp"
 @layout EventWOS.BlazorWeb.Layout.EmptyLayout
+@using EventWOS.BlazorWeb.Validation
 @inject IAuthApiService AuthApi
 @inject NavigationManager Nav
 @inject TokenRefreshService RefreshSvc
+@inject IJSRuntime JS
 
 <PageTitle>OTP sign-in — EventWOS</PageTitle>
 
@@ -28,10 +30,10 @@
 
         @if (_step == Step.Mobile)
         {
-            <Field Label="Mobile number" Required="true">
-                <input @bind="_mobile" @bind:event="oninput" @onkeydown="OnMobileKey"
-                       type="tel" autocomplete="tel"
-                       class="@Css" placeholder="+91 98765 43210" />
+            <Field Label="Mobile number" Required="true" Hint="Exactly 10 digits">
+                <input @ref="_mobileInputRef" value="@_mobile" @oninput="OnMobileInput" @onkeydown="OnMobileKey"
+                       type="tel" inputmode="numeric" maxlength="10" autocomplete="tel"
+                       class="@Css" placeholder="9876543210" />
             </Field>
 
             @if (_error is not null)
@@ -92,17 +94,24 @@
     private Step _step = Step.Mobile;
 
     private string _mobile = "", _otp = "";
+    private ElementReference _mobileInputRef;
     private string? _maskedMobile, _devOtp;
     private Guid _otpRequestId;
     private bool _loading;
     private string? _error;
+
+    private async Task OnMobileInput(ChangeEventArgs e)
+    {
+        _mobile = ClientValidation.FilterDigits(e.Value?.ToString(), 10);
+        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _mobileInputRef, _mobile);
+    }
 
     private async Task OnMobileKey(KeyboardEventArgs e) { if (e.Key == "Enter") await RequestOtpAsync(); }
     private async Task OnOtpKey   (KeyboardEventArgs e) { if (e.Key == "Enter") await VerifyOtpAsync();  }
 
     private async Task RequestOtpAsync()
     {
-        if (string.IsNullOrWhiteSpace(_mobile)) { _error = "Please enter your mobile number."; return; }
+        if (!ClientValidation.IsValidMobile(_mobile)) { _error = "Enter a valid 10-digit mobile number."; return; }
         _loading = true; _error = null;
         try
         {

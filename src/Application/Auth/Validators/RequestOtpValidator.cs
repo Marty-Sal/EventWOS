@@ -7,8 +7,10 @@ public sealed class RequestOtpValidator : AbstractValidator<RequestOtpCommand>
 {
     public RequestOtpValidator()
     {
-        RuleFor(x => x.Mobile)
-            .NotEmpty().WithMessage("Mobile number is required.")
-            .Matches(@"^\+?[1-9]\d{9,14}$").WithMessage("Mobile number must be a valid international format (e.g. +919876543210).");
+        // Exactly 10 digits — no country code, no separators. Matches the
+        // convention RegisterCrewValidator/RegisterVendorValidator already use
+        // for Mobile, and the client-side filter in LoginOtp.razor.
+        RuleFor(x => x.Mobile).NotEmpty().Matches(@"^\d{10}$")
+            .WithMessage("Mobile number must be exactly 10 digits.");
     }
 }
