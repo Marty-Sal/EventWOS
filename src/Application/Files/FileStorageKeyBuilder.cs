@@ -15,6 +15,7 @@ public static class FileStorageKeyBuilder
             DocumentType.CrewProfilePhoto        => $"crew/{ownerId}/profile/{fileId}{extension}",
             DocumentType.CrewIdentificationProof => $"crew/{ownerId}/identity/{fileId}{extension}",
             DocumentType.VendorDocument          => $"vendor/{ownerId}/documents/{fileId}{extension}",
+            DocumentType.VendorProfilePhoto      => $"vendor/{ownerId}/profile/{fileId}{extension}",
             DocumentType.EventDocument           => $"events/{entityId ?? ownerId}/documents/{fileId}{extension}",
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown document type.")
         };
