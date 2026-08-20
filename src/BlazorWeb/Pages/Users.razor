@@ -2,6 +2,8 @@
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject IUserApiService UserApi
 @inject IVendorApiService VendorApi
+@inject IJSRuntime JS
+@using EventWOS.BlazorWeb.Validation
 
 
     @if (_accessDenied)
@@ -168,12 +170,31 @@
             </div>
 
             <div class="space-y-3">
-                <input @bind="_createMobile" placeholder="Mobile (+91...)"
-                       class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                <input @bind="_createName" placeholder="Full Name"
-                       class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                <input @bind="_createEmail" type="email" placeholder="Email (optional)"
-                       class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <div>
+                    <input @ref="_mobileInputRef" value="@_createMobile" @oninput="OnMobileInput" type="tel" inputmode="numeric" maxlength="10"
+                           placeholder="Mobile (10 digits)" autocomplete="tel"
+                           class="@FieldCss(_touchedMobile && !MobileOk)" @onblur='() => _touchedMobile = true' />
+                    @if (_touchedMobile && !MobileOk)
+                    {
+                        <p class="text-xs text-red-600 mt-1 ml-1">Mobile number must be exactly 10 digits.</p>
+                    }
+                </div>
+                <div>
+                    <input @bind="_createName" @bind:event="oninput" placeholder="Full Name"
+                           class="@FieldCss(_touchedName && !NameOk)" @onblur='() => _touchedName = true' />
+                    @if (_touchedName && !NameOk)
+                    {
+                        <p class="text-xs text-red-600 mt-1 ml-1">Full name must contain only letters and spaces.</p>
+                    }
+                </div>
+                <div>
+                    <input @bind="_createEmail" @bind:event="oninput" type="email" placeholder="Email"
+                           class="@FieldCss(_touchedEmail && !EmailOk)" @onblur='() => _touchedEmail = true' />
+                    @if (_touchedEmail && !EmailOk)
+                    {
+                        <p class="text-xs text-red-600 mt-1 ml-1">Enter a valid email address.</p>
+                    }
+                </div>
                 @if (_createRole == "Vendor")
                 {
                     <input @bind="_createBusiness" placeholder="Business Name (optional)"
@@ -214,7 +235,7 @@
             }
 
             <div class="flex gap-3">
-                <button @onclick="SubmitCreate" disabled="@(_creating || string.IsNullOrWhiteSpace(_createMobile) || string.IsNullOrWhiteSpace(_createName) || (_createRole == "Crew" && string.IsNullOrWhiteSpace(_createReferral)))"
+                <button @onclick="SubmitCreate" disabled="@(_creating || !MobileOk || !NameOk || !EmailOk || (_createRole == "Crew" && string.IsNullOrWhiteSpace(_createReferral)))"
                         class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition">
                     @(_creating ? "Creating…" : $"Create {_createRole}")
                 </button>
@@ -252,6 +273,18 @@
     private string? _createReferral;
     private List<VendorListItemDto> _vendorOptions = new();
     private bool _vendorOptionsLoading;
+
+    // ── Add User form validation (mirrors ClientValidation — see RegisterCrew.razor) ──
+    private const string FieldCssOk    = "w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+    private const string FieldCssError = "w-full px-4 py-2.5 rounded-xl border border-red-400 text-sm focus:outline-none focus:ring-2 focus:ring-red-400";
+    private static string FieldCss(bool hasError) => hasError ? FieldCssError : FieldCssOk;
+
+    private ElementReference _mobileInputRef;
+    private bool _touchedMobile, _touchedName, _touchedEmail;
+
+    private bool MobileOk => ClientValidation.IsValidMobile(_createMobile);
+    private bool NameOk   => ClientValidation.IsValidFullName(_createName);
+    private bool EmailOk  => ClientValidation.IsValidEmail(_createEmail);
 
     protected override async Task OnInitializedAsync()
     {
@@ -327,16 +360,24 @@
         "Suspended" => "bg-red-500",
         _           => "bg-gray-400"
     };
+    private async Task OnMobileInput(ChangeEventArgs e)
+    {
+        _createMobile = ClientValidation.FilterDigits(e.Value?.ToString(), 10);
+        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _mobileInputRef, _createMobile);
+    }
+
     private void CloseCreate()
     {
         _showCreate = false; _createError = null;
         _createMobile = _createName = string.Empty;
         _createEmail = _createBusiness = _createReferral = null;
+        _touchedMobile = _touchedName = _touchedEmail = false;
     }
 
     private async Task SubmitCreate()
     {
-        if (string.IsNullOrWhiteSpace(_createMobile) || string.IsNullOrWhiteSpace(_createName)) return;
+        _touchedMobile = _touchedName = _touchedEmail = true;
+        if (!MobileOk || !NameOk || !EmailOk) return;
         if (_createRole == "Crew" && string.IsNullOrWhiteSpace(_createReferral))
         {
             _createError = "Please select a vendor.";

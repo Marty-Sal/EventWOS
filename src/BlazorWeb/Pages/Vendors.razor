@@ -1,6 +1,8 @@
 @page "/vendors"
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject IVendorApiService VendorApi
+@inject IJSRuntime JS
+@using EventWOS.BlazorWeb.Validation
 
 
     @if (_accessDenied)
@@ -144,24 +146,46 @@
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
             <div class="flex items-center justify-between">
                 <h3 class="font-bold text-gray-800">Add Vendor</h3>
-                <button @onclick="() => { _showCreate = false; _createError = null; }" class="text-gray-400 hover:text-gray-600">✕</button>
+                <button @onclick="ResetCreateForm" class="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <div class="space-y-3">
-                <input @bind="_newMobile" placeholder="Mobile (+91...)" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                <input @bind="_newName" placeholder="Full Name" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <div>
+                    <input @ref="_mobileInputRef" value="@_newMobile" @oninput="OnMobileInput" type="tel" inputmode="numeric" maxlength="10"
+                           placeholder="Mobile (10 digits)" autocomplete="tel"
+                           class="@FieldCss(_touchedMobile && !MobileOk)" @onblur='() => _touchedMobile = true' />
+                    @if (_touchedMobile && !MobileOk)
+                    {
+                        <p class="text-xs text-red-600 mt-1 ml-1">Mobile number must be exactly 10 digits.</p>
+                    }
+                </div>
+                <div>
+                    <input @bind="_newName" @bind:event="oninput" placeholder="Full Name"
+                           class="@FieldCss(_touchedName && !NameOk)" @onblur='() => _touchedName = true' />
+                    @if (_touchedName && !NameOk)
+                    {
+                        <p class="text-xs text-red-600 mt-1 ml-1">Full name must contain only letters and spaces.</p>
+                    }
+                </div>
                 <input @bind="_newBusiness" placeholder="Business Name (optional)" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                <input @bind="_newEmail" type="email" placeholder="Email (optional)" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <div>
+                    <input @bind="_newEmail" @bind:event="oninput" type="email" placeholder="Email"
+                           class="@FieldCss(_touchedEmail && !EmailOk)" @onblur='() => _touchedEmail = true' />
+                    @if (_touchedEmail && !EmailOk)
+                    {
+                        <p class="text-xs text-red-600 mt-1 ml-1">Enter a valid email address.</p>
+                    }
+                </div>
             </div>
             @if (_createError is not null)
             {
                 <p class="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">⚠️ @_createError</p>
             }
             <div class="flex gap-3">
-                <button @onclick="CreateVendor" disabled="@_creating"
+                <button @onclick="CreateVendor" disabled="@(_creating || !MobileOk || !NameOk || !EmailOk)"
                         class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition">
                     @(_creating ? "Creating…" : "Create Vendor")
                 </button>
-                <button @onclick="() => { _showCreate = false; _createError = null; }"
+                <button @onclick="ResetCreateForm"
                         class="px-5 py-2.5 rounded-xl border border-gray-200 text-sm hover:bg-gray-50 transition">Cancel</button>
             </div>
         </div>
@@ -209,6 +233,18 @@
     private string? _newBusiness;
     private string? _newEmail;
 
+    // ── Add Vendor form validation (mirrors ClientValidation — see RegisterCrew.razor) ──
+    private const string FieldCssOk    = "w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+    private const string FieldCssError = "w-full px-4 py-2.5 rounded-xl border border-red-400 text-sm focus:outline-none focus:ring-2 focus:ring-red-400";
+    private static string FieldCss(bool hasError) => hasError ? FieldCssError : FieldCssOk;
+
+    private ElementReference _mobileInputRef;
+    private bool _touchedMobile, _touchedName, _touchedEmail;
+
+    private bool MobileOk => ClientValidation.IsValidMobile(_newMobile);
+    private bool NameOk   => ClientValidation.IsValidFullName(_newName);
+    private bool EmailOk  => ClientValidation.IsValidEmail(_newEmail);
+
     private VendorListItemDto? _rateTarget;
     private decimal _newRating = 5.0m;
 
@@ -245,14 +281,32 @@
     private async Task PrevPage() { _page--; await LoadAsync(); }
     private async Task NextPage() { _page++; await LoadAsync(); }
 
+    private async Task OnMobileInput(ChangeEventArgs e)
+    {
+        _newMobile = ClientValidation.FilterDigits(e.Value?.ToString(), 10);
+        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _mobileInputRef, _newMobile);
+    }
+
+    private void ResetCreateForm()
+    {
+        _showCreate  = false;
+        _createError = null;
+        _newMobile   = string.Empty;
+        _newName     = string.Empty;
+        _newBusiness = null;
+        _newEmail    = null;
+        _touchedMobile = _touchedName = _touchedEmail = false;
+    }
+
     private async Task CreateVendor()
     {
-        if (string.IsNullOrWhiteSpace(_newMobile) || string.IsNullOrWhiteSpace(_newName)) return;
+        _touchedMobile = _touchedName = _touchedEmail = true;
+        if (!MobileOk || !NameOk || !EmailOk) return;
         _creating = true; _createError = null;
         var (ok, err) = await VendorApi.CreateVendorAsync(_newMobile, _newName, _newBusiness, _newEmail);
         if (ok)
         {
-            _showCreate = false; _newMobile = _newName = string.Empty; _newBusiness = _newEmail = null;
+            ResetCreateForm();
             await LoadAsync();
         }
         else { _createError = err; }

@@ -3,6 +3,7 @@
 @inject IApprovalApiService Api
 @inject IFilesApiService FilesApi
 @inject IJSRuntime JS
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthState
 
 <PageTitle>Approvals · @TypeLabel — EventWOS</PageTitle>
 
@@ -317,7 +318,24 @@
     private string? _notifyError;
     private bool _notifyBusy;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // Decide the default tab from the caller's ROLE first, synchronously
+        // available (no network round trip) — not from the queue counts,
+        // which only arrive after LoadAsync's API call resolves. Without
+        // this, a Vendor opening this page briefly saw "Vendor
+        // Registrations" (the hardcoded Tab.Vendors default) for the
+        // ~100-300ms the request was in flight, then it flipped to "Crew"
+        // once the response landed — a visible flash of the wrong tab.
+        try
+        {
+            var auth = await AuthState.GetAuthenticationStateAsync();
+            _tab = auth.User.IsInRole("Vendor") ? Tab.Crew : Tab.Vendors;
+        }
+        catch { /* keep default */ }
+
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
