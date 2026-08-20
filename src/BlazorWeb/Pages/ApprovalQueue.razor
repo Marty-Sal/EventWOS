@@ -439,12 +439,16 @@
 
     private static string? FormatDob(DateTime? dob) => dob?.ToString("dd MMM yyyy");
 
-    private static string HumanSize(long bytes) => bytes switch
+    // NOT a switch expression with relational patterns ("< 1024 => ...") on
+    // purpose: a case arm starting with a bare '<' inside an @code block
+    // trips the Razor tokenizer into thinking it's the start of an HTML
+    // tag, corrupting the parse of everything after it in the file.
+    private static string HumanSize(long bytes)
     {
-        < 1024 => $"{bytes} B",
-        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
-        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB"
-    };
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:0.#} KB";
+        return $"{bytes / (1024.0 * 1024.0):0.#} MB";
+    }
 
     private void OpenNotify(PendingRegistrationDto r)
     {
