@@ -22,24 +22,29 @@ public sealed class CreateCrewHandler : IRequestHandler<CreateCrewCommand, Resul
         if (await _db.Users.AnyAsync(u => u.Mobile == req.Mobile, ct))
             return Result.Failure<CrewDto>(new Error("Crew.DuplicateMobile", "Mobile already registered."));
 
-        User? vendor = null;
-        if (!string.IsNullOrWhiteSpace(req.ReferralCode))
-        {
-            vendor = await _db.Users.FirstOrDefaultAsync(
-                u => u.ReferralCode == req.ReferralCode && u.Role == UserRole.Vendor && !u.IsDeleted, ct);
-            if (vendor is null)
-                return Result.Failure<CrewDto>(new Error("Crew.InvalidReferral", "Invalid referral code."));
-        }
+        // A vendor is mandatory for every crew member created through this
+        // endpoint (Vendor self-service always sends their own code; the
+        // Admin/Manager "Add Crew" flow must select one from a dropdown of
+        // active vendors — there is no such thing as an unassigned crew
+        // member created this way). Crew self-registration is a separate
+        // command (RegisterCrewCommand) and is unaffected by this rule.
+        if (string.IsNullOrWhiteSpace(req.ReferralCode))
+            return Result.Failure<CrewDto>(new Error("Crew.VendorRequired", "A vendor must be selected for this crew member."));
+
+        var vendor = await _db.Users.FirstOrDefaultAsync(
+            u => u.ReferralCode == req.ReferralCode && u.Role == UserRole.Vendor && !u.IsDeleted, ct);
+        if (vendor is null)
+            return Result.Failure<CrewDto>(new Error("Crew.InvalidReferral", "Invalid referral code."));
 
         var crew = new User(req.Mobile, req.FullName, UserRole.Crew);
         crew.Activate();
         if (req.Email is not null) crew.Email = req.Email;
-        if (vendor is not null) crew.JoinVendor(vendor.Id);
+        crew.JoinVendor(vendor.Id);
 
         _db.Users.Add(crew);
         await _db.SaveChangesAsync(ct);
 
-        return Result.Success(MapToDto(crew, vendor?.FullName));
+        return Result.Success(MapToDto(crew, vendor.FullName));
     }
 
     internal static CrewDto MapToDto(User c, string? vendorName) => new(

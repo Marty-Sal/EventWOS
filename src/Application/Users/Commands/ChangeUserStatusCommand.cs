@@ -29,6 +29,14 @@ public sealed class ChangeUserStatusHandler : IRequestHandler<ChangeUserStatusCo
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.TargetUserId && !u.IsDeleted, ct);
         if (user is null) return Result.Failure(Error.UserNotFound);
 
+        // Admin accounts can never be suspended/deactivated through this
+        // command — by themselves, by another Admin, or via a stale/forged
+        // request. There's no "break glass" recovery path if the platform's
+        // only admins get locked out, so this is a hard rule, not just a UI
+        // nicety (the Users page also hides the button, but that's just UX).
+        if (user.Role == UserRole.Admin && request.NewStatus != UserStatus.Active)
+            return Result.Failure(Error.Custom("User.CannotSuspendAdmin", "Admin accounts cannot be suspended or deactivated."));
+
         var oldStatus = user.Status;
 
         switch (request.NewStatus)

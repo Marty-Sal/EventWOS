@@ -1793,7 +1793,7 @@ else
         var token = _allocSearchCts.Token;
         try
         {
-            var page = await VendorApi.GetVendorsAsync(1, _allocVendorSearch, token);
+            var page = await VendorApi.GetVendorsAsync(1, _allocVendorSearch, ct: token);
             if (token.IsCancellationRequested) return;
             _allocVendorResults = page?.Items?.Take(8).ToList() ?? new();
         }

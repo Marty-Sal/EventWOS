@@ -181,7 +181,30 @@
                 }
                 else
                 {
-                    <input @bind="_referralCode" placeholder="Vendor Referral Code (optional)" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase" />
+                    <div>
+                        <select @bind="_referralCode"
+                                class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white @(string.IsNullOrWhiteSpace(_referralCode) ? "text-gray-400" : "text-gray-800")">
+                            <option value="">Select vendor…</option>
+                            @foreach (var v in _vendorOptions)
+                            {
+                                <option value="@v.ReferralCode">@(v.BusinessName ?? v.FullName) (@v.ReferralCode)</option>
+                            }
+                        </select>
+                        <p class="text-[11px] text-gray-500 mt-1 ml-1">
+                            @if (_vendorOptionsLoading)
+                            {
+                                <text>Loading vendors…</text>
+                            }
+                            else if (_vendorOptions.Count == 0)
+                            {
+                                <text>No active vendors found — add a vendor first.</text>
+                            }
+                            else
+                            {
+                                <text>Required — every crew member must belong to a vendor.</text>
+                            }
+                        </p>
+                    </div>
                 }
             </div>
             @if (_createError is not null)
@@ -189,7 +212,7 @@
                 <p class="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">⚠️ @_createError</p>
             }
             <div class="flex gap-3">
-                <button @onclick="CreateCrew" disabled="@_creating"
+                <button @onclick="CreateCrew" disabled="@(_creating || (!_isVendor && string.IsNullOrWhiteSpace(_referralCode)))"
                         class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition">
                     @(_creating ? "Creating…" : "Add Crew")
                 </button>
@@ -231,6 +254,8 @@
     private string? _referralCode;
     private bool    _isVendor;
     private string? _myReferralCode;
+    private List<VendorListItemDto> _vendorOptions = new();
+    private bool _vendorOptionsLoading;
 
     protected override async Task OnInitializedAsync()
     {
@@ -248,8 +273,25 @@
             _myReferralCode = me?.ReferralCode;
             _referralCode   = _myReferralCode;
         }
+        else
+        {
+            // Admin/Manager must pick a vendor from a real list — no more
+            // free-text "optional" referral code that's easy to typo or skip.
+            await LoadVendorOptionsAsync();
+        }
 
         await LoadAsync();
+    }
+
+    private async Task LoadVendorOptionsAsync()
+    {
+        _vendorOptionsLoading = true;
+        var result = await VendorApi.GetVendorsAsync(page: 1, pageSize: 500);
+        _vendorOptions = (result?.Items ?? Array.Empty<VendorListItemDto>())
+            .Where(v => v.Status == "Active" && !string.IsNullOrWhiteSpace(v.ReferralCode))
+            .OrderBy(v => v.BusinessName ?? v.FullName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        _vendorOptionsLoading = false;
     }
 
     private async Task LoadAsync()
@@ -275,6 +317,11 @@
     private async Task CreateCrew()
     {
         if (string.IsNullOrWhiteSpace(_newMobile) || string.IsNullOrWhiteSpace(_newName)) return;
+        if (string.IsNullOrWhiteSpace(_referralCode))
+        {
+            _createError = "Please select a vendor.";
+            return;
+        }
         _creating = true; _createError = null;
         var (ok, err) = await VendorApi.CreateCrewAsync(_newMobile, _newName, _newEmail, _referralCode);
         if (ok) {

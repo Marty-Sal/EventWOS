@@ -115,8 +115,7 @@ public sealed class FileValidationPolicyTests
     // pin the one check that actually looks at the bytes on the wire.
 
     private static readonly byte[] RealJpegBytes = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10 };
-    private static readonly byte[] RealPdfBytes  = System.Text.Encoding.ASCII.GetBytes("%PDF-1.7
-rest of file");
+    private static readonly byte[] RealPdfBytes  = System.Text.Encoding.ASCII.GetBytes("%PDF-1.7\nrest of file");
     private static readonly byte[] FakeHtmlBytes = System.Text.Encoding.ASCII.GetBytes("<html><script>evil()</script></html>");
 
     [Fact]

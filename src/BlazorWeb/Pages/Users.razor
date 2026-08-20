@@ -1,6 +1,7 @@
 @page "/users"
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject IUserApiService UserApi
+@inject IVendorApiService VendorApi
 
 
     @if (_accessDenied)
@@ -100,7 +101,11 @@
                             </td>
                             <AuthorizeView Roles="Admin">
                                 <td class="px-6 py-4 text-right">
-                                    @if (currentUser.Status == "Active")
+                                    @if (currentUser.Role == "Admin")
+                                    {
+                                        <span class="text-xs text-gray-300" title="Admin accounts can't be suspended.">—</span>
+                                    }
+                                    else if (currentUser.Status == "Active")
                                     {
                                         <button @onclick="@(() => ChangeStatusAsync(currentUser.Id, StatusSuspended))"
                                                 class="text-xs text-red-600 hover:underline font-medium">Suspend</button>
@@ -176,8 +181,30 @@
                 }
                 @if (_createRole == "Crew")
                 {
-                    <input @bind="_createReferral" placeholder="Vendor Referral Code (optional)"
-                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase" />
+                    <div>
+                        <select @bind="_createReferral"
+                                class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white @(string.IsNullOrWhiteSpace(_createReferral) ? "text-gray-400" : "text-gray-800")">
+                            <option value="">Select vendor…</option>
+                            @foreach (var v in _vendorOptions)
+                            {
+                                <option value="@v.ReferralCode">@(v.BusinessName ?? v.FullName) (@v.ReferralCode)</option>
+                            }
+                        </select>
+                        <p class="text-[11px] text-gray-500 mt-1 ml-1">
+                            @if (_vendorOptionsLoading)
+                            {
+                                <text>Loading vendors…</text>
+                            }
+                            else if (_vendorOptions.Count == 0)
+                            {
+                                <text>No active vendors found — add a vendor first.</text>
+                            }
+                            else
+                            {
+                                <text>Required — every crew member must belong to a vendor.</text>
+                            }
+                        </p>
+                    </div>
                 }
             </div>
 
@@ -187,7 +214,7 @@
             }
 
             <div class="flex gap-3">
-                <button @onclick="SubmitCreate" disabled="@(_creating || string.IsNullOrWhiteSpace(_createMobile) || string.IsNullOrWhiteSpace(_createName))"
+                <button @onclick="SubmitCreate" disabled="@(_creating || string.IsNullOrWhiteSpace(_createMobile) || string.IsNullOrWhiteSpace(_createName) || (_createRole == "Crew" && string.IsNullOrWhiteSpace(_createReferral)))"
                         class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition">
                     @(_creating ? "Creating…" : $"Create {_createRole}")
                 </button>
@@ -223,6 +250,8 @@
     private string? _createEmail;
     private string? _createBusiness;
     private string? _createReferral;
+    private List<VendorListItemDto> _vendorOptions = new();
+    private bool _vendorOptionsLoading;
 
     protected override async Task OnInitializedAsync()
     {
@@ -231,6 +260,19 @@
         if (_accessDenied) { StateHasChanged(); return; }
         _canWrite = await PermGuard.CanAsync("users:write");
         await LoadAsync();
+        _ = LoadVendorOptionsAsync();
+    }
+
+    private async Task LoadVendorOptionsAsync()
+    {
+        _vendorOptionsLoading = true;
+        var result = await VendorApi.GetVendorsAsync(page: 1, pageSize: 500);
+        _vendorOptions = (result?.Items ?? Array.Empty<VendorListItemDto>())
+            .Where(v => v.Status == "Active" && !string.IsNullOrWhiteSpace(v.ReferralCode))
+            .OrderBy(v => v.BusinessName ?? v.FullName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        _vendorOptionsLoading = false;
+        StateHasChanged();
     }
 
     private async Task LoadAsync()
@@ -295,6 +337,11 @@
     private async Task SubmitCreate()
     {
         if (string.IsNullOrWhiteSpace(_createMobile) || string.IsNullOrWhiteSpace(_createName)) return;
+        if (_createRole == "Crew" && string.IsNullOrWhiteSpace(_createReferral))
+        {
+            _createError = "Please select a vendor.";
+            return;
+        }
         _creating = true; _createError = null;
 
         (bool ok, string? err) = _createRole == "Vendor"
