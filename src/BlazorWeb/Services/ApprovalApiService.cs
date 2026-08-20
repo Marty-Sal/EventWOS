@@ -19,7 +19,13 @@ public sealed record PendingRegistrationDto(
     int?     ExperienceYears,
     string?  ReferralCodeUsed,
     Guid?    ReferredVendorId,
-    string?  ReferredVendorName);
+    string?  ReferredVendorName,
+    string?  GstNumber,
+    string?  Address,
+    string?  State,
+    string?  Bio,
+    DateTime? DateOfBirth,
+    IReadOnlyList<FileDocumentDto> Files);
 
 public sealed record ApprovalQueueDto(
     int VendorCount,
@@ -34,6 +40,7 @@ public interface IApprovalApiService
     Task<ApiResult<ApprovalQueueDto>> GetQueueAsync(CancellationToken ct = default);
     Task<ApiResult<ApproveResultDto>> ApproveAsync(Guid userId, CancellationToken ct = default);
     Task<ApiResult<object>>           RejectAsync(Guid userId, string reason, CancellationToken ct = default);
+    Task<ApiResult<object>>           NotifyAsync(Guid userId, string message, CancellationToken ct = default);
 }
 
 public sealed class ApprovalApiService : IApprovalApiService
@@ -57,6 +64,12 @@ public sealed class ApprovalApiService : IApprovalApiService
     public async Task<ApiResult<object>> RejectAsync(Guid userId, string reason, CancellationToken ct = default)
     {
         var resp = await _http.PostAsJsonAsync($"api/v1/approval-queue/{userId}/reject", new { reason }, ct);
+        return await ParseAsync<object>(resp);
+    }
+
+    public async Task<ApiResult<object>> NotifyAsync(Guid userId, string message, CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsJsonAsync($"api/v1/approval-queue/{userId}/notify", new { message }, ct);
         return await ParseAsync<object>(resp);
     }
 

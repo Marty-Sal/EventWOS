@@ -22,5 +22,8 @@ public enum AuditAction
     FileUploaded,
     FileDeleted,
     /// <summary>Any read of a CrewIdentificationProof file — including the owner viewing their own. Required by policy: sensitive PII access is always logged.</summary>
-    SensitiveDocumentAccessed
+    SensitiveDocumentAccessed,
+
+    /// <summary>Admin/Manager/Vendor asked a pending applicant (by email) for more information before deciding.</summary>
+    UserNotified
 }

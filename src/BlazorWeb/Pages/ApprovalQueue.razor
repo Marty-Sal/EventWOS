@@ -1,15 +1,22 @@
 @page "/approvals/people"
 @attribute [Authorize]
 @inject IApprovalApiService Api
+@inject IFilesApiService FilesApi
 @inject IJSRuntime JS
 
-<PageTitle>Approvals · People — EventWOS</PageTitle>
+<PageTitle>Approvals · @TypeLabel — EventWOS</PageTitle>
 
 @*
-    Admin/Manager review page for self-registered Vendors and Crew.
-    Two tabs (Vendors / Crew), counts on each, per-row Approve / Reject.
-    Reject prompts for a mandatory reason via window.prompt — backend
-    enforces the requirement too.
+    Admin/Manager review page for self-registered Vendors, and Vendor
+    review page for self-registered Crew. The backend query is always
+    role-scoped to exactly one of the two (see GetApprovalQueueHandler),
+    so everything on this page — heading, empty-state, "View details"
+    modal — is labelled by TypeLabel ("Vendor" or "Crew") instead of the
+    old generic "People".
+
+    Per row: View details (full submitted data + uploaded documents),
+    Notify (ask for more info by email — doesn't change status), Approve,
+    Reject (mandatory reason, enforced client + server side).
 *@
 
 <div class="space-y-6">
@@ -17,7 +24,7 @@
 
     <div class="flex items-center justify-between">
         <div>
-            <h2 class="text-lg font-bold text-gray-800">Registrations</h2>
+            <h2 class="text-lg font-bold text-gray-800">@TypeLabel Registrations</h2>
             <p class="text-sm text-gray-500 mt-0.5">Review and approve new self-registrations awaiting your decision.</p>
         </div>
         <div class="flex items-center gap-2">
@@ -54,7 +61,7 @@
         @if (_queue.VendorCount > 0 && _queue.CrewCount > 0)
         {
             <div class="flex gap-2 border-b border-gray-200">
-                <TabButton Label="@($"Vendors ({_queue.VendorCount})")"
+                <TabButton Label="@($"Vendor ({_queue.VendorCount})")"
                            Active="_tab == Tab.Vendors"
                            OnClick="() => _tab = Tab.Vendors" />
                 <TabButton Label="@($"Crew ({_queue.CrewCount})")"
@@ -119,7 +126,16 @@
 
                                 <div class="text-[11px] text-gray-400 mt-2">
                                     Submitted @r.RegisteredAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")
+                                    @if (r.Files.Count > 0)
+                                    {
+                                        <span> · @r.Files.Count document@(r.Files.Count == 1 ? "" : "s") attached</span>
+                                    }
                                 </div>
+
+                                <button type="button" @onclick="() => OpenDetails(r)"
+                                        class="mt-2 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
+                                    🔍 View details
+                                </button>
                             </div>
 
                             <div class="flex flex-col gap-2 flex-shrink-0">
@@ -127,6 +143,11 @@
                                         disabled="@_busyIds.Contains(r.UserId)"
                                         class="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
                                     ✅ Approve
+                                </button>
+                                <button type="button" @onclick="() => OpenNotify(r)"
+                                        disabled="@_busyIds.Contains(r.UserId)"
+                                        class="px-3 py-1.5 text-xs rounded-lg bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">
+                                    ✉️ Notify
                                 </button>
                                 <button type="button" @onclick="() => RejectAsync(r)"
                                         disabled="@_busyIds.Contains(r.UserId)"
@@ -143,11 +164,124 @@
 
     @if (_toast is not null)
     {
-        <div class="fixed bottom-6 right-6 px-4 py-3 rounded-2xl shadow-lg text-sm @(_toastIsError ? "bg-red-600 text-white" : "bg-emerald-600 text-white")">
+        <div class="fixed bottom-6 right-6 px-4 py-3 rounded-2xl shadow-lg text-sm @(_toastIsError ? "bg-red-600 text-white" : "bg-emerald-600 text-white") z-[60]">
             @_toast
         </div>
     }
 </div>
+
+@* ── View details modal ─────────────────────────────────────────────── *@
+@if (_detailsRow is not null)
+{
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @onclick="CloseDetails">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6" @onclick:stopPropagation="true">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 class="text-base font-bold text-gray-900">@_detailsRow.FullName</h3>
+                    <p class="text-xs text-gray-500">@_detailsRow.Role registration · submitted @_detailsRow.RegisteredAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</p>
+                </div>
+                <button type="button" @onclick="CloseDetails" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-sm">
+                <DetailField Label="Username" Value="@_detailsRow.Username" />
+                <DetailField Label="Email" Value="@_detailsRow.Email" />
+                <DetailField Label="Mobile" Value="@_detailsRow.Mobile" />
+                @if (_detailsRow.DateOfBirth.HasValue)
+                {
+                    <DetailField Label="Date of birth" Value="@_detailsRow.DateOfBirth.Value.ToString("dd MMM yyyy")" />
+                }
+
+                @if (_detailsRow.Role == "Vendor")
+                {
+                    <DetailField Label="Business name" Value="@_detailsRow.BusinessName" />
+                    <DetailField Label="Contact person" Value="@_detailsRow.ContactPersonName" />
+                    <DetailField Label="GST number" Value="@_detailsRow.GstNumber" />
+                    <DetailField Label="City" Value="@_detailsRow.City" />
+                    <DetailField Label="State" Value="@_detailsRow.State" />
+                    <DetailField Label="Website" Value="@_detailsRow.Website" />
+                    <DetailField Label="Address" Value="@_detailsRow.Address" Span="2" />
+                    <DetailField Label="About business" Value="@_detailsRow.Bio" Span="2" />
+                }
+                else
+                {
+                    <DetailField Label="City" Value="@_detailsRow.City" />
+                    <DetailField Label="Experience" Value="@(_detailsRow.ExperienceYears.HasValue ? $"{_detailsRow.ExperienceYears} yr" : null)" />
+                    <DetailField Label="Skills" Value="@_detailsRow.Skills" Span="2" />
+                    <DetailField Label="Referred by" Value="@(_detailsRow.ReferredVendorName ?? _detailsRow.ReferralCodeUsed)" Span="2" />
+                    <DetailField Label="Bio" Value="@_detailsRow.Bio" Span="2" />
+                }
+            </div>
+
+            @if (_detailsRow.Files.Count > 0)
+            {
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                    <p class="text-xs font-semibold text-gray-500 mb-2">Submitted documents</p>
+                    <div class="space-y-2">
+                        @foreach (var f in _detailsRow.Files)
+                        {
+                            <div class="flex items-center gap-3 bg-gray-50 rounded-xl p-2.5">
+                                @if (_previewDataUrls.TryGetValue(f.Id, out var dataUrl))
+                                {
+                                    <img src="@dataUrl" class="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-gray-200" />
+                                }
+                                else
+                                {
+                                    <div class="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-lg flex-shrink-0">📄</div>
+                                }
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-xs font-medium text-gray-800">@DocumentTypes.Label(f.DocumentType)</div>
+                                    <div class="text-[11px] text-gray-500 truncate">@f.OriginalFileName · @HumanSize(f.FileSizeBytes)</div>
+                                </div>
+                                @if (f.ContentType.StartsWith("image/") && !_previewDataUrls.ContainsKey(f.Id))
+                                {
+                                    <button type="button" @onclick="() => LoadPreviewAsync(f.Id, f.ContentType)"
+                                            disabled="@_previewLoadingIds.Contains(f.Id)"
+                                            class="text-xs text-indigo-600 hover:underline flex-shrink-0 disabled:opacity-50">
+                                        @(_previewLoadingIds.Contains(f.Id) ? "Loading…" : "Preview")
+                                    </button>
+                                }
+                                <button type="button" @onclick="() => DownloadFileAsync(f)"
+                                        disabled="@_downloadingIds.Contains(f.Id)"
+                                        class="text-xs text-indigo-600 hover:underline flex-shrink-0 disabled:opacity-50">
+                                    @(_downloadingIds.Contains(f.Id) ? "…" : "⬇ Download")
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="mt-5 flex justify-end gap-2">
+                <button type="button" @onclick="CloseDetails" class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Notify modal ────────────────────────────────────────────────────── *@
+@if (_notifyRow is not null)
+{
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @onclick="CloseNotify">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" @onclick:stopPropagation="true">
+            <h3 class="text-base font-bold text-gray-900 mb-1">Ask @_notifyRow.FullName for more info</h3>
+            <p class="text-xs text-gray-500 mb-3">Sent by email to @_notifyRow.Email. This doesn't change their pending status.</p>
+            <textarea @bind="_notifyMessage" rows="4" placeholder="e.g. Could you upload a clearer photo of your ID proof?"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            @if (_notifyError is not null)
+            {
+                <p class="text-xs text-red-600 mt-1">@_notifyError</p>
+            }
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" @onclick="CloseNotify" class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Cancel</button>
+                <button type="button" @onclick="SendNotifyAsync" disabled="@(_notifyBusy || string.IsNullOrWhiteSpace(_notifyMessage))"
+                        class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+                    @(_notifyBusy ? "Sending…" : "Send message")
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private enum Tab { Vendors, Crew }
@@ -160,11 +294,28 @@
     private int TotalPending => (_queue?.VendorCount ?? 0) + (_queue?.CrewCount ?? 0);
     private readonly HashSet<Guid> _busyIds = new();
 
+    // Backend query is always role-scoped to exactly one of the two lists
+    // (see GetApprovalQueueHandler) — Admin/Manager only ever get Vendors,
+    // a Vendor caller only ever gets Crew. This label reflects that.
+    private string TypeLabel => _tab == Tab.Vendors ? "Vendor" : "Crew";
+
     // Computed property avoids the @{ } code-block pitfall when inside else { }.
     private IReadOnlyList<PendingRegistrationDto> CurrentRows =>
         _queue is null
             ? Array.Empty<PendingRegistrationDto>()
             : (_tab == Tab.Vendors ? _queue.Vendors : _queue.Crew);
+
+    // ── View details modal state ──────────────────────────────────────
+    private PendingRegistrationDto? _detailsRow;
+    private readonly Dictionary<Guid, string> _previewDataUrls = new();
+    private readonly HashSet<Guid> _previewLoadingIds = new();
+    private readonly HashSet<Guid> _downloadingIds = new();
+
+    // ── Notify modal state ────────────────────────────────────────────
+    private PendingRegistrationDto? _notifyRow;
+    private string _notifyMessage = "";
+    private string? _notifyError;
+    private bool _notifyBusy;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -231,6 +382,90 @@
             }
         }
         finally { _busyIds.Remove(r.UserId); }
+    }
+
+    private void OpenDetails(PendingRegistrationDto r)
+    {
+        _detailsRow = r;
+        _previewDataUrls.Clear();
+    }
+
+    private void CloseDetails() => _detailsRow = null;
+
+    private async Task LoadPreviewAsync(Guid fileId, string contentType)
+    {
+        _previewLoadingIds.Add(fileId);
+        StateHasChanged();
+        try
+        {
+            var (ok, content, respContentType, _) = await FilesApi.DownloadAsync(fileId);
+            if (ok && content is not null)
+            {
+                var mime = respContentType ?? contentType;
+                _previewDataUrls[fileId] = $"data:{mime};base64,{Convert.ToBase64String(content)}";
+            }
+        }
+        finally
+        {
+            _previewLoadingIds.Remove(fileId);
+            StateHasChanged();
+        }
+    }
+
+    private async Task DownloadFileAsync(EventWOS.BlazorWeb.Services.FileDocumentDto f)
+    {
+        _downloadingIds.Add(f.Id);
+        try
+        {
+            var (ok, content, contentType, error) = await FilesApi.DownloadAsync(f.Id);
+            if (ok && content is not null)
+            {
+                await JS.InvokeVoidAsync("downloadFileFromBytes", f.OriginalFileName,
+                    contentType ?? f.ContentType, Convert.ToBase64String(content));
+            }
+            else
+            {
+                Toast(error ?? "Download failed.", isError: true);
+            }
+        }
+        finally { _downloadingIds.Remove(f.Id); }
+    }
+
+    private static string HumanSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB"
+    };
+
+    private void OpenNotify(PendingRegistrationDto r)
+    {
+        _notifyRow = r;
+        _notifyMessage = "";
+        _notifyError = null;
+    }
+
+    private void CloseNotify() { _notifyRow = null; _notifyBusy = false; }
+
+    private async Task SendNotifyAsync()
+    {
+        if (_notifyRow is null || string.IsNullOrWhiteSpace(_notifyMessage)) return;
+        _notifyBusy = true; _notifyError = null;
+        try
+        {
+            var result = await Api.NotifyAsync(_notifyRow.UserId, _notifyMessage.Trim());
+            if (result.Success)
+            {
+                Toast($"Message sent to {_notifyRow.FullName}.", isError: false);
+                CloseNotify();
+            }
+            else
+            {
+                _notifyError = result.Errors?.FirstOrDefault() ?? result.Message ?? "Could not send message.";
+            }
+        }
+        catch (Exception ex) { _notifyError = ex.Message; }
+        finally { _notifyBusy = false; }
     }
 
     private async void Toast(string msg, bool isError)

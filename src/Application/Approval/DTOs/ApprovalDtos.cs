@@ -1,3 +1,5 @@
+using EventWOS.Application.Files.DTOs;
+
 namespace EventWOS.Application.Approval.DTOs;
 
 /// <summary>One row per pending registration.</summary>
@@ -19,7 +21,20 @@ public sealed record PendingRegistrationDto(
     int?     ExperienceYears,
     string?  ReferralCodeUsed,
     Guid?    ReferredVendorId,
-    string?  ReferredVendorName);
+    string?  ReferredVendorName,
+    // Full-detail fields for the "View details" modal — not shown in the
+    // summary row, only when the reviewer expands a record. GstNumber and
+    // Address are Vendor-only; Bio is used by both ("About your business"
+    // for Vendor, general bio for Crew).
+    string?  GstNumber,
+    string?  Address,
+    string?  State,
+    string?  Bio,
+    DateTime? DateOfBirth,
+    // Uploaded documents (profile photo / ID proof for Crew, profile photo
+    // for Vendor) so the reviewer can open/download them without leaving
+    // the modal.
+    IReadOnlyList<FileDocumentDto> Files);
 
 public sealed record ApprovalQueueDto(
     int VendorCount,

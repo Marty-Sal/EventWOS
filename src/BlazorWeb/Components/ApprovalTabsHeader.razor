@@ -4,20 +4,28 @@
 @implements IDisposable
 
 @*
-    Shared tab strip used by every approval-queue page so the three
-    sibling routes (/approvals/events and /approvals/people) feel like
-    one screen.
+    Shared tab strip used by every approval-queue page so the sibling
+    routes (/approvals/events and /approvals/people) feel like one screen.
 
-    Two tabs, exactly:
-      • Events  → /approvals/events
-                  Admin/Manager: crew forwarded by vendors (existing
-                                 ManagerApprovals queue).
-                  Vendor       : crew responses to invites (existing
-                                 VendorAssignments queue).
-      • People  → /approvals/people
-                  Admin/Manager: vendor account registrations.
-                  Vendor       : crew account registrations under the
-                                 vendor's referral code.
+    Two tabs:
+      • Events        → /approvals/events
+                         Admin/Manager: crew forwarded by vendors (existing
+                                        ManagerApprovals queue).
+                         Vendor       : crew responses to invites (existing
+                                        VendorAssignments queue).
+      • Vendor / Crew  → /approvals/people
+                         Admin/Manager: vendor account registrations —
+                                        labelled "Vendor".
+                         Vendor       : crew account registrations under
+                                        the vendor's referral code —
+                                        labelled "Crew".
+                         The backend query is always role-scoped to
+                         exactly one of the two (see GetApprovalQueueHandler),
+                         so a generic "People" label was actively confusing —
+                         it never told you which kind of record you were
+                         looking at. The label here is derived from the
+                         caller's own role, which is what actually decides
+                         which queue they see.
 
     Counts are best-effort:
       • EventsCount is read from a parent-provided value (each page
@@ -42,7 +50,7 @@
        class="@(Active == "people"
               ? "px-4 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-700"
               : "px-4 py-2 text-sm text-gray-600 hover:text-indigo-600")">
-        👤 People
+        @(_peopleLabel == "Crew" ? "🧑‍🔧" : "🏢") @_peopleLabel
         @if (_peopleCount > 0)
         {
             <span class="ml-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">@_peopleCount</span>
@@ -58,11 +66,20 @@
     [Parameter] public int EventsCount { get; set; }
 
     private int _peopleCount;
+    private string _peopleLabel = "Vendor";
     private CancellationTokenSource? _cts;
 
     protected override async Task OnInitializedAsync()
     {
         _cts = new CancellationTokenSource();
+
+        try
+        {
+            var authState = await Auth.GetAuthenticationStateAsync();
+            _peopleLabel = authState.User.IsInRole("Vendor") ? "Crew" : "Vendor";
+        }
+        catch { /* keep default label */ }
+
         try
         {
             var result = await PeopleApi.GetQueueAsync(_cts.Token);

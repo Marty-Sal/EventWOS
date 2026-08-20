@@ -1,0 +1,18 @@
+@*
+    One label/value pair inside the ApprovalQueue "View details" modal.
+    Renders nothing when Value is null/blank so the grid only shows
+    fields the applicant actually filled in.
+*@
+@if (!string.IsNullOrWhiteSpace(Value))
+{
+    <div class="@(Span == 2 ? "col-span-2" : "")">
+        <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">@Label</div>
+        <div class="text-sm text-gray-800 break-words">@Value</div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public int Span { get; set; } = 1;
+}

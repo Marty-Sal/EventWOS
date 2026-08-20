@@ -12,6 +12,18 @@ public static class DocumentTypes
     public const int CrewIdentificationProof = 2;
     public const int VendorDocument = 3;
     public const int EventDocument = 4;
+    public const int VendorProfilePhoto = 5;
+
+    /// <summary>Short human label for the "View details" modal file list.</summary>
+    public static string Label(int documentType) => documentType switch
+    {
+        CrewProfilePhoto        => "Profile photo",
+        CrewIdentificationProof => "ID proof",
+        VendorDocument          => "Vendor document",
+        EventDocument           => "Event document",
+        VendorProfilePhoto      => "Profile photo",
+        _ => "Document"
+    };
 }
 
 public sealed record FileDocumentDto(

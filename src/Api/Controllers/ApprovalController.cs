@@ -104,6 +104,31 @@ public sealed class ApprovalController : ControllerBase
         return Ok(ApiResponse.Ok("Registration rejected."));
     }
 
+    [HttpPost("{userId:guid}/notify")]
+    [ProducesResponseType(typeof(ApiResponse), 200)]
+    public async Task<IActionResult> Notify(Guid userId, [FromBody] NotifyDto dto, CancellationToken ct)
+    {
+        if (!CanApproveOrReject()) return Forbid();
+
+        var cmd = new NotifyUserCommand(userId, _currentUser.UserId!.Value, dto.Message);
+        var result = await _mediator.Send(cmd, ct);
+        if (result.IsFailure)
+        {
+            var status = result.Error.Code switch
+            {
+                "User.NotFound"             => 404,
+                "Approval.NotPending"       => 409,
+                "Approval.MessageRequired"  => 400,
+                "Approval.NoEmail"          => 400,
+                "Approval.EmailFailed"      => 502,
+                "Approval.Forbidden"        => 403,
+                _ => 400
+            };
+            return StatusCode(status, ApiResponse.Fail(result.Error.Message));
+        }
+        return Ok(ApiResponse.Ok("Message sent."));
+    }
+
     private bool CanApproveOrReject()
     {
         // Permission check is done by the handler (which knows the role).
@@ -115,3 +140,4 @@ public sealed class ApprovalController : ControllerBase
 }
 
 public sealed record RejectDto(string Reason);
+public sealed record NotifyDto(string Message);

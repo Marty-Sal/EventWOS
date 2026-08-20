@@ -1,5 +1,6 @@
 using EventWOS.Application.Approval.DTOs;
 using EventWOS.Application.Approval.Queries;
+using EventWOS.Application.Files.DTOs;
 using EventWOS.Application.Interfaces;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
@@ -66,7 +67,8 @@ public sealed class GetApprovalQueueHandler : IRequestHandler<GetApprovalQueueQu
             {
                 u.Id, u.Username, u.Email, u.Mobile, u.FullName, u.Role, u.CreatedAt,
                 u.BusinessName, u.ContactPersonName, u.City, u.Website,
-                u.Skills, u.ExperienceYears, u.ReferralCodeUsed, u.VendorId
+                u.Skills, u.ExperienceYears, u.ReferralCodeUsed, u.VendorId,
+                u.GstNumber, u.Address, u.State, u.Bio, u.DateOfBirth
             })
             .ToListAsync(ct);
 
@@ -77,13 +79,37 @@ public sealed class GetApprovalQueueHandler : IRequestHandler<GetApprovalQueueQu
                 .Select(u => new { u.Id, Name = u.BusinessName ?? u.FullName })
                 .ToDictionaryAsync(x => x.Id, x => x.Name, ct);
 
+        // Docs uploaded during self-registration (profile photo / ID proof)
+        // so the reviewer's "View details" modal can show/download them
+        // without a separate round trip per row.
+        var pendingIds = pending.Select(p => p.Id).ToList();
+        var filesByOwner = pendingIds.Count == 0
+            ? new Dictionary<Guid, List<FileDocumentDto>>()
+            : (await _db.FileDocuments
+                    .Where(f => pendingIds.Contains(f.OwnerId) && !f.IsDeleted)
+                    .OrderBy(f => f.CreatedAt)
+                    .Select(f => new
+                    {
+                        f.OwnerId, f.Id, f.EntityId, f.DocumentType, f.OriginalFileName,
+                        f.ContentType, f.FileSizeBytes, f.ThumbnailStorageKey, f.CreatedAt
+                    })
+                    .ToListAsync(ct))
+                .GroupBy(f => f.OwnerId)
+                .ToDictionary(g => g.Key, g => g.Select(f => new FileDocumentDto(
+                    f.Id, f.OwnerId, f.EntityId, f.DocumentType, f.OriginalFileName,
+                    f.ContentType, f.FileSizeBytes, f.ThumbnailStorageKey is not null, f.CreatedAt)).ToList());
+
         var rows = pending.Select(p => new PendingRegistrationDto(
             p.Id, p.Username ?? "", p.Email ?? "", p.Mobile, p.FullName,
             p.Role.ToString(), p.CreatedAt,
             p.BusinessName, p.ContactPersonName, p.City, p.Website,
             p.Skills, p.ExperienceYears, p.ReferralCodeUsed,
             p.VendorId,
-            p.VendorId.HasValue && vendorNames.TryGetValue(p.VendorId.Value, out var vn) ? vn : null)).ToList();
+            p.VendorId.HasValue && vendorNames.TryGetValue(p.VendorId.Value, out var vn) ? vn : null,
+            p.GstNumber, p.Address, p.State, p.Bio, p.DateOfBirth,
+            filesByOwner.TryGetValue(p.Id, out var files)
+                ? files
+                : Array.Empty<FileDocumentDto>())).ToList();
 
         var vendors = rows.Where(r => r.Role == "Vendor").ToList();
         var crew    = rows.Where(r => r.Role == "Crew").ToList();
