@@ -124,15 +124,94 @@
                     <p class="text-xs text-gray-400">Anyone who opens this link will see the sign-up form with your referral code already filled in.</p>
                 </div>
 
-                @* Custom invite message — used by Share/Copy above. {link} token
-                   gets swapped for the real invite URL; if omitted, the link is
-                   appended to the end of whatever the vendor writes. *@
+                @* Custom invite message composer — Gmail-style: editable body on
+                   top, toolbar pinned to the bottom. {link} token gets swapped
+                   for the real invite URL on Copy/Share; if omitted, the link
+                   is appended to the end of whatever the vendor writes.
+                   Formatting uses WhatsApp's own *bold*/_italic_/~strike~
+                   markup (not HTML) — that's what actually survives when the
+                   message is copied or shared into WhatsApp/SMS, so what you
+                   see here is exactly what recipients will see. *@
                 <div class="space-y-2 pt-2 border-t border-gray-100">
                     <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Custom Invite Message</p>
-                    <textarea @bind="_inviteMessageTemplate" rows="3" maxlength="500"
-                              placeholder="Hey! Join my crew on EventWOS — sign up here: {link}"
-                              class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
-                    <p class="text-xs text-gray-400">Optional. Use <code class="px-1 bg-gray-100 rounded">{link}</code> where you want the invite link to appear — leave blank to use the default message.</p>
+
+                    @if (_showFormatMenu || _showEmojiMenu)
+                    {
+                        <div class="fixed inset-0 z-40" @onclick="CloseMenus"></div>
+                    }
+
+                    <div class="rounded-xl border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500">
+                        <textarea @ref="_templateRef" value="@_inviteMessageTemplate" @oninput="OnTemplateInput"
+                                  rows="4" maxlength="500"
+                                  placeholder="Hey! Join my crew on EventWOS — sign up here: {link}"
+                                  class="w-full px-4 py-3 text-sm focus:outline-none resize-none block"></textarea>
+
+                        @* Bottom toolbar — mirrors an email compose bar: primary
+                           actions on the left, formatting tools after a divider. *@
+                        <div class="flex items-center gap-1.5 px-3 py-2 bg-gray-50 border-t border-gray-100 relative">
+                            <button type="button" @onclick="CopyMessage"
+                                    class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition whitespace-nowrap">
+                                @(_messageCopied ? "✅ Copied!" : "📋 Copy")
+                            </button>
+                            <button type="button" @onclick="ShareInviteLink"
+                                    class="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-100 transition whitespace-nowrap">
+                                📤 Share
+                            </button>
+
+                            <span class="w-px h-5 bg-gray-200 mx-1"></span>
+
+                            @* Aa — text formatting (WhatsApp markdown) *@
+                            <div class="relative">
+                                <button type="button" @onclick="ToggleFormatMenu" title="Formatting"
+                                        class="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-200 transition">
+                                    Aa
+                                </button>
+                                @if (_showFormatMenu)
+                                {
+                                    <div class="absolute bottom-full mb-2 left-0 bg-white rounded-xl border border-gray-200 shadow-lg p-1.5 flex gap-1 z-50" @onclick:stopPropagation="true">
+                                        <button type="button" @onclick='() => WrapSelection("*")' title="Bold"
+                                                class="w-9 h-9 flex items-center justify-center rounded-lg font-bold text-gray-700 hover:bg-gray-100 transition">B</button>
+                                        <button type="button" @onclick='() => WrapSelection("_")' title="Italic"
+                                                class="w-9 h-9 flex items-center justify-center rounded-lg italic text-gray-700 hover:bg-gray-100 transition">I</button>
+                                        <button type="button" @onclick='() => WrapSelection("~")' title="Strikethrough"
+                                                class="w-9 h-9 flex items-center justify-center rounded-lg line-through text-gray-700 hover:bg-gray-100 transition">S</button>
+                                    </div>
+                                }
+                            </div>
+
+                            @* Emoji picker *@
+                            <div class="relative">
+                                <button type="button" @onclick="ToggleEmojiMenu" title="Insert emoji"
+                                        class="w-8 h-8 flex items-center justify-center rounded-lg text-base hover:bg-gray-200 transition">
+                                    😀
+                                </button>
+                                @if (_showEmojiMenu)
+                                {
+                                    <div class="absolute bottom-full mb-2 left-0 bg-white rounded-xl border border-gray-200 shadow-lg p-2 grid grid-cols-8 gap-0.5 z-50 w-64" @onclick:stopPropagation="true">
+                                        @foreach (var emoji in EmojiChoices)
+                                        {
+                                            <button type="button" @onclick="() => InsertEmoji(emoji)"
+                                                    class="w-7 h-7 flex items-center justify-center rounded-lg text-base hover:bg-gray-100 transition">
+                                                @emoji
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+
+                            <span class="w-px h-5 bg-gray-200 mx-1"></span>
+
+                            @* Insert invite link at cursor — the one custom action
+                               that isn't a generic email-toolbar icon, so it's
+                               spelled out rather than left as a bare glyph. *@
+                            <button type="button" @onclick="InsertLinkToken" title="Insert your invite link at the cursor"
+                                    class="px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 text-xs font-semibold hover:bg-indigo-50 transition whitespace-nowrap ml-auto">
+                                🔗 Insert Invite Link
+                            </button>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-gray-400">Optional. Use <code class="px-1 bg-gray-100 rounded">{link}</code> or the <span class="font-semibold text-indigo-600">Insert Invite Link</span> button to place the link — leave blank to use the default message.</p>
                 </div>
             </div>
         }
@@ -393,6 +472,136 @@
     // Vendor referral copy
     private bool _copied;
     private string? _inviteMessageTemplate;
+
+    // ── Invite-message composer (Gmail-style toolbar) ─────────────────────
+    private ElementReference _templateRef;
+    private bool _showFormatMenu;
+    private bool _showEmojiMenu;
+    private bool _messageCopied;
+
+    private static readonly string[] EmojiChoices =
+    {
+        "👋", "🎉", "✨", "🙌", "🤝", "💪", "🔥", "⭐",
+        "🏆", "🎯", "📣", "📢", "🚀", "✅", "👍", "🙏",
+        "❤️", "😊", "😄", "🥳", "😎", "🤩", "💰", "💵",
+        "📅", "🕒", "📍", "📌", "🔔", "📱", "💬", "🔗"
+    };
+
+    private void ToggleFormatMenu()
+    {
+        _showFormatMenu = !_showFormatMenu;
+        _showEmojiMenu = false;
+    }
+
+    private void ToggleEmojiMenu()
+    {
+        _showEmojiMenu = !_showEmojiMenu;
+        _showFormatMenu = false;
+    }
+
+    private void CloseMenus()
+    {
+        _showFormatMenu = false;
+        _showEmojiMenu = false;
+    }
+
+    private async Task OnTemplateInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        // Native maxlength stops typed input, but a paste can still blow past
+        // it — clamp defensively and force the trimmed value back onto the
+        // DOM node (same pattern as eventwosForms.setInputValue elsewhere).
+        if (value.Length > 500)
+        {
+            value = value[..500];
+            await JS.InvokeVoidAsync("eventwosForms.setInputValue", _templateRef, value);
+        }
+        _inviteMessageTemplate = value;
+    }
+
+    /// <summary>Inserts <paramref name="text"/> at the current cursor
+    /// position (replacing any active selection), then restores the caret
+    /// right after the inserted text.</summary>
+    private async Task InsertAtCursorAsync(string text)
+    {
+        var range = await JS.InvokeAsync<int[]>("eventwosForms.getSelectionRange", _templateRef);
+        var current = _inviteMessageTemplate ?? "";
+        var start = Math.Clamp(range.ElementAtOrDefault(0), 0, current.Length);
+        var end = Math.Clamp(range.ElementAtOrDefault(1), start, current.Length);
+
+        var updated = current[..start] + text + current[end..];
+        _inviteMessageTemplate = updated;
+        StateHasChanged();
+
+        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _templateRef, updated);
+        var caret = start + text.Length;
+        await JS.InvokeVoidAsync("eventwosForms.setSelectionRange", _templateRef, caret, caret);
+    }
+
+    private Task InsertLinkToken() => InsertAtCursorAsync("{link}");
+
+    private async Task InsertEmoji(string emoji)
+    {
+        await InsertAtCursorAsync(emoji);
+        _showEmojiMenu = false;
+    }
+
+    /// <summary>Wraps the current selection in WhatsApp-style markup
+    /// (*bold*, _italic_, ~strike~). Clicking again on an already-wrapped
+    /// selection removes the markers instead of stacking a second pair —
+    /// a real toggle, not just an "add" button.</summary>
+    private async Task WrapSelection(string marker)
+    {
+        var range = await JS.InvokeAsync<int[]>("eventwosForms.getSelectionRange", _templateRef);
+        var current = _inviteMessageTemplate ?? "";
+        var start = Math.Clamp(range.ElementAtOrDefault(0), 0, current.Length);
+        var end = Math.Clamp(range.ElementAtOrDefault(1), start, current.Length);
+
+        var alreadyWrapped =
+            start >= marker.Length && end + marker.Length <= current.Length &&
+            current.Substring(start - marker.Length, marker.Length) == marker &&
+            current.Substring(end, marker.Length) == marker;
+
+        string updated;
+        int newStart, newEnd;
+
+        if (alreadyWrapped)
+        {
+            updated = current[..(start - marker.Length)] + current[start..end] + current[(end + marker.Length)..];
+            newStart = start - marker.Length;
+            newEnd = end - marker.Length;
+        }
+        else
+        {
+            var selected = current[start..end];
+            updated = current[..start] + marker + selected + marker + current[end..];
+            newStart = selected.Length == 0 ? start + marker.Length : start + marker.Length;
+            newEnd = selected.Length == 0 ? newStart : newStart + selected.Length;
+        }
+
+        _inviteMessageTemplate = updated;
+        StateHasChanged();
+
+        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _templateRef, updated);
+        await JS.InvokeVoidAsync("eventwosForms.setSelectionRange", _templateRef, newStart, newEnd);
+        _showFormatMenu = false;
+    }
+
+    /// <summary>Copies the FULL composed message (template with {link}
+    /// resolved to the real invite URL) — distinct from the "📋 Copy link"
+    /// button above, which only copies the bare URL.</summary>
+    private async Task CopyMessage()
+    {
+        var (text, _) = BuildShareContent();
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            _messageCopied = true; StateHasChanged();
+            await Task.Delay(2000);
+            _messageCopied = false; StateHasChanged();
+        }
+        catch { }
+    }
 
     // Crew join vendor
     private string  _joinCode    = "";

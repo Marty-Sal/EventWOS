@@ -24,6 +24,26 @@ window.eventwosForms.setInputValue = function (element, value) {
     }
 };
 
+// ── Cursor-aware text insertion (invite-message composer) ────────────────────
+// Powers the "Aa" formatting menu, emoji picker and "Insert invite link"
+// button on the vendor's Custom Invite Message box. We deliberately do
+// this against the plain <textarea> (not a contenteditable rich-text
+// surface) — the composed message only ever gets consumed as plain text
+// (clipboard copy / Web Share sheet to WhatsApp/SMS), and WhatsApp already
+// renders *bold*, _italic_ and ~strikethrough~ markers itself, so wrapping
+// selections in those characters IS the real formatting, not a fake
+// preview that would be lost the moment it left the browser.
+window.eventwosForms.getSelectionRange = function (el) {
+    if (!el) return [0, 0];
+    return [el.selectionStart || 0, el.selectionEnd || 0];
+};
+
+window.eventwosForms.setSelectionRange = function (el, start, end) {
+    if (!el) return;
+    el.focus();
+    try { el.setSelectionRange(start, end); } catch { }
+};
+
 // ── Native share sheet (Web Share API) ──────────────────────────────────────
 // Takes real JS parameters instead of interpolating values into an eval()
 // string (the previous approach was fragile — any stray quote/backslash in
