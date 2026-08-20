@@ -1372,7 +1372,7 @@ else
     private string? _search;
     private string? _statusFilter;
     private string  _sortKey   = "upcoming";   // sort dropdown (client-side over current page)
-    private string  _viewMode  = "cards";       // "cards" | "list"
+    private string  _viewMode  = "list";       // "cards" | "list"
 
     private IEnumerable<EventListItemDto> SortEvents(IEnumerable<EventListItemDto> items) => _sortKey switch
     {

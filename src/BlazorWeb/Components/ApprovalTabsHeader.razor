@@ -1,7 +1,7 @@
 @inject IApprovalApiService PeopleApi
 @inject HttpClient Http
-@inject EventWOS.BlazorWeb.Auth.AppAuthStateProvider Auth
 @implements IDisposable
+@using Microsoft.AspNetCore.Components.Authorization
 
 @*
     Shared tab strip used by every approval-queue page so the sibling
@@ -69,14 +69,31 @@
     private string _peopleLabel = "Vendor";
     private CancellationTokenSource? _cts;
 
+    // Consumed via the cascading Task<AuthenticationState> (set up once by
+    // <CascadingAuthenticationState> in App.razor) rather than re-injecting
+    // AppAuthStateProvider and calling GetAuthenticationStateAsync() fresh.
+    // That call reads the JWT from browser localStorage via a genuine JS
+    // interop round trip — always asynchronous, even though it resolves in
+    // a few ms — so Blazor renders once with the field's default ("Vendor")
+    // BEFORE it resolves, then again after, which is exactly the visible
+    // "Vendor" → "Crew" flash a Vendor saw opening this tab strip. The
+    // cascading Task, by contrast, was already awaited once when the app
+    // first loaded (it has to be, for any [Authorize] route to render at
+    // all) and is reused for the lifetime of the SPA session — awaiting an
+    // already-completed Task resolves on the same render, with no flash.
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         _cts = new CancellationTokenSource();
 
         try
         {
-            var authState = await Auth.GetAuthenticationStateAsync();
-            _peopleLabel = authState.User.IsInRole("Vendor") ? "Crew" : "Vendor";
+            if (AuthStateTask is not null)
+            {
+                var authState = await AuthStateTask;
+                _peopleLabel = authState.User.IsInRole("Vendor") ? "Crew" : "Vendor";
+            }
         }
         catch { /* keep default label */ }
 

@@ -107,7 +107,9 @@
                             <td class="px-5 py-3.5">
                                 <span class="px-2 py-0.5 rounded-full text-xs font-medium @StatusColor(v.Status)">@v.Status</span>
                             </td>
-                            <td class="px-5 py-3.5 text-right">
+                            <td class="px-5 py-3.5 text-right whitespace-nowrap">
+                                <button @onclick="() => OpenDetailsAsync(v)"
+                                        class="text-xs text-indigo-600 hover:underline mr-3">🔍 View</button>
                                 <button @onclick="() => OpenRate(v)"
                                         class="text-xs text-indigo-600 hover:underline mr-3">Rate</button>
                                 <button @onclick="() => ToggleStatus(v)"
@@ -192,6 +194,54 @@
     </div>
 }
 
+<!-- View Vendor Details Modal -->
+@if (_detailsTarget is not null || _detailsLoading)
+{
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @onclick="() => { _detailsTarget = null; _detailsLoading = false; }">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6" @onclick:stopPropagation="true">
+            @if (_detailsLoading)
+            {
+                <div class="flex justify-center py-10">
+                    <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                </div>
+            }
+            else if (_detailsTarget is not null)
+            {
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center font-bold text-amber-700 flex-shrink-0">
+                            @(_detailsTarget.FullName.FirstOrDefault())
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-gray-900">@_detailsTarget.FullName</h3>
+                            <p class="text-xs text-gray-500">Vendor · joined @_detailsTarget.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</p>
+                        </div>
+                    </div>
+                    <button type="button" @onclick="() => _detailsTarget = null" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <DetailField Label="Mobile" Value="@_detailsTarget.Mobile" />
+                    <DetailField Label="Email" Value="@_detailsTarget.Email" />
+                    <DetailField Label="Business name" Value="@_detailsTarget.BusinessName" />
+                    <DetailField Label="Referral code" Value="@_detailsTarget.ReferralCode" />
+                    <DetailField Label="Status" Value="@_detailsTarget.Status" />
+                    <DetailField Label="Rating" Value="@(_detailsTarget.Rating.HasValue ? $"★ {_detailsTarget.Rating.Value:F1}" : "Unrated")" />
+                    <DetailField Label="Crew count" Value="@_detailsTarget.CrewCount.ToString()" />
+                    <DetailField Label="Events completed" Value="@_detailsTarget.EventsCompleted.ToString()" />
+                </div>
+
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" @onclick="() => _detailsTarget = null" class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Close</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 <!-- Rate Vendor Modal -->
 @if (_rateTarget is not null)
 {
@@ -246,6 +296,19 @@
     private bool EmailOk  => ClientValidation.IsValidEmail(_newEmail);
 
     private VendorListItemDto? _rateTarget;
+
+    // ── View details modal (fetches the richer VendorDetailDto — Email +
+    // AvatarUrl aren't on the list DTO — reusing the GetVendorAsync/{id}
+    // endpoint that already existed but had no caller yet) ──
+    private VendorDetailDto? _detailsTarget;
+    private bool _detailsLoading;
+
+    private async Task OpenDetailsAsync(VendorListItemDto v)
+    {
+        _detailsLoading = true; _detailsTarget = null;
+        _detailsTarget = await VendorApi.GetVendorAsync(v.Id);
+        _detailsLoading = false;
+    }
     private decimal _newRating = 5.0m;
 
     protected override async Task OnInitializedAsync()

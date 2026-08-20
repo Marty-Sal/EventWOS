@@ -3,7 +3,7 @@
 @inject IApprovalApiService Api
 @inject IFilesApiService FilesApi
 @inject IJSRuntime JS
-@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthState
+@using Microsoft.AspNetCore.Components.Authorization
 
 <PageTitle>Approvals · @TypeLabel — EventWOS</PageTitle>
 
@@ -318,19 +318,33 @@
     private string? _notifyError;
     private bool _notifyBusy;
 
+    // Consumed via the cascading Task<AuthenticationState> (set up once by
+    // <CascadingAuthenticationState> in App.razor), NOT by re-injecting
+    // AuthenticationStateProvider and calling GetAuthenticationStateAsync()
+    // fresh — that call reads the JWT from localStorage via a real JS
+    // interop round trip, so even though it "resolves fast" it is never
+    // synchronous, and Blazor renders once with the field's default
+    // (Tab.Vendors) before it resolves. The cascading Task was already
+    // awaited once when the app first loaded (required for any
+    // [Authorize] route to render at all) and is reused for the whole SPA
+    // session, so awaiting it here resolves on the very first render —
+    // no flash of the wrong tab.
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        // Decide the default tab from the caller's ROLE first, synchronously
-        // available (no network round trip) — not from the queue counts,
-        // which only arrive after LoadAsync's API call resolves. Without
-        // this, a Vendor opening this page briefly saw "Vendor
-        // Registrations" (the hardcoded Tab.Vendors default) for the
-        // ~100-300ms the request was in flight, then it flipped to "Crew"
-        // once the response landed — a visible flash of the wrong tab.
+        // Decide the default tab from the caller's ROLE first — not from
+        // the queue counts, which only arrive after LoadAsync's API call
+        // resolves. Without this, a Vendor opening this page briefly saw
+        // "Vendor Registrations" (the hardcoded Tab.Vendors default) before
+        // it flipped to "Crew" once the response landed.
         try
         {
-            var auth = await AuthState.GetAuthenticationStateAsync();
-            _tab = auth.User.IsInRole("Vendor") ? Tab.Crew : Tab.Vendors;
+            if (AuthStateTask is not null)
+            {
+                var auth = await AuthStateTask;
+                _tab = auth.User.IsInRole("Vendor") ? Tab.Crew : Tab.Vendors;
+            }
         }
         catch { /* keep default */ }
 

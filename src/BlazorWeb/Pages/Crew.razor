@@ -114,6 +114,10 @@
                             <p class="text-sm font-bold text-gray-700">@c.EventsAttended</p>
                         </div>
                     </div>
+                    <button type="button" @onclick="() => _detailsCrew = c"
+                            class="mt-2 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
+                        🔍 View details
+                    </button>
                 </div>
             }
         </div>
@@ -131,6 +135,7 @@
                             <th class="px-4 py-3 text-center font-semibold">Discipline</th>
                             <th class="px-4 py-3 text-center font-semibold">Events</th>
                             <th class="px-4 py-3 text-center font-semibold">Status</th>
+                            <th class="px-4 py-3 text-center font-semibold">Details</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -152,6 +157,12 @@
                                 <td class="px-4 py-3 text-center">
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium @StatusColor(c.Status)">@c.Status</span>
                                 </td>
+                                <td class="px-4 py-3 text-center">
+                                    <button type="button" @onclick="() => _detailsCrew = c"
+                                            class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
+                                        🔍 View
+                                    </button>
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -160,6 +171,40 @@
         }
     }
 </div>
+
+@* ── View details modal ─────────────────────────────────────────────── *@
+@if (_detailsCrew is not null)
+{
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @onclick="() => _detailsCrew = null">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6" @onclick:stopPropagation="true">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 flex-shrink-0">
+                        @(_detailsCrew.FullName.FirstOrDefault())
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900">@_detailsCrew.FullName</h3>
+                        <p class="text-xs text-gray-500">Crew member · joined @_detailsCrew.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</p>
+                    </div>
+                </div>
+                <button type="button" @onclick="() => _detailsCrew = null" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-sm">
+                <DetailField Label="Mobile" Value="@_detailsCrew.Mobile" />
+                <DetailField Label="Email" Value="@_detailsCrew.Email" />
+                <DetailField Label="Vendor" Value="@(_detailsCrew.VendorName ?? "—")" />
+                <DetailField Label="Status" Value="@_detailsCrew.Status" />
+                <DetailField Label="Discipline score" Value="@_detailsCrew.DisciplineScore.ToString("F0")" />
+                <DetailField Label="Events attended" Value="@_detailsCrew.EventsAttended.ToString()" />
+            </div>
+
+            <div class="mt-5 flex justify-end gap-2">
+                <button type="button" @onclick="() => _detailsCrew = null" class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Close</button>
+            </div>
+        </div>
+    </div>
+}
 
 @if (_showCreate)
 {
@@ -252,11 +297,12 @@
     private bool _accessDenied;
     private bool _canWrite;
     private PagedCrewResult? _crew;
+    private CrewMemberDto? _detailsCrew;
     private bool _loading = true;
     private int  _page    = 1;
     private string? _search;
     private string  _sortKey  = "created_desc";
-    private string  _viewMode = "cards";
+    private string  _viewMode = "list";
 
     private IEnumerable<CrewMemberDto> SortCrew(IEnumerable<CrewMemberDto> items) => _sortKey switch
     {
