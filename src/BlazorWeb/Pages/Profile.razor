@@ -1,5 +1,6 @@
 @page "/profile"
 @attribute [Authorize]
+@using EventWOS.BlazorWeb.Validation
 @inject IUserApiService UserApi
 @inject HttpClient Http
 @inject IJSRuntime JS
@@ -8,6 +9,17 @@
 <PageTitle>My Profile — EventWOS</PageTitle>
 
 <div class="max-w-2xl mx-auto space-y-6">
+
+    @if (!_loading && _profile is not null && _profile.WasDirectlyAdded && !_profile.ProfileCompleted)
+    {
+        <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5">
+            <p class="font-semibold text-amber-800 flex items-center gap-2">🔒 Complete your profile to continue</p>
+            <p class="text-sm text-amber-700 mt-1">
+                An admin/vendor added your account directly. Fill in the required details below and save —
+                you won't be able to use the rest of EventWOS until this is done.
+            </p>
+        </div>
+    }
 
     @if (_loading)
     {
@@ -203,6 +215,90 @@
                        class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
 
+            @* ── Extended profile — required when completing a directly-added account,
+               optional (but still editable) for everyone else. ── *@
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-50">
+                @if (_profile?.Role == "Crew")
+                {
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">
+                            Date of birth @(MustComplete ? "*" : "")
+                        </label>
+                        <input value="@_dobStr" @oninput="OnDobInput" type="date" max="@_maxDob" min="@_minDob"
+                               class="w-full px-4 py-2.5 rounded-xl border @(_touchedDob && !DobOk ? "border-red-400" : "border-gray-200") text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               @onblur='() => _touchedDob = true' />
+                        <p class="text-xs mt-1 @(_dob.HasValue && !DobOk ? "text-red-600" : "text-gray-400")">@DobHint</p>
+                    </div>
+                }
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">City @(MustComplete ? "*" : "")</label>
+                    <input @bind="_city" type="text" placeholder="Mumbai"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">State</label>
+                    <input @bind="_state" type="text" placeholder="Maharashtra"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Address</label>
+                    <input @bind="_address" type="text" placeholder="Street, area"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Bio (optional)</label>
+                <textarea @bind="_bio" rows="2" maxlength="2000" placeholder="A short line about you"
+                          class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            </div>
+
+            @if (_profile?.Role == "Crew")
+            {
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Years of experience</label>
+                        <input @bind="_experienceYears" type="number" min="0" max="60" placeholder="3"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Skills</label>
+                        <input @bind="_skills" type="text" placeholder="stage, lighting"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                </div>
+            }
+
+            @if (_profile?.Role == "Vendor")
+            {
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Contact person</label>
+                        <input @bind="_contactPersonName" type="text"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">GST number</label>
+                        <input @bind="_gstNumber" type="text"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Website</label>
+                    <input @bind="_website" type="text" placeholder="https://…"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+            }
+
+            @if (MustComplete && !CanSubmitCompletion)
+            {
+                <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-amber-700 text-xs">
+                    @(_profile?.Role == "Crew" ? "Date of birth (18+) and City are required before you can continue." : "City is required before you can continue.")
+                </div>
+            }
             @if (_saveError is not null)
             {
                 <div class="bg-red-50 border border-red-100 rounded-xl p-3 text-red-600 text-xs">@_saveError</div>
@@ -212,10 +308,10 @@
                 <div class="bg-green-50 border border-green-100 rounded-xl p-3 text-green-600 text-xs">✅ Profile updated successfully.</div>
             }
 
-            <button @onclick="SaveAsync" disabled="@_saving"
+            <button @onclick="SaveAsync" disabled="@(_saving || (MustComplete && !CanSubmitCompletion))"
                     class="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold
                            hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm">
-                @(_saving ? "Saving…" : "Save Changes")
+                @(_saving ? "Saving…" : (MustComplete ? "Save & Continue" : "Save Changes"))
             </button>
         </div>
 
@@ -224,11 +320,11 @@
             <div class="grid grid-cols-2 gap-6 text-center">
                 <div>
                     <p class="text-xs text-gray-400 mb-1">Permissions</p>
-                    <p class="text-2xl font-bold text-indigo-600">@(_profile.Permissions?.Count ?? 0)</p>
+                    <p class="text-2xl font-bold text-indigo-600">@(_profile?.Permissions?.Count ?? 0)</p>
                 </div>
                 <div>
                     <p class="text-xs text-gray-400 mb-1">Last Login</p>
-                    <p class="text-sm font-semibold text-gray-700">@(_profile.LastLoginAt?.ToLocalTime().ToString("dd MMM HH:mm") ?? "—")</p>
+                    <p class="text-sm font-semibold text-gray-700">@(_profile?.LastLoginAt?.ToLocalTime().ToString("dd MMM HH:mm") ?? "—")</p>
                 </div>
             </div>
         </div>
@@ -252,6 +348,47 @@
     private string? _loadError;
     private string? _saveError;
     private bool    _saveSuccess;
+
+    // ── Extended profile fields ─────────────────────────────────────────────
+    private DateTime? _dob;
+    private string  _dobStr = "";
+    private bool    _touchedDob;
+    private readonly string _maxDob = DateTime.UtcNow.Date.ToString("yyyy-MM-dd");
+    private readonly string _minDob = DateTime.UtcNow.Date.AddYears(-ClientValidation.MaximumAge).AddDays(1).ToString("yyyy-MM-dd");
+    private string? _city;
+    private string? _state;
+    private string? _address;
+    private string? _bio;
+    private string? _skills;
+    private int?    _experienceYears;
+    private string? _contactPersonName;
+    private string? _gstNumber;
+    private string? _website;
+
+    /// <summary>True when an Admin/Vendor directly added this account and it's
+    /// never had its profile filled in — the form becomes mandatory and Save
+    /// is gated on DOB + City until this flips false.</summary>
+    private bool MustComplete => _profile is { WasDirectlyAdded: true, ProfileCompleted: false };
+    private bool DobOk => _dob.HasValue && ClientValidation.IsAdult(_dob.Value);
+    private string DobHint => _dob switch
+    {
+        null => "Required — must be 18+",
+        { } d when ClientValidation.IsAdult(d) => $"Age: {ClientValidation.CalculateAge(d)} — OK ✓",
+        { } d when ClientValidation.CalculateAge(d) >= ClientValidation.MaximumAge
+            => $"Age: {ClientValidation.CalculateAge(d)} — must be below {ClientValidation.MaximumAge}",
+        { } d => $"Age: {ClientValidation.CalculateAge(d)} — must be at least {ClientValidation.MinimumAge}"
+    };
+    // City is required for every directly-added role; DOB (18+) is additionally
+    // required for Crew only — Vendor's DOB never persists server-side
+    // (UpdateProfileHandler restricts SetDateOfBirth to Role == Crew).
+    private bool CanSubmitCompletion =>
+        !string.IsNullOrWhiteSpace(_city) && (_profile?.Role != "Crew" || DobOk);
+
+    private void OnDobInput(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _dobStr = e.Value?.ToString() ?? "";
+        _dob = DateTime.TryParse(_dobStr, out var d) ? d.Date : null;
+    }
 
     // Vendor referral copy
     private bool _copied;
@@ -283,21 +420,62 @@
                 _fullName = _profile.FullName;
                 _email    = _profile.Email;
                 _inviteMessageTemplate = _profile.InviteMessageTemplate;
+                HydrateExtendedFields(_profile);
             }
         }
         catch (Exception ex) { _loadError = ex.Message; }
         finally { _loading = false; StateHasChanged(); }
     }
 
+    private void HydrateExtendedFields(UserProfileDto p)
+    {
+        _dob = p.DateOfBirth;
+        _dobStr = p.DateOfBirth?.ToString("yyyy-MM-dd") ?? "";
+        _city = p.City;
+        _state = p.State;
+        _address = p.Address;
+        _bio = p.Bio;
+        _skills = p.Skills;
+        _experienceYears = p.ExperienceYears;
+        _contactPersonName = p.ContactPersonName;
+        _gstNumber = p.GstNumber;
+        _website = p.Website;
+    }
+
     private async Task SaveAsync()
     {
+        if (MustComplete && !CanSubmitCompletion)
+        {
+            _touchedDob = true;
+            StateHasChanged();
+            return;
+        }
+
+        var wasIncomplete = MustComplete;
         _saving = true; _saveError = null; _saveSuccess = false; StateHasChanged();
-        var ok = await UserApi.UpdateProfileAsync(_fullName ?? "", _email, _profile?.AvatarUrl, _inviteMessageTemplate ?? "");
+        var ok = await UserApi.UpdateProfileAsync(
+            _fullName ?? "", _email, _profile?.AvatarUrl, _inviteMessageTemplate ?? "",
+            _dob, _city, _state, _address, _bio, _skills, _experienceYears,
+            _profile?.BusinessName, _contactPersonName, _gstNumber, _website);
         if (ok)
         {
             _saveSuccess = true;
+
+            // First-time completion of a directly-added account — force a full
+            // reload so MainLayout re-fetches /users/me, sees ProfileCompleted=true,
+            // and lifts the "only /profile is reachable" gate.
+            if (wasIncomplete)
+            {
+                Nav.NavigateTo("/dashboard", forceLoad: true);
+                return;
+            }
+
             _profile = await UserApi.GetMeAsync();
-            if (_profile is not null) { _fullName = _profile.FullName; _email = _profile.Email; _inviteMessageTemplate = _profile.InviteMessageTemplate; }
+            if (_profile is not null)
+            {
+                _fullName = _profile.FullName; _email = _profile.Email; _inviteMessageTemplate = _profile.InviteMessageTemplate;
+                HydrateExtendedFields(_profile);
+            }
         }
         else { _saveError = "Failed to update profile. Please try again."; }
         _saving = false; StateHasChanged();

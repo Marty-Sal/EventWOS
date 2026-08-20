@@ -1,8 +1,10 @@
 @inherits LayoutComponentBase
 @using System.Net.Http.Json
+@implements IDisposable
 @inject NavigationManager Nav
 @inject AppAuthStateProvider AuthState
 @inject IAuthApiService AuthApi
+@inject IUserApiService UserApi
 @inject NotificationHubService Hub
 @inject IEventApiService EventApi
 @inject HttpClient Http
@@ -36,6 +38,17 @@
 
             <!-- Nav Items -->
             <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto" @onclick="() => _sidebarOpen = false">
+
+            @if (_mustCompleteProfile)
+            {
+                <div class="px-3 py-3 mb-2 rounded-lg bg-amber-900/40 border border-amber-600/50">
+                    <p class="text-xs font-semibold text-amber-300">🔒 Complete your profile</p>
+                    <p class="text-[11px] text-amber-200/80 mt-0.5">The rest of EventWOS unlocks once you save your details.</p>
+                </div>
+                <NavItem Href="/profile" Icon="👤" Label="My Profile" />
+            }
+            else
+            {
 
                 @* Dashboard — everyone *@
                 <NavItem Href="/dashboard" Icon="🏠" Label="Dashboard" />
@@ -142,6 +155,7 @@
                     </div>
                 </AuthorizeView>
 
+            }
             </nav>
 
             <!-- User block -->
@@ -265,6 +279,18 @@
     // Current Manager's effective permissions (loaded from JWT claims)
     private HashSet<string> _perms = new(StringComparer.OrdinalIgnoreCase);
 
+    // ── Directly-added-account profile-completion gate ───────────────────────
+    // An Admin/Vendor can add a Crew/Vendor account directly (skips the
+    // approval queue) — see CreateVendorCommand/CreateCrewCommand. That
+    // account can reach the authenticated app via ANY login route (OTP,
+    // password after /setup-password, etc). Wherever they come from, this
+    // layout is the one place every authenticated page passes through, so
+    // it's the single choke point: if the profile was never completed, we
+    // collapse the sidebar to just "My Profile" and hard-redirect away from
+    // every other route until they save it (which flips ProfileCompleted
+    // server-side — see UpdateProfileHandler.MarkProfileCompletedIfFirstTime).
+    private bool _mustCompleteProfile;
+
     protected override async Task OnInitializedAsync()
     {
         // Load permissions from JWT claims (already in auth state)
@@ -273,6 +299,9 @@
                       .FindAll(PermissionClaimTypes.Permission)
                       .Select(c => c.Value)
                       .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        await CheckProfileCompletionGateAsync();
+        Nav.LocationChanged += OnLocationChanged;
 
         await LoadPendingInvites();
         await LoadApprovalCountAsync();
@@ -479,4 +508,40 @@
     private sealed record ApprovalQueueData(int TotalCount);
     private sealed record PeopleQueueResult(bool Success, PeopleQueueData? Data);
     private sealed record PeopleQueueData(int VendorCount, int CrewCount);
+
+    // ── Profile-completion gate ────────────────────────────────────────────
+    private async Task CheckProfileCompletionGateAsync()
+    {
+        try
+        {
+            var me = await UserApi.GetMeAsync();
+            _mustCompleteProfile = me is { WasDirectlyAdded: true, ProfileCompleted: false };
+        }
+        catch
+        {
+            // Network hiccup — fail open rather than locking someone out of
+            // the whole app over a transient /users/me error. Re-checked on
+            // every navigation anyway (OnLocationChanged), so it self-heals.
+            _mustCompleteProfile = false;
+        }
+
+        if (_mustCompleteProfile && !Nav.Uri.Contains("/profile", StringComparison.OrdinalIgnoreCase))
+            Nav.NavigateTo("/profile");
+
+        StateHasChanged();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Re-arm the redirect on every in-app navigation — a directly-added
+        // user with an incomplete profile who tries to click/type their way
+        // to any other page gets bounced straight back to /profile.
+        if (_mustCompleteProfile && !e.Location.Contains("/profile", StringComparison.OrdinalIgnoreCase))
+            Nav.NavigateTo("/profile");
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+    }
 }

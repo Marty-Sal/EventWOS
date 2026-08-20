@@ -11,7 +11,16 @@ public sealed record UserProfileDto(
     // Vendor fields
     string? ReferralCode, string? BusinessName, decimal? Rating, string? InviteMessageTemplate,
     // Crew fields
-    decimal? DisciplineScore, int? EventsAttended, Guid? VendorId, string? VendorName);
+    decimal? DisciplineScore, int? EventsAttended, Guid? VendorId, string? VendorName,
+    // Extended profile (self-registered users have these from signup; directly-added
+    // Vendor/Crew fill them in here for the first time — see WasDirectlyAdded/ProfileCompleted).
+    DateTime? DateOfBirth = null, string? City = null, string? State = null, string? Address = null,
+    string? Bio = null, string? Skills = null, int? ExperienceYears = null,
+    string? ContactPersonName = null, string? GstNumber = null, string? Website = null,
+    // True when an Admin/Vendor directly added this account (skipped the approval queue).
+    // When true AND ProfileCompleted is false, the app forces this user onto /profile
+    // before letting them see anything else — see MainLayout's completion gate.
+    bool WasDirectlyAdded = false, bool ProfileCompleted = false);
 
 public sealed record UserListItemDto(
     Guid Id, string Mobile, string FullName, string? Email,
@@ -25,7 +34,12 @@ public interface IUserApiService
     Task<UserProfileDto?> GetMeAsync(CancellationToken ct = default);
     Task<PagedResult<UserListItemDto>?> GetUsersAsync(int page = 1, int pageSize = 20, string? search = null, CancellationToken ct = default);
     Task<bool> ChangeStatusAsync(Guid userId, string status, CancellationToken ct = default);
-    Task<bool> UpdateProfileAsync(string fullName, string? email, string? avatarUrl, string? inviteMessageTemplate = null, CancellationToken ct = default);
+    Task<bool> UpdateProfileAsync(
+        string fullName, string? email, string? avatarUrl, string? inviteMessageTemplate = null,
+        DateTime? dateOfBirth = null, string? city = null, string? state = null, string? address = null,
+        string? bio = null, string? skills = null, int? experienceYears = null,
+        string? businessName = null, string? contactPersonName = null, string? gstNumber = null, string? website = null,
+        CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateVendorAsync(string mobile, string fullName, string? businessName, string? email, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateCrewAsync(string mobile, string fullName, string? email, string? referralCode, CancellationToken ct = default);
 }
@@ -84,11 +98,21 @@ public sealed class UserApiService : IUserApiService
         catch { return false; }
     }
 
-    public async Task<bool> UpdateProfileAsync(string fullName, string? email, string? avatarUrl, string? inviteMessageTemplate = null, CancellationToken ct = default)
+    public async Task<bool> UpdateProfileAsync(
+        string fullName, string? email, string? avatarUrl, string? inviteMessageTemplate = null,
+        DateTime? dateOfBirth = null, string? city = null, string? state = null, string? address = null,
+        string? bio = null, string? skills = null, int? experienceYears = null,
+        string? businessName = null, string? contactPersonName = null, string? gstNumber = null, string? website = null,
+        CancellationToken ct = default)
     {
         try
         {
-            var resp = await _http.PutAsJsonAsync("api/v1/users/me", new { fullName, email, avatarUrl, inviteMessageTemplate }, ct);
+            var resp = await _http.PutAsJsonAsync("api/v1/users/me", new
+            {
+                fullName, email, avatarUrl, inviteMessageTemplate,
+                dateOfBirth, city, state, address, bio, skills, experienceYears,
+                businessName, contactPersonName, gstNumber, website
+            }, ct);
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
