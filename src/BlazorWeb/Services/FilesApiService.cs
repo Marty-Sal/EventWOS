@@ -4,7 +4,14 @@ namespace EventWOS.BlazorWeb.Services;
 
 /// <summary>
 /// DocumentType values mirror EventWOS.Domain.Enums.DocumentType on the API —
-/// kept as plain ints here so the Blazor client doesn't need a Domain reference.
+/// kept as plain ints here (for outgoing upload requests only, where
+/// ASP.NET Core's [FromForm] enum binder happily accepts a numeric
+/// string) so the Blazor client doesn't need a Domain reference.
+///
+/// NOTE: incoming JSON (FileDocumentDto.DocumentType below) is a STRING,
+/// not one of these ints — the API's JsonStringEnumConverter serializes
+/// every enum by name (e.g. "VendorProfilePhoto"), so Label() below
+/// matches on the enum's name, not these numeric constants.
 /// </summary>
 public static class DocumentTypes
 {
@@ -15,19 +22,19 @@ public static class DocumentTypes
     public const int VendorProfilePhoto = 5;
 
     /// <summary>Short human label for the "View details" modal file list.</summary>
-    public static string Label(int documentType) => documentType switch
+    public static string Label(string documentType) => documentType switch
     {
-        CrewProfilePhoto        => "Profile photo",
-        CrewIdentificationProof => "ID proof",
-        VendorDocument          => "Vendor document",
-        EventDocument           => "Event document",
-        VendorProfilePhoto      => "Profile photo",
+        nameof(CrewProfilePhoto)        => "Profile photo",
+        nameof(CrewIdentificationProof) => "ID proof",
+        nameof(VendorDocument)          => "Vendor document",
+        nameof(EventDocument)           => "Event document",
+        nameof(VendorProfilePhoto)      => "Profile photo",
         _ => "Document"
     };
 }
 
 public sealed record FileDocumentDto(
-    Guid Id, Guid OwnerId, Guid? EntityId, int DocumentType,
+    Guid Id, Guid OwnerId, Guid? EntityId, string DocumentType,
     string OriginalFileName, string ContentType, long FileSizeBytes,
     bool HasThumbnail, DateTime UploadedAt);
 
