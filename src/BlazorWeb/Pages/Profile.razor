@@ -100,29 +100,6 @@
                     <p class="text-xs text-gray-400">Share this code with crew members so they can join your roster.</p>
                 </div>
 
-                @* Invite link — one-click share for crew sign-up. Hits the
-                   existing /register/crew page with ?ref=<code>, which the
-                   form already auto-fills + locks. We build the URL from
-                   NavigationManager.BaseUri so it's always the right host
-                   in every deploy (prod, staging, local). *@
-                <div class="space-y-2 pt-2 border-t border-gray-100">
-                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Crew Invite Link</p>
-                    <div class="flex items-center gap-3">
-                        <input readonly value="@InviteLink"
-                               class="flex-1 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl text-sm text-indigo-700 font-mono truncate"
-                               @onclick="SelectInviteLink" />
-                        <button @onclick="CopyInviteLink"
-                                class="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition shadow-sm whitespace-nowrap">
-                            @(_inviteCopied ? "✅ Copied!" : "📋 Copy link")
-                        </button>
-                        <button @onclick="ShareInviteLink"
-                                class="px-4 py-3 rounded-xl bg-white border border-indigo-200 text-indigo-700 text-xs font-semibold hover:bg-indigo-50 transition whitespace-nowrap"
-                                title="Share via WhatsApp, SMS, etc.">
-                            📤 Share
-                        </button>
-                    </div>
-                    <p class="text-xs text-gray-400">Anyone who opens this link will see the sign-up form with your referral code already filled in.</p>
-                </div>
 
                 @* Custom invite message composer — Gmail-style: editable body on
                    top, toolbar pinned to the bottom. {link} token gets swapped
@@ -211,7 +188,7 @@
                         </div>
                     </div>
 
-                    <p class="text-xs text-gray-400">Optional. Use <code class="px-1 bg-gray-100 rounded">{link}</code> or the <span class="font-semibold text-indigo-600">Insert Invite Link</span> button to place the link — leave blank to use the default message.</p>
+                    <p class="text-xs text-gray-400">Use <code class="px-1 bg-gray-100 rounded">{link}</code> or the <span class="font-semibold text-indigo-600">Insert Invite Link</span> button to place your invite link. Anyone who opens it sees the sign-up form with your referral code already filled in.</p>
                 </div>
             </div>
         }
@@ -628,7 +605,9 @@
             {
                 _fullName = _profile.FullName;
                 _email    = _profile.Email;
-                _inviteMessageTemplate = _profile.InviteMessageTemplate;
+                _inviteMessageTemplate = string.IsNullOrWhiteSpace(_profile.InviteMessageTemplate)
+                    ? DefaultInviteMessageTemplate
+                    : _profile.InviteMessageTemplate;
                 HydrateExtendedFields(_profile);
             }
         }
@@ -682,7 +661,10 @@
             _profile = await UserApi.GetMeAsync();
             if (_profile is not null)
             {
-                _fullName = _profile.FullName; _email = _profile.Email; _inviteMessageTemplate = _profile.InviteMessageTemplate;
+                _fullName = _profile.FullName; _email = _profile.Email;
+                _inviteMessageTemplate = string.IsNullOrWhiteSpace(_profile.InviteMessageTemplate)
+                    ? DefaultInviteMessageTemplate
+                    : _profile.InviteMessageTemplate;
                 HydrateExtendedFields(_profile);
             }
         }
@@ -717,53 +699,43 @@
     }
 
     // ── Crew invite link ────────────────────────────────────────────────────
-    private bool _inviteCopied;
+    // No longer surfaced as its own box — folded into the message composer
+    // below. Kept here purely as the per-vendor URL the {link} token and
+    // "Insert Invite Link" button resolve to.
     private string InviteLink => _profile?.ReferralCode is null
         ? string.Empty
         : $"{Nav.BaseUri.TrimEnd('/')}/register/crew?ref={Uri.EscapeDataString(_profile.ReferralCode)}";
 
-    private async Task SelectInviteLink()
-    {
-        try { await JS.InvokeVoidAsync("eval", "document.activeElement && document.activeElement.select && document.activeElement.select()"); }
-        catch { }
-    }
+    /// <summary>Seeded into the composer whenever the vendor has no saved
+    /// template yet, so the box is never just empty placeholder text —
+    /// there's always a real, ready-to-send message with the invite link
+    /// already in it.</summary>
+    private const string DefaultInviteMessageTemplate = "Hey! 👋\nJoin my crew on EventWOS \u2014 sign up here: {link}";
 
-    private async Task CopyInviteLink()
-    {
-        if (string.IsNullOrEmpty(InviteLink)) return;
-        try
-        {
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", InviteLink);
-            _inviteCopied = true; StateHasChanged();
-            await Task.Delay(2000);
-            _inviteCopied = false; StateHasChanged();
-        }
-        catch { }
-    }
-
-    /// <summary>Opens the OS share sheet on mobile (Web Share API) or
-    /// falls back to copying + a toast on desktop.</summary>
     /// <summary>
-    /// Builds the share text from the vendor's custom template (if set):
-    ///   - contains "{link}"  → token is replaced with the real URL, link
-    ///     is NOT also passed as a separate "url" field (avoids it
-    ///     appearing twice in share sheets that concatenate text+url).
-    ///   - no "{link}" token  → link is appended on its own line, "url"
-    ///     left empty for the same reason.
-    ///   - blank/unset        → falls back to the original default copy,
-    ///     with the link passed via the "url" field as before.
+    /// Builds the share text from whatever's currently in the composer
+    /// (the live `_inviteMessageTemplate`, not the last-saved profile
+    /// value -- Copy/Share should reflect what's on screen even if the
+    /// vendor hasn't hit Save yet):
+    ///   - contains "{link}" -> token is replaced with the real per-vendor
+    ///     URL, link is NOT also passed as a separate "url" field (avoids
+    ///     it appearing twice in share sheets that concatenate text+url).
+    ///   - no "{link}" token -> link is appended on its own line.
+    ///   - blank/unset       -> falls back to DefaultInviteMessageTemplate.
     /// </summary>
     private (string Text, string Url) BuildShareContent()
     {
-        var template = _profile?.InviteMessageTemplate;
-        if (string.IsNullOrWhiteSpace(template))
-            return ("Sign up here to join my crew:", InviteLink);
+        var template = string.IsNullOrWhiteSpace(_inviteMessageTemplate)
+            ? DefaultInviteMessageTemplate
+            : _inviteMessageTemplate;
 
         return template.Contains("{link}")
             ? (template.Replace("{link}", InviteLink), string.Empty)
             : ($"{template}\n{InviteLink}", string.Empty);
     }
 
+    /// <summary>Opens the OS share sheet on mobile (Web Share API) or
+    /// falls back to copying the composed message + a toast on desktop.</summary>
     private async Task ShareInviteLink()
     {
         if (string.IsNullOrEmpty(InviteLink)) return;
@@ -776,10 +748,11 @@
         catch { }
         if (!shared)
         {
-            await CopyInviteLink();
-            ShowToast("Share menu unavailable — link copied instead.", err: false);
+            await CopyMessage();
+            ShowToast("Share menu unavailable — message copied instead.", err: false);
         }
     }
+
 
     private async Task CopyReferralCode()
     {
