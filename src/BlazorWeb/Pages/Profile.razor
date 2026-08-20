@@ -135,6 +135,18 @@
                                 📤 Share
                             </button>
 
+                            @* Saves the whole profile (same call as the main "Save
+                               Changes" button at the bottom) so the vendor doesn't
+                               have to scroll all the way down just to persist a
+                               message they edited up here. Feedback comes via the
+                               toast since the far-away success/error text under the
+                               main button wouldn't be visible from this scroll spot. *@
+                            <button type="button" @onclick="SaveAsync" disabled="@_saving"
+                                    title="Save this message to your profile"
+                                    class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition whitespace-nowrap disabled:opacity-60">
+                                @(_saving ? "Saving…" : "💾 Save")
+                            </button>
+
                             <span class="w-px h-5 bg-gray-200 mx-1"></span>
 
                             @* Aa — text formatting (WhatsApp markdown) *@
@@ -639,6 +651,11 @@
         {
             _touchedDob = true;
             StateHasChanged();
+            // The inline "Save" button up in the invite-message composer can hit
+            // this same gate if required profile fields further down aren't
+            // filled in yet — a toast makes that visible without having to
+            // scroll down to spot the (also-shown) inline field error.
+            ShowToast("Please fill in the required profile fields below before saving.", err: true);
             return;
         }
 
@@ -651,6 +668,7 @@
         if (ok)
         {
             _saveSuccess = true;
+            ShowToast("Profile saved!", err: false);
 
             // First-time completion of a directly-added account — force a full
             // reload so MainLayout re-fetches /users/me, sees ProfileCompleted=true,
@@ -671,7 +689,11 @@
                 HydrateExtendedFields(_profile);
             }
         }
-        else { _saveError = "Failed to update profile. Please try again."; }
+        else
+        {
+            _saveError = "Failed to update profile. Please try again.";
+            ShowToast(_saveError, err: true);
+        }
         _saving = false; StateHasChanged();
         _ = Task.Delay(3000).ContinueWith(_ => { _saveSuccess = false; InvokeAsync(StateHasChanged); });
     }
