@@ -515,7 +515,10 @@
         await JS.InvokeVoidAsync("eventwosForms.setSelectionRange", _templateRef, caret, caret);
     }
 
-    private Task InsertLinkToken() => InsertAtCursorAsync("{link}");
+    /// <summary>Inserts the vendor's actual, already-resolved invite URL
+    /// at the cursor — not a "{link}" placeholder token. What you see in
+    /// the box is exactly what gets sent, no hidden substitution step.</summary>
+    private Task InsertLinkToken() => InsertAtCursorAsync(InviteLink);
 
     private async Task InsertEmoji(string emoji)
     {
@@ -606,7 +609,7 @@
                 _fullName = _profile.FullName;
                 _email    = _profile.Email;
                 _inviteMessageTemplate = string.IsNullOrWhiteSpace(_profile.InviteMessageTemplate)
-                    ? DefaultInviteMessageTemplate
+                    ? BuildDefaultInviteMessage()
                     : _profile.InviteMessageTemplate;
                 HydrateExtendedFields(_profile);
             }
@@ -663,7 +666,7 @@
             {
                 _fullName = _profile.FullName; _email = _profile.Email;
                 _inviteMessageTemplate = string.IsNullOrWhiteSpace(_profile.InviteMessageTemplate)
-                    ? DefaultInviteMessageTemplate
+                    ? BuildDefaultInviteMessage()
                     : _profile.InviteMessageTemplate;
                 HydrateExtendedFields(_profile);
             }
@@ -708,30 +711,34 @@
 
     /// <summary>Seeded into the composer whenever the vendor has no saved
     /// template yet, so the box is never just empty placeholder text —
-    /// there's always a real, ready-to-send message with the invite link
-    /// already in it.</summary>
-    private const string DefaultInviteMessageTemplate = "Hey! 👋\nJoin my crew on EventWOS \u2014 sign up here: {link}";
+    /// there's always a real, ready-to-send message with the vendor's
+    /// actual invite URL already embedded (not a "{link}" token — a
+    /// method, not a const, since it needs the live per-vendor
+    /// <see cref="InviteLink"/>).</summary>
+    private string BuildDefaultInviteMessage() =>
+        $"Hey! 👋\nJoin my crew on EventWOS — sign up here: {InviteLink}";
 
     /// <summary>
     /// Builds the share text from whatever's currently in the composer
     /// (the live `_inviteMessageTemplate`, not the last-saved profile
-    /// value -- Copy/Share should reflect what's on screen even if the
-    /// vendor hasn't hit Save yet):
-    ///   - contains "{link}" -> token is replaced with the real per-vendor
-    ///     URL, link is NOT also passed as a separate "url" field (avoids
-    ///     it appearing twice in share sheets that concatenate text+url).
-    ///   - no "{link}" token -> link is appended on its own line.
-    ///   - blank/unset       -> falls back to DefaultInviteMessageTemplate.
+    /// value — Copy/Share should reflect what's on screen even if the
+    /// vendor hasn't hit Save yet).
+    /// The real URL is normally already embedded literally in the text
+    /// (inserted via the "Insert Invite Link" button, or present in the
+    /// default message) — we don't append it again. The "{link}" token
+    /// is still honored if someone types it manually, for anyone who
+    /// prefers writing the message before placing the link.
     /// </summary>
     private (string Text, string Url) BuildShareContent()
     {
         var template = string.IsNullOrWhiteSpace(_inviteMessageTemplate)
-            ? DefaultInviteMessageTemplate
+            ? BuildDefaultInviteMessage()
             : _inviteMessageTemplate;
 
-        return template.Contains("{link}")
-            ? (template.Replace("{link}", InviteLink), string.Empty)
-            : ($"{template}\n{InviteLink}", string.Empty);
+        if (template.Contains("{link}"))
+            template = template.Replace("{link}", InviteLink);
+
+        return (template, string.Empty);
     }
 
     /// <summary>Opens the OS share sheet on mobile (Web Share API) or
