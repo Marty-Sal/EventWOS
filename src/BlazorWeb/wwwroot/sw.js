@@ -34,7 +34,7 @@
  * (check-in, ratings) still require network by design.
  */
 
-const CACHE_VERSION = 'v3-2026-08-21-loader-js-never-cached';
+const CACHE_VERSION = 'v4-2026-08-21-no-forced-skipwaiting';
 const SHELL_CACHE   = `eventwos-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `eventwos-runtime-${CACHE_VERSION}`;
 
@@ -55,8 +55,27 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(SHELL_CACHE)
             .then((cache) => cache.addAll(SHELL_URLS))
-            // Take over from any previous SW immediately on first install.
-            .then(() => self.skipWaiting())
+            .then(() => {
+                // Only auto-activate on a genuine FIRST install (no prior
+                // worker was ever controlling this origin) — there's
+                // nothing to disrupt yet, so skipping the wait is free.
+                //
+                // On an UPDATE (self.registration.active already exists,
+                // i.e. an older worker is controlling open tabs right
+                // now), we must NOT call skipWaiting() here. Doing so
+                // unconditionally was a real production bug: it forced
+                // immediate activation on every deploy, which fires
+                // "controllerchange" on every open tab, and index.html's
+                // controllerchange listener calls location.reload() —
+                // an automatic reload storm for every visitor the moment
+                // any new version deployed, completely bypassing the
+                // "New version available" toast that's supposed to let
+                // the user pick when to reload. The new worker now stays
+                // in the "waiting" state on updates; only the toast's
+                // button click (which posts SKIP_WAITING, handled below)
+                // triggers activation + reload, on the user's own timing.
+                if (!self.registration.active) return self.skipWaiting();
+            })
             .catch((err) => {
                 // Precache failures shouldn't kill the SW — the app still
                 // works, we just lose offline shell. Log for debugging.
