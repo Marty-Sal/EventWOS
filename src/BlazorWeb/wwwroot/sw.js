@@ -34,7 +34,7 @@
  * (check-in, ratings) still require network by design.
  */
 
-const CACHE_VERSION = 'v2-2026-07-07-boot-json-never-cached';
+const CACHE_VERSION = 'v3-2026-08-21-loader-js-never-cached';
 const SHELL_CACHE   = `eventwos-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `eventwos-runtime-${CACHE_VERSION}`;
 
@@ -143,6 +143,25 @@ function isImmutableAsset(pathname) {
     // mismatch" against every wasm asset. Same story for version.json.
     if (pathname === '/_framework/blazor.boot.json') return false;
     if (pathname === '/version.json')                return false;
+
+    // blazor.webassembly.js and dotnet.js are the boot LOADER — the
+    // code that reads blazor.boot.json and pulls in the fingerprinted
+    // runtime/assembly files it lists. Unlike everything else under
+    // _framework/, these two keep the SAME filename across every
+    // deploy (no content hash in the URL), so cache-first here means
+    // "run whatever loader version happened to get cached first,
+    // forever" — against a manifest that keeps changing underneath
+    // it. That version-skew is exactly the kind of bug that hangs the
+    // boot process without throwing a catchable error (nothing to
+    // retry on), so it must always go to network, same as the
+    // manifest it drives.
+    if (pathname === '/_framework/blazor.webassembly.js') return false;
+    if (pathname === '/_framework/dotnet.js')              return false;
+
+    // Our own hand-written scripts are referenced by a plain
+    // <script src="js/...">  with no content hash or cache-busting
+    // query string either — same failure mode, smaller blast radius.
+    if (/^\/js\/(checkin|forms|pwa-install)\.js$/.test(pathname)) return false;
 
     return pathname.startsWith('/_framework/')
         || pathname.startsWith('/_content/')
