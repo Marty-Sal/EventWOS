@@ -77,8 +77,11 @@
 </head>
 <body class="antialiased text-gray-900">
     <div id="app">
-        <!-- Loading screen -->
-        <div style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#0f172a;">
+        <!-- Loading screen. The "loader" class is a deliberate hook (no
+             visual effect — no CSS rule targets it) so the recovery script
+             below can tell "Blazor replaced this" apart from "still on the
+             static shell" without guessing from unrelated markup. -->
+        <div class="loader" style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#0f172a;">
             <div style="font-size:48px;">⚡</div>
             <p style="color:#a5b4fc;font-size:14px;font-family:system-ui,sans-serif;font-weight:600;letter-spacing:0.05em;">
                 LOADING EVENTWOS…
@@ -120,6 +123,9 @@
     <script>
         (function () {
             const KEY = "eventwos-sri-recover";
+            const MAX_ATTEMPTS = 2; // one-shot was leaving some users stuck if the
+                                     // first unregister+reload lost a race with a
+                                     // freshly-re-registered service worker.
             const isSriOr504 = function (msg) {
                 if (!msg) return false;
                 const m = String(msg);
@@ -127,11 +133,13 @@
                        m.includes("SRI's integrity") ||
                        m.includes("Failed to find a valid digest") ||
                        m.includes("504") ||
-                       (m.includes("Failed to fetch") && m.includes("_framework/"));
+                       m.includes("NetworkError") ||
+                       (m.includes("Failed to fetch") && (m.includes("_framework/") || m.includes("blazor.boot.json")));
             };
             const bustAndReload = async function () {
-                if (sessionStorage.getItem(KEY) === "1") return; // already tried
-                sessionStorage.setItem(KEY, "1");
+                const attempts = parseInt(sessionStorage.getItem(KEY) || "0", 10);
+                if (attempts >= MAX_ATTEMPTS) return; // genuinely broken deploy — show the error banner instead of looping forever
+                sessionStorage.setItem(KEY, String(attempts + 1));
 
                 // NUCLEAR RESET — required for stale-SW recovery.
                 //
@@ -188,6 +196,15 @@
                         sessionStorage.removeItem(KEY);
                     }
                 }, 8000); // give WASM time to boot on slow devices
+
+                // Safety net: if we're STILL sitting on the static loading
+                // screen (Blazor never got a chance to raise a catchable JS
+                // error — e.g. the fetch just silently hung) after a generous
+                // grace period, treat it the same as a caught SRI/404 failure.
+                setTimeout(function () {
+                    const app = document.getElementById("app");
+                    if (app && app.querySelector(".loader")) bustAndReload();
+                }, 15000);
             });
         })();
     </script>
