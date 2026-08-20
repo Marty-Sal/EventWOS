@@ -194,8 +194,22 @@ try
                 // here so the right value is available at challenge time.
                 OnAuthenticationFailed = ctx =>
                 {
-                    if (ctx.Exception is Microsoft.IdentityModel.Tokens.SecurityTokenExpiredException)
-                        ctx.HttpContext.Items["auth_fail_reason"] = "expired";
+                    // Be precise about WHY auth failed. Previously only genuine
+                    // expiry was tagged and everything else fell through to the
+                    // "expired" default below — so a bad signature, wrong
+                    // issuer/audience or malformed token all told the user
+                    // "your session expired", which sent debugging down
+                    // completely the wrong path more than once.
+                    ctx.HttpContext.Items["auth_fail_reason"] = ctx.Exception switch
+                    {
+                        Microsoft.IdentityModel.Tokens.SecurityTokenExpiredException => "expired",
+                        Microsoft.IdentityModel.Tokens.SecurityTokenInvalidSignatureException => "invalid",
+                        Microsoft.IdentityModel.Tokens.SecurityTokenInvalidIssuerException => "invalid",
+                        Microsoft.IdentityModel.Tokens.SecurityTokenInvalidAudienceException => "invalid",
+                        Microsoft.IdentityModel.Tokens.SecurityTokenMalformedException => "invalid",
+                        null => "expired",
+                        _ => "invalid"
+                    };
                     return Task.CompletedTask;
                 },
                 OnChallenge = ctx =>

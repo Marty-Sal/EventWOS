@@ -56,7 +56,39 @@ public sealed class UnauthorizedRedirectHandler : DelegatingHandler
                     : "expired";
 
                 var nav = _sp.GetService<NavigationManager>();
-                nav?.NavigateTo($"/login?reason={Uri.EscapeDataString(reason)}", forceLoad: true);
+                if (nav is null)
+                    return response;
+
+                // ─── INFINITE-RELOAD CIRCUIT BREAKER ─────────────────────────
+                // This was a real production outage. NavigateTo(forceLoad: true)
+                // to a URL the browser is ALREADY on is just location.reload().
+                // So a single 401 raised while sitting on /login produced:
+                //     boot → authenticated call 401s → forceLoad /login
+                //          → boot → same call 401s → forceLoad /login → ...
+                // an endless ~1.5s reload cycle where the login page flashes in
+                // and then vanishes, so nobody could ever sign in. A stale token
+                // left in localStorage is what kept generating the 401 (the
+                // client only reads the local exp claim, so a token revoked or
+                // rejected server-side still *looks* authenticated here).
+                //
+                // Being already on a /login route means the user is exactly
+                // where this handler wants to send them. Tokens are cleared
+                // above, so the correct action is to STOP — never re-navigate
+                // to where we already are.
+                var current = nav.ToBaseRelativePath(nav.Uri);
+                var currentPath = ("/" + current.Split('?')[0].Split('#')[0])
+                    .TrimEnd('/');
+                if (currentPath.StartsWith("/login", StringComparison.OrdinalIgnoreCase)
+                    || currentPath.StartsWith("/register", StringComparison.OrdinalIgnoreCase)
+                    || currentPath.StartsWith("/setup-password", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Already on a public auth page — nothing to redirect to.
+                    // Leave the latch set so a burst of parallel 401s from the
+                    // same page load can't queue up a reload either.
+                    return response;
+                }
+
+                nav.NavigateTo($"/login?reason={Uri.EscapeDataString(reason)}", forceLoad: true);
             }
             catch
             {

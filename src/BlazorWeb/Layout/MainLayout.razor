@@ -300,6 +300,20 @@
                       .Select(c => c.Value)
                       .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // ─── Don't make authenticated calls without a session ────────────────
+        // Every call below (/users/me, pending invites, approval count, the
+        // SignalR hub) requires a live session. If the auth state says we're
+        // anonymous — or we're holding a token the server has already rejected
+        // — firing them just produces 401s, and a 401 trips the global
+        // UnauthorizedRedirectHandler. That combination caused a production
+        // reload loop: the handler force-navigates to /login, and a forceLoad
+        // to the page you're already on is a plain reload, so the app rebooted
+        // every ~1.5s and the login screen never stayed on screen. Bailing out
+        // here means an unauthenticated render of this layout is completely
+        // silent on the network.
+        if (state.User.Identity?.IsAuthenticated != true)
+            return;
+
         await CheckProfileCompletionGateAsync();
         Nav.LocationChanged += OnLocationChanged;
 
