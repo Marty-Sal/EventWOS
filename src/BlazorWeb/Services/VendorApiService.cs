@@ -13,12 +13,23 @@ public sealed record VendorListItemDto(
 public sealed record VendorDetailDto(
     Guid Id, string Mobile, string FullName, string? BusinessName, string? Email,
     string? AvatarUrl, string Status, string? ReferralCode, decimal? Rating,
-    int EventsCompleted, int CrewCount, DateTime CreatedAt);
+    int EventsCompleted, int CrewCount, DateTime CreatedAt,
+    string? ContactPersonName = null, string? GstNumber = null, string? Address = null,
+    string? City = null, string? State = null, string? Website = null, string? Bio = null,
+    DateTime? DateOfBirth = null, IReadOnlyList<FileDocumentDto>? Files = null);
 
 public sealed record CrewMemberDto(
     Guid Id, string Mobile, string FullName, string? Email, string? AvatarUrl,
     string Status, Guid? VendorId, string? VendorName,
     decimal DisciplineScore, int EventsAttended, DateTime CreatedAt);
+
+/// <summary>Full profile for the Crew page's "View details" modal — see CrewDetailDto (server-side) in Application/Vendors/DTOs/VendorDto.cs.</summary>
+public sealed record CrewDetailDto(
+    Guid Id, string Mobile, string FullName, string? Email, string? AvatarUrl,
+    string Status, Guid? VendorId, string? VendorName,
+    decimal DisciplineScore, int EventsAttended, DateTime CreatedAt,
+    string? City, string? State, string? Bio, string? Skills, int? ExperienceYears,
+    string? ReferralCodeUsed, DateTime? DateOfBirth, IReadOnlyList<FileDocumentDto> Files);
 
 public sealed record PagedVendorResult(
     IReadOnlyList<VendorListItemDto> Items, int TotalCount, int Page, int PageSize);
@@ -64,6 +75,7 @@ public interface IVendorApiService
     Task<bool> RateVendorAsync(Guid id, decimal rating, CancellationToken ct = default);
     Task<bool> ChangeVendorStatusAsync(Guid id, string status, CancellationToken ct = default);
     Task<PagedCrewResult?> GetCrewAsync(int page = 1, string? search = null, Guid? vendorId = null, CancellationToken ct = default);
+    Task<CrewDetailDto?> GetCrewDetailAsync(Guid id, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateCrewAsync(string mobile, string fullName, string? email, string? referralCode, CancellationToken ct = default);
     Task<VendorReportDto?> GetMyReportAsync(CancellationToken ct = default);
 }
@@ -97,6 +109,16 @@ public sealed class VendorApiService : IVendorApiService
         try
         {
             var r = await _http.GetFromJsonAsync<ApiResult<VendorDetailDto>>($"api/v1/vendors/{id}", _jsonOpts, ct);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<CrewDetailDto?> GetCrewDetailAsync(Guid id, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await _http.GetFromJsonAsync<ApiResult<CrewDetailDto>>($"api/v1/crew/{id}", _jsonOpts, ct);
             return r?.Data;
         }
         catch { return null; }

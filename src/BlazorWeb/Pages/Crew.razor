@@ -114,7 +114,7 @@
                             <p class="text-sm font-bold text-gray-700">@c.EventsAttended</p>
                         </div>
                     </div>
-                    <button type="button" @onclick="() => _detailsCrew = c"
+                    <button type="button" @onclick="() => OpenDetailsAsync(c)"
                             class="mt-2 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
                         🔍 View details
                     </button>
@@ -158,7 +158,7 @@
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium @StatusColor(c.Status)">@c.Status</span>
                                 </td>
                                 <td class="px-4 py-3 text-center">
-                                    <button type="button" @onclick="() => _detailsCrew = c"
+                                    <button type="button" @onclick="() => OpenDetailsAsync(c)"
                                             class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
                                         🔍 View
                                     </button>
@@ -173,35 +173,56 @@
 </div>
 
 @* ── View details modal ─────────────────────────────────────────────── *@
-@if (_detailsCrew is not null)
+@if (_detailsCrew is not null || _detailsLoading)
 {
-    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @onclick="() => _detailsCrew = null">
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @onclick="() => { _detailsCrew = null; _detailsLoading = false; }">
         <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6" @onclick:stopPropagation="true">
-            <div class="flex items-start justify-between mb-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 flex-shrink-0">
-                        @(_detailsCrew.FullName.FirstOrDefault())
-                    </div>
-                    <div>
-                        <h3 class="text-base font-bold text-gray-900">@_detailsCrew.FullName</h3>
-                        <p class="text-xs text-gray-500">Crew member · joined @_detailsCrew.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</p>
-                    </div>
+            @if (_detailsLoading)
+            {
+                <div class="flex justify-center py-10">
+                    <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
                 </div>
-                <button type="button" @onclick="() => _detailsCrew = null" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
-            </div>
+            }
+            else if (_detailsCrew is not null)
+            {
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 flex-shrink-0">
+                            @(_detailsCrew.FullName.FirstOrDefault())
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-gray-900">@_detailsCrew.FullName</h3>
+                            <p class="text-xs text-gray-500">Crew member · joined @_detailsCrew.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</p>
+                        </div>
+                    </div>
+                    <button type="button" @onclick="() => _detailsCrew = null" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+                </div>
 
-            <div class="grid grid-cols-2 gap-3 text-sm">
-                <DetailField Label="Mobile" Value="@_detailsCrew.Mobile" />
-                <DetailField Label="Email" Value="@_detailsCrew.Email" />
-                <DetailField Label="Vendor" Value="@(_detailsCrew.VendorName ?? "—")" />
-                <DetailField Label="Status" Value="@_detailsCrew.Status" />
-                <DetailField Label="Discipline score" Value="@_detailsCrew.DisciplineScore.ToString("F0")" />
-                <DetailField Label="Events attended" Value="@_detailsCrew.EventsAttended.ToString()" />
-            </div>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <DetailField Label="Mobile" Value="@_detailsCrew.Mobile" />
+                    <DetailField Label="Email" Value="@_detailsCrew.Email" />
+                    <DetailField Label="Vendor" Value="@(_detailsCrew.VendorName ?? "—")" />
+                    <DetailField Label="Status" Value="@_detailsCrew.Status" />
+                    <DetailField Label="Discipline score" Value="@_detailsCrew.DisciplineScore.ToString("F0")" />
+                    <DetailField Label="Events attended" Value="@_detailsCrew.EventsAttended.ToString()" />
+                    <DetailField Label="Date of birth" Value="@(_detailsCrew.DateOfBirth?.ToString("dd MMM yyyy"))" />
+                    <DetailField Label="Experience" Value="@(_detailsCrew.ExperienceYears.HasValue ? $"{_detailsCrew.ExperienceYears} yr" : null)" />
+                    <DetailField Label="City" Value="@_detailsCrew.City" />
+                    <DetailField Label="State" Value="@_detailsCrew.State" />
+                    <DetailField Label="Skills" Value="@_detailsCrew.Skills" Span="2" />
+                    <DetailField Label="Referral code used" Value="@_detailsCrew.ReferralCodeUsed" />
+                    <DetailField Label="About" Value="@_detailsCrew.Bio" Span="2" />
+                </div>
 
-            <div class="mt-5 flex justify-end gap-2">
-                <button type="button" @onclick="() => _detailsCrew = null" class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Close</button>
-            </div>
+                <FileDocumentList Files="@_detailsCrew.Files" />
+
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" @onclick="() => _detailsCrew = null" class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Close</button>
+                </div>
+            }
         </div>
     </div>
 }
@@ -297,7 +318,15 @@
     private bool _accessDenied;
     private bool _canWrite;
     private PagedCrewResult? _crew;
-    private CrewMemberDto? _detailsCrew;
+    private CrewDetailDto? _detailsCrew;
+    private bool _detailsLoading;
+
+    private async Task OpenDetailsAsync(CrewMemberDto c)
+    {
+        _detailsLoading = true; _detailsCrew = null;
+        _detailsCrew = await VendorApi.GetCrewDetailAsync(c.Id);
+        _detailsLoading = false;
+    }
     private bool _loading = true;
     private int  _page    = 1;
     private string? _search;

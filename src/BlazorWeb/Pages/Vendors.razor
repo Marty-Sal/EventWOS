@@ -227,12 +227,22 @@
                     <DetailField Label="Mobile" Value="@_detailsTarget.Mobile" />
                     <DetailField Label="Email" Value="@_detailsTarget.Email" />
                     <DetailField Label="Business name" Value="@_detailsTarget.BusinessName" />
+                    <DetailField Label="Contact person" Value="@_detailsTarget.ContactPersonName" />
                     <DetailField Label="Referral code" Value="@_detailsTarget.ReferralCode" />
                     <DetailField Label="Status" Value="@_detailsTarget.Status" />
                     <DetailField Label="Rating" Value="@(_detailsTarget.Rating.HasValue ? $"★ {_detailsTarget.Rating.Value:F1}" : "Unrated")" />
                     <DetailField Label="Crew count" Value="@_detailsTarget.CrewCount.ToString()" />
                     <DetailField Label="Events completed" Value="@_detailsTarget.EventsCompleted.ToString()" />
+                    <DetailField Label="GST number" Value="@_detailsTarget.GstNumber" />
+                    <DetailField Label="Website" Value="@_detailsTarget.Website" />
+                    <DetailField Label="City" Value="@_detailsTarget.City" />
+                    <DetailField Label="State" Value="@_detailsTarget.State" />
+                    <DetailField Label="Date of birth" Value="@(_detailsTarget.DateOfBirth?.ToString("dd MMM yyyy"))" />
+                    <DetailField Label="Address" Value="@_detailsTarget.Address" Span="2" />
+                    <DetailField Label="About" Value="@_detailsTarget.Bio" Span="2" />
                 </div>
+
+                <FileDocumentList Files="@_detailsTarget.Files" />
 
                 <div class="mt-5 flex justify-end gap-2">
                     <button type="button" @onclick="() => _detailsTarget = null" class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Close</button>

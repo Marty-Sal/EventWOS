@@ -1,3 +1,4 @@
+using EventWOS.Application.Files.DTOs;
 using EventWOS.Application.Interfaces;
 using EventWOS.Application.Vendors.Commands;
 using EventWOS.Application.Vendors.DTOs;
@@ -24,6 +25,17 @@ public sealed class GetVendorByIdHandler : IRequestHandler<GetVendorByIdQuery, R
         var crewCount = await _db.Users.CountAsync(
             u => u.VendorId == req.VendorId && u.Role == UserRole.Crew && !u.IsDeleted, ct);
 
-        return Result.Success(CreateVendorHandler.MapToDto(vendor, crewCount));
+        // Profile photo / any docs the vendor uploaded — same "View details"
+        // depth an Admin/Manager gets in the Approval Queue for a still-
+        // pending Vendor registration.
+        var files = await _db.FileDocuments
+            .Where(f => f.OwnerId == req.VendorId && !f.IsDeleted)
+            .OrderBy(f => f.CreatedAt)
+            .Select(f => new FileDocumentDto(
+                f.Id, f.OwnerId, f.EntityId, f.DocumentType, f.OriginalFileName,
+                f.ContentType, f.FileSizeBytes, f.ThumbnailStorageKey != null, f.CreatedAt))
+            .ToListAsync(ct);
+
+        return Result.Success(CreateVendorHandler.MapToDto(vendor, crewCount, files));
     }
 }

@@ -1,3 +1,5 @@
+using EventWOS.Application.Files.DTOs;
+
 namespace EventWOS.Application.Vendors.DTOs;
 
 public sealed record VendorDto(
@@ -12,7 +14,20 @@ public sealed record VendorDto(
     decimal? Rating,
     int     EventsCompleted,
     int     CrewCount,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    // Extended profile — same fields shown in the Approval Queue "View
+    // details" modal for a pending Vendor registration, now also surfaced
+    // for an already-active Vendor via GetVendorByIdQuery so the "View
+    // details" modal on the Vendors page shows equivalent depth.
+    string? ContactPersonName = null,
+    string? GstNumber         = null,
+    string? Address           = null,
+    string? City              = null,
+    string? State             = null,
+    string? Website           = null,
+    string? Bio               = null,
+    DateTime? DateOfBirth     = null,
+    IReadOnlyList<FileDocumentDto>? Files = null
 );
 
 public sealed record VendorListItemDto(
@@ -56,6 +71,35 @@ public sealed record CrewDto(
     decimal DisciplineScore,
     int     EventsAttended,
     DateTime CreatedAt
+);
+
+/// <summary>
+/// Full profile for the Crew page's "View details" modal — same shape and
+/// same fields as the Approval Queue's PendingRegistrationDto (minus the
+/// approval-only fields), so an Admin/Manager/Vendor sees just as much
+/// detail for an already-active Crew member as a reviewer sees for a
+/// pending one. Returned by GetCrewByIdQuery, not CreateCrewCommand.
+/// </summary>
+public sealed record CrewDetailDto(
+    Guid    Id,
+    string  Mobile,
+    string  FullName,
+    string? Email,
+    string? AvatarUrl,
+    string  Status,
+    Guid?   VendorId,
+    string? VendorName,
+    decimal DisciplineScore,
+    int     EventsAttended,
+    DateTime CreatedAt,
+    string? City,
+    string? State,
+    string? Bio,
+    string? Skills,
+    int?    ExperienceYears,
+    string? ReferralCodeUsed,
+    DateTime? DateOfBirth,
+    IReadOnlyList<FileDocumentDto> Files
 );
 
 public sealed record JoinVendorRequest(string ReferralCode);

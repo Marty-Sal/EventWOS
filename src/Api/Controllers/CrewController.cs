@@ -47,6 +47,18 @@ public sealed class CrewController : ControllerBase
         return Ok(ApiResponse<PagedCrewResult>.Ok(result.Value));
     }
 
+    /// <summary>Get a single crew member's full profile — "View details" modal.</summary>
+    [Permission("crew:read")]
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetCrewById(Guid id, CancellationToken ct)
+    {
+        if (!_currentUser.HasPermission("crew:read")) return Forbid();
+        var result = await _mediator.Send(new EventWOS.Application.Crew.Queries.GetCrewByIdQuery(id), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse<CrewDetailDto>.Ok(result.Value))
+            : NotFound(ApiResponse<CrewDetailDto>.Fail(result.Error.Message));
+    }
+
     /// <summary>Create a crew member. Admin/Vendor.</summary>
     [Permission("crew:write")]
     [HttpPost]
