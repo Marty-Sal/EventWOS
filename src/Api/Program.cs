@@ -725,8 +725,19 @@ BEGIN
     ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_by UUID;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_by UUID;
+    -- Direct-add invite tracking (Admin/Vendor adds a Crew/Vendor/Manager
+    -- directly, skipping the approval queue) — see UpdateProfileCommand /
+    -- CreateVendorCommand / CreateCrewCommand / CreateManagerCommand.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_by_user_id UUID;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMP;
     CREATE UNIQUE INDEX IF NOT EXISTS ix_users_referral_code ON users(referral_code) WHERE referral_code IS NOT NULL;
     CREATE INDEX IF NOT EXISTS ix_users_vendor_id ON users(vendor_id);
+    -- Email uniqueness (case-insensitive) across Vendor/Crew/Manager creation —
+    -- previously only mobile was checked. Normalize existing rows first so
+    -- legacy casing differences don't collide the new unique index.
+    UPDATE users SET email = LOWER(TRIM(email)) WHERE email IS NOT NULL;
+    DROP INDEX IF EXISTS ix_users_email;
+    CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users(email) WHERE email IS NOT NULL;
 
     -- ═══ otp_requests ════════════════════════════════════════════════════════
     -- Case A: both hashed_otp (old) and otp_hash (blank, added by prev patch) exist
