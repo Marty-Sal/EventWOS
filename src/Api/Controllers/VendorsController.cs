@@ -76,7 +76,7 @@ public sealed class VendorsController : ControllerBase
     public async Task<IActionResult> CreateVendor([FromBody] CreateVendorRequest req, CancellationToken ct)
     {
         if (!_currentUser.HasPermission("vendors:write")) return Forbid();
-        var result = await _mediator.Send(new CreateVendorCommand(req.Mobile, req.FullName, req.BusinessName, req.Email), ct);
+        var result = await _mediator.Send(new CreateVendorCommand(req.Mobile, req.FullName, req.BusinessName, req.Email, _currentUser.UserId!.Value), ct);
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetVendor), new { id = result.Value.Id, version = "1" },
                 ApiResponse<VendorDto>.Ok(result.Value))

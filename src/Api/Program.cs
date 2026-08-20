@@ -344,6 +344,25 @@ try
     }
     builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
+    // ── WhatsApp: Meta Cloud API if credentials are present, otherwise dev stub (logs only).
+    //    Same on/off pattern as SendGrid above — boots fine with no credentials configured.
+    var whatsAppToken = builder.Configuration["WhatsApp:AccessToken"]
+                      ?? builder.Configuration["WHATSAPP_ACCESS_TOKEN"];
+    var whatsAppPhoneId = builder.Configuration["WhatsApp:PhoneNumberId"]
+                        ?? builder.Configuration["WHATSAPP_PHONE_NUMBER_ID"];
+    if (!string.IsNullOrWhiteSpace(whatsAppToken) && !string.IsNullOrWhiteSpace(whatsAppPhoneId))
+    {
+        builder.Services.AddHttpClient<EventWOS.Application.Common.IWhatsAppProvider,
+                                       EventWOS.Infrastructure.Notifications.WhatsAppCloudApiProvider>();
+        Log.Information("WhatsApp: WhatsAppCloudApiProvider registered.");
+    }
+    else
+    {
+        builder.Services.AddSingleton<EventWOS.Application.Common.IWhatsAppProvider,
+                                      EventWOS.Infrastructure.Notifications.StubWhatsAppProvider>();
+        Log.Information("WhatsApp: WHATSAPP_ACCESS_TOKEN/WHATSAPP_PHONE_NUMBER_ID not set — using StubWhatsAppProvider (logs only).");
+    }
+
     // ── File & Image Storage module ────────────────────────────────────────
     // Provider selected purely by config — Storage:Provider = "Local" (default,
     // dev/MVP only) | "S3" (AWS S3 / Cloudflare R2 / MinIO) | "AzureBlob".

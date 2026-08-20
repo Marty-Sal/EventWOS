@@ -22,12 +22,17 @@ public sealed class CreateManagerHandler : IRequestHandler<CreateManagerCommand,
 
     public async Task<Result<ManagerDto>> Handle(CreateManagerCommand req, CancellationToken ct)
     {
-        if (await _db.Users.AnyAsync(u => u.Mobile == req.Mobile && !u.IsDeleted, ct))
-            return Result.Failure<ManagerDto>(new Error("Manager.DuplicateMobile", "Mobile already registered."));
+        var mobile = req.Mobile.Trim();
+        var email  = req.Email?.Trim().ToLowerInvariant();
 
-        var manager = new User(req.Mobile, req.FullName, UserRole.Manager);
+        if (await _db.Users.AnyAsync(u => u.Mobile == mobile && !u.IsDeleted, ct))
+            return Result.Failure<ManagerDto>(new Error("Manager.DuplicateMobile", "An account already exists with this mobile number."));
+        if (!string.IsNullOrEmpty(email) && await _db.Users.AnyAsync(u => u.Email == email && !u.IsDeleted, ct))
+            return Result.Failure<ManagerDto>(new Error("Manager.DuplicateEmail", "An account already exists with this email."));
+
+        var manager = new User(mobile, req.FullName, UserRole.Manager);
         manager.Activate();
-        if (req.Email is not null) manager.Email = req.Email;
+        if (email is not null) manager.Email = email;
 
         _db.Users.Add(manager);
         await _db.SaveChangesAsync(ct);

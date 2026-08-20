@@ -27,7 +27,10 @@ public sealed record VendorDto(
     string? Website           = null,
     string? Bio               = null,
     DateTime? DateOfBirth     = null,
-    IReadOnlyList<FileDocumentDto>? Files = null
+    IReadOnlyList<FileDocumentDto>? Files = null,
+    // Direct-add invite tracking (null/false for self-registered vendors)
+    bool WasDirectlyAdded = false,
+    bool ProfileCompleted = false
 );
 
 public sealed record VendorListItemDto(
@@ -99,7 +102,9 @@ public sealed record CrewDetailDto(
     int?    ExperienceYears,
     string? ReferralCodeUsed,
     DateTime? DateOfBirth,
-    IReadOnlyList<FileDocumentDto> Files
+    IReadOnlyList<FileDocumentDto> Files,
+    bool WasDirectlyAdded = false,
+    bool ProfileCompleted = false
 );
 
 public sealed record JoinVendorRequest(string ReferralCode);

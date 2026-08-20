@@ -48,4 +48,22 @@ public sealed class StubEmailService : IEmailService
             toEmail, fullName, otp);
         return Task.FromResult(true);
     }
+
+    public Task<bool> SendAccountInviteEmailAsync(string toEmail, string fullName, string role,
+        string invitedByName, string setupLink, CancellationToken ct = default)
+    {
+        _logger.LogInformation(
+            "📧 [STUB EMAIL → ACCOUNT INVITE] To: {To} | Name: {Name} | Role: {Role} | InvitedBy: {InvitedBy} | Setup: {Url}",
+            toEmail, fullName, role, invitedByName, setupLink);
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> SendProfileCompletedEmailAsync(string toEmail, string inviterName, string fullName,
+        string role, CancellationToken ct = default)
+    {
+        _logger.LogInformation(
+            "📧 [STUB EMAIL → PROFILE COMPLETED] To: {To} | Inviter: {Inviter} | Completed by: {Name} ({Role})",
+            toEmail, inviterName, fullName, role);
+        return Task.FromResult(true);
+    }
 }

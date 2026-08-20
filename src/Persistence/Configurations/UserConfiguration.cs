@@ -53,6 +53,8 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.ExperienceYears).HasColumnName("experience_years");
         builder.Property(u => u.DateOfBirth).HasColumnName("date_of_birth").HasColumnType("date");
         builder.Property(u => u.InviteMessageTemplate).HasColumnName("invite_message_template").HasMaxLength(500);
+        builder.Property(u => u.InvitedByUserId).HasColumnName("invited_by_user_id");
+        builder.Property(u => u.ProfileCompletedAt).HasColumnName("profile_completed_at");
         // Age is derived from DateOfBirth at read-time (get-only, no setter) — never a real column.
         builder.Ignore(u => u.Age);
         builder.Property(u => u.ReferralCodeUsed).HasColumnName("referral_code_used").HasMaxLength(20);
@@ -81,7 +83,15 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         // Indexes
         builder.HasIndex(u => u.Mobile).IsUnique().HasDatabaseName("ix_users_mobile");
-        builder.HasIndex(u => u.Email).HasDatabaseName("ix_users_email");
+        // Email uniqueness — enforced at the DB level too (defense-in-depth
+        // alongside the Application-layer checks in CreateVendorCommand /
+        // CreateCrewCommand / CreateManagerCommand / RegisterVendorCommand /
+        // RegisterCrewCommand). All those write paths lowercase+trim Email
+        // before saving, so a plain unique index is effectively
+        // case-insensitive. Filtered so the many users with no email
+        // (multiple NULLs) don't collide.
+        builder.HasIndex(u => u.Email).IsUnique().HasFilter("email IS NOT NULL")
+            .HasDatabaseName("ix_users_email");
         builder.HasIndex(u => u.Role).HasDatabaseName("ix_users_role");
         builder.HasIndex(u => u.Status).HasDatabaseName("ix_users_status");
         builder.HasIndex(u => u.ReferralCode).IsUnique().HasFilter("referral_code IS NOT NULL")
@@ -94,6 +104,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasDatabaseName("ix_users_rejected_at");
 
         // Relationships
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(u => u.InvitedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasOne(u => u.Manager)
             .WithMany()
             .HasForeignKey(u => u.ManagerId)

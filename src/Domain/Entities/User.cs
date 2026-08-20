@@ -109,6 +109,22 @@ public sealed class User : BaseEntity
     /// </summary>
     public string? InviteMessageTemplate { get; set; }
 
+    // ── Direct-add invite tracking (Admin/Vendor added this account) ────────
+    /// <summary>
+    /// The Admin/Manager/Vendor who directly added this account via
+    /// CreateVendorCommand/CreateCrewCommand (as opposed to self-registration).
+    /// Null for self-registered and legacy accounts. Used so we know who to
+    /// notify once the invitee finishes filling in their profile.
+    /// </summary>
+    public Guid?     InvitedByUserId  { get; private set; }
+    /// <summary>
+    /// Set the first time a directly-added account saves its extended
+    /// profile fields (see UpdateProfileCommand). Null means "invited but
+    /// hasn't filled in their details yet" — surfaced as a badge in the
+    /// Crew/Vendor 'View details' modal.
+    /// </summary>
+    public DateTime? ProfileCompletedAt { get; private set; }
+
     /// <summary>Age in whole years as of today, or null if DateOfBirth was never captured.</summary>
     public int? Age => DateOfBirth.HasValue ? CalculateAge(DateOfBirth.Value, DateTime.UtcNow.Date) : null;
 
@@ -344,6 +360,36 @@ public sealed class User : BaseEntity
 
     /// <summary>Marks a grandfathered user as needing to set a password before next login.</summary>
     public void RequirePasswordSetup() => RequirePasswordReset = true;
+
+    /// <summary>
+    /// Admin/Vendor directly added this account (skips self-registration and
+    /// the approval queue — the account is Active immediately since an
+    /// authorized party already vouched for it). Forces the same first-login
+    /// password-setup flow grandfathered users go through, and remembers who
+    /// added them so we can notify that person once the profile is filled in.
+    /// </summary>
+    public void MarkAsDirectlyAdded(Guid invitedByUserId)
+    {
+        InvitedByUserId = invitedByUserId;
+        RequirePasswordSetup();
+    }
+
+    /// <summary>
+    /// Saves the extended profile fields a directly-added Vendor/Crew fills
+    /// in after their first login. The FIRST time this is called for such a
+    /// user (ProfileCompletedAt still null), the caller should notify
+    /// InvitedByUserId — this method just flips the timestamp so that
+    /// decision can be made idempotently.
+    /// </summary>
+    public bool MarkProfileCompletedIfFirstTime()
+    {
+        if (InvitedByUserId is null || ProfileCompletedAt is not null) return false;
+        ProfileCompletedAt = DateTime.UtcNow;
+        return true;
+    }
+
+    /// <summary>Sets DOB when a directly-added account fills it in post-creation (18+ already enforced by the caller's validator).</summary>
+    public void SetDateOfBirth(DateTime dob) => DateOfBirth = dob.Date;
 
     public void RecordFailedLoginAttempt()
     {

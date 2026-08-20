@@ -1,3 +1,4 @@
+using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
 using EventWOS.Application.Vendors.DTOs;
 using EventWOS.Domain.Entities;
@@ -5,22 +6,49 @@ using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EventWOS.Application.Crew.Commands;
 
 public sealed record CreateCrewCommand(
-    string Mobile, string FullName, string? Email, string? ReferralCode
+    string Mobile, string FullName, string? Email, string? ReferralCode, Guid RequestingUserId
 ) : IRequest<Result<CrewDto>>;
 
+/// <summary>
+/// Admin/Manager/Vendor directly adds a Crew member. Skips self-registration
+/// and the approval queue entirely — the account is Active immediately (an
+/// authorized party already vouched for it). Instead we force the
+/// first-login password-setup flow (same one grandfathered users go
+/// through) and notify the new crew member by email + WhatsApp with a link
+/// to set their password and fill in their profile. See
+/// User.MarkAsDirectlyAdded / UpdateProfileHandler for the "notify the
+/// inviter once the profile is filled in" side of this loop.
+/// </summary>
 public sealed class CreateCrewHandler : IRequestHandler<CreateCrewCommand, Result<CrewDto>>
 {
     private readonly IAppDbContext _db;
-    public CreateCrewHandler(IAppDbContext db) => _db = db;
+    private readonly IEmailService _email;
+    private readonly IWhatsAppProvider _whatsApp;
+    private readonly AppUrlOptions _appUrls;
+    private readonly ILogger<CreateCrewHandler> _logger;
+
+    public CreateCrewHandler(
+        IAppDbContext db, IEmailService email, IWhatsAppProvider whatsApp,
+        IOptions<AppUrlOptions> appUrls, ILogger<CreateCrewHandler> logger)
+    {
+        _db = db; _email = email; _whatsApp = whatsApp; _appUrls = appUrls.Value; _logger = logger;
+    }
 
     public async Task<Result<CrewDto>> Handle(CreateCrewCommand req, CancellationToken ct)
     {
-        if (await _db.Users.AnyAsync(u => u.Mobile == req.Mobile, ct))
-            return Result.Failure<CrewDto>(new Error("Crew.DuplicateMobile", "Mobile already registered."));
+        var mobile = req.Mobile.Trim();
+        var email  = req.Email?.Trim().ToLowerInvariant();
+
+        if (await _db.Users.AnyAsync(u => u.Mobile == mobile, ct))
+            return Result.Failure<CrewDto>(new Error("Crew.DuplicateMobile", "An account already exists with this mobile number."));
+        if (!string.IsNullOrEmpty(email) && await _db.Users.AnyAsync(u => u.Email == email, ct))
+            return Result.Failure<CrewDto>(new Error("Crew.DuplicateEmail", "An account already exists with this email."));
 
         // A vendor is mandatory for every crew member created through this
         // endpoint (Vendor self-service always sends their own code; the
@@ -36,15 +64,44 @@ public sealed class CreateCrewHandler : IRequestHandler<CreateCrewCommand, Resul
         if (vendor is null)
             return Result.Failure<CrewDto>(new Error("Crew.InvalidReferral", "Invalid referral code."));
 
-        var crew = new User(req.Mobile, req.FullName, UserRole.Crew);
+        var requester = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == req.RequestingUserId)
+            .Select(u => u.FullName)
+            .FirstOrDefaultAsync(ct);
+
+        var crew = new User(mobile, req.FullName, UserRole.Crew);
         crew.Activate();
-        if (req.Email is not null) crew.Email = req.Email;
+        crew.MarkAsDirectlyAdded(req.RequestingUserId);
+        if (email is not null) crew.Email = email;
         crew.JoinVendor(vendor.Id);
 
         _db.Users.Add(crew);
         await _db.SaveChangesAsync(ct);
 
+        await SendInviteAsync(crew, requester ?? vendor.FullName, ct);
+
         return Result.Success(MapToDto(crew, vendor.FullName));
+    }
+
+    private async Task SendInviteAsync(User crew, string invitedByName, CancellationToken ct)
+    {
+        var baseUrl = !string.IsNullOrWhiteSpace(_appUrls.BaseUrl)
+            ? _appUrls.BaseUrl
+            : (Environment.GetEnvironmentVariable("APP_BASE_URL") ?? "https://eventwos.app");
+        var setupLink = $"{baseUrl.TrimEnd('/')}/setup-password?mobile={Uri.EscapeDataString(crew.Mobile)}";
+
+        if (!string.IsNullOrEmpty(crew.Email))
+        {
+            try { await _email.SendAccountInviteEmailAsync(crew.Email, crew.FullName, "Crew", invitedByName, setupLink, ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Crew invite email failed for {UserId}.", crew.Id); }
+        }
+
+        try
+        {
+            var msg = $"Hi {crew.FullName}, {invitedByName} added you to EventWOS as Crew. Set up your password: {setupLink}";
+            await _whatsApp.SendAsync(crew.Mobile, msg, ct);
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Crew invite WhatsApp failed for {UserId}.", crew.Id); }
     }
 
     internal static CrewDto MapToDto(User c, string? vendorName) => new(

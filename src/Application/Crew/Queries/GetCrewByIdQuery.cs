@@ -60,6 +60,7 @@ public sealed class GetCrewByIdHandler : IRequestHandler<GetCrewByIdQuery, Resul
             crew.Status.ToString(), crew.VendorId, vendorName,
             crew.DisciplineScore, crew.EventsAttended, crew.CreatedAt,
             crew.City, crew.State, crew.Bio, crew.Skills, crew.ExperienceYears,
-            crew.ReferralCodeUsed, crew.DateOfBirth, files));
+            crew.ReferralCodeUsed, crew.DateOfBirth, files,
+            crew.InvitedByUserId.HasValue, crew.ProfileCompletedAt.HasValue));
     }
 }

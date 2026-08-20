@@ -54,6 +54,18 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
             user.Role == Domain.Enums.UserRole.Crew ? user.DisciplineScore : null,
             user.Role == Domain.Enums.UserRole.Crew ? user.EventsAttended : null,
             user.VendorId,
-            vendorName));
+            vendorName,
+            user.DateOfBirth,
+            user.City,
+            user.State,
+            user.Address,
+            user.Bio,
+            user.Role == Domain.Enums.UserRole.Crew ? user.Skills : null,
+            user.Role == Domain.Enums.UserRole.Crew ? user.ExperienceYears : null,
+            user.Role == Domain.Enums.UserRole.Vendor ? user.ContactPersonName : null,
+            user.Role == Domain.Enums.UserRole.Vendor ? user.GstNumber : null,
+            user.Role == Domain.Enums.UserRole.Vendor ? user.Website : null,
+            user.InvitedByUserId.HasValue,
+            user.ProfileCompletedAt.HasValue));
     }
 }

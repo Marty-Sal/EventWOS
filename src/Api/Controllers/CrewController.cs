@@ -65,7 +65,7 @@ public sealed class CrewController : ControllerBase
     public async Task<IActionResult> CreateCrew([FromBody] CreateCrewRequest req, CancellationToken ct)
     {
         if (!_currentUser.HasPermission("crew:write")) return Forbid();
-        var result = await _mediator.Send(new CreateCrewCommand(req.Mobile, req.FullName, req.Email, req.ReferralCode), ct);
+        var result = await _mediator.Send(new CreateCrewCommand(req.Mobile, req.FullName, req.Email, req.ReferralCode, _currentUser.UserId!.Value), ct);
         return result.IsSuccess
             ? Created(string.Empty, ApiResponse<CrewDto>.Ok(result.Value))
             : BadRequest(ApiResponse<CrewDto>.Fail(result.Error.Message));

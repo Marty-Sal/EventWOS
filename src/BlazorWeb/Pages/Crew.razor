@@ -201,6 +201,20 @@
                     <button type="button" @onclick="() => _detailsCrew = null" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
                 </div>
 
+                @if (_detailsCrew.WasDirectlyAdded)
+                {
+                    <div class="mb-4">
+                        @if (_detailsCrew.ProfileCompleted)
+                        {
+                            <span class="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">Profile completed</span>
+                        }
+                        else
+                        {
+                            <span class="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700">Invited — awaiting profile completion</span>
+                        }
+                    </div>
+                }
+
                 <div class="grid grid-cols-2 gap-3 text-sm">
                     <DetailField Label="Mobile" Value="@_detailsCrew.Mobile" />
                     <DetailField Label="Email" Value="@_detailsCrew.Email" />

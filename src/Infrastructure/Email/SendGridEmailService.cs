@@ -132,4 +132,35 @@ public sealed class SendGridEmailService : IEmailService
         var plain = $"Your EventWOS password reset code: {otp} (valid for 10 minutes).";
         return SendAsync(toEmail, subject, html, plain, ct);
     }
+
+    public Task<bool> SendAccountInviteEmailAsync(string toEmail, string fullName, string role,
+        string invitedByName, string setupLink, CancellationToken ct = default)
+    {
+        var subject = $"You've been added to EventWOS as a {role}";
+        var html = $@"
+<div style='font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto;color:#1f2937'>
+  <h2 style='color:#4f46e5'>Hi {fullName},</h2>
+  <p>{invitedByName} has added you to EventWOS as a <strong>{role}</strong>. Your account is already active — no approval needed.</p>
+  <p>Set up your password to get started, then fill in your profile:</p>
+  <p style='margin-top:20px'>
+    <a href='{setupLink}' style='background:#4f46e5;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block'>Set up my account</a>
+  </p>
+  <p style='color:#6b7280;font-size:12px;margin-top:32px'>If you weren't expecting this, you can ignore this email.</p>
+</div>";
+        var plain = $"Hi {fullName}, {invitedByName} has added you to EventWOS as a {role}. Your account is already active. Set up your password: {setupLink}";
+        return SendAsync(toEmail, subject, html, plain, ct);
+    }
+
+    public Task<bool> SendProfileCompletedEmailAsync(string toEmail, string inviterName, string fullName,
+        string role, CancellationToken ct = default)
+    {
+        var subject = $"{fullName} completed their EventWOS profile";
+        var html = $@"
+<div style='font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto;color:#1f2937'>
+  <h2 style='color:#4f46e5'>Hi {inviterName},</h2>
+  <p><strong>{fullName}</strong> ({role}) has finished filling in their profile details on EventWOS.</p>
+</div>";
+        var plain = $"Hi {inviterName}, {fullName} ({role}) has finished filling in their profile details on EventWOS.";
+        return SendAsync(toEmail, subject, html, plain, ct);
+    }
 }
