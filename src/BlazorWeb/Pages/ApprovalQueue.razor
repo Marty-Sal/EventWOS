@@ -189,7 +189,7 @@
                 <DetailField Label="Mobile" Value="@_detailsRow.Mobile" />
                 @if (_detailsRow.DateOfBirth.HasValue)
                 {
-                    <DetailField Label="Date of birth" Value="@_detailsRow.DateOfBirth.Value.ToString("dd MMM yyyy")" />
+                    <DetailField Label="Date of birth" Value="@FormatDob(_detailsRow.DateOfBirth)" />
                 }
 
                 @if (_detailsRow.Role == "Vendor")
@@ -206,7 +206,7 @@
                 else
                 {
                     <DetailField Label="City" Value="@_detailsRow.City" />
-                    <DetailField Label="Experience" Value="@(_detailsRow.ExperienceYears.HasValue ? $"{_detailsRow.ExperienceYears} yr" : null)" />
+                    <DetailField Label="Experience" Value="@ExperienceLabel(_detailsRow)" />
                     <DetailField Label="Skills" Value="@_detailsRow.Skills" Span="2" />
                     <DetailField Label="Referred by" Value="@(_detailsRow.ReferredVendorName ?? _detailsRow.ReferralCodeUsed)" Span="2" />
                     <DetailField Label="Bio" Value="@_detailsRow.Bio" Span="2" />
@@ -430,6 +430,14 @@
         }
         finally { _downloadingIds.Remove(f.Id); }
     }
+
+    // Kept as a helper (rather than an inline ternary with an interpolated
+    // string) because embedding "$\"...\"" directly inside a Razor markup
+    // attribute value trips the Razor tokenizer's quote tracking.
+    private static string? ExperienceLabel(PendingRegistrationDto r) =>
+        r.ExperienceYears.HasValue ? $"{r.ExperienceYears} yr" : null;
+
+    private static string? FormatDob(DateTime? dob) => dob?.ToString("dd MMM yyyy");
 
     private static string HumanSize(long bytes) => bytes switch
     {
