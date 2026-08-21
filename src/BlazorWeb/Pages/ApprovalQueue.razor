@@ -42,6 +42,32 @@
         </div>
     </div>
 
+    @* Bulk approve/reject — same shape as the Events tab's bulk bar
+       (ManagerApprovals.razor), fanning out the existing per-row
+       Approve/Reject endpoints in parallel rather than needing a new
+       bulk backend endpoint. *@
+    @if (_selectedIds.Count > 0)
+    {
+        <div class="sticky top-2 z-30 bg-indigo-600 text-white rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3">
+            <span class="font-semibold text-sm">@_selectedIds.Count selected</span>
+            <span class="text-indigo-200 text-xs">on this page</span>
+            <div class="ml-auto flex gap-2">
+                <button @onclick="ClearSelection"
+                        class="px-3 py-1.5 rounded-xl border border-indigo-400 text-xs font-semibold hover:bg-indigo-700 transition">
+                    Clear
+                </button>
+                <button @onclick="OpenBulkReject" disabled="@_bulkBusy"
+                        class="px-3 py-1.5 rounded-xl bg-white text-red-600 text-xs font-bold hover:bg-red-50 disabled:opacity-50 transition">
+                    ✕ Reject selected
+                </button>
+                <button @onclick="DoBulkApprove" disabled="@_bulkBusy"
+                        class="px-4 py-1.5 rounded-xl bg-green-500 text-white text-xs font-bold hover:bg-green-600 disabled:opacity-50 transition shadow">
+                    @(_bulkBusy && _bulkAction == "approve" ? "Approving…" : "✓ Approve selected")
+                </button>
+            </div>
+        </div>
+    }
+
     @if (_loading && _queue is null)
     {
         <div class="flex justify-center py-20">
@@ -81,11 +107,23 @@
         }
         else
         {
+            <div class="flex items-center gap-2 px-1">
+                <input type="checkbox" checked="@AllSelected"
+                       @onchange="e => ToggleSelectAll((bool)(e.Value ?? false))"
+                       disabled="@_bulkBusy"
+                       class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                <span class="text-xs text-gray-500">Select all @(_tab == Tab.Vendors ? "vendor" : "crew") registrations</span>
+            </div>
             <div class="space-y-4">
                 @foreach (var r in CurrentRows)
                 {
-                    <div class="bg-white rounded-2xl border border-blue-100 shadow-sm p-5">
+                    <div class="bg-white rounded-2xl border @(_selectedIds.Contains(r.UserId) ? "border-indigo-300 ring-1 ring-indigo-100" : "border-blue-100") shadow-sm p-5">
                         <div class="flex items-start gap-4">
+                            <input type="checkbox" checked="@_selectedIds.Contains(r.UserId)"
+                                   @onchange="e => ToggleSelect(r.UserId, (bool)(e.Value ?? false))"
+                                   disabled="@_bulkBusy"
+                                   class="w-4 h-4 mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                                   title="Select for bulk action" />
                             <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center font-semibold flex-shrink-0">
                                 @(string.IsNullOrEmpty(r.FullName) ? "?" : r.FullName[0].ToString().ToUpperInvariant())
                             </div>
@@ -141,17 +179,17 @@
 
                             <div class="flex flex-col gap-2 flex-shrink-0">
                                 <button type="button" @onclick="() => ApproveAsync(r)"
-                                        disabled="@_busyIds.Contains(r.UserId)"
+                                        disabled="@(_busyIds.Contains(r.UserId) || _bulkBusy)"
                                         class="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
                                     ✅ Approve
                                 </button>
                                 <button type="button" @onclick="() => OpenNotify(r)"
-                                        disabled="@_busyIds.Contains(r.UserId)"
+                                        disabled="@(_busyIds.Contains(r.UserId) || _bulkBusy)"
                                         class="px-3 py-1.5 text-xs rounded-lg bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">
                                     ✉️ Notify
                                 </button>
                                 <button type="button" @onclick="() => RejectAsync(r)"
-                                        disabled="@_busyIds.Contains(r.UserId)"
+                                        disabled="@(_busyIds.Contains(r.UserId) || _bulkBusy)"
                                         class="px-3 py-1.5 text-xs rounded-lg bg-white border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50">
                                     ✖ Reject
                                 </button>
@@ -260,6 +298,46 @@
     </div>
 }
 
+@* ── Bulk reject modal ──────────────────────────────────────────────── *@
+@* One reason applies to every selected row — mirrors the Events tab's
+   bulk-reject modal (ManagerApprovals.razor). *@
+@if (_bulkRejectOpen)
+{
+    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <h3 class="font-bold text-gray-800 text-base">Reject @_selectedIds.Count @(TypeLabel.ToLowerInvariant()) @(_selectedIds.Count == 1 ? "registration" : "registrations")</h3>
+            <p class="text-xs text-gray-500">
+                The same reason will be emailed to every selected @(TypeLabel.ToLowerInvariant()).
+                Use this for clear, common rejections like "Incomplete documents" or "Duplicate registration".
+            </p>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1.5">
+                    Rejection Reason <span class="text-red-500">*</span>
+                </label>
+                <textarea @bind="_bulkRejectReason" rows="4"
+                          class="w-full px-3 py-2 text-sm rounded-xl border @(_bulkReasonError ? "border-red-400 bg-red-50" : "border-gray-200")
+                                 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                          placeholder="e.g. Incomplete documents, duplicate registration, etc." />
+                @if (_bulkReasonError)
+                {
+                    <p class="text-xs text-red-500 mt-1">⚠ Rejection reason is mandatory.</p>
+                }
+            </div>
+            <div class="flex gap-3 pt-1">
+                <button @onclick="CancelBulkReject"
+                        class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition">
+                    Cancel
+                </button>
+                <button @onclick="DoBulkReject" disabled="@_bulkBusy"
+                        class="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold
+                               hover:bg-red-700 disabled:opacity-50 transition shadow-sm">
+                    @(_bulkBusy ? "Rejecting…" : $"Confirm reject ({_selectedIds.Count})")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @* ── Notify modal ────────────────────────────────────────────────────── *@
 @if (_notifyRow is not null)
 {
@@ -294,6 +372,18 @@
     private bool _toastIsError;
     private int TotalPending => (_queue?.VendorCount ?? 0) + (_queue?.CrewCount ?? 0);
     private readonly HashSet<Guid> _busyIds = new();
+
+    // ── Bulk selection state ────────────────────────────────────────────
+    // _selectedIds is the source of truth; checkboxes bind to membership.
+    // Bulk operations fan out the existing per-row Approve/Reject
+    // endpoints in parallel — same pattern as the Events tab
+    // (ManagerApprovals.razor) — no new bulk backend endpoint needed.
+    private readonly HashSet<Guid> _selectedIds = new();
+    private bool    _bulkBusy;
+    private string? _bulkAction; // "approve" | "reject"
+    private bool    _bulkRejectOpen;
+    private string  _bulkRejectReason = "";
+    private bool    _bulkReasonError;
 
     // Backend query is always role-scoped to exactly one of the two lists
     // (see GetApprovalQueueHandler) — Admin/Manager only ever get Vendors,
@@ -414,6 +504,82 @@
             }
         }
         finally { _busyIds.Remove(r.UserId); }
+    }
+
+    // ── Bulk selection ───────────────────────────────────────────────────
+    private bool AllSelected =>
+        CurrentRows.Any() && CurrentRows.All(r => _selectedIds.Contains(r.UserId));
+
+    private void ToggleSelect(Guid id, bool isSelected)
+    {
+        if (isSelected) _selectedIds.Add(id); else _selectedIds.Remove(id);
+    }
+
+    private void ToggleSelectAll(bool isSelected)
+    {
+        if (isSelected)
+            foreach (var r in CurrentRows) _selectedIds.Add(r.UserId);
+        else
+            foreach (var r in CurrentRows) _selectedIds.Remove(r.UserId);
+    }
+
+    private void ClearSelection() => _selectedIds.Clear();
+
+    // Fans out the existing single-approve endpoint in parallel. Reports a
+    // one-line summary in the toast and reloads once at the end.
+    private async Task DoBulkApprove()
+    {
+        if (_selectedIds.Count == 0) return;
+        _bulkBusy = true; _bulkAction = "approve"; StateHasChanged();
+        var ids = _selectedIds.ToList();
+        var tasks = ids.Select(id => Api.ApproveAsync(id)).ToList();
+        await Task.WhenAll(tasks);
+        var ok   = tasks.Count(t => t.Result.Success);
+        var fail = tasks.Count - ok;
+        Toast(fail == 0
+            ? $"✓ Approved {ok} {(ok == 1 ? "registration" : "registrations")}."
+            : $"Approved {ok}, {fail} failed. Refresh to retry.",
+            isError: fail > 0);
+        _selectedIds.Clear();
+        _bulkBusy = false; _bulkAction = null;
+        await LoadAsync();
+    }
+
+    private void OpenBulkReject()
+    {
+        if (_selectedIds.Count == 0) return;
+        _bulkRejectReason = ""; _bulkReasonError = false; _bulkRejectOpen = true;
+    }
+
+    private void CancelBulkReject()
+    {
+        _bulkRejectOpen = false; _bulkReasonError = false;
+    }
+
+    // Bulk reject mirrors bulk approve — same fan-out, same toast shape.
+    // The shared rejection reason becomes every selected row's reason.
+    private async Task DoBulkReject()
+    {
+        if (string.IsNullOrWhiteSpace(_bulkRejectReason))
+        {
+            _bulkReasonError = true; StateHasChanged(); return;
+        }
+        if (_selectedIds.Count == 0) { _bulkRejectOpen = false; return; }
+        _bulkBusy = true; _bulkAction = "reject"; StateHasChanged();
+        var ids = _selectedIds.ToList();
+        var reason = _bulkRejectReason.Trim();
+        var tasks = ids.Select(id => Api.RejectAsync(id, reason)).ToList();
+        await Task.WhenAll(tasks);
+        var ok   = tasks.Count(t => t.Result.Success);
+        var fail = tasks.Count - ok;
+        Toast(fail == 0
+            ? $"✓ Rejected {ok} {(ok == 1 ? "registration" : "registrations")}."
+            : $"Rejected {ok}, {fail} failed. Refresh to retry.",
+            isError: fail > 0);
+        _selectedIds.Clear();
+        _bulkBusy = false; _bulkAction = null;
+        _bulkRejectOpen = false;
+        await LoadAsync();
     }
 
     private void OpenDetails(PendingRegistrationDto r)
