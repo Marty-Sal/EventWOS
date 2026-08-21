@@ -1,12 +1,184 @@
 @page "/admin/settings/terms-and-conditions"
 @attribute [Authorize(Roles = "Admin,Manager")]
+@inject HttpClient Http
+@using System.Net.Http
+@using System.Net.Http.Json
 @using EventWOS.BlazorWeb.Components
 
 <PageTitle>Settings — Terms &amp; Conditions — EventWOS</PageTitle>
 
+@*
+    Settings → Terms & Conditions. Two independent documents — Vendor and
+    Crew — each versioned (publishing always adds a new version, never
+    edits in place; see TermsAndConditions.cs doc comment). Publishing a
+    new version is what flips every existing user of that role to
+    "must re-accept" on their next login (handled by the login-time gate,
+    a separate piece of work).
+*@
+
 <SettingsTabs ActiveTab="terms" />
 
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
-    <div class="text-4xl mb-2">📄</div>
-    <p class="text-sm text-gray-500">Terms &amp; Conditions editor is on the way in the next update.</p>
+@if (_accessDenied)
+{
+    <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div class="text-5xl mb-4">🔒</div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
+        <p class="text-gray-500 text-sm">You need <strong>terms:read</strong> permission.</p>
+    </div>
+    return;
+}
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between flex-wrap gap-3">
+        <p class="text-sm text-gray-500">
+            Vendor and Crew each accept their own document at registration, and must re-accept if it's ever updated.
+        </p>
+        <div class="inline-flex rounded-xl border border-gray-200 bg-white p-1">
+            <button @onclick='() => SwitchAudience("Vendor")'
+                    class="px-4 py-1.5 text-sm font-semibold rounded-lg transition @(_audience == "Vendor" ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-50")">
+                Vendor
+            </button>
+            <button @onclick='() => SwitchAudience("Crew")'
+                    class="px-4 py-1.5 text-sm font-semibold rounded-lg transition @(_audience == "Crew" ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-50")">
+                Crew
+            </button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex items-center justify-center py-20">
+            <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            </svg>
+        </div>
+    }
+    else
+    {
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-gray-800">@_audience Terms &amp; Conditions</h3>
+                <span class="text-xs text-gray-400">
+                    @(_currentVersion is null ? "No version published yet" : $"Current: v{_currentVersion}")
+                </span>
+            </div>
+
+            <textarea @bind="_draftContent" rows="16" maxlength="20000"
+                      placeholder="Write the full Terms & Conditions text shown to this audience at registration…"
+                      class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+
+            <div class="flex items-center justify-between">
+                <span class="text-xs text-gray-400">@(_draftContent?.Length ?? 0) / 20,000 characters</span>
+                @if (_canWrite)
+                {
+                    <button @onclick="PublishAsync" disabled="@(_saving || string.IsNullOrWhiteSpace(_draftContent))"
+                            class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition disabled:opacity-50">
+                        @(_saving ? "Publishing…" : $"Publish v{(_currentVersion ?? 0) + 1}")
+                    </button>
+                }
+            </div>
+
+            @if (_currentVersion is not null)
+            {
+                <p class="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                    ⚠️ Publishing creates a new version. Every @_audience user who already accepted v@(_currentVersion)
+                    will be asked to review and accept the new text next time they log in.
+                </p>
+            }
+        </div>
+    }
 </div>
+
+@if (_success is not null)
+{
+    <div class="fixed bottom-5 right-5 bg-green-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
+        ✅ @_success <button @onclick="() => _success = null" class="ml-3 font-bold">✕</button>
+    </div>
+}
+@if (_error is not null)
+{
+    <div class="fixed bottom-5 right-5 bg-red-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg z-50">
+        ⚠️ @_error <button @onclick="() => _error = null" class="ml-3 font-bold">✕</button>
+    </div>
+}
+
+@code {
+    private bool _accessDenied;
+    private bool _canWrite;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _success;
+    private string? _error;
+
+    private string _audience = "Vendor";
+    private int?   _currentVersion;
+    private string? _draftContent;
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _accessDenied = !await PermGuard.CanAsync("terms:read");
+        if (_accessDenied) { _loading = false; StateHasChanged(); return; }
+        _canWrite = await PermGuard.CanAsync("terms:write");
+        await LoadAsync();
+    }
+
+    private async Task SwitchAudience(string audience)
+    {
+        if (_audience == audience) return;
+        _audience = audience;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ApiEnvelope<TermsDto>>(
+                $"/api/v1/terms/current?audience={_audience}", JsonOpts);
+            var dto = resp?.Data;
+            _currentVersion = dto?.Version;
+            _draftContent   = dto?.Content ?? "";
+        }
+        catch (Exception ex) { _error = ex.Message; _draftContent = ""; }
+        finally { _loading = false; }
+    }
+
+    private async Task PublishAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_draftContent)) return;
+        _saving = true;
+        _error = null;
+        try
+        {
+            var resp = await Http.PostAsJsonAsync("/api/v1/terms", new { Audience = _audience, Content = _draftContent });
+            if (resp.IsSuccessStatusCode)
+            {
+                _success = $"{_audience} Terms & Conditions published.";
+                await LoadAsync();
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiEnvelope<object>>();
+                _error = body?.Errors?.FirstOrDefault() ?? body?.Message ?? "Publish failed.";
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private sealed record TermsDto(Guid Id, string Audience, int Version, string Content, DateTime CreatedAt, Guid? CreatedBy);
+
+    private sealed class ApiEnvelope<T>
+    {
+        public bool          Success { get; set; }
+        public T?            Data    { get; set; }
+        public string?       Message { get; set; }
+        public List<string>? Errors  { get; set; }
+    }
+}
