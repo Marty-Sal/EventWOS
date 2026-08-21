@@ -129,9 +129,9 @@
                             </span>
                         </div>
                         <div class="flex gap-2 pt-1 border-t border-gray-50">
-                            <button @onclick="() => OpenDetailPanel(ev)" disabled="@(_loadingEventId == ev.Id)"
+                            <button @onclick="() => OpenDetailPanel(ev)" disabled="@(_loadingViewEventId == ev.Id)"
                                     class="flex-1 text-xs py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium transition disabled:opacity-60 flex items-center justify-center gap-1.5">
-                                @if (_loadingEventId == ev.Id)
+                                @if (_loadingViewEventId == ev.Id)
                                 {
                                     <svg class="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -145,9 +145,9 @@
                             </button>
                             @if (ev.Status is not "Completed" and not "Cancelled")
                             {
-                                <button @onclick="() => OpenEditModal(ev)" disabled="@(_loadingEventId == ev.Id)"
+                                <button @onclick="() => OpenEditModal(ev)" disabled="@(_loadingEditEventId == ev.Id)"
                                         class="px-3 text-xs py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium transition disabled:opacity-60 flex items-center justify-center gap-1.5">
-                                    @if (_loadingEventId == ev.Id)
+                                    @if (_loadingEditEventId == ev.Id)
                                     {
                                         <svg class="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -218,9 +218,9 @@
                                     </td>
                                     <td class="px-4 py-3 text-right">
                                         <div class="inline-flex gap-1.5">
-                                            <button @onclick="() => OpenDetailPanel(ev)" disabled="@(_loadingEventId == ev.Id)"
+                                            <button @onclick="() => OpenDetailPanel(ev)" disabled="@(_loadingViewEventId == ev.Id)"
                                                     class="text-xs px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium disabled:opacity-60 inline-flex items-center gap-1">
-                                                @if (_loadingEventId == ev.Id)
+                                                @if (_loadingViewEventId == ev.Id)
                                                 {
                                                     <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
                                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -234,9 +234,9 @@
                                             </button>
                                             @if (ev.Status is not "Completed" and not "Cancelled")
                                             {
-                                                <button @onclick="() => OpenEditModal(ev)" disabled="@(_loadingEventId == ev.Id)"
+                                                <button @onclick="() => OpenEditModal(ev)" disabled="@(_loadingEditEventId == ev.Id)"
                                                         class="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium disabled:opacity-60 inline-flex items-center gap-1">
-                                                    @if (_loadingEventId == ev.Id)
+                                                    @if (_loadingEditEventId == ev.Id)
                                                     {
                                                         <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
                                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -1903,7 +1903,8 @@ else
     private List<ScopePickItem> _scopeCatalog = new();
 
     // ── Row "⋮" actions menu (Replicate Event) ──────────────────────────────
-    private Guid? _loadingEventId;   // View/Edit button spinner while the async open-modal fetch chain runs
+    private Guid? _loadingViewEventId;   // View button spinner while OpenDetailPanel's fetch chain runs
+    private Guid? _loadingEditEventId;   // Edit button spinner while OpenEditModal's fetch chain runs
     private EventListItemDto? _openActionsMenuEvent;
     private double            _actionsMenuX;
     private double            _actionsMenuY;
@@ -2024,7 +2025,7 @@ else
 
     private async Task OpenDetailPanel(EventListItemDto ev)
     {
-        _loadingEventId = ev.Id;
+        _loadingViewEventId = ev.Id;
         try
         {
         _selectedEvent = await EventApi.GetEventAsync(ev.Id);
@@ -2062,7 +2063,7 @@ else
             if (first is not null) _expandedVendorGroups.Add(first.Key);
         }
         }
-        finally { _loadingEventId = null; }
+        finally { _loadingViewEventId = null; }
     }
 
     private void CloseDetailPanel()
@@ -2620,7 +2621,7 @@ else
 
     private async Task OpenEditModal(EventListItemDto ev)
     {
-        _loadingEventId = ev.Id;
+        _loadingEditEventId = ev.Id;
         try
         {
         // Fix: the shift editor's scope <select> needs the catalog loaded
@@ -2653,7 +2654,7 @@ else
         _showAddVenueForm = false;
         _showEventModal = true;
         }
-        finally { _loadingEventId = null; }   // modal is visible now — clear the row spinner
+        finally { _loadingEditEventId = null; }   // modal is visible now — clear the row spinner
 
         // If this event is linked to a catalog venue, look it up so we know
         // its State and can preload that state's venue list for the picker.
