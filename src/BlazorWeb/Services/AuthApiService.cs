@@ -19,15 +19,22 @@ public sealed record RegisterVendorRequest(
     string Username, string Email, string Mobile, string Password, string FullName,
     string BusinessName, string? ContactPersonName, string? GstNumber,
     string? Address, string? City, string? State, string? Website, string? Bio,
-    byte[]? ProfilePhotoContent, string? ProfilePhotoFileName, string? ProfilePhotoContentType);
+    byte[]? ProfilePhotoContent, string? ProfilePhotoFileName, string? ProfilePhotoContentType,
+    bool TermsAccepted, int TermsVersion);
 public sealed record RegisterCrewRequest(
     string Username, string Email, string Mobile, string Password, string FullName,
     DateTime DateOfBirth,
     string? ReferralCode, string? City, string? Skills, int? ExperienceYears, string? Bio,
     byte[] IdentificationProofContent, string IdentificationProofFileName, string IdentificationProofContentType,
-    byte[]? ProfilePhotoContent, string? ProfilePhotoFileName, string? ProfilePhotoContentType);
+    byte[]? ProfilePhotoContent, string? ProfilePhotoFileName, string? ProfilePhotoContentType,
+    bool TermsAccepted, int TermsVersion);
 public sealed record RegistrationResultDto(Guid UserId, string Status, string Message);
 public sealed record ReferralCodeCheckResultDto(bool IsValid, string? VendorBusinessName);
+
+/// <summary>The published Terms & Conditions for an audience — null Data from
+/// GetCurrentTermsAsync means Admin hasn't published one yet for that role,
+/// and the registration page should skip the accept-checkbox entirely.</summary>
+public sealed record CurrentTermsDto(Guid Id, string Audience, int Version, string Content, DateTime CreatedAt);
 
 public sealed record ForgotPasswordRequest(string UsernameEmailOrMobile);
 public sealed record ForgotPasswordResultDto(Guid? OtpRequestId, string MaskedDestination, string? DevOtp = null);
@@ -64,6 +71,8 @@ public interface IAuthApiService
     Task<ApiResult<RegistrationResultDto>> RegisterCrewAsync(RegisterCrewRequest req, CancellationToken ct = default);
     /// <summary>Live "is this vendor referral code valid" check — used for inline validation before form submit.</summary>
     Task<ApiResult<ReferralCodeCheckResultDto>> CheckReferralCodeAsync(string code, CancellationToken ct = default);
+    /// <summary>Public — fetched right before showing the registration form's T&amp;C section.</summary>
+    Task<ApiResult<CurrentTermsDto>> GetCurrentTermsAsync(string audience, CancellationToken ct = default);
     Task<ApiResult<ForgotPasswordResultDto>> RequestPasswordResetAsync(string usernameEmailOrMobile, CancellationToken ct = default);
     Task<ApiResult<object>> ResetPasswordAsync(ResetPasswordRequest req, CancellationToken ct = default);
     Task<ApiResult<object>> SetupPasswordAsync(SetupPasswordRequest req, CancellationToken ct = default);
@@ -164,6 +173,8 @@ public sealed class AuthApiService : IAuthApiService
         if (req.State is not null) form.Add(new StringContent(req.State), "State");
         if (req.Website is not null) form.Add(new StringContent(req.Website), "Website");
         if (req.Bio is not null) form.Add(new StringContent(req.Bio), "Bio");
+        form.Add(new StringContent(req.TermsAccepted.ToString()), "TermsAccepted");
+        form.Add(new StringContent(req.TermsVersion.ToString()), "TermsVersion");
 
         if (req.ProfilePhotoContent is not null)
         {
@@ -193,6 +204,8 @@ public sealed class AuthApiService : IAuthApiService
         if (req.Skills is not null) form.Add(new StringContent(req.Skills), "Skills");
         if (req.ExperienceYears.HasValue) form.Add(new StringContent(req.ExperienceYears.Value.ToString()), "ExperienceYears");
         if (req.Bio is not null) form.Add(new StringContent(req.Bio), "Bio");
+        form.Add(new StringContent(req.TermsAccepted.ToString()), "TermsAccepted");
+        form.Add(new StringContent(req.TermsVersion.ToString()), "TermsVersion");
 
         var idProofContent = new ByteArrayContent(req.IdentificationProofContent);
         idProofContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(req.IdentificationProofContentType);
@@ -214,6 +227,13 @@ public sealed class AuthApiService : IAuthApiService
     {
         var resp = await _http.GetAsync($"api/v1/auth/register/check-referral?code={Uri.EscapeDataString(code)}", ct);
         return await ParseAsync<ReferralCodeCheckResultDto>(resp);
+    }
+
+    public async Task<ApiResult<CurrentTermsDto>> GetCurrentTermsAsync(
+        string audience, CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync($"api/v1/terms/current?audience={Uri.EscapeDataString(audience)}", ct);
+        return await ParseAsync<CurrentTermsDto>(resp);
     }
 
     public async Task<ApiResult<ForgotPasswordResultDto>> RequestPasswordResetAsync(

@@ -144,6 +144,18 @@
                         <textarea @bind="_bio" rows="3" class="@Css" placeholder="A short intro about your event experience."></textarea>
                     </Field>
 
+                    @if (_termsContent is not null)
+                    {
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium text-gray-700">Terms &amp; Conditions <span class="text-red-500">*</span></label>
+                            <div class="h-40 overflow-y-auto border border-gray-200 rounded-lg p-3 text-xs text-gray-600 whitespace-pre-wrap bg-gray-50">@_termsContent</div>
+                            <label class="flex items-start gap-2 text-sm text-gray-700">
+                                <input type="checkbox" @bind="_termsAccepted" class="mt-0.5" />
+                                <span>I have read and accept the Terms &amp; Conditions above.</span>
+                            </label>
+                        </div>
+                    }
+
                     @if (_error is not null)
                     {
                         <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">@_error</div>
@@ -195,6 +207,10 @@
     private byte[]? _photoBytes;    private string? _photoFileName, _photoContentType, _photoError;
     private byte[]? _idProofBytes;  private string? _idProofFileName, _idProofContentType, _idProofError;
 
+    private string? _termsContent;
+    private int _termsVersion;
+    private bool _termsAccepted;
+
     private bool? _refValid;
     private string? _refVendorName;
     private bool _refChecking;
@@ -211,7 +227,8 @@
         NameOk && UsernameOk && EmailOk && MobileOk && PasswordOk && DobOk
         && !string.IsNullOrWhiteSpace(_ref) && _refValid != false
         && _idProofBytes is not null && _idProofError is null
-        && _photoError is null;
+        && _photoError is null
+        && (_termsContent is null || _termsAccepted);
 
     private string AgeHint => _dob switch
     {
@@ -236,6 +253,17 @@
     {
         if (_refLocked && !string.IsNullOrWhiteSpace(_ref))
             await ValidateReferralAsync();
+
+        try
+        {
+            var terms = await AuthApi.GetCurrentTermsAsync("Crew");
+            if (terms.Success && terms.Data is not null)
+            {
+                _termsContent = terms.Data.Content;
+                _termsVersion = terms.Data.Version;
+            }
+        }
+        catch { /* no T&C published yet, or transient error — registration still works without it */ }
     }
 
     private void OnDobInput(ChangeEventArgs e)
@@ -329,7 +357,8 @@
                 string.IsNullOrWhiteSpace(_ref) ? null : _ref!.Trim(),
                 _city, _skills, _years, _bio,
                 _idProofBytes!, _idProofFileName ?? "id-proof", _idProofContentType ?? "application/octet-stream",
-                _photoBytes, _photoFileName, _photoContentType);
+                _photoBytes, _photoFileName, _photoContentType,
+                _termsContent is null || _termsAccepted, _termsVersion);
             var result = await AuthApi.RegisterCrewAsync(req);
             if (!result.Success)
             {
