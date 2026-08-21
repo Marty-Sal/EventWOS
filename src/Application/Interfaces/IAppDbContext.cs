@@ -39,5 +39,8 @@ public interface IAppDbContext
     DbSet<TermsAndConditions> TermsAndConditions { get; }
     DbSet<TermsAcceptance>    TermsAcceptances    { get; }
 
+    // Reference data — canonical India states + union territories list.
+    DbSet<IndianState> IndianStates { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

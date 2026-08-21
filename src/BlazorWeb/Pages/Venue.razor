@@ -192,8 +192,7 @@
                     </div>
                     <div>
                         <label class="text-xs text-gray-500 mb-1 block">State *</label>
-                        <input @bind="_form.State" maxlength="100"
-                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        <StateSelect @bind-Value="_form.State" />
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">

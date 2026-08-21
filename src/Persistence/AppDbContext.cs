@@ -61,6 +61,9 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<TermsAndConditions> TermsAndConditions => Set<TermsAndConditions>();
     public DbSet<TermsAcceptance>    TermsAcceptances    => Set<TermsAcceptance>();
 
+    // Reference data — canonical India states + union territories list.
+    public DbSet<IndianState> IndianStates => Set<IndianState>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -1,0 +1,66 @@
+@*
+    Reusable "State" dropdown, sourced from the canonical India states +
+    union territories list (Settings-managed reference data, see
+    IndianStatesApiService / GET api/v1/lookups/indian-states).
+
+    Replaces free-text State inputs everywhere in the app (Venue catalog,
+    Vendor/Crew registration, profile editing) so state values are
+    consistent instead of drifting ("Maharashtra" vs "maharashtra" vs "MH").
+
+    Usage: <StateSelect @bind-Value="_form.State" />
+*@
+@inject IIndianStatesApiService StatesApi
+
+<select value="@Value" @onchange="OnChange" disabled="@Disabled" class="@CssClass">
+    <option value="">@Placeholder</option>
+    @if (_states is not null)
+    {
+        @if (_states.Any(s => !s.IsUnionTerritory))
+        {
+            <optgroup label="States">
+                @foreach (var s in _states.Where(s => !s.IsUnionTerritory))
+                {
+                    <option value="@s.Name">@s.Name</option>
+                }
+            </optgroup>
+        }
+        @if (_states.Any(s => s.IsUnionTerritory))
+        {
+            <optgroup label="Union Territories">
+                @foreach (var s in _states.Where(s => s.IsUnionTerritory))
+                {
+                    <option value="@s.Name">@s.Name</option>
+                }
+            </optgroup>
+        }
+    }
+    @if (!string.IsNullOrWhiteSpace(Value) && _states is not null && !_states.Any(s => s.Name == Value))
+    {
+        @* Preserve an existing free-text value (legacy data saved before this
+           dropdown existed) as a selectable option instead of silently
+           blanking it out. *@
+        <option value="@Value">@Value (existing value)</option>
+    }
+</select>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string CssClass { get; set; } =
+        "w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white";
+    [Parameter] public string Placeholder { get; set; } = "Select state…";
+    [Parameter] public bool Disabled { get; set; }
+
+    private IReadOnlyList<IndianStateOption>? _states;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _states = await StatesApi.GetStatesAsync();
+    }
+
+    private Task OnChange(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        return ValueChanged.InvokeAsync(string.IsNullOrWhiteSpace(val) ? null : val);
+    }
+}

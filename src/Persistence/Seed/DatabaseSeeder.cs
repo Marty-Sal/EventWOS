@@ -42,7 +42,61 @@ public sealed class DatabaseSeeder
         // dev/local use; call it manually from a debug branch if needed.
         // await SeedTestUsersAsync(ct);
         await SeedDefaultScopeOfWorkAsync(ct);
+        await SeedIndianStatesAsync(ct);
         _logger.LogInformation("Database seeding complete.");
+    }
+
+    // ─── India states + union territories reference data ────────────────────
+    // Static list — 28 states + 8 union territories (post J&K reorganisation
+    // and Dadra & Nagar Haveli / Daman & Diu merger). Every "State" field in
+    // the app is meant to be a dropdown sourced from this table, not free
+    // text. Idempotent by Name; safe to re-run (e.g. if a future release adds
+    // a name correction, this only inserts rows that don't already exist —
+    // it never overwrites one that does).
+    private async Task SeedIndianStatesAsync(CancellationToken ct)
+    {
+        var existingNames = await _db.IndianStates
+            .IgnoreQueryFilters()
+            .Select(s => s.Name)
+            .ToListAsync(ct);
+        var existing = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
+
+        var states = new[]
+        {
+            "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+            "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand",
+            "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+            "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
+            "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
+            "Uttar Pradesh", "Uttarakhand", "West Bengal",
+        };
+        var unionTerritories = new[]
+        {
+            "Andaman and Nicobar Islands", "Chandigarh",
+            "Dadra and Nagar Haveli and Daman and Diu", "Delhi",
+            "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry",
+        };
+
+        var sortOrder = 0;
+        var toAdd = new List<IndianState>();
+        foreach (var name in states.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
+        {
+            sortOrder++;
+            if (!existing.Contains(name))
+                toAdd.Add(new IndianState(name, isUnionTerritory: false, sortOrder));
+        }
+        foreach (var name in unionTerritories.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
+        {
+            sortOrder++;
+            if (!existing.Contains(name))
+                toAdd.Add(new IndianState(name, isUnionTerritory: true, sortOrder));
+        }
+
+        if (toAdd.Count == 0) return;
+
+        _db.IndianStates.AddRange(toAdd);
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Seeded {Count} Indian states/union territories.", toAdd.Count);
     }
 
     // ─── Default Scope of Work (Phase B) ─────────────────────────────────────

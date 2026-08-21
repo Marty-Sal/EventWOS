@@ -87,7 +87,7 @@
                             <input @bind="_city" class="@Css" placeholder="Mumbai" />
                         </Field>
                         <Field Label="State">
-                            <input @bind="_state" class="@Css" placeholder="Maharashtra" />
+                            <StateSelect @bind-Value="_state" CssClass="@Css" />
                         </Field>
                         <Field Label="Website">
                             <input @bind="_website" class="@Css" placeholder="https://…" />
