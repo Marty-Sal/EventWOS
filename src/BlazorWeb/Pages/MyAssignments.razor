@@ -87,6 +87,40 @@
                                     <span class="font-semibold">@shiftLabel</span>
                                 </div>
                             }
+
+                            @* Amazon-style progress tracker: Invited → Reviewed →
+                               Confirmed → Attended. Only rendered on the happy
+                               path — a Declined/Rejected/NoShow row isn't
+                               "further along a line", it stopped, so those
+                               keep their existing red status text below
+                               instead of a tracker that would misleadingly
+                               imply forward progress. *@
+                            @{ var trackerStep = TrackerStep(a.Status); }
+                            @if (trackerStep > 0)
+                            {
+                                <div class="relative w-full max-w-sm pt-3 pb-1">
+                                    @* Fill lives INSIDE the track div so its width is a plain
+                                       percentage of the track's own (already-inset) width —
+                                       no calc() mixing % of container with px offsets needed. *@
+                                    <div class="absolute top-[15px] left-3 right-3 h-0.5 bg-gray-200 overflow-hidden">
+                                        <div class="h-0.5 bg-indigo-600 transition-all" style="width: @(TrackerProgressPercent(trackerStep).ToString("0.##"))%"></div>
+                                    </div>
+                                    <div class="relative flex justify-between">
+                                        @for (var i = 1; i <= 4; i++)
+                                        {
+                                            var idx = i;
+                                            var reached = idx <= trackerStep;
+                                            <div class="flex flex-col items-center gap-1 w-1/4">
+                                                <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2
+                                                            @(reached ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-gray-300 text-gray-400")">
+                                                    @(reached ? "✓" : idx.ToString())
+                                                </div>
+                                                <span class="text-[10px] text-center @(reached ? "text-indigo-700 font-semibold" : "text-gray-400")">@TrackerLabels[idx - 1]</span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
                             <p class="text-xs text-gray-400">
                                 via <span class="font-medium text-gray-600">@a.VendorName</span>
                                 &nbsp;·&nbsp; Invited @TimeAgo(a.CreatedAt)
@@ -402,6 +436,30 @@
         if (diff.TotalDays    < 7)  return $"{(int)diff.TotalDays}d ago";
         return dt.ToLocalTime().ToString("dd MMM");
     }
+
+    /// <summary>Labels for the 4-stop crew progress tracker (Invited → Reviewed → Confirmed → Attended).</summary>
+    private static readonly string[] TrackerLabels = { "Invited", "Reviewed", "Confirmed", "Attended" };
+
+    /// <summary>
+    /// Maps an assignment's workflow status onto the 4-stop tracker.
+    /// VendorApproved + PendingManagerApproval both read as "Reviewed" (crew
+    /// accepted, somewhere in vendor/manager sign-off); ManagerApproved +
+    /// Confirmed both read as "Confirmed" (fully cleared to work, matching
+    /// the same grouping already used for the Dashboard's status tiles).
+    /// Returns 0 for Declined/RejectedByVendor/RejectedByManager/NoShow —
+    /// those aren't a point on this line, so the tracker is hidden for them.
+    /// </summary>
+    private static int TrackerStep(string status) => status switch
+    {
+        "Invited"                                    => 1,
+        "VendorApproved" or "PendingManagerApproval"  => 2,
+        "ManagerApproved" or "Confirmed"              => 3,
+        "Attended"                                    => 4,
+        _                                             => 0
+    };
+
+    /// <summary>Fill percentage for the connecting line: step 1 → 0%, step 4 → 100%.</summary>
+    private static double TrackerProgressPercent(int step) => step <= 1 ? 0 : (step - 1) / 3.0 * 100.0;
 
     /// <summary>
     /// Phase D step 12: build the per-shift label "Box Office · 18:00–23:00 · 5h"
