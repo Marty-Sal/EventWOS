@@ -157,6 +157,8 @@
                                     Complete
                                 </button>
                             }
+                            <button @onclick="(MouseEventArgs e) => ToggleActionsMenu(ev, e)"
+                                    class="px-2 text-xs py-1.5 rounded-lg hover:bg-gray-100 text-gray-500 font-bold transition">⋮</button>
                         </div>
                     </div>
                 }
@@ -213,6 +215,8 @@
                                                 <button @onclick='() => ChangeStatus(ev.Id, "complete")'
                                                         class="text-xs px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium">Complete</button>
                                             }
+                                            <button @onclick="(MouseEventArgs e) => ToggleActionsMenu(ev, e)"
+                                                    class="text-xs px-1.5 py-1 rounded-lg hover:bg-gray-100 text-gray-500 font-bold">⋮</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -232,6 +236,24 @@
                             class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next →</button>
                 </div>
             }
+        }
+
+        @* ── Row "⋮" actions menu ────────────────────────────────────────────
+           Rendered once, fixed to the viewport at the click coordinates
+           (not absolute inside the row) so it isn't clipped by the events
+           table's overflow-x-auto scroll container. An invisible full-page
+           catcher behind it closes the menu on any outside click. *@
+        @if (_openActionsMenuEvent is not null)
+        {
+            <div class="fixed inset-0 z-40" @onclick="() => _openActionsMenuEvent = null"></div>
+            <div class="fixed z-50 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1"
+                 style="top:@(_actionsMenuY)px; left:@(_actionsMenuX)px;"
+                 @onclick:stopPropagation>
+                <button @onclick="() => ReplicateEvent(_openActionsMenuEvent)"
+                        class="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                    📋 Replicate Event
+                </button>
+            </div>
         }
 
         @* Toasts *@
@@ -966,7 +988,7 @@
     @if (_showEventModal)
     {
         <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @onclick="CloseModal">
-            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]" @onclick:stopPropagation>
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]" @onclick:stopPropagation>
                 @* Sticky header — pinned so users always see what dialog
                    they're in even when the body scrolls. *@
                 <div class="flex items-center justify-between px-6 pt-6 pb-3 border-b border-gray-100 flex-shrink-0">
@@ -979,6 +1001,14 @@
                    the panel grew off-screen and neither the panel nor the
                    page behind it could scroll. *@
                 <div class="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+
+                @if (_replicatingFromTitle is not null)
+                {
+                    <div class="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                        📋 Replicated from "<strong>@_replicatingFromTitle</strong>" — description, dates, shifts and
+                        each shift's vendor quotas carried over. Pick a new title and venue below.
+                    </div>
+                }
 
                 <div class="space-y-3">
                     <input @bind="_form.Title" placeholder="Event title *"
@@ -1816,6 +1846,19 @@ else
     // picker. Loaded lazily the first time the modal opens, refreshed
     // when the page reloads. Tiny enough to keep in memory; no pagination.
     private List<ScopePickItem> _scopeCatalog = new();
+
+    // ── Row "⋮" actions menu (Replicate Event) ──────────────────────────────
+    private EventListItemDto? _openActionsMenuEvent;
+    private double            _actionsMenuX;
+    private double            _actionsMenuY;
+
+    // ── Replicate Event: carries the source event's per-shift vendor
+    // allocations across to the newly created replica once SaveEvent
+    // succeeds. Populated by ReplicateEvent, consumed + cleared in
+    // SaveEvent. List is positional — index i's allocations belong to
+    // _form.Shifts[i] (both lists are ordered by shift StartAt).
+    private List<IReadOnlyList<VendorAllocationDto>>? _pendingReplicationAllocations;
+    private string?           _replicatingFromTitle;
     private sealed record ScopePickItem(Guid Id, string Name);
 
     // ── Venue picker: state -> searchable venue dropdown ───────────────────
@@ -2124,6 +2167,78 @@ else
         // "create one first" banner instead.
         if (_form.Shifts.Count == 0 && _scopeCatalog.Count > 0)
             _form.Shifts.Add(new ShiftDraft { ScopeOfWorkId = _scopeCatalog[0].Id, CrewCount = 1 });
+    }
+
+    private void ToggleActionsMenu(EventListItemDto ev, MouseEventArgs e)
+    {
+        if (_openActionsMenuEvent?.Id == ev.Id)
+        {
+            _openActionsMenuEvent = null;
+            return;
+        }
+        _openActionsMenuEvent = ev;
+        // Anchor to the click point; shift left so a menu opened from the
+        // rightmost column (where ⋮ lives) doesn't run off the viewport.
+        _actionsMenuX = Math.Max(8, e.ClientX - 160);
+        _actionsMenuY = e.ClientY + 8;
+    }
+
+    /// <summary>
+    /// Duplicates an event into a fresh Create form: same description,
+    /// dates, shifts (scope/crew count/times) and each shift's vendor
+    /// quotas — but Title and Venue are cleared since those are almost
+    /// always different for a re-run of the same show. The admin reviews
+    /// everything in the normal Create Event modal and picks a new title
+    /// + venue before saving; nothing is written until they hit Create.
+    /// </summary>
+    private async Task ReplicateEvent(EventListItemDto? ev)
+    {
+        _openActionsMenuEvent = null;
+        if (ev is null) return;
+
+        var detail = await EventApi.GetEventAsync(ev.Id);
+        if (detail is null) { _error = "Could not load that event to replicate."; return; }
+
+        var origShifts = await EventApi.GetEventShiftsAsync(ev.Id) ?? new List<EventShiftDto>();
+
+        // Pull each shift's live (non-archived) vendor allocations up front
+        // so they can be reapplied to the new shifts right after creation —
+        // see SaveEvent's post-create block.
+        var allocations = new List<IReadOnlyList<VendorAllocationDto>>();
+        foreach (var sh in origShifts)
+        {
+            var rows = await AllocApi.GetForShiftAsync(sh.Id) ?? Array.Empty<VendorAllocationDto>();
+            allocations.Add(rows.Where(a => !a.IsArchived).ToList());
+        }
+
+        await EnsureScopeCatalogLoaded();
+
+        _editingEvent      = null;   // Create mode, not Edit — this becomes a new event
+        _formError         = null;
+        _manualVenueEntry  = false;
+        _showAddVenueForm  = false;
+
+        _form = new EventForm
+        {
+            Title       = "",                                  // cleared — pick a new title
+            Description = detail.Description,
+            Venue       = "",                                   // cleared — pick a new venue
+            Address     = null,
+            VenueId     = null,
+            StartAt     = detail.StartAt.ToLocalTime(),
+            EndAt       = detail.EndAt.ToLocalTime(),
+            Shifts      = origShifts.Select(sh => new ShiftDraft
+            {
+                ScopeOfWorkId = sh.ScopeOfWorkId,
+                CrewCount     = sh.CrewCount,
+                StartAt       = sh.StartAt.ToLocalTime(),
+                EndAt         = sh.EndAt?.ToLocalTime(),
+            }).ToList(),
+        };
+
+        _pendingReplicationAllocations = allocations;
+        _replicatingFromTitle          = detail.Title;
+        _showEventModal = true;
     }
 
     /// <summary>Append a fresh shift row, defaulting to the first scope.</summary>
@@ -2507,7 +2622,12 @@ else
         }
     }
 
-    private void CloseModal() => _showEventModal = false;
+    private void CloseModal()
+    {
+        _showEventModal = false;
+        _pendingReplicationAllocations = null;
+        _replicatingFromTitle = null;
+    }
 
     private async Task SaveEvent()
     {
@@ -2620,9 +2740,17 @@ else
 
         if (_editingEvent is null)
         {
-            var (ok, err, _) = await EventApi.CreateEventAsync(req);
-            if (ok) { _success = "Event created!"; CloseModal(); await LoadEvents(); }
-            else    { _formError = err; }
+            var (ok, err, created) = await EventApi.CreateEventAsync(req);
+            if (ok)
+            {
+                if (_pendingReplicationAllocations is { Count: > 0 } sourceAllocs && created is not null)
+                    await ReapplyReplicatedAllocationsAsync(created.Id, sourceAllocs);
+
+                _success = "Event created!";
+                CloseModal();
+                await LoadEvents();
+            }
+            else { _formError = err; }
         }
         else
         {
@@ -2631,6 +2759,34 @@ else
             else    { _formError = err; }
         }
         _saving = false;
+    }
+
+    /// <summary>
+    /// Post-create step for Replicate Event: re-grants each source shift's
+    /// vendor quotas to the matching new shift. Both the source shifts
+    /// (captured in _pendingReplicationAllocations, positional) and the
+    /// newly created shifts are ordered by StartAt (GetEventShiftsQuery),
+    /// and since the replica copied each shift's exact StartAt, the two
+    /// lists line up 1:1 by index. Best-effort — a failure here still
+    /// leaves a perfectly usable event, just without the pre-filled
+    /// vendor quotas, so errors don't block the "Event created!" flow.
+    /// </summary>
+    private async Task ReapplyReplicatedAllocationsAsync(Guid newEventId, List<IReadOnlyList<VendorAllocationDto>> sourceAllocations)
+    {
+        try
+        {
+            var newShifts = await EventApi.GetEventShiftsAsync(newEventId);
+            if (newShifts is null) return;
+
+            var count = Math.Min(newShifts.Count, sourceAllocations.Count);
+            for (int i = 0; i < count; i++)
+            {
+                var newShiftId = newShifts[i].Id;
+                foreach (var alloc in sourceAllocations[i])
+                    await AllocApi.CreateAsync(newShiftId, alloc.VendorId, alloc.Quota);
+            }
+        }
+        catch { /* best-effort — event itself is already created successfully */ }
     }
 
     private async Task ChangeStatus(Guid id, string action)
