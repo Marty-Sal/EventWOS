@@ -30,6 +30,7 @@ public sealed record UserProfileDto(
     string? ReferralCode,
     string? BusinessName,
     decimal? Rating,
+    int? EventsCompleted,
     string? InviteMessageTemplate,
     // Crew-specific
     decimal? DisciplineScore,

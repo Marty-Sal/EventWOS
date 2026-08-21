@@ -9,7 +9,7 @@ public sealed record UserProfileDto(
     string? AvatarUrl, string Role, string Status,
     IReadOnlyList<string> Permissions, DateTime? LastLoginAt,
     // Vendor fields
-    string? ReferralCode, string? BusinessName, decimal? Rating, string? InviteMessageTemplate,
+    string? ReferralCode, string? BusinessName, decimal? Rating, int? EventsCompleted, string? InviteMessageTemplate,
     // Crew fields
     decimal? DisciplineScore, int? EventsAttended, decimal? CrewRating, int? CrewRatingCount,
     Guid? VendorId, string? VendorName,

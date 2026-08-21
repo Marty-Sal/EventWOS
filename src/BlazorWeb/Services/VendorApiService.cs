@@ -76,7 +76,7 @@ public interface IVendorApiService
     Task<(bool Ok, string? Error)> CreateVendorAsync(string mobile, string fullName, string? businessName, string? email, CancellationToken ct = default);
     Task<bool> RateVendorAsync(Guid id, decimal rating, CancellationToken ct = default);
     Task<bool> ChangeVendorStatusAsync(Guid id, string status, CancellationToken ct = default);
-    Task<PagedCrewResult?> GetCrewAsync(int page = 1, string? search = null, Guid? vendorId = null, CancellationToken ct = default);
+    Task<PagedCrewResult?> GetCrewAsync(int page = 1, string? search = null, Guid? vendorId = null, int pageSize = 20, CancellationToken ct = default);
     Task<CrewDetailDto?> GetCrewDetailAsync(Guid id, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateCrewAsync(string mobile, string fullName, string? email, string? referralCode, CancellationToken ct = default);
     Task<VendorReportDto?> GetMyReportAsync(CancellationToken ct = default);
@@ -159,11 +159,11 @@ public sealed class VendorApiService : IVendorApiService
         catch { return false; }
     }
 
-    public async Task<PagedCrewResult?> GetCrewAsync(int page = 1, string? search = null, Guid? vendorId = null, CancellationToken ct = default)
+    public async Task<PagedCrewResult?> GetCrewAsync(int page = 1, string? search = null, Guid? vendorId = null, int pageSize = 20, CancellationToken ct = default)
     {
         try
         {
-            var url = $"api/v1/crew?page={page}&pageSize=20";
+            var url = $"api/v1/crew?page={page}&pageSize={pageSize}";
             if (search != null)   url += $"&search={Uri.EscapeDataString(search)}";
             if (vendorId != null) url += $"&vendorId={vendorId}";
             var r = await _http.GetFromJsonAsync<ApiResult<PagedCrewResult>>(url, _jsonOpts, ct);

@@ -49,6 +49,7 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
             user.ReferralCode,
             user.BusinessName,
             user.Role == Domain.Enums.UserRole.Vendor ? user.Rating : null,
+            user.Role == Domain.Enums.UserRole.Vendor ? user.EventsCompleted : null,
             user.Role == Domain.Enums.UserRole.Vendor ? user.InviteMessageTemplate : null,
             // Crew-specific
             user.Role == Domain.Enums.UserRole.Crew ? user.DisciplineScore : null,
