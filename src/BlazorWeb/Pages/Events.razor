@@ -1012,14 +1012,7 @@
                         }
                         else
                         {
-                            <select class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    value="@_form.VenueState" @onchange="OnVenueStateChanged">
-                                <option value="">Select state…</option>
-                                @foreach (var st in _venueStates)
-                                {
-                                    <option value="@st">@st</option>
-                                }
-                            </select>
+                            <StateSelect Value="@_form.VenueState" ValueChanged="OnVenueStateSelected" />
 
                             @if (_form.VenueState is not null)
                             {
@@ -1806,8 +1799,6 @@ else
     private sealed record ScopePickItem(Guid Id, string Name);
 
     // ── Venue picker: state -> searchable venue dropdown ───────────────────
-    private List<string>        _venueStates        = new();
-    private bool                 _venueStatesLoaded   = false;
     private List<VenuePickItem>  _venuesForState      = new();
     private List<VenuePickItem>  _venueSearchResults  = new();
     private bool                 _manualVenueEntry    = false;   // escape hatch: type Venue/Address by hand
@@ -2108,7 +2099,6 @@ else
         _showAddVenueForm = false;
         _showEventModal = true;
         await EnsureScopeCatalogLoaded();
-        await EnsureVenueStatesLoaded();
         // Phase C step 4: seed exactly ONE default shift row pointing at the
         // first scope. If the catalog is empty the editor renders a helpful
         // "create one first" banner instead.
@@ -2165,18 +2155,6 @@ else
     // State-first, then a searchable venue dropdown within that state (per
     // owner request). Venues are catalog data (Settings not built yet —
     // this modal doubles as the entry point via "+ Add new venue").
-    private async Task EnsureVenueStatesLoaded()
-    {
-        if (_venueStatesLoaded) return;
-        try
-        {
-            var resp = await Http.GetFromJsonAsync<VenueStatesEnvelope>("/api/v1/venues/states");
-            _venueStates = resp?.Data ?? new();
-        }
-        catch { _venueStates = new(); }
-        _venueStatesLoaded = true;
-    }
-
     private async Task LoadVenuesForStateAsync(string state)
     {
         try
@@ -2192,9 +2170,8 @@ else
         _venueSearchResults = _venuesForState;
     }
 
-    private async Task OnVenueStateChanged(ChangeEventArgs e)
+    private async Task OnVenueStateSelected(string? state)
     {
-        var state = e.Value?.ToString();
         _form.VenueState = string.IsNullOrWhiteSpace(state) ? null : state;
         _form.VenueId    = null;
         _form.Venue      = "";
@@ -2285,10 +2262,8 @@ else
                 var created = body?.Data;
                 if (created is not null)
                 {
-                    // Refresh state list (new state may not have existed before),
-                    // select it, load venues for it, and auto-pick the new one.
-                    _venueStatesLoaded = false;
-                    await EnsureVenueStatesLoaded();
+                    // Select the newly created venue's state, load venues for
+                    // it, and auto-pick the new one.
                     _form.VenueState = created.State ?? _addVenueForm.State;
                     await LoadVenuesForStateAsync(_form.VenueState!);
                     SelectVenue(new VenuePickItem(created.Id, created.Name, created.AddressLine1, created.City, created.State));
@@ -2305,7 +2280,6 @@ else
         finally { _addVenueSaving = false; }
     }
 
-    private sealed record VenueStatesEnvelope(List<string>? Data);
     private sealed record VenueListEnvelope(VenueListData? Data);
     private sealed record VenueListData(List<VenueApiDto> Items);
     private sealed record VenueSingleEnvelope(VenueApiDto? Data);
@@ -2483,7 +2457,6 @@ else
         _manualVenueEntry = _form.VenueId is null;   // no catalog link -> show free-text so existing text isn't lost
         _showAddVenueForm = false;
         _showEventModal = true;
-        await EnsureVenueStatesLoaded();
 
         // If this event is linked to a catalog venue, look it up so we know
         // its State and can preload that state's venue list for the picker.
