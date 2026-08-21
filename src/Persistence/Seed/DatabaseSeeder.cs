@@ -144,6 +144,10 @@ public sealed class DatabaseSeeder
         ("venues:read",  "venues", "read",  "View venue catalog"),
         ("venues:write", "venues", "write", "Manage venue catalog"),
 
+        // Settings — Terms & Conditions (admin-managed, per audience: Vendor/Crew)
+        ("terms:read",  "terms", "read",  "View Terms & Conditions documents"),
+        ("terms:write", "terms", "write", "Publish new Terms & Conditions versions"),
+
         // Phase C — Vendor shift allocations (per-vendor quota on a shift)
         ("vendor_allocations:read",  "vendor_allocations", "read",
             "View vendor allocations on event shifts"),
@@ -286,7 +290,7 @@ public sealed class DatabaseSeeder
             // taxonomy rather than something every Manager mutates.
             foreach (var name in new[]
             {
-                "profile:read", "profile:write", "scope_of_work:read", "venues:read",
+                "profile:read", "profile:write", "scope_of_work:read", "venues:read", "terms:read",
                 // Phase C: Managers run day-to-day staffing, so they can
                 // both view and grant per-vendor quotas on event shifts.
                 // (Vendors only get :read; Admins implicitly get both via

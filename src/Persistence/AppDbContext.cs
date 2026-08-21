@@ -58,6 +58,8 @@ public sealed class AppDbContext : DbContext, IAppDbContext
 
     // Settings module — Venue catalog.
     public DbSet<Venue>             Venues            => Set<Venue>();
+    public DbSet<TermsAndConditions> TermsAndConditions => Set<TermsAndConditions>();
+    public DbSet<TermsAcceptance>    TermsAcceptances    => Set<TermsAcceptance>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

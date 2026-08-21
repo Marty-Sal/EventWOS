@@ -36,6 +36,8 @@ public interface IAppDbContext
 
     // Settings module — Venue catalog.
     DbSet<Venue>             Venues            { get; }
+    DbSet<TermsAndConditions> TermsAndConditions { get; }
+    DbSet<TermsAcceptance>    TermsAcceptances    { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
