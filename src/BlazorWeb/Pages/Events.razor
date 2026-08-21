@@ -984,18 +984,29 @@
                     <div class="space-y-2">
                         <div class="flex items-center justify-between">
                             <label class="text-xs text-gray-500">Venue *</label>
-                            <button type="button" @onclick="ToggleManualVenueEntry"
-                                    class="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium">
-                                @(_manualVenueEntry ? "Use venue picker instead" : "Type manually instead")
-                            </button>
+                            <a href="/admin/settings/venue" target="_blank" rel="noopener"
+                               class="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium">
+                                Venue not available? Add here →
+                            </a>
                         </div>
 
                         @if (_manualVenueEntry)
                         {
+                            @* Legacy escape hatch: only reachable when editing an older event
+                               whose Venue was free-typed before the catalog existed (no VenueId
+                               link) — see OpenEditModal. New events always use the picker; there's
+                               no button to re-enter manual mode from a fresh Create. *@
+                            <p class="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                                This event uses a legacy free-text venue not linked to the catalog.
+                            </p>
                             <input @bind="_form.Venue" placeholder="Venue *"
                                    class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                             <input @bind="_form.Address" placeholder="Address (optional)"
                                    class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                            <button type="button" @onclick="SwitchToVenuePicker"
+                                    class="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium">
+                                Use venue picker instead
+                            </button>
                         }
                         else if (_form.VenueId is not null)
                         {
@@ -2212,15 +2223,11 @@ else
         _form.Address = null;
     }
 
-    private void ToggleManualVenueEntry()
+    private void SwitchToVenuePicker()
     {
-        _manualVenueEntry = !_manualVenueEntry;
-        if (_manualVenueEntry)
-        {
-            // Switching to manual entry — drop any catalog link so the
-            // free-typed text is what actually gets saved.
-            _form.VenueId = null;
-        }
+        // Legacy-event escape hatch: lets an old free-text venue be
+        // migrated to a real catalog pick without leaving the modal.
+        _manualVenueEntry = false;
     }
 
     private void ToggleAddVenueForm()
