@@ -1490,6 +1490,46 @@ BEGIN
 
     CREATE INDEX IF NOT EXISTS ix_events_venue_id ON events (venue_id);
 
+    -- ═══ terms_and_conditions + terms_acceptances ═══════════════════════════
+    -- Belt-and-braces for 20260821214500_AddTermsAndConditions. Idempotent.
+    -- Settings module: versioned Terms & Conditions per audience (Vendor/
+    -- Crew) plus an append-only acceptance audit trail.
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'terms_and_conditions') THEN
+        CREATE TABLE terms_and_conditions (
+            id           UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            audience     VARCHAR(20) NOT NULL,
+            version      INT NOT NULL,
+            content      VARCHAR(20000) NOT NULL,
+            created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+            created_by   UUID,
+            updated_at   TIMESTAMPTZ,
+            updated_by   UUID,
+            is_deleted   BOOLEAN NOT NULL DEFAULT false,
+            deleted_at   TIMESTAMPTZ,
+            deleted_by   UUID
+        );
+        CREATE UNIQUE INDEX ux_terms_audience_version ON terms_and_conditions (audience, version);
+        RAISE NOTICE 'Created terms_and_conditions table';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'terms_acceptances') THEN
+        CREATE TABLE terms_acceptances (
+            id           UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            user_id      UUID NOT NULL,
+            audience     VARCHAR(20) NOT NULL,
+            version      INT NOT NULL,
+            created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+            created_by   UUID,
+            updated_at   TIMESTAMPTZ,
+            updated_by   UUID,
+            is_deleted   BOOLEAN NOT NULL DEFAULT false,
+            deleted_at   TIMESTAMPTZ,
+            deleted_by   UUID
+        );
+        CREATE INDEX ix_terms_acceptances_user_audience_version ON terms_acceptances (user_id, audience, version);
+        RAISE NOTICE 'Created terms_acceptances table';
+    END IF;
+
 END $$;
 ";
         try
