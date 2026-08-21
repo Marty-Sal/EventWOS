@@ -331,13 +331,12 @@
                 <div class="space-y-3">
                     <h4 class="font-semibold text-gray-700 text-sm">Assign Crew Member</h4>
 
-                    @* ── Mode toggle: Direct OR Via Vendor ── *@
-                    <div class="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-xl text-[11px] font-medium">
-                        <button type="button"
-                                @onclick='() => SetAssignMode("crew")'
-                                class="@(_assignMode == "crew" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500 hover:text-gray-700") py-1.5 rounded-lg transition">
-                            👤 Crew only
-                        </button>
+                    @* ── Mode toggle: Vendor only (default) OR Vendor + Crew.
+                       "Crew only" (direct, vendor-less assignment) has been
+                       removed per owner request — every assignment now goes
+                       through a vendor, either alone or paired with a named
+                       crew member. *@
+                    <div class="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-xl text-[11px] font-medium">
                         <button type="button"
                                 @onclick='() => SetAssignMode("vendor")'
                                 class="@(_assignMode == "vendor" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500 hover:text-gray-700") py-1.5 rounded-lg transition">
@@ -402,9 +401,9 @@
                         </div>
                     }
 
-                    @if (_assignMode == "crew" || _assignMode == "both")
+                    @if (_assignMode == "both")
                     {
-                    @* ── Crew picker (filtered by vendor in vendor mode) ── *@
+                    @* ── Crew picker (shown only in Vendor + Crew mode) ── *@
                     <div class="relative">
                         <label class="block text-xs font-medium text-gray-500 mb-1">Crew Member <span class="text-red-400">*</span></label>
                         @if (_assignSelectedCrew != null)
@@ -420,7 +419,7 @@
                         else
                         {
                             <input class="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                                   placeholder="@(_assignMode == "vendor" && _assignSelectedVendor != null ? "Search crew under this vendor…" : "Search crew by name…")"
+                                   placeholder="Search crew by name…"
                                    @value="_assignCrewSearch"
                                    @onfocus="() => _assignCrewDropOpen = true"
                                    @oninput="OnAssignCrewSearch" />
@@ -455,13 +454,7 @@
                     }
 
                     @* ── Mode hint ── *@
-                    @if (_assignMode == "crew")
-                    {
-                        <p class="text-[11px] text-gray-500 italic">
-                            Direct crew assignment — skips the vendor step. Crew acceptance goes straight to your Approval Queue.
-                        </p>
-                    }
-                    else if (_assignMode == "vendor")
+                    @if (_assignMode == "vendor")
                     {
                         <p class="text-[11px] text-gray-500 italic">
                             Vendor-only — the vendor will assign their own crew to this event.
@@ -1808,7 +1801,7 @@ else
 
     private bool                      _assigning;
     private string?                   _assignError;
-    private string                    _assignMode = "both"; // "crew" | "vendor" | "both" 
+    private string                    _assignMode = "vendor"; // "vendor" | "both" — "crew"-only removed per owner request
     // Modal
     private bool              _showEventModal;
     private EventListItemDto? _editingEvent;
