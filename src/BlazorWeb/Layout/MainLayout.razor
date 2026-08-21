@@ -242,6 +242,44 @@
 <NotificationToast />
 <PwaInstallBanner />
 
+@if (_termsStatus is { RequiresAcceptance: true })
+{
+    <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+            <div>
+                <h2 class="text-lg font-bold text-gray-900">Updated Terms &amp; Conditions</h2>
+                <p class="text-sm text-gray-500 mt-1">
+                    Our Terms &amp; Conditions for @_termsStatus.Audience accounts have changed. Please review and accept to continue.
+                </p>
+            </div>
+
+            <div class="h-56 overflow-y-auto border border-gray-200 rounded-lg p-3 text-xs text-gray-600 whitespace-pre-wrap bg-gray-50">
+                @_termsStatus.Content
+            </div>
+
+            <label class="flex items-start gap-2 text-sm text-gray-700">
+                <input type="checkbox" @bind="_termsAccepted" class="mt-0.5" />
+                <span>I have read and accept the Terms &amp; Conditions above.</span>
+            </label>
+
+            @if (_termsError is not null)
+            {
+                <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">@_termsError</div>
+            }
+
+            <div class="flex items-center justify-between gap-3 pt-1">
+                <button @onclick="LogoutAsync" class="text-sm text-gray-500 hover:text-gray-700 underline">
+                    Log out instead
+                </button>
+                <button @onclick="AcceptTermsAsync" disabled="@(!_termsAccepted || _termsAccepting)"
+                        class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition disabled:opacity-50">
+                    @(_termsAccepting ? "Accepting…" : "Accept & Continue")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string PageTitle
     {
@@ -291,6 +329,58 @@
     // server-side — see UpdateProfileHandler.MarkProfileCompletedIfFirstTime).
     private bool _mustCompleteProfile;
 
+    // ── Post-login Terms & Conditions re-accept gate ───────────────────────
+    // Admin/Manager never have a T&C audience — the endpoint returns
+    // RequiresAcceptance=false for them and this stays null forever.
+    private TermsStatusDto? _termsStatus;
+    private bool _termsAccepted;
+    private bool _termsAccepting;
+    private string? _termsError;
+
+    private async Task CheckTermsGateAsync()
+    {
+        try
+        {
+            var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var resp = await Http.GetFromJsonAsync<TermsStatusEnvelope>("api/v1/terms/me/status", jsonOpts);
+            _termsStatus = resp?.Data;
+        }
+        catch
+        {
+            // Fail open — same rationale as the profile-completion gate.
+            _termsStatus = null;
+        }
+        StateHasChanged();
+    }
+
+    private async Task AcceptTermsAsync()
+    {
+        if (_termsStatus is null || _termsStatus.CurrentVersion is null) return;
+        _termsAccepting = true;
+        _termsError = null;
+        try
+        {
+            var resp = await Http.PostAsJsonAsync("api/v1/terms/accept",
+                new { Audience = _termsStatus.Audience, Version = _termsStatus.CurrentVersion });
+            if (resp.IsSuccessStatusCode)
+            {
+                _termsStatus = null;
+            }
+            else
+            {
+                var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var body = await resp.Content.ReadFromJsonAsync<ApiEnvelope>(jsonOpts);
+                _termsError = body?.Message ?? "Couldn't record acceptance. Please try again.";
+            }
+        }
+        catch { _termsError = "Network error. Please try again."; }
+        finally { _termsAccepting = false; }
+    }
+
+    private sealed record TermsStatusDto(bool RequiresAcceptance, string? Audience, int? CurrentVersion, string? Content);
+    private sealed record TermsStatusEnvelope(bool Success, TermsStatusDto? Data);
+    private sealed record ApiEnvelope(bool Success, string? Message);
+
     protected override async Task OnInitializedAsync()
     {
         // Load permissions from JWT claims (already in auth state)
@@ -315,6 +405,7 @@
             return;
 
         await CheckProfileCompletionGateAsync();
+        await CheckTermsGateAsync();
         Nav.LocationChanged += OnLocationChanged;
 
         await LoadPendingInvites();
