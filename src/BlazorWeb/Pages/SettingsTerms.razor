@@ -169,12 +169,44 @@
             }
             else
             {
-                var body = await resp.Content.ReadFromJsonAsync<ApiEnvelope<object>>();
-                _error = body?.Errors?.FirstOrDefault() ?? body?.Message ?? "Publish failed.";
+                _error = await ExtractErrorAsync(resp);
             }
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _saving = false; }
+    }
+
+    /// <summary>
+    /// Never throws — reads the failed response as raw text first (a
+    /// non-2xx response isn't guaranteed to be valid JSON in our envelope
+    /// shape: could be an empty body, an ASP.NET Core ProblemDetails
+    /// payload, or a reverse-proxy error page) and only THEN attempts to
+    /// parse our ApiResponse envelope out of it. Falls back to showing the
+    /// raw status + a text snippet rather than surfacing a cryptic
+    /// "JsonException: the input does not contain any JSON tokens" from a
+    /// failed ReadFromJsonAsync — that's what was happening before this,
+    /// hiding whatever the real server-side error was.
+    /// </summary>
+    private static async Task<string> ExtractErrorAsync(HttpResponseMessage resp)
+    {
+        string raw;
+        try { raw = await resp.Content.ReadAsStringAsync(); }
+        catch { return $"Publish failed ({(int)resp.StatusCode} {resp.StatusCode})."; }
+
+        if (string.IsNullOrWhiteSpace(raw))
+            return $"Publish failed ({(int)resp.StatusCode} {resp.StatusCode}) — server returned no details.";
+
+        try
+        {
+            var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var body = System.Text.Json.JsonSerializer.Deserialize<ApiEnvelope<object>>(raw, jsonOpts);
+            if (body?.Errors is { Count: > 0 }) return body.Errors[0];
+            if (!string.IsNullOrWhiteSpace(body?.Message)) return body!.Message!;
+        }
+        catch { /* not our envelope shape — fall through to raw snippet */ }
+
+        var snippet = raw.Length > 300 ? raw[..300] + "…" : raw;
+        return $"Publish failed ({(int)resp.StatusCode} {resp.StatusCode}): {snippet}";
     }
 
     private sealed record TermsDto(Guid Id, string Audience, int Version, string Content, DateTime CreatedAt, Guid? CreatedBy);

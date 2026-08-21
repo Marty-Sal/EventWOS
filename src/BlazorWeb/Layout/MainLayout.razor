@@ -368,9 +368,21 @@
             }
             else
             {
-                var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var body = await resp.Content.ReadFromJsonAsync<ApiEnvelope>(jsonOpts);
-                _termsError = body?.Message ?? "Couldn't record acceptance. Please try again.";
+                // Never assume the error body is valid JSON in our shape —
+                // could be empty, or ASP.NET's own ProblemDetails format.
+                string raw = "";
+                try { raw = await resp.Content.ReadAsStringAsync(); } catch { }
+                _termsError = "Couldn't record acceptance. Please try again.";
+                if (!string.IsNullOrWhiteSpace(raw))
+                {
+                    try
+                    {
+                        var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                        var body = System.Text.Json.JsonSerializer.Deserialize<ApiEnvelope>(raw, jsonOpts);
+                        if (!string.IsNullOrWhiteSpace(body?.Message)) _termsError = body!.Message!;
+                    }
+                    catch { /* not JSON — keep the generic message */ }
+                }
             }
         }
         catch { _termsError = "Network error. Please try again."; }
