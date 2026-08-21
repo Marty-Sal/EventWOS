@@ -32,6 +32,9 @@ public sealed class RegisterVendorValidator : AbstractValidator<RegisterVendorCo
         RuleFor(x => x.City).MaximumLength(100);
         RuleFor(x => x.Website).MaximumLength(255);
 
+        RuleFor(x => x.TermsAccepted).Equal(true)
+            .WithMessage("You must accept the Terms & Conditions to register.");
+
         // Profile photo is optional for Vendor (unlike Crew's mandatory ID proof) —
         // every predicate is null-safe by construction, same pattern as
         // RegisterCrewValidator's IdentificationProof rule.

@@ -51,7 +51,9 @@ public sealed class RegisterCrewValidatorTests
             ExperienceYears:     experience,
             Bio:                 null,
             IdentificationProof: identificationProof ?? ValidIdProof,
-            ProfilePhoto:        null);
+            ProfilePhoto:        null,
+            TermsAccepted:       true,
+            TermsVersion:        1);
 
     // ── Baseline ─────────────────────────────────────────────────────────────
 

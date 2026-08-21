@@ -67,6 +67,16 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
                 $"This contact was rejected recently. You can register again after {canRetry:dd MMM yyyy, HH:mm} UTC."));
         }
 
+        // 1b. Terms & Conditions — same check as Vendor's, against the Crew audience.
+        var currentTerms = await _db.TermsAndConditions
+            .Where(t => t.Audience == TermsAudience.Crew)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync(ct);
+        if (currentTerms is not null && (!req.TermsAccepted || req.TermsVersion != currentTerms.Version))
+            return Result.Failure<RegistrationResponse>(Error.Custom(
+                "Registration.TermsRequired",
+                "Please review and accept the latest Terms & Conditions before registering."));
+
         // 2. Uniqueness.
         if (await _db.Users.AnyAsync(u => u.Username == usernameLower, ct))
             return Result.Failure<RegistrationResponse>(Error.Custom("Registration.UsernameTaken", "That username is already taken."));
@@ -137,6 +147,10 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
         }
 
         _db.Users.Add(user);
+
+        if (currentTerms is not null)
+            _db.TermsAcceptances.Add(new TermsAcceptance(user.Id, TermsAudience.Crew, currentTerms.Version));
+
         await _uow.SaveChangesAsync(ct);
 
         await _audit.LogAsync(AuditAction.UserCreated, nameof(User), user.Id.ToString(),

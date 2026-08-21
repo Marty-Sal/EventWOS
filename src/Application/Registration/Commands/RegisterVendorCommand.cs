@@ -27,7 +27,9 @@ public sealed record RegisterVendorCommand(
     string? State,
     string? Website,
     string? Bio,
-    FileUploadPayload? ProfilePhoto
+    FileUploadPayload? ProfilePhoto,
+    bool    TermsAccepted,
+    int     TermsVersion
 ) : IRequest<Result<RegistrationResponse>>;
 
 public sealed record RegistrationResponse(

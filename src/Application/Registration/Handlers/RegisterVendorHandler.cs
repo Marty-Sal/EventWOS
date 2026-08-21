@@ -62,6 +62,19 @@ public sealed class RegisterVendorHandler : IRequestHandler<RegisterVendorComman
                 $"This contact was rejected recently. You can register again after {canRetry:dd MMM yyyy, HH:mm} UTC."));
         }
 
+        // 1b. Terms & Conditions — if Admin has published one for Vendor,
+        // the submitted version must match the current one exactly (client
+        // fetches it fresh right before showing the checkbox; a mismatch
+        // means it changed mid-fill and the user must review again).
+        var currentTerms = await _db.TermsAndConditions
+            .Where(t => t.Audience == TermsAudience.Vendor)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync(ct);
+        if (currentTerms is not null && (!req.TermsAccepted || req.TermsVersion != currentTerms.Version))
+            return Result.Failure<RegistrationResponse>(Error.Custom(
+                "Registration.TermsRequired",
+                "Please review and accept the latest Terms & Conditions before registering."));
+
         // 2. Active uniqueness checks.
         var usernameTaken = await _db.Users.AnyAsync(u => u.Username == usernameLower, ct);
         if (usernameTaken)
@@ -106,6 +119,13 @@ public sealed class RegisterVendorHandler : IRequestHandler<RegisterVendorComman
         }
 
         _db.Users.Add(user);
+
+        // Record T&C acceptance against the new user's own Id — safe before
+        // SaveChanges the same way the profile-photo storage call above is;
+        // both land in the same transaction.
+        if (currentTerms is not null)
+            _db.TermsAcceptances.Add(new TermsAcceptance(user.Id, TermsAudience.Vendor, currentTerms.Version));
+
         await _uow.SaveChangesAsync(ct);
 
         await _audit.LogAsync(AuditAction.UserCreated, nameof(User), user.Id.ToString(),

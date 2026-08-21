@@ -39,7 +39,9 @@ public sealed class RegisterVendorValidatorTests
             State:             "MH",
             Website:           website,
             Bio:               null,
-            ProfilePhoto:      profilePhoto);
+            ProfilePhoto:      profilePhoto,
+            TermsAccepted:     true,
+            TermsVersion:      1);
 
     [Fact]
     public void Valid_command_has_no_errors() =>

@@ -53,6 +53,9 @@ public sealed class RegisterCrewValidator : AbstractValidator<RegisterCrewComman
 
         RuleFor(x => x.ExperienceYears).InclusiveBetween(0, 60).When(x => x.ExperienceYears.HasValue);
 
+        RuleFor(x => x.TermsAccepted).Equal(true)
+            .WithMessage("You must accept the Terms & Conditions to register.");
+
         // Identification proof is mandatory for crew (Aadhaar / driving licence / voter ID etc.).
         // Every predicate below is written null-safe on purpose (no nested property-selector
         // rules) so there's zero reliance on FluentValidation's When()-guards-the-selector

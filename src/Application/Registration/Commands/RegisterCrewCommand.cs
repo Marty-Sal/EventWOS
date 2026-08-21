@@ -27,5 +27,7 @@ public sealed record RegisterCrewCommand(
     int?    ExperienceYears,
     string? Bio,
     FileUploadPayload IdentificationProof,
-    FileUploadPayload? ProfilePhoto
+    FileUploadPayload? ProfilePhoto,
+    bool    TermsAccepted,
+    int     TermsVersion
 ) : IRequest<Result<RegistrationResponse>>;

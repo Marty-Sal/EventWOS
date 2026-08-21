@@ -48,7 +48,8 @@ public sealed class RegistrationController : ControllerBase
         var cmd = new RegisterVendorCommand(
             form.Username, form.Email, form.Mobile, form.Password, form.FullName,
             form.BusinessName, form.ContactPersonName, form.GstNumber,
-            form.Address, form.City, form.State, form.Website, form.Bio, photo);
+            form.Address, form.City, form.State, form.Website, form.Bio, photo,
+            form.TermsAccepted, form.TermsVersion);
 
         var result = await _mediator.Send(cmd, ct);
         if (result.IsFailure)
@@ -59,6 +60,7 @@ public sealed class RegistrationController : ControllerBase
                 "Registration.MobileTaken"   => 409,
                 "Registration.EmailTaken"    => 409,
                 "Registration.CoolDown"      => 429,
+                "Registration.TermsRequired"  => 400,
                 "Files.InvalidFile"          => 400,
                 "Files.StorageError"         => 500,
                 _ => 400
@@ -96,7 +98,7 @@ public sealed class RegistrationController : ControllerBase
         var cmd = new RegisterCrewCommand(
             form.Username, form.Email, form.Mobile, form.Password, form.FullName, form.DateOfBirth,
             form.ReferralCode, form.City, form.Skills, form.ExperienceYears, form.Bio,
-            idProof, photo);
+            idProof, photo, form.TermsAccepted, form.TermsVersion);
 
         var result = await _mediator.Send(cmd, ct);
         if (result.IsFailure)
@@ -108,6 +110,7 @@ public sealed class RegistrationController : ControllerBase
                 "Registration.EmailTaken"      => 409,
                 "Registration.CoolDown"        => 429,
                 "Registration.InvalidReferral" => 400,
+                "Registration.TermsRequired"    => 400,
                 "Files.InvalidFile"            => 400,
                 "Files.StorageError"           => 500,
                 _ => 400
@@ -156,6 +159,8 @@ public sealed class RegisterVendorForm
     public string? Website { get; set; }
     public string? Bio { get; set; }
     public IFormFile? ProfilePhoto { get; set; }
+    public bool TermsAccepted { get; set; }
+    public int  TermsVersion { get; set; }
 }
 
 /// <summary>A plain class (not a record) — ASP.NET Core's form binder needs settable properties, especially alongside IFormFile.</summary>
@@ -174,4 +179,6 @@ public sealed class RegisterCrewForm
     public string? Bio { get; set; }
     public IFormFile? IdentificationProof { get; set; }
     public IFormFile? ProfilePhoto { get; set; }
+    public bool TermsAccepted { get; set; }
+    public int  TermsVersion { get; set; }
 }
