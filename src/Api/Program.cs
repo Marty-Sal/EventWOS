@@ -1547,6 +1547,30 @@ BEGIN
         RAISE NOTICE 'Created terms_acceptances table';
     END IF;
 
+    -- ═══ indian_states ══════════════════════════════════════════════════════
+    -- Belt-and-braces for 20260821224500_AddIndianStatesTable. Idempotent.
+    -- Reference data (28 states + 8 union territories) backing every ""State""
+    -- dropdown in the app — Venue catalog, vendor/crew self-registration,
+    -- profile editing, and the Event venue picker. Rows are inserted by
+    -- DatabaseSeeder, which runs right after this patch.
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'indian_states') THEN
+        CREATE TABLE indian_states (
+            id                   UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            name                 VARCHAR(100) NOT NULL,
+            is_union_territory   BOOLEAN NOT NULL DEFAULT false,
+            sort_order           INTEGER NOT NULL DEFAULT 0,
+            created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+            created_by           UUID,
+            updated_at           TIMESTAMPTZ,
+            updated_by           UUID,
+            is_deleted           BOOLEAN NOT NULL DEFAULT false,
+            deleted_at           TIMESTAMPTZ,
+            deleted_by           UUID
+        );
+        CREATE UNIQUE INDEX ux_indian_states_name ON indian_states (name);
+        RAISE NOTICE 'Created indian_states table';
+    END IF;
+
 END $$;
 ";
         try
