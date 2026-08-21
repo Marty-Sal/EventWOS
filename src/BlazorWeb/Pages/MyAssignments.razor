@@ -417,6 +417,10 @@
         if (a.ShiftStartAt is { } s)
         {
             var local = s.ToLocalTime();
+            // Date was missing entirely — a crew member with two shifts on
+            // different dates (or just trying to plan their week) had no
+            // way to tell which day a shift fell on from this chip alone.
+            parts.Add($"{local:d MMM}");
             if (a.ShiftEndAt is { } e)
             {
                 var le = e.ToLocalTime();
