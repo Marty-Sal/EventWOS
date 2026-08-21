@@ -563,6 +563,12 @@ try
         // drift-rebuild + MigrateAsync block below only runs when explicitly armed.
         // Enable for exactly one deploy via Railway variable RUN_MIGRATIONS_ON_STARTUP=true
         // (or config key Database:RunMigrationsOnStartup), then disable it again.
+        //
+        // >>> Adding a new table/column? A migration alone will NOT reach prod <<<
+        // because of this gate. You ALSO need a matching block in
+        // emergencySchemaPatchSql below (it runs on every boot, gate or no gate).
+        // See docs/DatabaseMigrations.md — this exact mistake already caused one
+        // outage (indian_states, 2026-08-22).
         var runMigrationsOnStartup = string.Equals(
             Environment.GetEnvironmentVariable("RUN_MIGRATIONS_ON_STARTUP")
                 ?? app.Configuration["Database:RunMigrationsOnStartup"],
