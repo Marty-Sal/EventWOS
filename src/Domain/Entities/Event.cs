@@ -19,7 +19,8 @@ public sealed class Event : BaseEntity
         DateTime startAt,
         DateTime endAt,
         Guid createdByUserId,
-        int maxCrew = 0)
+        int maxCrew = 0,
+        Guid? venueId = null)
     {
         Title           = title;
         Description     = description;
@@ -30,6 +31,7 @@ public sealed class Event : BaseEntity
         CreatedByUserId = createdByUserId;
         MaxCrew         = maxCrew;
         Status          = EventStatus.Draft;
+        VenueId         = venueId;
     }
 
     public string      Title           { get; private set; } = default!;
@@ -42,6 +44,17 @@ public sealed class Event : BaseEntity
     public int         MaxCrew         { get; private set; }
     public Guid        CreatedByUserId { get; private set; }
     public string?     Notes           { get; private set; }
+
+    /// <summary>
+    /// Optional link to a catalog Venue (Settings -> Venue). When set, this
+    /// event's location was chosen from the saved-venue picker rather than
+    /// typed by hand -- Venue/Address above are still the display copy
+    /// (denormalised at pick-time so the event keeps its own address text
+    /// even if the venue is edited/archived later), but VenueId lets the
+    /// UI show which venue was used and lets a future feature resolve
+    /// back to the venue's lat/lng if that's ever wanted.
+    /// </summary>
+    public Guid?       VenueId         { get; private set; }
 
     // Navigation
     public User                        Creator     { get; private set; } = default!;
@@ -110,7 +123,8 @@ public sealed class Event : BaseEntity
     /// </summary>
     public void Update(string title, string? description, string venue, string? address,
                        DateTime startAt, DateTime endAt, int maxCrew,
-                       int currentSeatsOccupied = 0)
+                       int currentSeatsOccupied = 0,
+                       Guid? venueId = null)
     {
         if (Status == EventStatus.Completed || Status == EventStatus.Cancelled)
             throw new InvalidOperationException("Completed or Cancelled events cannot be edited.");
@@ -133,6 +147,7 @@ public sealed class Event : BaseEntity
         StartAt     = startAt;
         EndAt       = endAt;
         MaxCrew     = maxCrew;
+        VenueId     = venueId;
         UpdatedAt   = DateTime.UtcNow;
     }
 

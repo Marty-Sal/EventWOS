@@ -23,6 +23,7 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(e => e.Status)         .HasColumnName("status")            .HasConversion<int>();
         builder.Property(e => e.MaxCrew)        .HasColumnName("max_crew")          .HasDefaultValue(0);
         builder.Property(e => e.CreatedByUserId).HasColumnName("created_by_user_id");
+        builder.Property(e => e.VenueId)         .HasColumnName("venue_id");
 
         // BaseEntity audit Guid (distinct from Creator nav property which uses CreatedByUserId FK)
         builder.Property(e => e.CreatedBy).HasColumnName("created_by");
@@ -42,6 +43,14 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
                .HasForeignKey(e => e.CreatedByUserId)
                .OnDelete(DeleteBehavior.Restrict);
 
+        // Optional catalog venue this event's location was picked from.
+        // SetNull on delete: archiving/removing a venue must never cascade
+        // into deleting the events that once used it.
+        builder.HasOne<EventWOS.Domain.Entities.Venue>()
+               .WithMany()
+               .HasForeignKey(e => e.VenueId)
+               .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasMany(e => e.Assignments)
                .WithOne(a => a.Event)
                .HasForeignKey(a => a.EventId)
@@ -50,6 +59,7 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.HasIndex(e => e.Status).HasDatabaseName("ix_events_status");
         builder.HasIndex(e => e.StartAt).HasDatabaseName("ix_events_start_at");
         builder.HasIndex(e => e.CreatedByUserId).HasDatabaseName("ix_events_created_by_user_id");
+        builder.HasIndex(e => e.VenueId).HasDatabaseName("ix_events_venue_id");
 
 
         // Global soft-delete filter — matches every other entity in the project.

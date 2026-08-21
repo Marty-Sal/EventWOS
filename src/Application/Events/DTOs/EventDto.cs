@@ -18,7 +18,10 @@ public sealed record EventDto(
     // Includes only ManagerApproved / Confirmed / Attended statuses;
     // excludes Invited / VendorApproved / PendingManagerApproval.
     // Used by admin Events card to show real fulfillment.
-    int    ConfirmedCrew = 0
+    int    ConfirmedCrew = 0,
+    // Settings -> Venue: which catalog venue (if any) this event's location
+    // was picked from. Lets the edit form preselect the venue picker.
+    Guid?  VenueId = null
 );
 
 public sealed record EventListItemDto(

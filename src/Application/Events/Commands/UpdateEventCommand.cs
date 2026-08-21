@@ -15,7 +15,11 @@ public sealed record UpdateEventCommand(
     string?  Address,
     DateTime StartAt,
     DateTime EndAt,
-    int      MaxCrew
+    int      MaxCrew,
+    // Optional: pick a catalog Venue instead of typing Venue/Address by hand.
+    // When set, the handler overwrites Venue/Address with the venue's
+    // name/address so the two always agree with what was actually picked.
+    Guid?    VenueId = null
 ) : IRequest<Result>;
 
 public sealed class UpdateEventHandler : IRequestHandler<UpdateEventCommand, Result>
@@ -28,6 +32,19 @@ public sealed class UpdateEventHandler : IRequestHandler<UpdateEventCommand, Res
     {
         var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == req.Id, ct);
         if (ev is null) return Result.Failure(new Error("Event.NotFound", "Event not found."));
+
+        // Resolve venue -> display copy (see CreateEventHandler for the
+        // same pattern and rationale).
+        var venueName = req.Venue;
+        var venueAddr = req.Address;
+        if (req.VenueId is not null)
+        {
+            var venue = await _db.Venues.FirstOrDefaultAsync(v => v.Id == req.VenueId, ct);
+            if (venue is null)
+                return Result.Failure(new Error("Event.InvalidVenue", "Selected venue not found or archived."));
+            venueName = venue.Name;
+            venueAddr = $"{venue.AddressLine1}, {venue.City}".Trim(' ', ',');
+        }
 
         // Count seat-occupiers BEFORE calling Update so the entity can enforce
         // its MaxCrew floor (you cannot shrink the cap below already-approved
@@ -43,8 +60,8 @@ public sealed class UpdateEventHandler : IRequestHandler<UpdateEventCommand, Res
 
         try
         {
-            ev.Update(req.Title, req.Description, req.Venue, req.Address,
-                      req.StartAt, req.EndAt, req.MaxCrew, currentSeats);
+            ev.Update(req.Title, req.Description, venueName, venueAddr,
+                      req.StartAt, req.EndAt, req.MaxCrew, currentSeats, req.VenueId);
         }
         catch (InvalidOperationException ex)
         {

@@ -134,7 +134,7 @@ public sealed class EventsController : ControllerBase
 
         var result = await _mediator.Send(new CreateEventCommand(
             req.Title, req.Description, req.Venue, req.Address,
-            req.StartAt, req.EndAt, req.MaxCrew, _currentUser.UserId!.Value, shifts), ct);
+            req.StartAt, req.EndAt, req.MaxCrew, _currentUser.UserId!.Value, shifts, req.VenueId), ct);
 
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetEvent), new { id = result.Value.Id, version = "1" },
@@ -149,7 +149,7 @@ public sealed class EventsController : ControllerBase
     {
         var result = await _mediator.Send(new UpdateEventCommand(
             id, req.Title, req.Description, req.Venue, req.Address,
-            req.StartAt, req.EndAt, req.MaxCrew), ct);
+            req.StartAt, req.EndAt, req.MaxCrew, VenueId: req.VenueId), ct);
 
         return result.IsSuccess
             ? Ok(ApiResponse.Ok("Event updated."))
@@ -552,11 +552,14 @@ public sealed record CreateEventShiftRequest(
 public sealed record CreateEventRequest(
     string Title, string? Description, string Venue, string? Address,
     DateTime StartAt, DateTime EndAt, int MaxCrew = 0,
-    IReadOnlyList<CreateEventShiftRequest>? Shifts = null);
+    IReadOnlyList<CreateEventShiftRequest>? Shifts = null,
+    // Optional catalog Venue picked via the state-filtered venue dropdown.
+    Guid? VenueId = null);
 
 public sealed record UpdateEventRequest(
     string Title, string? Description, string Venue, string? Address,
-    DateTime StartAt, DateTime EndAt, int MaxCrew = 0);
+    DateTime StartAt, DateTime EndAt, int MaxCrew = 0,
+    Guid? VenueId = null);
 
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
 public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId, Guid? ShiftId = null);

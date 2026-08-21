@@ -49,7 +49,14 @@ public sealed record CreateEventCommand(
     DateTime EndAt,
     int      MaxCrew,
     Guid     CreatedByUserId,
-    IReadOnlyList<CreateEventShiftDto>? Shifts = null
+    IReadOnlyList<CreateEventShiftDto>? Shifts = null,
+    // Optional: pick a catalog Venue (Settings -> Venue) instead of typing
+    // Venue/Address by hand. When set, the handler overwrites Venue/Address
+    // with the venue's name/address so the two always agree with what was
+    // actually picked -- the venue catalog is the source of truth for the
+    // full address details (incl. lat/lng); the event just carries the
+    // display copy plus this VenueId back-reference.
+    Guid?    VenueId = null
 ) : IRequest<Result<EventDto>>;
 
 public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Result<EventDto>>
@@ -64,6 +71,20 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
         // Two code paths converge on the same end state: an Event with >= 1
         // EventShift attached. The Phase-B-aware path validates the supplied
         // shifts; the legacy path synthesises a single "General" shift.
+        // Resolve venue -> display copy. A selected venue's Name/Address wins
+        // over whatever free text was passed, so the event's location text
+        // always matches the catalog entry it was picked from.
+        var venueName = req.Venue;
+        var venueAddr = req.Address;
+        if (req.VenueId is not null)
+        {
+            var venue = await _db.Venues.FirstOrDefaultAsync(v => v.Id == req.VenueId, ct);
+            if (venue is null)
+                return Result.Failure<EventDto>(new Error("Event.InvalidVenue", "Selected venue not found or archived."));
+            venueName = venue.Name;
+            venueAddr = $"{venue.AddressLine1}, {venue.City}".Trim(' ', ',');
+        }
+
         var providedShifts = req.Shifts ?? Array.Empty<CreateEventShiftDto>();
 
         // Effective MaxCrew = sum of shift crew counts when shifts are
@@ -75,9 +96,9 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
             : Math.Max(req.MaxCrew, 1);
 
         var ev = new Event(
-            req.Title, req.Description, req.Venue, req.Address,
+            req.Title, req.Description, venueName, venueAddr,
             req.StartAt, req.EndAt, req.CreatedByUserId,
-            maxCrew: effectiveMaxCrew);
+            maxCrew: effectiveMaxCrew, venueId: req.VenueId);
 
         _db.Events.Add(ev);
 
@@ -209,5 +230,5 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
         Domain.Entities.Event ev, int assignedCrew, string creatorName, int confirmedCrew = 0) => new(
         ev.Id, ev.Title, ev.Description, ev.Venue, ev.Address,
         ev.StartAt, ev.EndAt, ev.Status.ToString(), ev.MaxCrew,
-        assignedCrew, ev.CreatedByUserId, creatorName, ev.CreatedAt, confirmedCrew);
+        assignedCrew, ev.CreatedByUserId, creatorName, ev.CreatedAt, confirmedCrew, ev.VenueId);
 }
