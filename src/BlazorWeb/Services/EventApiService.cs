@@ -85,7 +85,7 @@ public interface IEventApiService
 
     // Crew / Vendor — my own assignments
     Task<PagedEventAssignmentResult?> GetMyAssignmentsAsync(int page = 1, CancellationToken ct = default);
-    Task<PagedEventAssignmentResult?> GetVendorAssignmentsAsync(int page = 1, CancellationToken ct = default);
+    Task<PagedEventAssignmentResult?> GetVendorAssignmentsAsync(int page = 1, CancellationToken ct = default, string? mode = null, int pageSize = 20);
     Task<(bool Ok, string? Error)> RespondAssignmentAsync(Guid assignmentId, string response, string? reason = null, CancellationToken ct = default);
     Task<(bool Ok, Guid? AssignmentId, string? Error)> VendorAssignCrewAsync(Guid eventId, Guid crewId, Guid? shiftId = null, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> VendorRevokeCrewInviteAsync(Guid eventId, Guid crewId, CancellationToken ct = default);
@@ -404,12 +404,20 @@ public sealed class EventApiService : IEventApiService
         catch { return null; }
     }
 
-    public async Task<PagedEventAssignmentResult?> GetVendorAssignmentsAsync(int page = 1, CancellationToken ct = default)
+    public async Task<PagedEventAssignmentResult?> GetVendorAssignmentsAsync(int page = 1, CancellationToken ct = default, string? mode = null, int pageSize = 20)
     {
         try
         {
+            // mode: "Invitations" = placeholder rows only (CrewId == null,
+            // Status == Invited) — the vendor's OWN pending event invites,
+            // answered on My Events. "CrewAssignments" = rows with a real
+            // crew member — the crew responses a vendor reviews/forwards
+            // on /vendor-assignments. Omit for the legacy unfiltered "All"
+            // (mixes both — kept only where nothing downstream branches on
+            // the distinction).
+            var modeQs = string.IsNullOrWhiteSpace(mode) ? "" : $"&mode={mode}";
             var r = await _http.GetFromJsonAsync<ApiResult<PagedEventAssignmentResult>>(
-                $"api/v1/events/vendor-assignments?page={page}&pageSize=20", _jsonOpts, ct);
+                $"api/v1/events/vendor-assignments?page={page}&pageSize={pageSize}{modeQs}", _jsonOpts, ct);
             return r?.Data;
         }
         catch { return null; }

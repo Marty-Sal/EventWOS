@@ -399,26 +399,51 @@
             </div>
 
             @* ── Action Center — grouped by category ──────────────────────── *@
+            @* Three distinct things a vendor acts on, each with its own card
+               and its own target page — previously "Events" and crew-review
+               were conflated into one card/count that linked to the
+               crew-review queue, so an event-level invite bumped the badge
+               but was invisible once you clicked through. *@
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h3 class="text-sm font-semibold text-gray-700 mb-4">Action Center</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div class="rounded-xl border p-4 flex items-center justify-between gap-3 cursor-pointer transition
                                 @(_vendorEventsAwaiting > 0 ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50" : "border-gray-100 hover:bg-gray-50")"
-                         @onclick="@(() => Nav.NavigateTo("/vendor-assignments"))">
+                         @onclick="@(() => Nav.NavigateTo("/my-events"))">
                         <div class="flex items-center gap-3">
                             <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">🗓️</div>
                             <div>
                                 <p class="text-sm font-semibold text-gray-800">Events</p>
                                 <p class="text-xs text-gray-500">
                                     @(_vendorEventsAwaiting > 0
-                                        ? $"{_vendorEventsAwaiting} crew response(s) awaiting your review"
-                                        : "All caught up — nothing awaiting review")
+                                        ? $"{_vendorEventsAwaiting} event invite(s) awaiting your response"
+                                        : "All caught up — no event invites pending")
                                 </p>
                             </div>
                         </div>
                         @if (_vendorEventsAwaiting > 0)
                         {
                             <span class="px-2.5 py-1 rounded-full bg-amber-400 text-white text-xs font-bold flex-shrink-0">@_vendorEventsAwaiting</span>
+                        }
+                    </div>
+
+                    <div class="rounded-xl border p-4 flex items-center justify-between gap-3 cursor-pointer transition
+                                @(_vendorCrewReviewAwaiting > 0 ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50" : "border-gray-100 hover:bg-gray-50")"
+                         @onclick="@(() => Nav.NavigateTo("/vendor-assignments"))">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">✅</div>
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">Crew Event Approval</p>
+                                <p class="text-xs text-gray-500">
+                                    @(_vendorCrewReviewAwaiting > 0
+                                        ? $"{_vendorCrewReviewAwaiting} crew response(s) awaiting your review"
+                                        : "All caught up — nothing awaiting review")
+                                </p>
+                            </div>
+                        </div>
+                        @if (_vendorCrewReviewAwaiting > 0)
+                        {
+                            <span class="px-2.5 py-1 rounded-full bg-amber-400 text-white text-xs font-bold flex-shrink-0">@_vendorCrewReviewAwaiting</span>
                         }
                     </div>
 
@@ -490,6 +515,7 @@
     // ── Vendor: Total Active Crew + Action Center counts ────────────────────
     private int _totalActiveCrew;
     private int _vendorEventsAwaiting;
+    private int _vendorCrewReviewAwaiting;
     private int _vendorPeopleAwaiting;
 
     private async Task LoadVendorActionCenterAsync()
@@ -504,11 +530,29 @@
         }
         catch { /* best-effort */ }
 
-        // Events category — same "Awaiting Review" grouping as VendorAssignments.razor.
+        // Events category — the vendor's OWN pending event invites (placeholder
+        // rows, CrewId == null), answered by Accept/Reject on My Events.
+        // Previously this pulled the unfiltered "All" mode, which silently
+        // mixed in crew-response rows too — so the card said "Events" but
+        // clicking it landed on the crew-review queue, which doesn't show
+        // event-level invites at all. mode=Invitations is exactly the
+        // placeholder-row filter GetVendorAssignmentsQuery already exposes.
         try
         {
-            var assignments = await EventApi.GetVendorAssignmentsAsync();
-            _vendorEventsAwaiting = assignments?.Items.Count(a => a.Status is "Invited" or "VendorApproved") ?? 0;
+            var invites = await EventApi.GetVendorAssignmentsAsync(mode: "Invitations", pageSize: 500);
+            _vendorEventsAwaiting = invites?.Items.Count ?? 0;
+        }
+        catch { /* best-effort */ }
+
+        // Crew Event Approval category — crew responses on THIS vendor's
+        // referred crew, waiting for the vendor to review/forward to the
+        // Manager. mode=CrewAssignments matches exactly what
+        // VendorAssignments.razor's own "Awaiting Review" badge counts, so
+        // the dashboard number and the target page agree.
+        try
+        {
+            var crewRows = await EventApi.GetVendorAssignmentsAsync(mode: "CrewAssignments", pageSize: 500);
+            _vendorCrewReviewAwaiting = crewRows?.Items.Count(a => a.Status is "Invited" or "VendorApproved") ?? 0;
         }
         catch { /* best-effort */ }
 
