@@ -3,6 +3,8 @@
 @inject IUserApiService      UserApi
 @inject IAnalyticsApiService AnalyticsApi
 @inject IEventApiService     EventApi
+@inject IVendorApiService    VendorApi
+@inject HttpClient           Http
 @inject NavigationManager    Nav
 
 <PageTitle>Dashboard — EventWOS</PageTitle>
@@ -378,16 +380,67 @@
                     <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Role</p><p class="text-lg font-bold text-gray-800 truncate">@(_profile?.Role ?? "—")</p></div>
                 </div>
                 <div class="stat-card bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-                    <div class="w-11 h-11 rounded-xl bg-green-50 flex items-center justify-center text-2xl">✅</div>
-                    <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Status</p><p class="text-lg font-bold text-gray-800 truncate">@(_profile?.Status ?? "—")</p></div>
+                    <div class="w-11 h-11 rounded-xl bg-green-50 flex items-center justify-center text-2xl">🎉</div>
+                    <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Total Events Done</p><p class="text-lg font-bold text-gray-800 truncate">@(_profile?.EventsCompleted ?? 0)</p></div>
                 </div>
                 <div class="stat-card bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-                    <div class="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center text-2xl">🔑</div>
-                    <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Permissions</p><p class="text-lg font-bold text-gray-800 truncate">@(_profile?.Permissions.Count ?? 0)</p></div>
+                    <div class="w-11 h-11 rounded-xl bg-sky-50 flex items-center justify-center text-2xl">👷</div>
+                    <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Total Active Crew</p><p class="text-lg font-bold text-gray-800 truncate">@_totalActiveCrew</p></div>
                 </div>
                 <div class="stat-card bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-                    <div class="w-11 h-11 rounded-xl bg-sky-50 flex items-center justify-center text-2xl">📱</div>
-                    <div class="min-w-0 flex-1"><p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Mobile</p><p class="text-lg font-bold text-gray-800 truncate">@(_profile?.Mobile ?? "—")</p></div>
+                    <div class="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center text-2xl">⭐</div>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Rating</p>
+                        <p class="text-lg font-bold text-gray-800 truncate">
+                            @(_profile?.Rating is decimal r ? $"{r:0.0} / 5" : "Not yet rated")
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            @* ── Action Center — grouped by category ──────────────────────── *@
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h3 class="text-sm font-semibold text-gray-700 mb-4">Action Center</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="rounded-xl border p-4 flex items-center justify-between gap-3 cursor-pointer transition
+                                @(_vendorEventsAwaiting > 0 ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50" : "border-gray-100 hover:bg-gray-50")"
+                         @onclick="@(() => Nav.NavigateTo("/vendor-assignments"))">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">🗓️</div>
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">Events</p>
+                                <p class="text-xs text-gray-500">
+                                    @(_vendorEventsAwaiting > 0
+                                        ? $"{_vendorEventsAwaiting} crew response(s) awaiting your review"
+                                        : "All caught up — nothing awaiting review")
+                                </p>
+                            </div>
+                        </div>
+                        @if (_vendorEventsAwaiting > 0)
+                        {
+                            <span class="px-2.5 py-1 rounded-full bg-amber-400 text-white text-xs font-bold flex-shrink-0">@_vendorEventsAwaiting</span>
+                        }
+                    </div>
+
+                    <div class="rounded-xl border p-4 flex items-center justify-between gap-3 cursor-pointer transition
+                                @(_vendorPeopleAwaiting > 0 ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50" : "border-gray-100 hover:bg-gray-50")"
+                         @onclick="@(() => Nav.NavigateTo("/approvals/people"))">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">🧑‍🤝‍🧑</div>
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">Profile Approval</p>
+                                <p class="text-xs text-gray-500">
+                                    @(_vendorPeopleAwaiting > 0
+                                        ? $"{_vendorPeopleAwaiting} crew registration(s) pending your approval"
+                                        : "No pending crew registrations")
+                                </p>
+                            </div>
+                        </div>
+                        @if (_vendorPeopleAwaiting > 0)
+                        {
+                            <span class="px-2.5 py-1 rounded-full bg-amber-400 text-white text-xs font-bold flex-shrink-0">@_vendorPeopleAwaiting</span>
+                        }
+                    </div>
                 </div>
             </div>
 
@@ -428,7 +481,50 @@
         {
             _assignments = await EventApi.GetMyAssignmentsAsync();
         }
+        else if (_profile?.Role == "Vendor")
+        {
+            await LoadVendorActionCenterAsync();
+        }
     }
+
+    // ── Vendor: Total Active Crew + Action Center counts ────────────────────
+    private int _totalActiveCrew;
+    private int _vendorEventsAwaiting;
+    private int _vendorPeopleAwaiting;
+
+    private async Task LoadVendorActionCenterAsync()
+    {
+        // Total Active Crew — pull the full roster (pageSize large enough for
+        // any realistic vendor) and count Active ones; TotalCount alone would
+        // include Suspended/other statuses.
+        try
+        {
+            var crew = await VendorApi.GetCrewAsync(page: 1, pageSize: 500);
+            _totalActiveCrew = crew?.Items.Count(c => c.Status == "Active") ?? 0;
+        }
+        catch { /* best-effort */ }
+
+        // Events category — same "Awaiting Review" grouping as VendorAssignments.razor.
+        try
+        {
+            var assignments = await EventApi.GetVendorAssignmentsAsync();
+            _vendorEventsAwaiting = assignments?.Items.Count(a => a.Status is "Invited" or "VendorApproved") ?? 0;
+        }
+        catch { /* best-effort */ }
+
+        // Profile Approval category — pending crew registrations under this
+        // vendor's referral code (People tab of /approvals).
+        try
+        {
+            var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var r = await Http.GetFromJsonAsync<ApprovalQueueResult>("api/v1/approval-queue", jsonOpts);
+            _vendorPeopleAwaiting = r?.Data?.CrewCount ?? 0;
+        }
+        catch { /* best-effort */ }
+    }
+
+    private sealed record ApprovalQueueResult(bool Success, ApprovalQueueData? Data);
+    private sealed record ApprovalQueueData(int VendorCount, int CrewCount);
 
     // ── Crew assignment call-to-action / status tracker ─────────────────────
     private int PendingInviteCount =>
