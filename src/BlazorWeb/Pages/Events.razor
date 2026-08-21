@@ -976,10 +976,115 @@
                            class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     <textarea @bind="_form.Description" placeholder="Description (optional)" rows="2"
                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
-                    <input @bind="_form.Venue" placeholder="Venue *"
-                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    <input @bind="_form.Address" placeholder="Address (optional)"
-                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    @* ─── Venue picker: state -> searchable venue dropdown ───────
+                       Owner request: pick a State first, then a searchable
+                       dropdown shows only venues saved under that state. A
+                       "type manually" escape hatch covers one-off locations
+                       that aren't in the catalog yet. *@
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs text-gray-500">Venue *</label>
+                            <button type="button" @onclick="ToggleManualVenueEntry"
+                                    class="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium">
+                                @(_manualVenueEntry ? "Use venue picker instead" : "Type manually instead")
+                            </button>
+                        </div>
+
+                        @if (_manualVenueEntry)
+                        {
+                            <input @bind="_form.Venue" placeholder="Venue *"
+                                   class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                            <input @bind="_form.Address" placeholder="Address (optional)"
+                                   class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        }
+                        else if (_form.VenueId is not null)
+                        {
+                            <div class="flex items-center justify-between px-3 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50">
+                                <div>
+                                    <p class="text-sm font-semibold text-indigo-800">@_form.Venue</p>
+                                    @if (!string.IsNullOrWhiteSpace(_form.Address))
+                                    {
+                                        <p class="text-[11px] text-indigo-500">@_form.Address</p>
+                                    }
+                                </div>
+                                <button type="button" class="text-gray-400 hover:text-red-500 text-xs" @onclick="ClearPickedVenue">✕</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <select class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    value="@_form.VenueState" @onchange="OnVenueStateChanged">
+                                <option value="">Select state…</option>
+                                @foreach (var st in _venueStates)
+                                {
+                                    <option value="@st">@st</option>
+                                }
+                            </select>
+
+                            @if (_form.VenueState is not null)
+                            {
+                                <div class="relative">
+                                    <input type="text" placeholder="Search venue by name or city…" value="@_form.VenueSearch"
+                                           @oninput="OnVenueSearchInput"
+                                           @onfocus="() => _form.VenueDropOpen = true"
+                                           class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    @if (_form.VenueDropOpen && _venueSearchResults.Count > 0)
+                                    {
+                                        <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                                            @foreach (var v in _venueSearchResults)
+                                            {
+                                                <button type="button" class="w-full text-left px-3 py-2 hover:bg-indigo-50 text-xs"
+                                                        @onclick="() => SelectVenue(v)">
+                                                    <span class="font-semibold text-gray-700">@v.Name</span>
+                                                    <span class="text-gray-400 ml-1">@v.City</span>
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                    else if (_form.VenueDropOpen && _venuesForState.Count == 0)
+                                    {
+                                        <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 text-xs text-gray-400">
+                                            No venues saved for @_form.VenueState yet.
+                                        </div>
+                                    }
+                                </div>
+                                <button type="button" @onclick="ToggleAddVenueForm"
+                                        class="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium">
+                                    @(_showAddVenueForm ? "Cancel" : "+ Add new venue")
+                                </button>
+
+                                @if (_showAddVenueForm)
+                                {
+                                    <div class="p-3 rounded-xl border border-gray-200 bg-gray-50 space-y-2">
+                                        <input @bind="_addVenueForm.Name" placeholder="Venue name *"
+                                               class="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                        <input @bind="_addVenueForm.AddressLine1" placeholder="Address line *"
+                                               class="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <input @bind="_addVenueForm.City" placeholder="City *"
+                                                   class="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                            <input @bind="_addVenueForm.State" placeholder="State *"
+                                                   class="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <input @bind="_addVenueForm.Latitude" placeholder="Latitude (optional)"
+                                                   class="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                            <input @bind="_addVenueForm.Longitude" placeholder="Longitude (optional)"
+                                                   class="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                        </div>
+                                        @if (_addVenueError is not null)
+                                        {
+                                            <p class="text-[11px] text-red-500">@_addVenueError</p>
+                                        }
+                                        <button type="button" @onclick="SubmitAddVenue" disabled="@_addVenueSaving"
+                                                class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                                            @(_addVenueSaving ? "Saving…" : "Save venue")
+                                        </button>
+                                    </div>
+                                }
+                            }
+                        }
+                    </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="text-xs text-gray-500 mb-1 block">Start *</label>
@@ -1698,6 +1803,29 @@ else
     // when the page reloads. Tiny enough to keep in memory; no pagination.
     private List<ScopePickItem> _scopeCatalog = new();
     private sealed record ScopePickItem(Guid Id, string Name);
+
+    // ── Venue picker: state -> searchable venue dropdown ───────────────────
+    private List<string>        _venueStates        = new();
+    private bool                 _venueStatesLoaded   = false;
+    private List<VenuePickItem>  _venuesForState      = new();
+    private List<VenuePickItem>  _venueSearchResults  = new();
+    private bool                 _manualVenueEntry    = false;   // escape hatch: type Venue/Address by hand
+    private bool                 _showAddVenueForm    = false;
+    private AddVenueForm         _addVenueForm        = new();
+    private string?              _addVenueError;
+    private bool                 _addVenueSaving;
+
+    private sealed record VenuePickItem(Guid Id, string Name, string AddressLine1, string City, string? State);
+
+    private sealed class AddVenueForm
+    {
+        public string  Name         { get; set; } = "";
+        public string  AddressLine1 { get; set; } = "";
+        public string  City         { get; set; } = "";
+        public string  State        { get; set; } = "";
+        public double? Latitude     { get; set; }
+        public double? Longitude    { get; set; }
+    }
     private string?           _formError;
 
     // Crew/Vendor paging
@@ -1975,8 +2103,11 @@ else
         var seedEnd   = seedDate.AddHours(13);
         _form = new EventForm { StartAt = seedStart, EndAt = seedEnd };
         _formError = null;
+        _manualVenueEntry = false;
+        _showAddVenueForm = false;
         _showEventModal = true;
         await EnsureScopeCatalogLoaded();
+        await EnsureVenueStatesLoaded();
         // Phase C step 4: seed exactly ONE default shift row pointing at the
         // first scope. If the catalog is empty the editor renders a helpful
         // "create one first" banner instead.
@@ -2028,6 +2159,158 @@ else
 
     private sealed record ScopeApiEnvelope(ScopeApiData? Data);
     private sealed record ScopeApiData(List<ScopePickItem> Items);
+
+    // ── Venue picker handlers ────────────────────────────────────────────
+    // State-first, then a searchable venue dropdown within that state (per
+    // owner request). Venues are catalog data (Settings not built yet —
+    // this modal doubles as the entry point via "+ Add new venue").
+    private async Task EnsureVenueStatesLoaded()
+    {
+        if (_venueStatesLoaded) return;
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<VenueStatesEnvelope>("/api/v1/venues/states");
+            _venueStates = resp?.Data ?? new();
+        }
+        catch { _venueStates = new(); }
+        _venueStatesLoaded = true;
+    }
+
+    private async Task LoadVenuesForStateAsync(string state)
+    {
+        try
+        {
+            var url = $"/api/v1/venues?state={Uri.EscapeDataString(state)}&includeArchived=false&page=1&pageSize=200";
+            var resp = await Http.GetFromJsonAsync<VenueListEnvelope>(url);
+            _venuesForState = resp?.Data?.Items
+                ?.Select(v => new VenuePickItem(v.Id, v.Name, v.AddressLine1, v.City, v.State))
+                .OrderBy(v => v.Name)
+                .ToList() ?? new();
+        }
+        catch { _venuesForState = new(); }
+        _venueSearchResults = _venuesForState;
+    }
+
+    private async Task OnVenueStateChanged(ChangeEventArgs e)
+    {
+        var state = e.Value?.ToString();
+        _form.VenueState = string.IsNullOrWhiteSpace(state) ? null : state;
+        _form.VenueId    = null;
+        _form.Venue      = "";
+        _form.Address    = null;
+        _form.VenueSearch   = "";
+        _form.VenueDropOpen = false;
+        _venuesForState = new();
+        _venueSearchResults = new();
+        if (_form.VenueState is not null)
+            await LoadVenuesForStateAsync(_form.VenueState);
+    }
+
+    private void OnVenueSearchInput(ChangeEventArgs e)
+    {
+        _form.VenueSearch = e.Value?.ToString() ?? "";
+        var q = _form.VenueSearch.Trim();
+        _venueSearchResults = q.Length == 0
+            ? _venuesForState
+            : _venuesForState.Where(v =>
+                v.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                v.City.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        _form.VenueDropOpen = true;
+    }
+
+    private void SelectVenue(VenuePickItem v)
+    {
+        _form.VenueId       = v.Id;
+        _form.Venue         = v.Name;
+        _form.Address       = string.IsNullOrWhiteSpace(v.City) ? v.AddressLine1 : $"{v.AddressLine1}, {v.City}";
+        _form.VenueSearch    = "";
+        _form.VenueDropOpen  = false;
+    }
+
+    private void ClearPickedVenue()
+    {
+        _form.VenueId = null;
+        _form.Venue   = "";
+        _form.Address = null;
+    }
+
+    private void ToggleManualVenueEntry()
+    {
+        _manualVenueEntry = !_manualVenueEntry;
+        if (_manualVenueEntry)
+        {
+            // Switching to manual entry — drop any catalog link so the
+            // free-typed text is what actually gets saved.
+            _form.VenueId = null;
+        }
+    }
+
+    private void ToggleAddVenueForm()
+    {
+        _showAddVenueForm = !_showAddVenueForm;
+        _addVenueError = null;
+        if (_showAddVenueForm)
+            _addVenueForm = new AddVenueForm { State = _form.VenueState ?? "" };
+    }
+
+    private async Task SubmitAddVenue()
+    {
+        if (string.IsNullOrWhiteSpace(_addVenueForm.Name) ||
+            string.IsNullOrWhiteSpace(_addVenueForm.AddressLine1) ||
+            string.IsNullOrWhiteSpace(_addVenueForm.City) ||
+            string.IsNullOrWhiteSpace(_addVenueForm.State))
+        {
+            _addVenueError = "Name, address, city and state are required.";
+            return;
+        }
+
+        _addVenueSaving = true;
+        _addVenueError  = null;
+        try
+        {
+            var payload = new
+            {
+                name = _addVenueForm.Name.Trim(),
+                addressLine1 = _addVenueForm.AddressLine1.Trim(),
+                city = _addVenueForm.City.Trim(),
+                state = _addVenueForm.State.Trim(),
+                latitude = _addVenueForm.Latitude,
+                longitude = _addVenueForm.Longitude
+            };
+            var resp = await Http.PostAsJsonAsync("/api/v1/venues", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<VenueSingleEnvelope>();
+                var created = body?.Data;
+                if (created is not null)
+                {
+                    // Refresh state list (new state may not have existed before),
+                    // select it, load venues for it, and auto-pick the new one.
+                    _venueStatesLoaded = false;
+                    await EnsureVenueStatesLoaded();
+                    _form.VenueState = created.State ?? _addVenueForm.State;
+                    await LoadVenuesForStateAsync(_form.VenueState!);
+                    SelectVenue(new VenuePickItem(created.Id, created.Name, created.AddressLine1, created.City, created.State));
+                    _showAddVenueForm = false;
+                }
+            }
+            else
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiErrorEnvelope>();
+                _addVenueError = body?.Errors?.FirstOrDefault() ?? body?.Message ?? "Could not save venue.";
+            }
+        }
+        catch (Exception ex) { _addVenueError = ex.Message; }
+        finally { _addVenueSaving = false; }
+    }
+
+    private sealed record VenueStatesEnvelope(List<string>? Data);
+    private sealed record VenueListEnvelope(VenueListData? Data);
+    private sealed record VenueListData(List<VenueApiDto> Items);
+    private sealed record VenueSingleEnvelope(VenueApiDto? Data);
+    private sealed record VenueApiDto(Guid Id, string Name, string AddressLine1, string? AddressLine2,
+        string City, string? State, string? PostalCode, string? Country, double? Latitude, double? Longitude);
+    private sealed record ApiErrorEnvelope(string? Message, List<string>? Errors);
 
     // ── Phase D step 1: shift editor handlers ──────────────────────────
     // Each row mutates in-place via @onchange so the user can keep typing;
@@ -2176,10 +2459,18 @@ else
         await EnsureScopeCatalogLoaded();
 
         _editingEvent = ev;
+
+        // EventListItemDto (list row) doesn't carry VenueId/Address — pull
+        // the full detail so the edit form can preselect the venue picker
+        // exactly like it would for a fresh pick.
+        var detail = await EventApi.GetEventAsync(ev.Id);
+
         _form = new EventForm
         {
             Title       = ev.Title,
             Venue       = ev.Venue,
+            Address     = detail?.Address,
+            VenueId     = detail?.VenueId,
             StartAt     = ev.StartAt.ToLocalTime(),
             EndAt       = ev.EndAt.ToLocalTime(),
             MaxCrew     = ev.MaxCrew,
@@ -2188,7 +2479,27 @@ else
         _editShiftError = null;
         _editShifts     = null;
         _addShiftDraft  = new() { ScopeOfWorkId = _scopeCatalog.FirstOrDefault()?.Id ?? Guid.Empty };
+        _manualVenueEntry = _form.VenueId is null;   // no catalog link -> show free-text so existing text isn't lost
+        _showAddVenueForm = false;
         _showEventModal = true;
+        await EnsureVenueStatesLoaded();
+
+        // If this event is linked to a catalog venue, look it up so we know
+        // its State and can preload that state's venue list for the picker.
+        if (_form.VenueId is { } vid)
+        {
+            try
+            {
+                var vResp = await Http.GetFromJsonAsync<VenueSingleEnvelope>($"/api/v1/venues/{vid}");
+                if (vResp?.Data is { } v)
+                {
+                    _form.VenueState = v.State;
+                    if (v.State is not null)
+                        await LoadVenuesForStateAsync(v.State);
+                }
+            }
+            catch { /* picker just falls back to empty state list; text stays visible either way */ }
+        }
 
         // Phase D: load shifts so the editor can render. We don't block the
         // modal on this — it shows a skeleton while loading.
@@ -2315,7 +2626,7 @@ else
         var req = new CreateEventRequest(
             _form.Title, _form.Description, _form.Venue, _form.Address,
             _form.StartAt!.Value.ToUniversalTime(), _form.EndAt!.Value.ToUniversalTime(),
-            derivedMaxCrew, shifts);
+            derivedMaxCrew, shifts, _form.VenueId);
 
         if (_editingEvent is null)
         {
@@ -3018,6 +3329,16 @@ else
         public string?   Description { get; set; }
         public string    Venue       { get; set; } = "";
         public string?   Address     { get; set; }
+
+        // ── Venue picker (state -> searchable venue dropdown) ──────────────
+        // VenueId is what actually gets sent to the API; Venue/Address above
+        // are populated as display copy the moment a venue is picked (the
+        // server re-derives them from VenueId anyway, but keeping them in
+        // sync client-side means the read-only summary always matches).
+        public Guid?             VenueId       { get; set; }
+        public string?           VenueState    { get; set; }
+        public string            VenueSearch   { get; set; } = "";
+        public bool              VenueDropOpen { get; set; }
         // Nullable so a fresh form renders empty ("mm/dd/yyyy --:--") instead
         // of the DateTime.MinValue placeholder (01/01/0001) that a non-nullable
         // DateTime would surface after Blazor's initial render. OpenCreateModal

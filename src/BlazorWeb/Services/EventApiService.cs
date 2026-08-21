@@ -19,7 +19,9 @@ public sealed record EventDetailDto(
     DateTime StartAt, DateTime EndAt, string Status, int MaxCrew, int AssignedCrew,
     Guid CreatedByUserId, string CreatedByName, DateTime CreatedAt,
     // Phase D step 21: see EventListItemDto.ConfirmedCrew.
-    int ConfirmedCrew = 0);
+    int ConfirmedCrew = 0,
+    // Which catalog venue (if any) this event's location was picked from.
+    Guid? VenueId = null);
 
 public sealed record EventAssignmentDto(
     Guid      Id,
@@ -121,7 +123,9 @@ public sealed record CreateEventShiftRequest(
 public sealed record CreateEventRequest(
     string Title, string? Description, string Venue, string? Address,
     DateTime StartAt, DateTime EndAt, int MaxCrew,
-    IReadOnlyList<CreateEventShiftRequest>? Shifts = null);
+    IReadOnlyList<CreateEventShiftRequest>? Shifts = null,
+    // Optional catalog Venue picked via the state-filtered venue dropdown.
+    Guid? VenueId = null);
 
 /// <summary>
 /// Phase B read-back shape — matches API EventShiftDto exactly.
