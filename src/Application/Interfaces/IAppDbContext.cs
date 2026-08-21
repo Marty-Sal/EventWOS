@@ -34,5 +34,8 @@ public interface IAppDbContext
     // File & Image Storage module
     DbSet<FileDocument>     FileDocuments     { get; }
 
+    // Settings module — Venue catalog.
+    DbSet<Venue>             Venues            { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

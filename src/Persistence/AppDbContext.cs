@@ -56,6 +56,9 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     // File & Image Storage module
     public DbSet<FileDocument>     FileDocuments     => Set<FileDocument>();
 
+    // Settings module — Venue catalog.
+    public DbSet<Venue>             Venues            => Set<Venue>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

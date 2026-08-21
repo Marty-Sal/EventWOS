@@ -1443,6 +1443,53 @@ BEGIN
            AND e.max_crew IS DISTINCT FROM st.total;
     END IF;
 
+    -- ═══ venues catalog + events.venue_id ═══════════════════════════════════
+    -- Belt-and-braces for 20260821211500_AddVenues. Idempotent. Settings
+    -- module: admin-managed venue catalog with structured address + lat/lng,
+    -- so an Event can reuse a saved venue's location (Event.VenueId) instead
+    -- of every event needing its own coordinates entered by hand.
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'venues') THEN
+        CREATE TABLE venues (
+            id                   UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+            name                 VARCHAR(120) NOT NULL,
+            address_line1        VARCHAR(200) NOT NULL,
+            address_line2        VARCHAR(200),
+            city                 VARCHAR(200) NOT NULL,
+            state                VARCHAR(100),
+            postal_code          VARCHAR(20),
+            country              VARCHAR(100),
+            latitude             DOUBLE PRECISION,
+            longitude            DOUBLE PRECISION,
+            notes                VARCHAR(1000),
+            created_by_user_id   UUID NOT NULL,
+            created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+            created_by           UUID,
+            updated_at           TIMESTAMPTZ,
+            updated_by           UUID,
+            is_deleted           BOOLEAN NOT NULL DEFAULT false,
+            deleted_at           TIMESTAMPTZ,
+            deleted_by           UUID
+        );
+        CREATE INDEX ix_venues_name ON venues (name);
+        CREATE UNIQUE INDEX ux_venues_name_active
+            ON venues (LOWER(name))
+            WHERE is_deleted = false;
+        RAISE NOTICE 'Created venues table';
+    END IF;
+
+    ALTER TABLE events ADD COLUMN IF NOT EXISTS venue_id UUID NULL;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'fk_events_venue_id'
+    ) THEN
+        ALTER TABLE events
+            ADD CONSTRAINT fk_events_venue_id
+            FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE SET NULL;
+    END IF;
+
+    CREATE INDEX IF NOT EXISTS ix_events_venue_id ON events (venue_id);
+
 END $$;
 ";
         try
