@@ -71,13 +71,14 @@
                                     // exist for the same event, each renders as its own row with its
                                     // own scope + time + hours so the crew sees them as distinct.
                                     var shiftLabel = BuildShiftLabel(a);
-                                    var trackerStepForBadge = TrackerStep(a.Status);
+                                    var (trackerStepForBadge, rejectedAtForBadge) = TrackerState(a.Status);
                                 }
                                 @* The raw-status pill (e.g. "VendorApproved") duplicated and
                                    contradicted the tracker below it — the tracker already tells
-                                   the story clearly, so only show this pill when there's no
-                                   tracker to fall back on (Declined/Rejected/NoShow rows). *@
-                                @if (trackerStepForBadge == 0)
+                                   the story clearly, so only show this pill on rows with no
+                                   tracker at all (Declined/NoShow), or on a rejected row where
+                                   the crossed-out tracker alone doesn't say WHO rejected it. *@
+                                @if (trackerStepForBadge == 0 || rejectedAtForBadge is not null)
                                 {
                                     <div class="flex flex-col items-end gap-0.5">
                                         <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold @badge">@lbl</span>
@@ -96,34 +97,41 @@
                                 </div>
                             }
 
-                            @* Amazon-style progress tracker: Invited → Reviewed →
-                               Confirmed → Attended. Only rendered on the happy
-                               path — a Declined/Rejected/NoShow row isn't
-                               "further along a line", it stopped, so those
-                               keep their existing red status text below
-                               instead of a tracker that would misleadingly
-                               imply forward progress. *@
-                            @{ var trackerStep = TrackerStep(a.Status); }
-                            @if (trackerStep > 0)
+                            @* Amazon-style progress tracker: Invited → Accepted → Vendor
+                               Reviewed → Manager Reviewed → Confirmed → Attended. Rendered on
+                               the happy path AND on a rejection — a rejection still shows how
+                               far it got, with the point of rejection and everything after it
+                               crossed out (✕) instead of just vanishing the whole tracker.
+                               Declined/NoShow have no tracker: Declined means crew never even
+                               responded to reach step 2, and NoShow is a post-event admin
+                               override with nothing "in progress" to visualize. *@
+                            @{ var (trackerStep, rejectedAtStep) = TrackerState(a.Status); }
+                            @if (trackerStep > 0 || rejectedAtStep is not null)
                             {
-                                <div class="relative w-full max-w-sm pt-3 pb-1">
+                                <div class="relative w-full max-w-sm pt-3 pb-1 cursor-pointer select-none"
+                                     title="Tap for status details"
+                                     @onclick="() => ShowStatusFlash(a.Id)">
                                     @* Fill lives INSIDE the track div so its width is a plain
                                        percentage of the track's own (already-inset) width —
                                        no calc() mixing % of container with px offsets needed. *@
                                     <div class="absolute top-[15px] left-3 right-3 h-0.5 bg-gray-200 overflow-hidden">
-                                        <div class="h-0.5 bg-indigo-600 transition-all" style="width: @(TrackerProgressPercent(trackerStep).ToString("0.##"))%"></div>
+                                        <div class="h-0.5 @(rejectedAtStep is not null ? "bg-red-400" : "bg-indigo-600") transition-all"
+                                             style="width: @(TrackerProgressPercent(trackerStep).ToString("0.##"))%"></div>
                                     </div>
                                     <div class="relative flex justify-between">
                                         @for (var i = 1; i <= 6; i++)
                                         {
                                             var idx = i;
                                             var reached = idx <= trackerStep;
+                                            var crossed = !reached && rejectedAtStep is not null && idx >= rejectedAtStep.Value;
                                             <div class="flex flex-col items-center gap-1 w-1/6">
                                                 <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2
-                                                            @(reached ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-gray-300 text-gray-400")">
-                                                    @(reached ? "✓" : idx.ToString())
+                                                            @(reached  ? "bg-indigo-600 border-indigo-600 text-white"
+                                                              : crossed ? "bg-red-50 border-red-300 text-red-500"
+                                                              : "bg-white border-gray-300 text-gray-400")">
+                                                    @(reached ? "✓" : crossed ? "✕" : idx.ToString())
                                                 </div>
-                                                <span class="text-[10px] text-center @(reached ? "text-indigo-700 font-semibold" : "text-gray-400")">@TrackerLabels[idx - 1]</span>
+                                                <span class="text-[10px] text-center @(reached ? "text-indigo-700 font-semibold" : crossed ? "text-red-400" : "text-gray-400")">@TrackerLabels[idx - 1]</span>
                                             </div>
                                         }
                                     </div>
@@ -133,18 +141,31 @@
                                 via <span class="font-medium text-gray-600">@a.VendorName</span>
                                 &nbsp;·&nbsp; Invited @TimeAgo(a.CreatedAt)
                             </p>
-                            @if (a.Status is "ManagerApproved" or "Confirmed")
+                            @* These duplicate what the tracker already shows, so they're
+                               hidden by default — tap the tracker above and they flash for a
+                               few seconds then disappear again, instead of sitting there
+                               permanently repeating the same story in words. *@
+                            @if (_flashAssignmentId == a.Id)
                             {
-                                <p class="text-xs text-green-600">✅ Approved — you are confirmed for this event!</p>
+                                @if (a.Status is "ManagerApproved" or "Confirmed")
+                                {
+                                    <p class="text-xs text-green-600">✅ Approved — you are confirmed for this event!</p>
+                                }
+                                @if (a.Status == "PendingManagerApproval")
+                                {
+                                    <p class="text-xs text-blue-600">📋 Vendor approved you — waiting for Manager's final review.</p>
+                                }
+                                @if (a.Status == "VendorApproved")
+                                {
+                                    <p class="text-xs text-orange-600">🔄 You accepted — waiting for Vendor review.</p>
+                                }
+                                @if (a.Status == "Attended")
+                                {
+                                    <p class="text-xs text-indigo-600">🎯 Marked as Attended</p>
+                                }
                             }
-                            @if (a.Status == "PendingManagerApproval")
-                            {
-                                <p class="text-xs text-blue-600">📋 Vendor approved you — waiting for Manager's final review.</p>
-                            }
-                            @if (a.Status == "VendorApproved")
-                            {
-                                <p class="text-xs text-orange-600">🔄 You accepted — waiting for Vendor review.</p>
-                            }
+                            @* Rejection reason and decline date are the real story on a
+                               terminal row, not filler — those stay permanently visible. *@
                             @if (a.Status is "RejectedByVendor" or "RejectedByManager")
                             {
                                 <p class="text-xs text-red-600 font-medium mt-1">Reason: @(a.RejectionReason ?? "No reason provided")</p>
@@ -152,10 +173,6 @@
                             @if (a.Status == "Declined" && a.DeclinedAt.HasValue)
                             {
                                 <p class="text-xs text-red-500">❌ Declined @a.DeclinedAt.Value.ToLocalTime().ToString("dd MMM, hh:mm tt")</p>
-                            }
-                            @if (a.Status == "Attended")
-                            {
-                                <p class="text-xs text-indigo-600">🎯 Marked as Attended</p>
                             }
                         </div>
 
@@ -469,8 +486,11 @@
     /// which is correct: you can't be Confirmed without having been
     /// reviewed by the Manager first.
     ///
-    /// Returns 0 for Declined/RejectedByVendor/RejectedByManager/NoShow —
-    /// those aren't a point on this line, so the tracker is hidden for them.
+    /// Returns (0, null) for Declined/NoShow — those aren't a point on this
+    /// line at all, so the tracker is hidden entirely for them. A rejection
+    /// is different: it's returned as (stepsReachedBeforeRejection,
+    /// stepAtWhichItWasRejected) so the tracker still renders, showing how
+    /// far it got before dying — see TrackerState below.
     /// </summary>
     private static int TrackerStep(string status) => status switch
     {
@@ -482,8 +502,46 @@
         _                        => 0
     };
 
+    /// <summary>
+    /// Full tracker state including rejections. Reached = steps genuinely
+    /// completed; RejectedAt = the step where the row died, if any — the
+    /// caller renders that step and everything after it crossed out (✕)
+    /// instead of the normal grey "not there yet" circle, so a rejection
+    /// visibly shows "it got this far, then stopped here" rather than
+    /// hiding the tracker outright.
+    ///   - RejectedByVendor  can only happen from VendorApproved (Accepted,
+    ///     reached=2), so it dies at step 3 (Vendor Reviewed).
+    ///   - RejectedByManager can only happen from PendingManagerApproval
+    ///     (Vendor Reviewed, reached=3), so it dies at step 4 (Manager Reviewed).
+    /// </summary>
+    private static (int Reached, int? RejectedAt) TrackerState(string status) => status switch
+    {
+        "RejectedByVendor"  => (2, 3),
+        "RejectedByManager" => (3, 4),
+        _                   => (TrackerStep(status), null)
+    };
+
     /// <summary>Fill percentage for the connecting line: step 1 → 0%, step 6 → 100%.</summary>
     private static double TrackerProgressPercent(int step) => step <= 1 ? 0 : (step - 1) / 5.0 * 100.0;
+
+    // ── Tap-to-reveal status text ────────────────────────────────────────────
+    // The plain-English status lines (Approved/Confirmed, waiting-on-Vendor,
+    // waiting-on-Manager, Attended) just restate what the tracker already
+    // shows visually, so they're hidden by default. Tapping the tracker
+    // flashes them in for a few seconds, then they disappear again.
+    private Guid? _flashAssignmentId;
+
+    private async Task ShowStatusFlash(Guid assignmentId)
+    {
+        _flashAssignmentId = assignmentId;
+        StateHasChanged();
+        await Task.Delay(2500);
+        if (_flashAssignmentId == assignmentId)
+        {
+            _flashAssignmentId = null;
+            StateHasChanged();
+        }
+    }
 
     /// <summary>
     /// Phase D step 12: build the per-shift label "Box Office · 18:00–23:00 · 5h"
