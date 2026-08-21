@@ -129,15 +129,35 @@
                             </span>
                         </div>
                         <div class="flex gap-2 pt-1 border-t border-gray-50">
-                            <button @onclick="() => OpenDetailPanel(ev)"
-                                    class="flex-1 text-xs py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium transition">
-                                View Details
+                            <button @onclick="() => OpenDetailPanel(ev)" disabled="@(_loadingEventId == ev.Id)"
+                                    class="flex-1 text-xs py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium transition disabled:opacity-60 flex items-center justify-center gap-1.5">
+                                @if (_loadingEventId == ev.Id)
+                                {
+                                    <svg class="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                </svg>
+                                }
+                                else
+                                {
+                                    @: View Details
+                                }
                             </button>
                             @if (ev.Status is not "Completed" and not "Cancelled")
                             {
-                                <button @onclick="() => OpenEditModal(ev)"
-                                        class="px-3 text-xs py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium transition">
-                                    Edit
+                                <button @onclick="() => OpenEditModal(ev)" disabled="@(_loadingEventId == ev.Id)"
+                                        class="px-3 text-xs py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium transition disabled:opacity-60 flex items-center justify-center gap-1.5">
+                                    @if (_loadingEventId == ev.Id)
+                                    {
+                                        <svg class="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                </svg>
+                                    }
+                                    else
+                                    {
+                                        @: Edit
+                                    }
                                 </button>
                             }
                             @* Phase D step 21: collapsed Draft+Published into one Start
@@ -198,12 +218,36 @@
                                     </td>
                                     <td class="px-4 py-3 text-right">
                                         <div class="inline-flex gap-1.5">
-                                            <button @onclick="() => OpenDetailPanel(ev)"
-                                                    class="text-xs px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium">View</button>
+                                            <button @onclick="() => OpenDetailPanel(ev)" disabled="@(_loadingEventId == ev.Id)"
+                                                    class="text-xs px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium disabled:opacity-60 inline-flex items-center gap-1">
+                                                @if (_loadingEventId == ev.Id)
+                                                {
+                                                    <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                                    </svg>
+                                                }
+                                                else
+                                                {
+                                                    @: View
+                                                }
+                                            </button>
                                             @if (ev.Status is not "Completed" and not "Cancelled")
                                             {
-                                                <button @onclick="() => OpenEditModal(ev)"
-                                                        class="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium">Edit</button>
+                                                <button @onclick="() => OpenEditModal(ev)" disabled="@(_loadingEventId == ev.Id)"
+                                                        class="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium disabled:opacity-60 inline-flex items-center gap-1">
+                                                    @if (_loadingEventId == ev.Id)
+                                                    {
+                                                        <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                                    </svg>
+                                                    }
+                                                    else
+                                                    {
+                                                        @: Edit
+                                                    }
+                                                </button>
                                             }
                                             @if (ev.Status == "Draft" || ev.Status == "Published")
                                             {
@@ -366,11 +410,21 @@
                             }
                             else
                             {
-                                <input class="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                                       placeholder="Search vendor by name…"
-                                       @value="_assignVendorSearch"
-                                       @onfocus="() => _assignVendorDropOpen = true"
-                                       @oninput="OnAssignVendorSearch" />
+                                @* ── Combobox: click/focus shows the full vendor list
+                                   immediately (like a native <select>); typing filters
+                                   it. The ▾/▲ button doubles as an explicit open/close
+                                   toggle. ── *@
+                                <div class="relative">
+                                    <input class="w-full px-3 py-2 pr-8 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                           placeholder="Search or select a vendor…"
+                                           @value="_assignVendorSearch"
+                                           @onfocus="OnAssignVendorFocus"
+                                           @oninput="OnAssignVendorSearch" />
+                                    <button type="button" @onclick="ToggleAssignVendorDropdown"
+                                            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[10px] leading-none">
+                                        @(_assignVendorDropOpen ? "▲" : "▼")
+                                    </button>
+                                </div>
                                 @if (_assignVendorDropOpen)
                                 {
                                     @if (_assignVendorResults.Count > 0)
@@ -1234,10 +1288,14 @@
                                             else
                                             {
                                                 <div class="relative">
-                                                    <input type="text" placeholder="Search vendor by name or mobile…" value="@row.VendorSearch"
+                                                    <input type="text" placeholder="Search or select a vendor…" value="@row.VendorSearch"
                                                            @oninput="e => OnShiftVendorSearch(row, e)"
-                                                           @onfocus="() => row.VendorDropOpen = true"
-                                                           class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                           @onfocus="() => OnShiftVendorFocus(row)"
+                                                           class="w-full px-3 py-2 pr-8 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                    <button type="button" @onclick="() => ToggleShiftVendorDropdown(row)"
+                                                            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[10px] leading-none">
+                                                        @(row.VendorDropOpen ? "▲" : "▼")
+                                                    </button>
                                                     @if (row.VendorDropOpen && row.VendorResults.Count > 0)
                                                     {
                                                         <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
@@ -1417,10 +1475,14 @@
                                         else
                                         {
                                             <div class="relative">
-                                                <input type="text" placeholder="Search vendor by name or mobile…" value="@_addShiftDraft.VendorSearch"
+                                                <input type="text" placeholder="Search or select a vendor…" value="@_addShiftDraft.VendorSearch"
                                                        @oninput="e => OnShiftVendorSearch(_addShiftDraft, e)"
-                                                       @onfocus="() => _addShiftDraft.VendorDropOpen = true"
-                                                       class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                       @onfocus="() => OnShiftVendorFocus(_addShiftDraft)"
+                                                       class="w-full px-3 py-2 pr-8 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                <button type="button" @onclick="() => ToggleShiftVendorDropdown(_addShiftDraft)"
+                                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[10px] leading-none">
+                                                    @(_addShiftDraft.VendorDropOpen ? "▲" : "▼")
+                                                </button>
                                                 @if (_addShiftDraft.VendorDropOpen && _addShiftDraft.VendorResults.Count > 0)
                                                 {
                                                     <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
@@ -1841,6 +1903,7 @@ else
     private List<ScopePickItem> _scopeCatalog = new();
 
     // ── Row "⋮" actions menu (Replicate Event) ──────────────────────────────
+    private Guid? _loadingEventId;   // View/Edit button spinner while the async open-modal fetch chain runs
     private EventListItemDto? _openActionsMenuEvent;
     private double            _actionsMenuX;
     private double            _actionsMenuY;
@@ -1961,6 +2024,9 @@ else
 
     private async Task OpenDetailPanel(EventListItemDto ev)
     {
+        _loadingEventId = ev.Id;
+        try
+        {
         _selectedEvent = await EventApi.GetEventAsync(ev.Id);
         if (_selectedEvent is null) { _error = "Could not load event details."; return; }
         _loadingAssignments = true;
@@ -1995,6 +2061,8 @@ else
             var first = GroupAssignmentsByVendor(_assignments.Items).FirstOrDefault();
             if (first is not null) _expandedVendorGroups.Add(first.Key);
         }
+        }
+        finally { _loadingEventId = null; }
     }
 
     private void CloseDetailPanel()
@@ -2552,6 +2620,9 @@ else
 
     private async Task OpenEditModal(EventListItemDto ev)
     {
+        _loadingEventId = ev.Id;
+        try
+        {
         // Fix: the shift editor's scope <select> needs the catalog loaded
         // before render — otherwise the existing shift's ScopeOfWorkId
         // can't match any option and the dropdown shows blank.
@@ -2581,6 +2652,8 @@ else
         _manualVenueEntry = _form.VenueId is null;   // no catalog link -> show free-text so existing text isn't lost
         _showAddVenueForm = false;
         _showEventModal = true;
+        }
+        finally { _loadingEventId = null; }   // modal is visible now — clear the row spinner
 
         // If this event is linked to a catalog venue, look it up so we know
         // its State and can preload that state's venue list for the picker.
@@ -2807,10 +2880,30 @@ else
     private async Task OnShiftVendorSearch(IShiftVendorDraft row, ChangeEventArgs e)
     {
         row.VendorSearch = e.Value?.ToString() ?? "";
-        if (row.VendorSearch.Length < 1) { row.VendorResults.Clear(); row.VendorDropOpen = false; return; }
+        // Empty search still shows a browsable list rather than closing —
+        // see OnAssignVendorSearch for the same combobox behaviour.
         var result = await VendorApi.GetVendorsAsync(search: row.VendorSearch, page: 1);
         row.VendorResults = result?.Items?.Take(8).ToList() ?? new();
         row.VendorDropOpen = true;
+    }
+
+    /// <summary>Focusing the (empty) vendor input opens the dropdown and, if
+    /// nothing has been fetched yet, loads the default browsable list.</summary>
+    private async Task OnShiftVendorFocus(IShiftVendorDraft row)
+    {
+        row.VendorDropOpen = true;
+        if (row.VendorResults.Count == 0)
+        {
+            var result = await VendorApi.GetVendorsAsync(search: row.VendorSearch, page: 1);
+            row.VendorResults = result?.Items?.Take(8).ToList() ?? new();
+        }
+    }
+
+    /// <summary>The ▾/▲ button: explicit open/close without needing to click into the text box.</summary>
+    private async Task ToggleShiftVendorDropdown(IShiftVendorDraft row)
+    {
+        if (row.VendorDropOpen) { row.VendorDropOpen = false; return; }
+        await OnShiftVendorFocus(row);
     }
 
     private void SelectShiftVendor(IShiftVendorDraft row, VendorListItemDto v)
@@ -2847,10 +2940,31 @@ else
     private async Task OnAssignVendorSearch(ChangeEventArgs e)
     {
         _assignVendorSearch = e.Value?.ToString() ?? "";
-        if (_assignVendorSearch.Length < 1) { _assignVendorResults.Clear(); _assignVendorDropOpen = false; return; }
+        // Empty search still shows a browsable list (most-recent vendors)
+        // instead of closing — that's what makes this a combobox rather
+        // than a plain type-ahead box.
         var result = await VendorApi.GetVendorsAsync(search: _assignVendorSearch, page: 1);
         _assignVendorResults = result?.Items?.Take(8).ToList() ?? new();
         _assignVendorDropOpen = true;
+    }
+
+    /// <summary>Focusing the (empty) vendor input opens the dropdown and, if
+    /// nothing has been fetched yet, loads the default browsable list.</summary>
+    private async Task OnAssignVendorFocus()
+    {
+        _assignVendorDropOpen = true;
+        if (_assignVendorResults.Count == 0)
+        {
+            var result = await VendorApi.GetVendorsAsync(search: _assignVendorSearch, page: 1);
+            _assignVendorResults = result?.Items?.Take(8).ToList() ?? new();
+        }
+    }
+
+    /// <summary>The ▾/▲ button: explicit open/close without needing to click into the text box.</summary>
+    private async Task ToggleAssignVendorDropdown()
+    {
+        if (_assignVendorDropOpen) { _assignVendorDropOpen = false; return; }
+        await OnAssignVendorFocus();
     }
 
     private void SelectAssignVendor(VendorListItemDto v)
