@@ -79,6 +79,33 @@
         </div>
     </div>
 
+    @* Bulk approve/reject — same shape as the Manager's Events tab bulk bar
+       (ManagerApprovals.razor). "Approve selected" replays each selected
+       row's own single-row action (Send to Manager for VendorApproved,
+       Force Forward for Invited); "Reject selected" opens a shared-reason
+       modal and fans that reason out to every selected row. *@
+    @if (_selectedIds.Count > 0)
+    {
+        <div class="sticky top-2 z-30 bg-indigo-600 text-white rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3">
+            <span class="font-semibold text-sm">@_selectedIds.Count selected</span>
+            <span class="text-indigo-200 text-xs">on this page</span>
+            <div class="ml-auto flex gap-2">
+                <button @onclick="ClearSelection"
+                        class="px-3 py-1.5 rounded-xl border border-indigo-400 text-xs font-semibold hover:bg-indigo-700 transition">
+                    Clear
+                </button>
+                <button @onclick="OpenBulkReject" disabled="@_bulkBusy"
+                        class="px-3 py-1.5 rounded-xl bg-white text-red-600 text-xs font-bold hover:bg-red-50 disabled:opacity-50 transition">
+                    ✕ Reject selected
+                </button>
+                <button @onclick="DoBulkApprove" disabled="@_bulkBusy"
+                        class="px-4 py-1.5 rounded-xl bg-green-500 text-white text-xs font-bold hover:bg-green-600 disabled:opacity-50 transition shadow">
+                    @(_bulkBusy && _bulkAction == "approve" ? "Working…" : "✓ Approve selected")
+                </button>
+            </div>
+        </div>
+    }
+
     @if (_loading)
     {
         <div class="flex justify-center py-20">
@@ -101,13 +128,31 @@
     }
     else if (_viewMode == "cards")
     {
+        @if (Filtered.Any(IsSelectable))
+        {
+            <div class="flex items-center gap-2 px-1 mb-2">
+                <input type="checkbox" checked="@AllSelected"
+                       @onchange="e => ToggleSelectAll((bool)(e.Value ?? false))"
+                       disabled="@_bulkBusy"
+                       class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                <span class="text-xs text-gray-500">Select all pending responses</span>
+            </div>
+        }
         <div class="space-y-3">
             @foreach (var a in Filtered)
             {
-                <div class="bg-white rounded-2xl border @BorderColor(a.Status) shadow-sm p-5">
+                <div class="bg-white rounded-2xl border @(_selectedIds.Contains(a.Id) ? "border-indigo-300 ring-1 ring-indigo-100" : BorderColor(a.Status)) shadow-sm p-5">
                     <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                         <div class="flex-1 space-y-1.5">
                             <div class="flex items-center gap-2 flex-wrap">
+                                @if (IsSelectable(a))
+                                {
+                                    <input type="checkbox" checked="@_selectedIds.Contains(a.Id)"
+                                           @onchange="e => ToggleSelect(a.Id, (bool)(e.Value ?? false))"
+                                           disabled="@_bulkBusy"
+                                           class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                                           title="Select for bulk action" />
+                                }
                                 <span class="font-bold text-gray-800 text-sm">@a.CrewName</span>
                                 <span class="text-xs text-gray-400">@a.CrewMobile</span>
                                 @{
@@ -145,13 +190,13 @@
                         {
                             <div class="flex gap-2 shrink-0">
                                 <button @onclick="() => OpenReject(a)"
-                                        disabled="@(_busy == a.Id)"
+                                        disabled="@(_busy == a.Id || _bulkBusy)"
                                         class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-200 text-red-600
                                                hover:bg-red-50 disabled:opacity-50 transition">
                                     ✕ Reject
                                 </button>
                                 <button @onclick="() => DoApprove(a.Id)"
-                                        disabled="@(_busy == a.Id)"
+                                        disabled="@(_busy == a.Id || _bulkBusy)"
                                         class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white
                                                hover:bg-indigo-700 disabled:opacity-50 transition shadow">
                                     @(_busy == a.Id ? "…" : "✓ Send to Manager")
@@ -164,13 +209,13 @@
                                 <p class="text-[10px] text-gray-400 text-right">Crew hasn't responded yet</p>
                                 <div class="flex gap-2">
                                     <button @onclick="() => OpenReject(a)"
-                                            disabled="@(_busy == a.Id)"
+                                            disabled="@(_busy == a.Id || _bulkBusy)"
                                             class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-200 text-red-600
                                                    hover:bg-red-50 disabled:opacity-50 transition">
                                         ✕ Cancel
                                     </button>
                                     <button @onclick="() => DoDirectForward(a.Id)"
-                                            disabled="@(_busy == a.Id)"
+                                            disabled="@(_busy == a.Id || _bulkBusy)"
                                             class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 text-white
                                                    hover:bg-amber-600 disabled:opacity-50 transition shadow"
                                             title="Forward to Manager without waiting for crew to accept (offline confirmation)">
@@ -222,6 +267,12 @@
                 <table class="min-w-full text-xs">
                     <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
                         <tr>
+                            <th class="px-4 py-2.5">
+                                <input type="checkbox" checked="@AllSelected"
+                                       @onchange="e => ToggleSelectAll((bool)(e.Value ?? false))"
+                                       disabled="@_bulkBusy"
+                                       class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                            </th>
                             <th class="text-left px-4 py-2.5 font-semibold">Date</th>
                             <th class="text-left px-4 py-2.5 font-semibold">Crew</th>
                             <th class="text-left px-4 py-2.5 font-semibold">Event</th>
@@ -236,7 +287,16 @@
                         {
                             var (lbl, badge, _) = AssignmentStatusDisplay.For(a.Status, a.EventStatus, a.AttendanceNote);
                             var shiftLbl = BuildShiftLabel(a) ?? "—";
-                            <tr class="hover:bg-gray-50 transition">
+                            <tr class="hover:bg-gray-50 transition @(_selectedIds.Contains(a.Id) ? "bg-indigo-50/30" : "")">
+                                <td class="px-4 py-2.5">
+                                    @if (IsSelectable(a))
+                                    {
+                                        <input type="checkbox" checked="@_selectedIds.Contains(a.Id)"
+                                               @onchange="e => ToggleSelect(a.Id, (bool)(e.Value ?? false))"
+                                               disabled="@_bulkBusy"
+                                               class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                                    }
+                                </td>
                                 <td class="px-4 py-2.5 text-gray-600 whitespace-nowrap">@FormatShiftDate(a)</td>
                                 <td class="px-4 py-2.5">
                                     <div class="font-semibold text-gray-800">@a.CrewName</div>
@@ -254,22 +314,22 @@
                                     <div class="flex gap-1.5 justify-end">
                                         @if (a.Status == "VendorApproved")
                                         {
-                                            <button @onclick="() => OpenReject(a)" disabled="@(_busy == a.Id)"
+                                            <button @onclick="() => OpenReject(a)" disabled="@(_busy == a.Id || _bulkBusy)"
                                                     class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">
                                                 ✕
                                             </button>
-                                            <button @onclick="() => DoApprove(a.Id)" disabled="@(_busy == a.Id)"
+                                            <button @onclick="() => DoApprove(a.Id)" disabled="@(_busy == a.Id || _bulkBusy)"
                                                     class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
                                                 ✓ Send
                                             </button>
                                         }
                                         else if (a.Status == "Invited")
                                         {
-                                            <button @onclick="() => OpenReject(a)" disabled="@(_busy == a.Id)"
+                                            <button @onclick="() => OpenReject(a)" disabled="@(_busy == a.Id || _bulkBusy)"
                                                     class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">
                                                 ✕ Cancel
                                             </button>
-                                            <button @onclick="() => DoDirectForward(a.Id)" disabled="@(_busy == a.Id)"
+                                            <button @onclick="() => DoDirectForward(a.Id)" disabled="@(_busy == a.Id || _bulkBusy)"
                                                     class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
                                                     title="Force forward to Manager without crew response">
                                                 ⚡ Forward
@@ -297,6 +357,40 @@
         </div>
     }
 </div>
+
+@* Bulk reject modal — one reason applies to every selected row, same
+   pattern as the Manager's Events tab (ManagerApprovals.razor). *@
+@if (_bulkRejectOpen)
+{
+    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 class="font-bold text-gray-800">Reject @_selectedIds.Count crew @(_selectedIds.Count == 1 ? "application" : "applications")</h3>
+            <p class="text-sm text-gray-500">The same reason will be sent to every selected crew member.</p>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Rejection Reason <span class="text-red-500">*</span></label>
+                <textarea @bind="_bulkRejectReason" rows="3"
+                          class="w-full px-3 py-2 text-sm rounded-xl border @(_bulkReasonError ? "border-red-400" : "border-gray-200")
+                                 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                          placeholder="Describe why these crew members are not suitable…" />
+                @if (_bulkReasonError)
+                {
+                    <p class="text-xs text-red-500 mt-1">Rejection reason is mandatory.</p>
+                }
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button @onclick="CancelBulkReject"
+                        class="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition">
+                    Cancel
+                </button>
+                <button @onclick="DoBulkReject" disabled="@_bulkBusy"
+                        class="flex-1 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold
+                               hover:bg-red-700 disabled:opacity-50 transition">
+                    @(_bulkBusy ? "Rejecting…" : $"Confirm reject ({_selectedIds.Count})")
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
 @* Reject modal *@
 @if (_rejectTarget is not null)
@@ -356,6 +450,98 @@
 
     private string? _toast;
     private bool    _toastError;
+
+    // ── Bulk selection state ────────────────────────────────────────────
+    // Only VendorApproved (crew accepted, awaiting your review) and Invited
+    // (you can force-forward) rows have any action at all — mirrors
+    // IsSelectable below, which is also what the single-row buttons already
+    // gate on. Bulk operations replay each row's own single-row action —
+    // no new backend endpoint needed.
+    private readonly HashSet<Guid> _selectedIds = new();
+    private bool    _bulkBusy;
+    private string? _bulkAction; // "approve" | "reject"
+    private bool    _bulkRejectOpen;
+    private string  _bulkRejectReason = "";
+    private bool    _bulkReasonError;
+
+    private static bool IsSelectable(AssignmentDto a) => a.Status is "VendorApproved" or "Invited";
+
+    private bool AllSelected =>
+        Filtered.Any(IsSelectable) && Filtered.Where(IsSelectable).All(a => _selectedIds.Contains(a.Id));
+
+    private void ToggleSelect(Guid id, bool isSelected)
+    {
+        if (isSelected) _selectedIds.Add(id); else _selectedIds.Remove(id);
+    }
+
+    private void ToggleSelectAll(bool isSelected)
+    {
+        if (isSelected)
+            foreach (var a in Filtered.Where(IsSelectable)) _selectedIds.Add(a.Id);
+        else
+            foreach (var a in Filtered.Where(IsSelectable)) _selectedIds.Remove(a.Id);
+    }
+
+    private void ClearSelection() => _selectedIds.Clear();
+
+    // "Approve" means different things depending on the row's own status:
+    // VendorApproved -> Send to Manager (vendor-approve), Invited ->
+    // Force Forward (vendor-direct-forward). Each selected row replays
+    // exactly the endpoint its own single-row button would have hit.
+    private async Task DoBulkApprove()
+    {
+        if (_selectedIds.Count == 0) return;
+        _bulkBusy = true; _bulkAction = "approve"; StateHasChanged();
+        var targets = _all.Where(a => _selectedIds.Contains(a.Id) && IsSelectable(a)).ToList();
+        var tasks = targets.Select(a => a.Status == "VendorApproved"
+            ? Http.PatchAsJsonAsync($"api/v1/events/assignments/{a.Id}/vendor-approve", new { })
+            : Http.PatchAsJsonAsync($"api/v1/events/assignments/{a.Id}/vendor-direct-forward", new { })).ToList();
+        await Task.WhenAll(tasks);
+        var ok   = tasks.Count(t => t.Result.IsSuccessStatusCode);
+        var fail = tasks.Count - ok;
+        ShowToast(fail == 0
+            ? $"✓ Forwarded {ok} crew to Manager."
+            : $"Forwarded {ok}, {fail} failed. Refresh to retry.",
+            fail > 0);
+        _selectedIds.Clear();
+        _bulkBusy = false; _bulkAction = null;
+        await Load();
+    }
+
+    private void OpenBulkReject()
+    {
+        if (_selectedIds.Count == 0) return;
+        _bulkRejectReason = ""; _bulkReasonError = false; _bulkRejectOpen = true;
+    }
+
+    private void CancelBulkReject() { _bulkRejectOpen = false; _bulkReasonError = false; }
+
+    // Fans the same shared reason out to every selected row's vendor-reject
+    // endpoint in parallel — mirrors the per-row Reject/Cancel action.
+    private async Task DoBulkReject()
+    {
+        if (string.IsNullOrWhiteSpace(_bulkRejectReason))
+        {
+            _bulkReasonError = true; StateHasChanged(); return;
+        }
+        if (_selectedIds.Count == 0) { _bulkRejectOpen = false; return; }
+        _bulkBusy = true; _bulkAction = "reject"; StateHasChanged();
+        var ids = _selectedIds.ToList();
+        var reason = _bulkRejectReason.Trim();
+        var tasks = ids.Select(id => Http.PatchAsJsonAsync(
+            $"api/v1/events/assignments/{id}/vendor-reject", new { reason })).ToList();
+        await Task.WhenAll(tasks);
+        var ok   = tasks.Count(t => t.Result.IsSuccessStatusCode);
+        var fail = tasks.Count - ok;
+        ShowToast(fail == 0
+            ? $"✓ Rejected {ok} crew."
+            : $"Rejected {ok}, {fail} failed. Refresh to retry.",
+            fail > 0);
+        _selectedIds.Clear();
+        _bulkBusy = false; _bulkAction = null;
+        _bulkRejectOpen = false;
+        await Load();
+    }
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
         new() { PropertyNameCaseInsensitive = true };
