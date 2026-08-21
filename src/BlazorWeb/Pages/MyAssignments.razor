@@ -71,14 +71,22 @@
                                     // exist for the same event, each renders as its own row with its
                                     // own scope + time + hours so the crew sees them as distinct.
                                     var shiftLabel = BuildShiftLabel(a);
+                                    var trackerStepForBadge = TrackerStep(a.Status);
                                 }
-                                <div class="flex flex-col items-end gap-0.5">
-                                    <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold @badge">@lbl</span>
-                                    @if (!string.IsNullOrEmpty(sub))
-                                    {
-                                        <span class="text-[10px] text-gray-400 italic">@sub</span>
-                                    }
-                                </div>
+                                @* The raw-status pill (e.g. "VendorApproved") duplicated and
+                                   contradicted the tracker below it — the tracker already tells
+                                   the story clearly, so only show this pill when there's no
+                                   tracker to fall back on (Declined/Rejected/NoShow rows). *@
+                                @if (trackerStepForBadge == 0)
+                                {
+                                    <div class="flex flex-col items-end gap-0.5">
+                                        <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold @badge">@lbl</span>
+                                        @if (!string.IsNullOrEmpty(sub))
+                                        {
+                                            <span class="text-[10px] text-gray-400 italic">@sub</span>
+                                        }
+                                    </div>
+                                }
                             </div>
                             @if (shiftLabel is not null)
                             {
@@ -106,11 +114,11 @@
                                         <div class="h-0.5 bg-indigo-600 transition-all" style="width: @(TrackerProgressPercent(trackerStep).ToString("0.##"))%"></div>
                                     </div>
                                     <div class="relative flex justify-between">
-                                        @for (var i = 1; i <= 5; i++)
+                                        @for (var i = 1; i <= 6; i++)
                                         {
                                             var idx = i;
                                             var reached = idx <= trackerStep;
-                                            <div class="flex flex-col items-center gap-1 w-1/5">
+                                            <div class="flex flex-col items-center gap-1 w-1/6">
                                                 <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2
                                                             @(reached ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-gray-300 text-gray-400")">
                                                     @(reached ? "✓" : idx.ToString())
@@ -437,19 +445,30 @@
         return dt.ToLocalTime().ToString("dd MMM");
     }
 
-    /// <summary>Labels for the 5-stop crew progress tracker.</summary>
-    private static readonly string[] TrackerLabels = { "Invited", "Vendor Reviewed", "Manager Reviewed", "Confirmed", "Attended" };
+    /// <summary>Labels for the 6-stop crew progress tracker.</summary>
+    private static readonly string[] TrackerLabels = { "Invited", "Accepted", "Vendor Reviewed", "Manager Reviewed", "Confirmed", "Attended" };
 
     /// <summary>
-    /// Maps an assignment's workflow status onto the 5-stop tracker.
-    /// VendorApproved reads as "Vendor Reviewed" (crew accepted, vendor
-    /// signed off, not yet forwarded); PendingManagerApproval reads as
-    /// "Manager Reviewed" (sitting in the manager's queue — the stop name
-    /// is "reached" the moment it's in that queue, matching how every
-    /// other stop reads as "reached this checkpoint" rather than "fully
-    /// past it"); ManagerApproved + Confirmed both read as "Confirmed"
-    /// (fully cleared to work, matching the same grouping already used
-    /// for the Dashboard's status tiles).
+    /// Maps an assignment's workflow status onto the 6-stop tracker.
+    ///
+    /// The domain's "VendorApproved" enum name is misleading — per
+    /// EventAssignment.CrewAccept(), that status is set the moment the
+    /// CREW accepts (not when the vendor reviews); the vendor hasn't
+    /// touched it yet. Treating that as "Vendor Reviewed" was the actual
+    /// bug reported: the pill said "VendorApproved" while the sub-text
+    /// correctly said "waiting for Vendor review" — visually contradicting
+    /// itself. So "VendorApproved" now maps to its own "Accepted" stop, and
+    /// "Vendor Reviewed" is reserved for PendingManagerApproval, which is
+    /// only reached once the vendor has actually forwarded it.
+    ///
+    /// ManagerApprove() sets status straight to ManagerApproved/Confirmed —
+    /// there's no distinct enum value for "manager reviewed but not yet
+    /// confirmed" (approval IS the review outcome, same instant). So both
+    /// land on step 5 ("Confirmed"), which — since reached is cumulative
+    /// (idx &lt;= step) — also marks step 4 ("Manager Reviewed") reached,
+    /// which is correct: you can't be Confirmed without having been
+    /// reviewed by the Manager first.
+    ///
     /// Returns 0 for Declined/RejectedByVendor/RejectedByManager/NoShow —
     /// those aren't a point on this line, so the tracker is hidden for them.
     /// </summary>
@@ -458,13 +477,13 @@
         "Invited"                => 1,
         "VendorApproved"         => 2,
         "PendingManagerApproval" => 3,
-        "ManagerApproved" or "Confirmed" => 4,
-        "Attended"               => 5,
+        "ManagerApproved" or "Confirmed" => 5,
+        "Attended"               => 6,
         _                        => 0
     };
 
-    /// <summary>Fill percentage for the connecting line: step 1 → 0%, step 5 → 100%.</summary>
-    private static double TrackerProgressPercent(int step) => step <= 1 ? 0 : (step - 1) / 4.0 * 100.0;
+    /// <summary>Fill percentage for the connecting line: step 1 → 0%, step 6 → 100%.</summary>
+    private static double TrackerProgressPercent(int step) => step <= 1 ? 0 : (step - 1) / 5.0 * 100.0;
 
     /// <summary>
     /// Phase D step 12: build the per-shift label "Box Office · 18:00–23:00 · 5h"
