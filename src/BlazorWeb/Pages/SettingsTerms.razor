@@ -64,12 +64,12 @@
                 </span>
             </div>
 
-            <textarea @bind="_draftContent" rows="16" maxlength="20000"
-                      placeholder="Write the full Terms & Conditions text shown to this audience at registration…"
-                      class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            <div class="border border-gray-200 rounded-xl overflow-hidden">
+                <RichTextEditor @ref="_editor" Value="@_draftContent" ValueChanged="html => _draftContent = html" Height="360px" />
+            </div>
 
             <div class="flex items-center justify-between">
-                <span class="text-xs text-gray-400">@(_draftContent?.Length ?? 0) / 20,000 characters</span>
+                <span class="text-xs text-gray-400">Formatted rich text — headings, bold, lists, colors, etc.</span>
                 @if (_canWrite)
                 {
                     <button @onclick="PublishAsync" disabled="@(_saving || string.IsNullOrWhiteSpace(_draftContent))"
@@ -114,6 +114,7 @@
     private string _audience = "Vendor";
     private int?   _currentVersion;
     private string? _draftContent;
+    private RichTextEditor? _editor;
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
         new() { PropertyNameCaseInsensitive = true };
@@ -147,6 +148,10 @@
         }
         catch (Exception ex) { _error = ex.Message; _draftContent = ""; }
         finally { _loading = false; }
+        // No explicit push to the editor here: the loading-spinner toggle
+        // unmounts/remounts <RichTextEditor> across an audience switch (see
+        // the @if (_loading) block above), so the fresh instance picks up
+        // the new _draftContent via its Value parameter on init anyway.
     }
 
     private async Task PublishAsync()

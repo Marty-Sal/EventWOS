@@ -148,7 +148,7 @@
                     {
                         <div class="space-y-2">
                             <label class="text-sm font-medium text-gray-700">Terms &amp; Conditions <span class="text-red-500">*</span></label>
-                            <div class="h-40 overflow-y-auto border border-gray-200 rounded-lg p-3 text-xs text-gray-600 whitespace-pre-wrap bg-gray-50">@_termsContent</div>
+                            <div class="ql-editor h-40 overflow-y-auto border border-gray-200 rounded-lg text-xs bg-gray-50" style="padding:0.75rem;">@((MarkupString)_termsContent!)</div>
                             <label class="flex items-start gap-2 text-sm text-gray-700">
                                 <input type="checkbox" @bind="_termsAccepted" class="mt-0.5" />
                                 <span>I have read and accept the Terms &amp; Conditions above.</span>

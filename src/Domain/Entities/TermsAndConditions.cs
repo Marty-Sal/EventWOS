@@ -42,8 +42,13 @@ public sealed class TermsAndConditions : BaseEntity
         if (string.IsNullOrWhiteSpace(content))
             throw new ArgumentException("Terms & Conditions content is required.", nameof(content));
         var trimmed = content.Trim();
-        if (trimmed.Length > 20000)
-            throw new ArgumentException("Terms & Conditions content must be 20,000 characters or fewer.", nameof(content));
+        // Content is rich-text HTML from the admin editor (Settings → Terms
+        // & Conditions uses a WYSIWYG editor, not plain text) — markup
+        // roughly doubles/triples the raw character count versus the
+        // visible text, so this is a generous sanity cap, not a real-world
+        // document-length limit. Column type is unbounded `text` in Postgres.
+        if (trimmed.Length > 200000)
+            throw new ArgumentException("Terms & Conditions content must be 200,000 characters or fewer.", nameof(content));
         Content = trimmed;
     }
 }

@@ -15,7 +15,11 @@ public sealed class TermsAndConditionsConfiguration : IEntityTypeConfiguration<T
         builder.Property(t => t.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
         builder.Property(t => t.Audience).HasColumnName("audience").HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(t => t.Version).HasColumnName("version").IsRequired();
-        builder.Property(t => t.Content).HasColumnName("content").HasMaxLength(20000).IsRequired();
+        // No HasMaxLength — rich-text HTML from the WYSIWYG editor, mapped
+        // to Postgres' unbounded `text` (Npgsql's default for string
+        // properties with no max length). The domain entity's SetContent
+        // still enforces a generous 200,000-char sanity cap.
+        builder.Property(t => t.Content).HasColumnName("content").IsRequired();
 
         builder.Property(t => t.CreatedAt).HasColumnName("created_at");
         builder.Property(t => t.CreatedBy).HasColumnName("created_by");

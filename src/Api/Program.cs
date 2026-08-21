@@ -1499,7 +1499,7 @@ BEGIN
             id           UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
             audience     VARCHAR(20) NOT NULL,
             version      INT NOT NULL,
-            content      VARCHAR(20000) NOT NULL,
+            content      TEXT NOT NULL,
             created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
             created_by   UUID,
             updated_at   TIMESTAMPTZ,
@@ -1511,6 +1511,11 @@ BEGIN
         CREATE UNIQUE INDEX ux_terms_audience_version ON terms_and_conditions (audience, version);
         RAISE NOTICE 'Created terms_and_conditions table';
     END IF;
+
+    -- Belt-and-braces for 20260821223000_WidenTermsContentColumn. Content is
+    -- now rich-text HTML from a WYSIWYG editor, which needs more room than
+    -- the original VARCHAR(20000). No-op once already TEXT.
+    ALTER TABLE terms_and_conditions ALTER COLUMN content TYPE TEXT;
 
     IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'terms_acceptances') THEN
         CREATE TABLE terms_acceptances (

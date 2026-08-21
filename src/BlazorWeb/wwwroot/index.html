@@ -22,6 +22,13 @@
     <base href="/" />
     <!-- Tailwind CDN (swap for compiled build in production) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Quill WYSIWYG editor — Settings → Terms & Conditions rich-text
+         editing, plus its "snow" theme CSS doubles as the read-only
+         typography (headings/bold/lists/etc.) wherever T&C content is
+         DISPLAYED (registration pages, post-login re-accept modal) by
+         reusing its .ql-editor class on a plain div. -->
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
     <style>
         /* Custom scrollbar */
         ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -219,6 +226,8 @@
          prompt. Registers a listener for the "appinstalled" event too,
          to hide the banner instantly on successful install. -->
     <script src="js/pwa-install.js"></script>
+    <!-- Quill wrapper for <RichTextEditor /> — see wwwroot/js/richTextEditor.js -->
+    <script src="js/richTextEditor.js"></script>
     <!-- Phase D step 22: helper for Excel downloads from Attendance page.
          Builds a Blob from a base64 string and triggers an anchor click.
          Defined globally so any page can call it via JSInterop. -->

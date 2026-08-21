@@ -253,8 +253,8 @@
                 </p>
             </div>
 
-            <div class="h-56 overflow-y-auto border border-gray-200 rounded-lg p-3 text-xs text-gray-600 whitespace-pre-wrap bg-gray-50">
-                @_termsStatus.Content
+            <div class="ql-editor h-56 overflow-y-auto border border-gray-200 rounded-lg text-xs bg-gray-50" style="padding:0.75rem;">
+                @((MarkupString)(_termsStatus.Content ?? ""))
             </div>
 
             <label class="flex items-start gap-2 text-sm text-gray-700">

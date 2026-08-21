@@ -1,0 +1,65 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@*
+    WYSIWYG editor wrapper around Quill (loaded from CDN — see index.html).
+    Value is HTML. Unlike a normal Blazor input, Value/ValueChanged only
+    fires on Quill's text-change event (via JS interop callback) — there's
+    no <input>/<textarea> for Blazor to bind directly, since Quill owns the
+    DOM inside #@_editorId.
+
+    Parent components that need to push a NEW value in after the editor is
+    already initialized (e.g. switching the Vendor/Crew tab in
+    SettingsTerms.razor) must call SetContentAsync(html) explicitly via
+    @@ref — plain parameter changes to Value are intentionally NOT
+    re-pushed into Quill automatically, to avoid fighting the user's
+    cursor position while they're actively typing.
+*@
+
+<div id="@_editorId" style="height:@Height; background:white;"></div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string Height { get; set; } = "300px";
+
+    private readonly string _editorId = $"rte-{Guid.NewGuid():N}";
+    private DotNetObjectReference<RichTextEditor>? _selfRef;
+    private bool _initialized;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("eventwosRichText.init", _editorId, Value, _selfRef);
+            _initialized = true;
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnContentChanged(string html)
+    {
+        Value = html;
+        await ValueChanged.InvokeAsync(html);
+    }
+
+    /// <summary>Explicitly overwrite the editor's content — for loading a
+    /// different document (e.g. Admin switches the Vendor/Crew tab).</summary>
+    public async Task SetContentAsync(string? html)
+    {
+        Value = html;
+        if (_initialized)
+            await JS.InvokeVoidAsync("eventwosRichText.setHtml", _editorId, html ?? "");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_initialized)
+        {
+            try { await JS.InvokeVoidAsync("eventwosRichText.destroy", _editorId); }
+            catch { /* JS runtime may already be torn down on navigation */ }
+        }
+        _selfRef?.Dispose();
+    }
+}
