@@ -1,55 +1,49 @@
-@page "/admin/scope-of-work"
-@page "/admin/settings/scope-of-work"
+@page "/admin/settings/venue"
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject HttpClient Http
 @using System.Net.Http
 @using System.Net.Http.Json
 @using EventWOS.BlazorWeb.Components
 
-<PageTitle>Settings — Scope of Work — EventWOS</PageTitle>
+<PageTitle>Settings — Venue — EventWOS</PageTitle>
 
 @*
-    Admin-managed catalog of work categories (Box Office, Gates, F&B,
-    Accreditation, Inventory…). Phase A of the Scope-of-Work feature.
-
-    Managers can VIEW (seeder grants them scope_of_work:read) so they can
-    confirm what's available when creating events. Only Admin gets the
-    Create / Edit / Archive buttons because only Admin has scope_of_work:write
-    by default. Permission gating is enforced by the API; this page just
-    hides UI affordances based on _canWrite so non-admins don't bonk into 403s.
+    Settings → Venue. Admin-managed catalog of venues so an Event just
+    picks a saved location instead of re-entering it every time. Fields
+    mirror what geocoding needs later (structured address + lat/lng) even
+    though nothing auto-geocodes yet — memory: Venue is master data, Event
+    just references it.
 *@
+
+<SettingsTabs ActiveTab="venue" />
 
 @if (_accessDenied)
 {
     <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <div class="text-5xl mb-4">🔒</div>
         <h2 class="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
-        <p class="text-gray-500 text-sm">You need <strong>scope_of_work:read</strong> permission.</p>
+        <p class="text-gray-500 text-sm">You need <strong>venues:read</strong> permission.</p>
     </div>
     return;
 }
 
-<SettingsTabs ActiveTab="scope-of-work" />
-
 <div class="space-y-6">
     <div class="flex items-center justify-between">
-        <div>
-            <p class="text-sm text-gray-500 mt-0.5">
-                Catalog of work categories used when staffing events. Pickable in event creation.
-            </p>
-        </div>
+        <p class="text-sm text-gray-500 mt-0.5">
+            Catalog of venues used when creating events. Pick a saved venue instead of typing an address each time.
+        </p>
         @if (_canWrite)
         {
             <button @onclick="OpenCreateModal"
-                    class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition">
-                ➕ New Scope
+                    class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition shrink-0">
+                ➕ New Venue
             </button>
         }
     </div>
 
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-center gap-3">
         <input @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKey"
-               placeholder="Search by name or description…"
+               placeholder="Search by name, city…"
                class="px-3 py-2 rounded-xl border border-gray-200 text-sm flex-1 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-indigo-300" />
         <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
             <input type="checkbox" @bind="_includeArchived" @bind:after="LoadAsync"
@@ -74,10 +68,10 @@
     else if (_items.Count == 0)
     {
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
-            <div class="text-4xl mb-2">🧰</div>
+            <div class="text-4xl mb-2">📍</div>
             <p class="text-sm text-gray-500">
-                No scope-of-work categories yet.
-                @if (_canWrite) { <span>Create your first one to use it when staffing events.</span> }
+                No venues yet.
+                @if (_canWrite) { <span>Create your first one to use it when creating events.</span> }
             </p>
         </div>
     }
@@ -89,19 +83,25 @@
                 <thead class="bg-gray-50 border-b border-gray-100 text-xs uppercase tracking-wider text-gray-500">
                     <tr>
                         <th class="px-5 py-3 text-left">Name</th>
-                        <th class="px-5 py-3 text-left">Description</th>
+                        <th class="px-5 py-3 text-left">Address</th>
+                        <th class="px-5 py-3 text-left">City / State</th>
+                        <th class="px-5 py-3 text-left">Lat / Lng</th>
                         <th class="px-5 py-3 text-left">Status</th>
                         <th class="px-5 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                    @foreach (var s in _items)
+                    @foreach (var v in _items)
                     {
                         <tr class="hover:bg-gray-50 transition">
-                            <td class="px-5 py-3 font-semibold text-gray-800">@s.Name</td>
-                            <td class="px-5 py-3 text-gray-500">@(string.IsNullOrEmpty(s.Description) ? "—" : s.Description)</td>
+                            <td class="px-5 py-3 font-semibold text-gray-800">@v.Name</td>
+                            <td class="px-5 py-3 text-gray-500">@v.AddressLine1</td>
+                            <td class="px-5 py-3 text-gray-500">@v.City@(string.IsNullOrEmpty(v.State) ? "" : $", {v.State}")</td>
+                            <td class="px-5 py-3 text-gray-400 text-xs">
+                                @(v.Latitude is null ? "—" : $"{v.Latitude:F5}, {v.Longitude:F5}")
+                            </td>
                             <td class="px-5 py-3">
-                                @if (s.IsArchived)
+                                @if (v.IsArchived)
                                 {
                                     <span class="text-xs px-2.5 py-1 rounded-full font-semibold bg-gray-100 text-gray-500">Archived</span>
                                 }
@@ -113,20 +113,20 @@
                             <td class="px-5 py-3 text-right">
                                 @if (_canWrite)
                                 {
-                                    @if (s.IsArchived)
+                                    @if (v.IsArchived)
                                     {
-                                        <button @onclick="() => RestoreAsync(s)"
+                                        <button @onclick="() => RestoreAsync(v)"
                                                 class="text-xs px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold">
                                             ↻ Restore
                                         </button>
                                     }
                                     else
                                     {
-                                        <button @onclick="() => OpenEditModal(s)"
+                                        <button @onclick="() => OpenEditModal(v)"
                                                 class="text-xs px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold mr-2">
                                             Edit
                                         </button>
-                                        <button @onclick="() => ArchiveAsync(s)"
+                                        <button @onclick="() => ArchiveAsync(v)"
                                                 class="text-xs px-3 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold">
                                             Archive
                                         </button>
@@ -161,23 +161,68 @@
 @if (_modalOpen)
 {
     <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @onclick="CloseModal">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5" @onclick:stopPropagation>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto" @onclick:stopPropagation>
             <div class="flex items-center justify-between">
-                <h3 class="text-base font-bold text-gray-800">@(_editing is null ? "New Scope of Work" : "Edit Scope of Work")</h3>
+                <h3 class="text-base font-bold text-gray-800">@(_editing is null ? "New Venue" : "Edit Venue")</h3>
                 <button @onclick="CloseModal" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
 
             <div class="space-y-3">
                 <div>
                     <label class="text-xs text-gray-500 mb-1 block">Name *</label>
-                    <input @bind="_form.Name" maxlength="80"
-                           placeholder="e.g. Box Office, Gates, F&B"
+                    <input @bind="_form.Name" maxlength="120"
+                           placeholder="e.g. Grand Convention Hall"
                            class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                    <label class="text-xs text-gray-500 mb-1 block">Description (optional)</label>
-                    <textarea @bind="_form.Description" maxlength="500" rows="3"
-                              placeholder="Short note describing what this work category covers."
+                    <label class="text-xs text-gray-500 mb-1 block">Address line 1 *</label>
+                    <input @bind="_form.AddressLine1" maxlength="200"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Address line 2 (optional)</label>
+                    <input @bind="_form.AddressLine2" maxlength="200"
+                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">City *</label>
+                        <input @bind="_form.City" maxlength="200"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">State *</label>
+                        <input @bind="_form.State" maxlength="100"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Postal code</label>
+                        <input @bind="_form.PostalCode" maxlength="20"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Country</label>
+                        <input @bind="_form.Country" maxlength="100"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Latitude (optional — for geofencing later)</label>
+                        <input @bind="_form.Latitude" type="number" step="any"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Longitude (optional)</label>
+                        <input @bind="_form.Longitude" type="number" step="any"
+                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 mb-1 block">Notes (optional)</label>
+                    <textarea @bind="_form.Notes" maxlength="1000" rows="2"
                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
                 </div>
             </div>
@@ -216,9 +261,8 @@
 }
 
 @code {
-    // ── State ──────────────────────────────────────────────────────────────────
     private bool _accessDenied;
-    private bool _canWrite;     // Admin only (scope_of_work:write seeded for Admin)
+    private bool _canWrite;
     private bool _loading = true;
     private string? _error;
     private string? _success;
@@ -228,30 +272,22 @@
     private bool    _includeArchived;
     private int     _page = 1;
     private int     _totalPages = 1;
-    private List<ScopeOfWorkDto> _items = new();
+    private List<VenueDto> _items = new();
 
-    // Modal state
     private bool   _modalOpen;
     private bool   _saving;
     private string? _formError;
-    private ScopeOfWorkDto? _editing;
-    private ScopeForm _form = new();
+    private VenueDto? _editing;
+    private VenueForm _form = new();
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
         new() { PropertyNameCaseInsensitive = true };
 
     protected override async Task OnInitializedAsync()
     {
-        // Permission gating uses the shared PermGuard service (globally
-        // injected via _Imports.razor) — same pattern as Crew, Vendors,
-        // Events, Users, Payments. Two checks:
-        //   • scope_of_work:read  — gates the whole page
-        //   • scope_of_work:write — gates the create/edit/archive buttons
-        // The API enforces both — _canWrite is purely a UX hint to hide
-        // affordances non-admins can't action anyway.
-        _accessDenied = !await PermGuard.CanAsync("scope_of_work:read");
+        _accessDenied = !await PermGuard.CanAsync("venues:read");
         if (_accessDenied) { _loading = false; StateHasChanged(); return; }
-        _canWrite = await PermGuard.CanAsync("scope_of_work:write");
+        _canWrite = await PermGuard.CanAsync("venues:write");
         await LoadAsync();
     }
 
@@ -261,11 +297,11 @@
         _error   = null;
         try
         {
-            var url = $"/api/v1/scope-of-work?page={_page}&pageSize=50&includeArchived={_includeArchived.ToString().ToLower()}";
+            var url = $"/api/v1/venues?page={_page}&pageSize=50&includeArchived={_includeArchived.ToString().ToLower()}";
             if (!string.IsNullOrWhiteSpace(_search))
                 url += $"&search={Uri.EscapeDataString(_search)}";
 
-            var resp = await Http.GetFromJsonAsync<ApiEnvelope<PagedShape<ScopeOfWorkDto>>>(url, JsonOpts);
+            var resp = await Http.GetFromJsonAsync<ApiEnvelope<PagedShape<VenueDto>>>(url, JsonOpts);
             if (resp?.Data is null) { _error = "Failed to load."; return; }
             _items      = resp.Data.Items?.ToList() ?? new();
             _totalPages = resp.Data.TotalPages == 0 ? 1 : resp.Data.TotalPages;
@@ -282,19 +318,23 @@
     private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
     private async Task NextPage() { if (_page < _totalPages) { _page++; await LoadAsync(); } }
 
-    // ── Create / Edit ────────────────────────────────────────────────────────
     private void OpenCreateModal()
     {
         _editing   = null;
-        _form      = new ScopeForm();
+        _form      = new VenueForm();
         _formError = null;
         _modalOpen = true;
     }
 
-    private void OpenEditModal(ScopeOfWorkDto s)
+    private void OpenEditModal(VenueDto v)
     {
-        _editing   = s;
-        _form      = new ScopeForm { Name = s.Name, Description = s.Description };
+        _editing = v;
+        _form = new VenueForm
+        {
+            Name = v.Name, AddressLine1 = v.AddressLine1, AddressLine2 = v.AddressLine2,
+            City = v.City, State = v.State, PostalCode = v.PostalCode, Country = v.Country,
+            Latitude = v.Latitude, Longitude = v.Longitude, Notes = v.Notes
+        };
         _formError = null;
         _modalOpen = true;
     }
@@ -303,24 +343,19 @@
 
     private async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(_form.Name))
+        if (string.IsNullOrWhiteSpace(_form.Name) || string.IsNullOrWhiteSpace(_form.AddressLine1) ||
+            string.IsNullOrWhiteSpace(_form.City)  || string.IsNullOrWhiteSpace(_form.State))
         {
-            _formError = "Name is required.";
+            _formError = "Name, address, city and state are required.";
             return;
         }
         _saving = true;
         _formError = null;
         try
         {
-            HttpResponseMessage resp;
-            if (_editing is null)
-            {
-                resp = await Http.PostAsJsonAsync("/api/v1/scope-of-work", _form);
-            }
-            else
-            {
-                resp = await Http.PutAsJsonAsync($"/api/v1/scope-of-work/{_editing.Id}", _form);
-            }
+            HttpResponseMessage resp = _editing is null
+                ? await Http.PostAsJsonAsync("/api/v1/venues", _form)
+                : await Http.PutAsJsonAsync($"/api/v1/venues/{_editing.Id}", _form);
 
             if (resp.IsSuccessStatusCode)
             {
@@ -330,8 +365,6 @@
             }
             else
             {
-                // Pull the structured error out of the envelope (memory rule #29
-                // sister-rule: surface Errors[0] / Message, never a generic toast).
                 var body = await resp.Content.ReadFromJsonAsync<ApiEnvelope<object>>();
                 _formError = body?.Errors?.FirstOrDefault() ?? body?.Message ?? "Save failed.";
             }
@@ -340,11 +373,11 @@
         finally { _saving = false; }
     }
 
-    private async Task ArchiveAsync(ScopeOfWorkDto s)
+    private async Task ArchiveAsync(VenueDto v)
     {
         try
         {
-            var resp = await Http.DeleteAsync($"/api/v1/scope-of-work/{s.Id}");
+            var resp = await Http.DeleteAsync($"/api/v1/venues/{v.Id}");
             if (resp.IsSuccessStatusCode) { _success = "Archived."; await LoadAsync(); }
             else
             {
@@ -355,11 +388,11 @@
         catch (Exception ex) { _pageError = ex.Message; }
     }
 
-    private async Task RestoreAsync(ScopeOfWorkDto s)
+    private async Task RestoreAsync(VenueDto v)
     {
         try
         {
-            var resp = await Http.PostAsync($"/api/v1/scope-of-work/{s.Id}/restore", null);
+            var resp = await Http.PostAsync($"/api/v1/venues/{v.Id}/restore", null);
             if (resp.IsSuccessStatusCode) { _success = "Restored."; await LoadAsync(); }
             else
             {
@@ -370,26 +403,31 @@
         catch (Exception ex) { _pageError = ex.Message; }
     }
 
-    // ── Local DTO shapes ──────────────────────────────────────────────────────
-    // Mirror the API shape minimally — the page doesn't share a model lib with
-    // the API, so we keep these as private records colocated with the page.
-
-    public sealed class ScopeForm
+    public sealed class VenueForm
     {
-        public string  Name        { get; set; } = "";
-        public string? Description { get; set; }
+        public string  Name         { get; set; } = "";
+        public string  AddressLine1 { get; set; } = "";
+        public string? AddressLine2 { get; set; }
+        public string  City         { get; set; } = "";
+        public string? State        { get; set; }
+        public string? PostalCode   { get; set; }
+        public string? Country      { get; set; }
+        public double? Latitude     { get; set; }
+        public double? Longitude    { get; set; }
+        public string? Notes        { get; set; }
     }
 
-    public sealed record ScopeOfWorkDto(
-        Guid Id, string Name, string? Description, bool IsArchived,
-        DateTime CreatedAt, DateTime? UpdatedAt);
+    public sealed record VenueDto(
+        Guid Id, string Name, string AddressLine1, string? AddressLine2, string City,
+        string? State, string? PostalCode, string? Country, double? Latitude, double? Longitude,
+        string? Notes, bool IsArchived, DateTime CreatedAt, DateTime? UpdatedAt);
 
     private sealed class ApiEnvelope<T>
     {
-        public bool         Success { get; set; }
-        public T?           Data    { get; set; }
-        public string?      Message { get; set; }
-        public List<string>? Errors { get; set; }
+        public bool          Success { get; set; }
+        public T?            Data    { get; set; }
+        public string?       Message { get; set; }
+        public List<string>? Errors  { get; set; }
     }
 
     private sealed class PagedShape<T>

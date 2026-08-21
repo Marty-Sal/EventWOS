@@ -1,0 +1,27 @@
+@*
+    Shared tab header for the Settings area (memory: owner wants Venue,
+    Scope of Work, and Terms & Conditions grouped under one Settings nav
+    item instead of 3 separate sidebar entries). Each tab is its own
+    @page route — this component just renders the header + active state.
+*@
+<div class="space-y-1 mb-2">
+    <h2 class="text-lg font-bold text-gray-800">Settings</h2>
+    <div class="flex flex-wrap gap-1 border-b border-gray-200">
+        <a href="/admin/settings/venue"
+           class="px-4 py-2.5 text-sm font-semibold rounded-t-lg transition @(ActiveTab == "venue" ? "text-indigo-700 border-b-2 border-indigo-600 bg-indigo-50" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50")">
+            📍 Venue
+        </a>
+        <a href="/admin/settings/scope-of-work"
+           class="px-4 py-2.5 text-sm font-semibold rounded-t-lg transition @(ActiveTab == "scope-of-work" ? "text-indigo-700 border-b-2 border-indigo-600 bg-indigo-50" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50")">
+            🧰 Scope of Work
+        </a>
+        <a href="/admin/settings/terms-and-conditions"
+           class="px-4 py-2.5 text-sm font-semibold rounded-t-lg transition @(ActiveTab == "terms" ? "text-indigo-700 border-b-2 border-indigo-600 bg-indigo-50" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50")">
+            📄 Terms &amp; Conditions
+        </a>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string ActiveTab { get; set; } = "";
+}

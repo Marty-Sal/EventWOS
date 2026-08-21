@@ -1,0 +1,12 @@
+@page "/admin/settings/terms-and-conditions"
+@attribute [Authorize(Roles = "Admin,Manager")]
+@using EventWOS.BlazorWeb.Components
+
+<PageTitle>Settings — Terms &amp; Conditions — EventWOS</PageTitle>
+
+<SettingsTabs ActiveTab="terms" />
+
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
+    <div class="text-4xl mb-2">📄</div>
+    <p class="text-sm text-gray-500">Terms &amp; Conditions editor is on the way in the next update.</p>
+</div>
