@@ -61,9 +61,11 @@ public sealed record CreateEventCommand(
 
 public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Result<EventDto>>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
-    public CreateEventHandler(IAppDbContext db, IUnitOfWork uow) { _db = db; _uow = uow; }
+    private readonly IAppDbContext       _db;
+    private readonly IUnitOfWork         _uow;
+    private readonly INotificationPusher _push;
+    public CreateEventHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    { _db = db; _uow = uow; _push = push; }
 
     public async Task<Result<EventDto>> Handle(CreateEventCommand req, CancellationToken ct)
     {
@@ -101,6 +103,11 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
             maxCrew: effectiveMaxCrew, venueId: req.VenueId);
 
         _db.Events.Add(ev);
+
+        // Vendors that got a shift handed to them at create time. Collected
+        // during the shift loop and pushed AFTER SaveChangesAsync, so we
+        // never notify anyone about an event that failed to persist.
+        var vendorInvites = new List<(Guid VendorId, Guid AssignmentId)>();
 
         // ── Build the shift rows ────────────────────────────────────────────
         if (providedShifts.Count > 0)
@@ -189,6 +196,24 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
                     {
                         return Result.Failure<EventDto>(new Error("Event.InvalidShiftVendorAllocation", ex.Message));
                     }
+
+                    // The quota alone is invisible to the vendor: My Events,
+                    // their approval queue and the push pipeline all read
+                    // EventAssignments, never VendorShiftAllocations. So the
+                    // allocation on its own left the vendor with seats they
+                    // never knew about. Mirror what AssignCrewHandler does in
+                    // vendor-only mode and drop the placeholder invite anchor
+                    // (CrewId == null, Status == Invited) on the same shift, so
+                    // "Assign vendor" at create time really does assign them.
+                    //
+                    // One placeholder per (shift, vendor) — same shape the
+                    // admin would have produced by clicking "Assign to Event"
+                    // on each shift afterwards. The vendor accepts it, then
+                    // staffs crew up to their quota.
+                    var placeholder = new EventAssignment(
+                        ev.Id, shift.Id, crewId: null, vendorId: vendorId, req.CreatedByUserId);
+                    _db.EventAssignments.Add(placeholder);
+                    vendorInvites.Add((vendorId, placeholder.Id));
                 }
             }
         }
@@ -218,6 +243,19 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
         }
 
         await _uow.SaveChangesAsync(ct);
+
+        // Same notification AssignCrewHandler sends in vendor-only mode, so a
+        // vendor staffed straight from the create-event form hears about it
+        // through the identical channel as one added afterwards.
+        foreach (var (vendorId, assignmentId) in vendorInvites)
+        {
+            await _push.PushToUserAsync(vendorId, "VendorEventAssigned", new
+            {
+                assignmentId = assignmentId,
+                eventTitle   = ev.Title,
+                eventStart   = ev.StartAt
+            }, ct);
+        }
 
         var creator = await _db.Users.FindAsync(new object[] { req.CreatedByUserId }, ct);
         return Result.Success(MapToDto(ev, 0, creator?.FullName ?? "Unknown", 0));

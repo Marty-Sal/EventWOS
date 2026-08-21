@@ -37,12 +37,13 @@ public sealed record AddEventShiftCommand(
 public sealed class AddEventShiftHandler
     : IRequestHandler<AddEventShiftCommand, Result<EventShiftDto>>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
+    private readonly IAppDbContext       _db;
+    private readonly IUnitOfWork         _uow;
+    private readonly INotificationPusher _push;
 
-    public AddEventShiftHandler(IAppDbContext db, IUnitOfWork uow)
+    public AddEventShiftHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
     {
-        _db = db; _uow = uow;
+        _db = db; _uow = uow; _push = push;
     }
 
     public async Task<Result<EventShiftDto>> Handle(AddEventShiftCommand req, CancellationToken ct)
@@ -106,6 +107,7 @@ public sealed class AddEventShiftHandler
         // shift (Quota == CrewCount), same model the post-creation "Vendor
         // Quotas" flow uses. No duplicate/over-commit check needed — this
         // is a brand-new shift with zero existing allocations.
+        Guid? vendorInviteAssignmentId = null;
         if (vendor is not null)
         {
             try
@@ -117,6 +119,18 @@ public sealed class AddEventShiftHandler
             {
                 return Result.Failure<EventShiftDto>(new Error("Shift.InvalidVendorAllocation", ex.Message));
             }
+
+            // A quota row on its own is invisible to the vendor — My Events,
+            // their approval queue and the push pipeline all read
+            // EventAssignments. Add the placeholder invite anchor
+            // (CrewId == null, Status == Invited) exactly like
+            // AssignCrewHandler does in vendor-only mode, so picking a vendor
+            // on a new shift actually invites them. See CreateEventHandler
+            // for the same pairing on the create-event path.
+            var placeholder = new EventAssignment(
+                req.EventId, shift.Id, crewId: null, vendorId: vendor.Id, req.ActorUserId);
+            _db.EventAssignments.Add(placeholder);
+            vendorInviteAssignmentId = placeholder.Id;
         }
 
         // Auto-grow MaxCrew. SumAsync sees only committed rows — the
@@ -133,6 +147,17 @@ public sealed class AddEventShiftHandler
         ev.RecomputeCapacityFromShifts(newTotal);
 
         await _uow.SaveChangesAsync(ct);
+
+        // Notify only after the shift + invite are safely persisted.
+        if (vendor is not null && vendorInviteAssignmentId is { } inviteId)
+        {
+            await _push.PushToUserAsync(vendor.Id, "VendorEventAssigned", new
+            {
+                assignmentId = inviteId,
+                eventTitle   = ev.Title,
+                eventStart   = ev.StartAt
+            }, ct);
+        }
 
         // Brand-new shift: both counts are zero — no assignments exist yet
         // (assigned = OccupiesSeat count, reserved = ReservesSeatOnShift
