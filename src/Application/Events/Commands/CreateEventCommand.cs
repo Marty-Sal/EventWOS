@@ -2,6 +2,7 @@ using EventWOS.Application.Events.DTOs;
 using EventWOS.Application.Interfaces;
 using EventWOS.Application.Events.Shifts;
 using EventWOS.Domain.Entities;
+using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Result;
 using MediatR;
@@ -29,7 +30,14 @@ public sealed record CreateEventShiftDto(
     Guid     ScopeOfWorkId,
     int      CrewCount,
     DateTime StartAt,
-    DateTime? EndAt
+    DateTime? EndAt,
+    // Optional: assign a vendor to this shift at creation time instead of
+    // doing it as a separate step afterwards (Vendor Quotas). When set, the
+    // ENTIRE shift capacity (CrewCount) is granted to this one vendor via a
+    // VendorShiftAllocation created alongside the shift in the same
+    // transaction. Leave null to skip — the shift is created unassigned and
+    // vendors can still be allocated later (one or split across several).
+    Guid?    VendorId = null
 );
 
 public sealed record CreateEventCommand(
@@ -91,6 +99,35 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
                     "Event.InvalidScope",
                     $"Scope-of-work not found or archived: {string.Join(", ", missing)}."));
 
+            // Pre-validate every requested vendor in one round trip (rather
+            // than N queries inside the loop) — same shape as the checks in
+            // CreateVendorAllocationHandler, just batched since several
+            // shifts can name a vendor in the same create-event request.
+            var vendorIds = providedShifts
+                .Where(s => s.VendorId.HasValue)
+                .Select(s => s.VendorId!.Value)
+                .Distinct()
+                .ToList();
+            Dictionary<Guid, Domain.Entities.User> vendorsById = new();
+            if (vendorIds.Count > 0)
+            {
+                vendorsById = await _db.Users
+                    .Where(u => vendorIds.Contains(u.Id))
+                    .ToDictionaryAsync(u => u.Id, ct);
+
+                var missingVendors = vendorIds.Except(vendorsById.Keys).ToList();
+                if (missingVendors.Count > 0)
+                    return Result.Failure<EventDto>(new Error(
+                        "Event.InvalidShiftVendor",
+                        $"Vendor not found: {string.Join(", ", missingVendors)}."));
+
+                var nonVendors = vendorsById.Values.Where(u => u.Role != UserRole.Vendor).ToList();
+                if (nonVendors.Count > 0)
+                    return Result.Failure<EventDto>(new Error(
+                        "Event.InvalidShiftVendor",
+                        $"User is not a Vendor: {string.Join(", ", nonVendors.Select(u => u.FullName ?? u.Id.ToString()))}."));
+            }
+
             foreach (var sh in providedShifts)
             {
                 // Phase D step 2: per-shift bounds-check against the event
@@ -100,9 +137,10 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
                 if (boundsCheck.IsFailure)
                     return Result.Failure<EventDto>(boundsCheck.Error);
 
+                EventShift shift;
                 try
                 {
-                    var shift = new EventShift(
+                    shift = new EventShift(
                         ev.Id, sh.ScopeOfWorkId, sh.CrewCount,
                         sh.StartAt, sh.EndAt, req.CreatedByUserId);
                     _db.EventShifts.Add(shift);
@@ -110,6 +148,26 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
                 catch (ArgumentException ex)
                 {
                     return Result.Failure<EventDto>(new Error("Event.InvalidShift", ex.Message));
+                }
+
+                // Vendor assigned at shift-creation time: grant them the
+                // WHOLE shift (Quota == CrewCount) via the same
+                // VendorShiftAllocation model the post-creation "Vendor
+                // Quotas" flow uses. shift.Id is already populated (client-
+                // generated GUID — see BaseEntity), so this can happen
+                // before SaveChangesAsync without a round trip.
+                if (sh.VendorId is { } vendorId)
+                {
+                    try
+                    {
+                        var allocation = new VendorShiftAllocation(
+                            shift.Id, vendorId, sh.CrewCount, req.CreatedByUserId);
+                        _db.VendorShiftAllocations.Add(allocation);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        return Result.Failure<EventDto>(new Error("Event.InvalidShiftVendorAllocation", ex.Message));
+                    }
                 }
             }
         }

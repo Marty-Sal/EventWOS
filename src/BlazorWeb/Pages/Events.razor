@@ -1062,6 +1062,62 @@
                                                        class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                                             </div>
                                         </div>
+                                        @{ var rowDuration = FormatShiftDuration(row.StartAt ?? _form.StartAt, row.EndAt); }
+                                        @if (rowDuration is not null)
+                                        {
+                                            <p class="text-[11px] text-indigo-600 font-medium">🕐 @rowDuration shift</p>
+                                        }
+                                        else if (row.EndAt is null)
+                                        {
+                                            <p class="text-[11px] text-gray-400 italic">Open-ended — set a shift end to see the duration.</p>
+                                        }
+
+                                        @* ── Optional: assign a vendor to this shift right now ──
+                                           Grants them the whole shift (all "Crew needed" seats)
+                                           the moment the event is created. Skip it and use
+                                           Vendor Quotas afterwards to split a shift across
+                                           several vendors instead. *@
+                                        <div>
+                                            <label class="text-[11px] text-gray-500 mb-1 block">Assign vendor (optional)</label>
+                                            @if (row.Vendor is not null)
+                                            {
+                                                <div class="flex items-center justify-between px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50">
+                                                    <span class="text-xs font-semibold text-indigo-800">
+                                                        @row.Vendor.FullName <span class="text-gray-400 font-normal">· @row.Vendor.Mobile</span>
+                                                    </span>
+                                                    <button type="button" class="text-gray-400 hover:text-red-500 text-xs" @onclick="() => ClearShiftVendor(row)">✕</button>
+                                                </div>
+                                                <p class="text-[11px] text-gray-400 mt-1">All @Math.Max(1, row.CrewCount) seat(s) on this shift go to this vendor.</p>
+                                            }
+                                            else
+                                            {
+                                                <div class="relative">
+                                                    <input type="text" placeholder="Search vendor by name or mobile…" value="@row.VendorSearch"
+                                                           @oninput="e => OnShiftVendorSearch(row, e)"
+                                                           @onfocus="() => row.VendorDropOpen = true"
+                                                           class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                    @if (row.VendorDropOpen && row.VendorResults.Count > 0)
+                                                    {
+                                                        <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                                                            @foreach (var v in row.VendorResults)
+                                                            {
+                                                                <button type="button" class="w-full text-left px-3 py-2 hover:bg-indigo-50 text-xs"
+                                                                        @onclick="() => SelectShiftVendor(row, v)">
+                                                                    <span class="font-semibold text-gray-700">@v.FullName</span>
+                                                                    <span class="text-gray-400 ml-1">@v.Mobile</span>
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    }
+                                                    else if (row.VendorDropOpen && row.VendorSearch.Length >= 1)
+                                                    {
+                                                        <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 text-xs text-gray-400">
+                                                            No vendors found for "@row.VendorSearch"
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
                                     </div>
                                 }
 
@@ -1158,6 +1214,15 @@
                                                        class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
                                             </div>
                                         </div>
+                                        @{ var existingDuration = FormatShiftDuration(row.StartAt, row.EndAt); }
+                                        @if (existingDuration is not null)
+                                        {
+                                            <p class="text-[11px] text-indigo-600 font-medium">🕐 @existingDuration shift</p>
+                                        }
+                                        else if (row.EndAt is null)
+                                        {
+                                            <p class="text-[11px] text-gray-400 italic">Open-ended — runs until the event wraps.</p>
+                                        }
                                     </div>
                                 }
                             }
@@ -1183,6 +1248,58 @@
                                         <input type="datetime-local" @bind="_addShiftDraft.EndAt"
                                                title="Optional end time"
                                                class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+                                    </div>
+                                    @{ var addShiftDuration = FormatShiftDuration(_addShiftDraft.StartAt ?? _editingEvent?.StartAt.ToLocalTime(), _addShiftDraft.EndAt); }
+                                    @if (addShiftDuration is not null)
+                                    {
+                                        <p class="text-[11px] text-indigo-600 font-medium">🕐 @addShiftDuration shift</p>
+                                    }
+                                    else if (_addShiftDraft.EndAt is null)
+                                    {
+                                        <p class="text-[11px] text-gray-400 italic">Open-ended — set a shift end to see the duration.</p>
+                                    }
+
+                                    @* ── Optional: assign a vendor right at creation ── *@
+                                    <div>
+                                        <label class="text-[11px] text-gray-500 mb-1 block">Assign vendor (optional)</label>
+                                        @if (_addShiftDraft.Vendor is not null)
+                                        {
+                                            <div class="flex items-center justify-between px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50">
+                                                <span class="text-xs font-semibold text-indigo-800">
+                                                    @_addShiftDraft.Vendor.FullName <span class="text-gray-400 font-normal">· @_addShiftDraft.Vendor.Mobile</span>
+                                                </span>
+                                                <button type="button" class="text-gray-400 hover:text-red-500 text-xs" @onclick="() => ClearShiftVendor(_addShiftDraft)">✕</button>
+                                            </div>
+                                            <p class="text-[11px] text-gray-400 mt-1">All @Math.Max(1, _addShiftDraft.CrewCount) seat(s) go to this vendor.</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="relative">
+                                                <input type="text" placeholder="Search vendor by name or mobile…" value="@_addShiftDraft.VendorSearch"
+                                                       @oninput="e => OnShiftVendorSearch(_addShiftDraft, e)"
+                                                       @onfocus="() => _addShiftDraft.VendorDropOpen = true"
+                                                       class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                @if (_addShiftDraft.VendorDropOpen && _addShiftDraft.VendorResults.Count > 0)
+                                                {
+                                                    <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                                                        @foreach (var v in _addShiftDraft.VendorResults)
+                                                        {
+                                                            <button type="button" class="w-full text-left px-3 py-2 hover:bg-indigo-50 text-xs"
+                                                                    @onclick="() => SelectShiftVendor(_addShiftDraft, v)">
+                                                                <span class="font-semibold text-gray-700">@v.FullName</span>
+                                                                <span class="text-gray-400 ml-1">@v.Mobile</span>
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                }
+                                                else if (_addShiftDraft.VendorDropOpen && _addShiftDraft.VendorSearch.Length >= 1)
+                                                {
+                                                    <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 text-xs text-gray-400">
+                                                        No vendors found for "@_addShiftDraft.VendorSearch"
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
                                     </div>
                                     <button type="button" @onclick="AddShiftToExistingEvent"
                                             disabled="@_editShiftsLoading"
@@ -1557,12 +1674,22 @@ else
     private Guid                 _editShiftBusyId = Guid.Empty;   // row currently saving
     private EditShiftDraft       _addShiftDraft   = new();
 
-    private sealed class EditShiftDraft
+    private sealed class EditShiftDraft : IShiftVendorDraft
     {
         public Guid      ScopeOfWorkId { get; set; }
         public int       CrewCount     { get; set; } = 1;
         public DateTime? StartAt       { get; set; }
         public DateTime? EndAt         { get; set; }
+
+        // Optional vendor assignment right at creation — mirrors ShiftDraft
+        // (create-mode multi-shift editor). This row only ever represents
+        // ONE new shift being added to an already-existing event, so no
+        // vendor-picker duplication concerns beyond what ShiftDraft already
+        // handles.
+        public VendorListItemDto?      Vendor         { get; set; }
+        public string                  VendorSearch   { get; set; } = "";
+        public List<VendorListItemDto> VendorResults  { get; set; } = new();
+        public bool                    VendorDropOpen { get; set; }
     }
     private EventForm         _form = new();
 
@@ -2026,7 +2153,7 @@ else
             : _editingEvent.StartAt;   // already UTC
         var (ok, shift, err) = await EventApi.AddEventShiftAsync(
             _editingEvent.Id, _addShiftDraft.ScopeOfWorkId, _addShiftDraft.CrewCount,
-            startUtc, endUtc);
+            startUtc, endUtc, _addShiftDraft.Vendor?.Id);
         if (!ok)
         {
             _editShiftError = err ?? "Couldn't add shift.";
@@ -2179,7 +2306,8 @@ else
                     s.ScopeOfWorkId,
                     Math.Max(s.CrewCount, 1),
                     (s.StartAt ?? _form.StartAt!.Value).ToUniversalTime(),
-                    s.EndAt?.ToUniversalTime()))
+                    s.EndAt?.ToUniversalTime(),
+                    s.Vendor?.Id))
                 .ToArray();
             derivedMaxCrew = shifts.Sum(x => x.CrewCount);
         }
@@ -2212,6 +2340,60 @@ else
     }
 
     // ── Vendor search for assign section ─────────────────────────────────────
+    // ── Shift-creation vendor picker (shared by ShiftDraft + EditShiftDraft) ──
+    // Lets an admin assign a vendor to a shift AT CREATE TIME (grants them
+    // the whole shift) instead of always doing it as a separate post-create
+    // "Vendor Quotas" step. Implemented against a small interface so the
+    // same three methods drive both the create-mode multi-shift editor rows
+    // and the "add another shift" mini-form on an already-existing event.
+    private interface IShiftVendorDraft
+    {
+        VendorListItemDto?      Vendor         { get; set; }
+        string                  VendorSearch   { get; set; }
+        List<VendorListItemDto> VendorResults  { get; set; }
+        bool                    VendorDropOpen { get; set; }
+    }
+
+    private async Task OnShiftVendorSearch(IShiftVendorDraft row, ChangeEventArgs e)
+    {
+        row.VendorSearch = e.Value?.ToString() ?? "";
+        if (row.VendorSearch.Length < 1) { row.VendorResults.Clear(); row.VendorDropOpen = false; return; }
+        var result = await VendorApi.GetVendorsAsync(search: row.VendorSearch, page: 1);
+        row.VendorResults = result?.Items?.Take(8).ToList() ?? new();
+        row.VendorDropOpen = true;
+    }
+
+    private void SelectShiftVendor(IShiftVendorDraft row, VendorListItemDto v)
+    {
+        row.Vendor         = v;
+        row.VendorDropOpen = false;
+        row.VendorSearch   = "";
+        row.VendorResults.Clear();
+    }
+
+    private void ClearShiftVendor(IShiftVendorDraft row) => row.Vendor = null;
+
+    /// <summary>
+    /// Formats a shift's duration for the "≈ X hours" hint shown under the
+    /// start/end pickers wherever a shift's time window is edited. Returns
+    /// null when there's nothing sensible to show yet (end not entered) —
+    /// callers fall back to an "open-ended" hint in that case instead.
+    /// </summary>
+    private static string? FormatShiftDuration(DateTime? start, DateTime? end)
+    {
+        if (start is null || end is null) return null;
+        var span = end.Value - start.Value;
+        if (span <= TimeSpan.Zero) return null;   // invalid range — the separate validation message covers this
+        var totalMinutes = (int)Math.Round(span.TotalMinutes);
+        var hours   = totalMinutes / 60;
+        var minutes = totalMinutes % 60;
+        if (minutes == 0)
+            return $"{hours} hr{(hours == 1 ? "" : "s")}";
+        if (hours == 0)
+            return $"{minutes} min";
+        return $"{hours}h {minutes}m";
+    }
+
     private async Task OnAssignVendorSearch(ChangeEventArgs e)
     {
         _assignVendorSearch = e.Value?.ToString() ?? "";
@@ -2859,10 +3041,24 @@ else
     /// they're mapped straight through to the API. CrewCount has min=1
     /// from the input element but the save-time guard also floors it to 1.
     /// </summary>
-    public sealed class ShiftDraft
+    public sealed class ShiftDraft : IShiftVendorDraft
     {
         public Guid      ScopeOfWorkId { get; set; }
         public int       CrewCount     { get; set; } = 1;
+
+        // ── Optional vendor assignment right at shift-creation time ────────
+        // When Vendor is set, the WHOLE shift (CrewCount seats) gets granted
+        // to this one vendor server-side as soon as the shift is created —
+        // no separate trip to the "Vendor Quotas" section needed. Leaving it
+        // blank keeps the old behaviour exactly (unassigned shift). The
+        // search/results/drop-open fields are transient UI state, kept on
+        // the row itself (not shared page-level state) so multiple shift
+        // rows can each search independently without clobbering each other.
+        public VendorListItemDto?      Vendor         { get; set; }
+        public string                  VendorSearch   { get; set; } = "";
+        public List<VendorListItemDto> VendorResults  { get; set; } = new();
+        public bool                    VendorDropOpen { get; set; }
+
         // Phase D step 2: optional per-shift start. Null = use event StartAt.
         // Stored as nullable local-time DateTime; converted to UTC at save.
         public DateTime? StartAt       { get; set; }

@@ -96,7 +96,7 @@ public interface IEventApiService
 
     // Phase D step 1: shift editor — add / update / archive shifts post-create.
     Task<(bool Ok, EventShiftDto? Shift, string? Error)> AddEventShiftAsync(
-        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, CancellationToken ct = default);
+        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, Guid? vendorId = null, CancellationToken ct = default);
     Task<(bool Ok, EventShiftDto? Shift, string? Error)> UpdateEventShiftAsync(
         Guid shiftId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> ArchiveEventShiftAsync(Guid shiftId, CancellationToken ct = default);
@@ -112,7 +112,11 @@ public interface IEventApiService
 /// the event's effective MaxCrew as their sum.
 /// </summary>
 public sealed record CreateEventShiftRequest(
-    Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt);
+    Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt,
+    // Optional vendor to assign this shift to right at creation time —
+    // grants them the whole shift instead of doing it as a separate
+    // Vendor Quotas step afterwards.
+    Guid? VendorId = null);
 
 public sealed record CreateEventRequest(
     string Title, string? Description, string Venue, string? Address,
@@ -295,13 +299,13 @@ public sealed class EventApiService : IEventApiService
     }
 
     public async Task<(bool Ok, EventShiftDto? Shift, string? Error)> AddEventShiftAsync(
-        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, CancellationToken ct = default)
+        Guid eventId, Guid scopeOfWorkId, int crewCount, DateTime startAt, DateTime? endAt, Guid? vendorId = null, CancellationToken ct = default)
     {
         try
         {
             var resp = await _http.PostAsJsonAsync(
                 $"api/v1/events/{eventId}/shifts",
-                new { scopeOfWorkId, crewCount, startAt, endAt }, ct);
+                new { scopeOfWorkId, crewCount, startAt, endAt, vendorId }, ct);
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<ApiResult<EventShiftDto>>(_jsonOpts, ct);

@@ -26,7 +26,12 @@ public sealed record AddEventShiftCommand(
     int      CrewCount,
     DateTime StartAt,
     DateTime? EndAt,
-    Guid     ActorUserId
+    Guid     ActorUserId,
+    // Optional: assign a vendor to this new shift right away instead of a
+    // separate Vendor Quotas step. Grants them the whole shift (Quota ==
+    // CrewCount). See CreateEventCommand.CreateEventShiftDto.VendorId for
+    // the equivalent on the create-event path.
+    Guid?    VendorId = null
 ) : IRequest<Result<EventShiftDto>>;
 
 public sealed class AddEventShiftHandler
@@ -65,6 +70,21 @@ public sealed class AddEventShiftHandler
         if (boundsCheck.IsFailure)
             return Result.Failure<EventShiftDto>(boundsCheck.Error);
 
+        // Validate the vendor BEFORE creating the shift so a bad vendor id
+        // fails clean without leaving a half-built shift tracked in the
+        // change tracker (nothing's been saved yet either way, but this
+        // keeps the ordering obviously safe if that ever changes).
+        Domain.Entities.User? vendor = null;
+        if (req.VendorId is { } wantedVendorId)
+        {
+            vendor = await _db.Users.FirstOrDefaultAsync(u => u.Id == wantedVendorId, ct);
+            if (vendor is null)
+                return Result.Failure<EventShiftDto>(new Error("Shift.InvalidVendor", "Vendor not found."));
+            if (vendor.Role != UserRole.Vendor)
+                return Result.Failure<EventShiftDto>(new Error("Shift.InvalidVendor",
+                    $"User is not a Vendor (role: {vendor.Role})."));
+        }
+
         EventShift shift;
         try
         {
@@ -81,6 +101,23 @@ public sealed class AddEventShiftHandler
             return Result.Failure<EventShiftDto>(new Error("Shift.Invalid", ex.Message));
         }
         _db.EventShifts.Add(shift);
+
+        // Vendor assigned at shift-creation time: grant them the whole
+        // shift (Quota == CrewCount), same model the post-creation "Vendor
+        // Quotas" flow uses. No duplicate/over-commit check needed — this
+        // is a brand-new shift with zero existing allocations.
+        if (vendor is not null)
+        {
+            try
+            {
+                _db.VendorShiftAllocations.Add(
+                    new VendorShiftAllocation(shift.Id, vendor.Id, req.CrewCount, req.ActorUserId));
+            }
+            catch (ArgumentException ex)
+            {
+                return Result.Failure<EventShiftDto>(new Error("Shift.InvalidVendorAllocation", ex.Message));
+            }
+        }
 
         // Auto-grow MaxCrew. SumAsync sees only committed rows — the
         // just-Added shift is tracked but unsaved and will not appear

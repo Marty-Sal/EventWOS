@@ -84,7 +84,7 @@ public sealed class EventsController : ControllerBase
     {
         var result = await _mediator.Send(new AddEventShiftCommand(
             id, req.ScopeOfWorkId, req.CrewCount, req.StartAt, req.EndAt,
-            _currentUser.UserId!.Value), ct);
+            _currentUser.UserId!.Value, req.VendorId), ct);
         return result.IsSuccess
             ? Created(string.Empty, ApiResponse<EventShiftDto>.Ok(result.Value))
             : BadRequest(ApiResponse<EventShiftDto>.Fail(result.Error.Message));
@@ -129,7 +129,7 @@ public sealed class EventsController : ControllerBase
     {
         var shifts = req.Shifts?
             .Select(x => new EventWOS.Application.Events.Commands.CreateEventShiftDto(
-                x.ScopeOfWorkId, x.CrewCount, x.StartAt, x.EndAt))
+                x.ScopeOfWorkId, x.CrewCount, x.StartAt, x.EndAt, x.VendorId))
             .ToList();
 
         var result = await _mediator.Send(new CreateEventCommand(
@@ -544,7 +544,10 @@ public sealed class EventsController : ControllerBase
 /// that don't know about shifts yet.
 /// </summary>
 public sealed record CreateEventShiftRequest(
-    Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt);
+    Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt,
+    // Optional vendor to assign this shift to right at creation time —
+    // see CreateEventCommand.CreateEventShiftDto.VendorId.
+    Guid? VendorId = null);
 
 public sealed record CreateEventRequest(
     string Title, string? Description, string Venue, string? Address,
@@ -557,7 +560,9 @@ public sealed record UpdateEventRequest(
 
 public sealed record ChangeEventStatusRequest(string Action, string? Reason = null);
 public sealed record AssignCrewRequest(Guid? CrewId, Guid? VendorId, Guid? ShiftId = null);
-public sealed record AddEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt = null);
+public sealed record AddEventShiftRequest(
+    Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt = null,
+    Guid? VendorId = null);
 public sealed record UpdateEventShiftRequest(Guid ScopeOfWorkId, int CrewCount, DateTime StartAt, DateTime? EndAt = null);
 
 public sealed record VendorAssignCrewRequest(Guid CrewId, Guid? ShiftId = null);
