@@ -314,6 +314,18 @@ try
         options.AddPolicy("perm:vendor_allocations:write", policy => policy.Requirements.Add(new PermissionRequirement("vendor_allocations:write")));
         options.AddPolicy("perm:vendors:read",      policy => policy.Requirements.Add(new PermissionRequirement("vendors:read")));
         options.AddPolicy("perm:vendors:write",     policy => policy.Requirements.Add(new PermissionRequirement("vendors:write")));
+        // Venue catalog + Terms & Conditions (Settings tabs) — same class of
+        // bug as the scope_of_work comment above: [Permission("...")] builds
+        // a policy name from whatever string you pass it, but that policy
+        // only actually EXISTS if it's also registered here. Both features'
+        // permission strings were already seeded into the Permissions table
+        // (DatabaseSeeder) and granted to Admin, but nobody had added the
+        // matching AddPolicy calls, so every write attempt 500'd with
+        // "AuthorizationPolicy named 'perm:terms:write' was not found."
+        options.AddPolicy("perm:venues:read",       policy => policy.Requirements.Add(new PermissionRequirement("venues:read")));
+        options.AddPolicy("perm:venues:write",      policy => policy.Requirements.Add(new PermissionRequirement("venues:write")));
+        options.AddPolicy("perm:terms:read",        policy => policy.Requirements.Add(new PermissionRequirement("terms:read")));
+        options.AddPolicy("perm:terms:write",       policy => policy.Requirements.Add(new PermissionRequirement("terms:write")));
     });
     builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
