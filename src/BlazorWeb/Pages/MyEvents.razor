@@ -127,7 +127,7 @@
                                     var capturedShift = ash;
                                     <button @onclick="() => OpenAssignPanel(ev, capturedShift.ShiftId)"
                                             class="w-full px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
-                                        <span>👥</span> Assign My Crew — @capturedShift.ScopeLabel
+                                        <span>👥</span> Assign Crew - @capturedShift.ButtonLabel
                                     </button>
                                 }
                             </div>
@@ -593,7 +593,15 @@
     // render one "Assign My Crew" button per shift. Empty list = falls
     // back to legacy single button via HasAcceptedInvite.
     private Dictionary<Guid, List<AcceptedShift>>  _acceptedShiftsByEventId = new();
-    private sealed record AcceptedShift(Guid? ShiftId, string ScopeLabel);
+    private sealed record AcceptedShift(Guid? ShiftId, string ScopeLabel, DateTime? ShiftStartAt, DateTime? ShiftEndAt)
+    {
+        /// <summary>"Box Office - 23 Aug · 15:00 - 22:00 (7 hr)" — falls back to
+        /// just the scope name when the shift has no schedule (legacy rows).</summary>
+        public string ButtonLabel =>
+            BuildScheduleLabel(ShiftStartAt, ShiftEndAt) is { } sched
+                ? $"{ScopeLabel} - {sched}"
+                : ScopeLabel;
+    }
     private Guid                                 _inviteBusyBucketKey = Guid.Empty;   // hash of bucket's first row id
     private Guid                                 _expandedInviteEventId = Guid.Empty;
     private InviteShiftBucket?                   _rejectInviteTargetBucket;
@@ -621,24 +629,29 @@
         /// start (legacy pre-multi-shift rows). Local-time, matching
         /// every other time display on this page.
         /// </summary>
-        public string? ScheduleLabel
+        public string? ScheduleLabel => BuildScheduleLabel(ShiftStartAt, ShiftEndAt);
+    }
+
+    /// <summary>
+    /// Shared "23 Aug · 15:00 - 22:00 (7 hr)" formatter used by every
+    /// per-shift label on this page (invite buckets, accepted-shift
+    /// buttons). Local-time; omits the schedule segment entirely when
+    /// there's no start (legacy pre-multi-shift rows).
+    /// </summary>
+    private static string? BuildScheduleLabel(DateTime? shiftStartAt, DateTime? shiftEndAt)
+    {
+        if (shiftStartAt is not { } start) return null;
+        var startLocal = start.ToLocalTime();
+        var label = startLocal.ToString("d MMM · HH:mm");
+        if (shiftEndAt is { } end)
         {
-            get
-            {
-                if (ShiftStartAt is not { } start) return null;
-                var startLocal = start.ToLocalTime();
-                var label = startLocal.ToString("d MMM · HH:mm");
-                if (ShiftEndAt is { } end)
-                {
-                    var endLocal = end.ToLocalTime();
-                    label += $" - {endLocal:HH:mm}";
-                    var hours = (end - start).TotalHours;
-                    if (hours > 0)
-                        label += $" ({(hours == Math.Floor(hours) ? hours.ToString("0") : hours.ToString("0.#"))} hr)";
-                }
-                return label;
-            }
+            var endLocal = end.ToLocalTime();
+            label += $" - {endLocal:HH:mm}";
+            var hours = (end - start).TotalHours;
+            if (hours > 0)
+                label += $" ({(hours == Math.Floor(hours) ? hours.ToString("0") : hours.ToString("0.#"))} hr)";
         }
+        return label;
     }
 
     // Assign panel state
@@ -856,7 +869,7 @@
                         g => g.Key,
                         g => g.GroupBy(r => new { r.ShiftId, Label = r.ShiftScopeName ?? "Shift" })
                               .OrderBy(b => b.Key.Label, StringComparer.OrdinalIgnoreCase)
-                              .Select(b => new AcceptedShift(b.Key.ShiftId, b.Key.Label))
+                              .Select(b => new AcceptedShift(b.Key.ShiftId, b.Key.Label, b.First().ShiftStartAt, b.First().ShiftEndAt))
                               .ToList());
             }
         }
