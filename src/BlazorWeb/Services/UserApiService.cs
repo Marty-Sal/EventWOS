@@ -11,7 +11,8 @@ public sealed record UserProfileDto(
     // Vendor fields
     string? ReferralCode, string? BusinessName, decimal? Rating, string? InviteMessageTemplate,
     // Crew fields
-    decimal? DisciplineScore, int? EventsAttended, Guid? VendorId, string? VendorName,
+    decimal? DisciplineScore, int? EventsAttended, decimal? CrewRating, int? CrewRatingCount,
+    Guid? VendorId, string? VendorName,
     // Extended profile (self-registered users have these from signup; directly-added
     // Vendor/Crew fill them in here for the first time — see WasDirectlyAdded/ProfileCompleted).
     DateTime? DateOfBirth = null, string? City = null, string? State = null, string? Address = null,

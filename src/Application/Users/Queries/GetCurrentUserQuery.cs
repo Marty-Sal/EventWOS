@@ -53,6 +53,8 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
             // Crew-specific
             user.Role == Domain.Enums.UserRole.Crew ? user.DisciplineScore : null,
             user.Role == Domain.Enums.UserRole.Crew ? user.EventsAttended : null,
+            user.Role == Domain.Enums.UserRole.Crew ? user.CrewRating : null,
+            user.Role == Domain.Enums.UserRole.Crew ? user.CrewRatingCount : null,
             user.VendorId,
             vendorName,
             user.DateOfBirth,

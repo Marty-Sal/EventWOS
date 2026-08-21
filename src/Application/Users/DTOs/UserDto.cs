@@ -34,6 +34,8 @@ public sealed record UserProfileDto(
     // Crew-specific
     decimal? DisciplineScore,
     int? EventsAttended,
+    decimal? CrewRating,
+    int? CrewRatingCount,
     Guid? VendorId,
     string? VendorName,
     // Extended profile
