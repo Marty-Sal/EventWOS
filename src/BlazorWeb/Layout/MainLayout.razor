@@ -245,29 +245,29 @@
 @if (_termsStatus is { RequiresAcceptance: true })
 {
     <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
-            <div>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg md:max-w-3xl lg:max-w-4xl max-h-[92vh] p-6 flex flex-col">
+            <div class="flex-shrink-0">
                 <h2 class="text-lg font-bold text-gray-900">Updated Terms &amp; Conditions</h2>
                 <p class="text-sm text-gray-500 mt-1">
                     Our Terms &amp; Conditions for @_termsStatus.Audience accounts have changed. Please review and accept to continue.
                 </p>
             </div>
 
-            <div class="ql-editor h-56 overflow-y-auto border border-gray-200 rounded-lg text-xs bg-gray-50" style="padding:0.75rem;">
+            <div class="ql-editor flex-1 min-h-[45vh] md:min-h-[55vh] overflow-y-auto border border-gray-200 rounded-lg text-sm bg-gray-50 my-4" style="padding:1rem 1.25rem;">
                 @((MarkupString)(_termsStatus.Content ?? ""))
             </div>
 
-            <label class="flex items-start gap-2 text-sm text-gray-700">
+            <label class="flex items-start gap-2 text-sm text-gray-700 flex-shrink-0">
                 <input type="checkbox" @bind="_termsAccepted" class="mt-0.5" />
                 <span>I have read and accept the Terms &amp; Conditions above.</span>
             </label>
 
             @if (_termsError is not null)
             {
-                <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">@_termsError</div>
+                <div class="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm flex-shrink-0 mt-3">@_termsError</div>
             }
 
-            <div class="flex items-center justify-between gap-3 pt-1">
+            <div class="flex items-center justify-between gap-3 pt-4 flex-shrink-0">
                 <button @onclick="LogoutAsync" class="text-sm text-gray-500 hover:text-gray-700 underline">
                     Log out instead
                 </button>
