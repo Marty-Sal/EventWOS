@@ -30,6 +30,23 @@ public sealed record UserListItemDto(
 public sealed record PagedResult<T>(
     IReadOnlyList<T> Items, int TotalCount, int PageNumber, int PageSize, int TotalPages);
 
+/// <summary>One rated event. Mirrors RatingHistoryItemDto in Application/Ratings/Queries.</summary>
+public sealed record RatingHistoryItemDto(
+    Guid RatingId, Guid EventId, string EventName, DateTime? EventDate,
+    int Performance, int Cooperation, decimal Score, string? Comment,
+    string? RaterName, DateTime RatedAt, bool IsLegacySingleScore);
+
+/// <summary>
+/// A user's reputation, broken out rather than flattened to one number.
+/// Mirrors UserRatingSummaryDto in Application/Ratings/Queries.
+/// </summary>
+public sealed record UserRatingSummaryDto(
+    Guid UserId, string Role, decimal? Average,
+    decimal? AveragePerformance, decimal? AverageCooperation,
+    int RatedEventCount,
+    IReadOnlyDictionary<int, int> Distribution,
+    IReadOnlyList<RatingHistoryItemDto> Recent);
+
 public interface IUserApiService
 {
     Task<UserProfileDto?> GetMeAsync(CancellationToken ct = default);
@@ -43,6 +60,12 @@ public interface IUserApiService
         CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateVendorAsync(string mobile, string fullName, string? businessName, string? email, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateCrewAsync(string mobile, string fullName, string? email, string? referralCode, CancellationToken ct = default);
+
+    /// <summary>
+    /// Full rating breakdown for one user -- both axes, the star distribution and
+    /// recent feedback. Used by RatingSummaryCard on the dashboards and profile.
+    /// </summary>
+    Task<UserRatingSummaryDto?> GetRatingSummaryAsync(Guid userId, CancellationToken ct = default);
 }
 
 public sealed class UserApiService : IUserApiService
@@ -148,6 +171,20 @@ public sealed class UserApiService : IUserApiService
             return (false, parsed?.Errors?.FirstOrDefault() ?? "Failed to create crew.");
         }
         catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    public async Task<UserRatingSummaryDto?> GetRatingSummaryAsync(
+        Guid userId, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await _http.GetFromJsonAsync<ApiResult<UserRatingSummaryDto>>(
+                $"api/v1/users/{userId}/rating-summary", JsonOpts, ct);
+            return r?.Data;
+        }
+        // Null, not an exception: a dashboard must still render when one card's
+        // data is unavailable.
+        catch { return null; }
     }
 }
 

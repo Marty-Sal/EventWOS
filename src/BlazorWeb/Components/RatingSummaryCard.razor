@@ -1,0 +1,192 @@
+@*
+    RatingSummaryCard -- the full reputation breakdown for one person, used on the
+    crew dashboard, the vendor dashboard and the profile page.
+
+    Deliberately NOT a single number. The two axes are shown separately because
+    they lead to different actions: someone technically excellent but hard to work
+    with averages the same 3.0 as someone mediocre at both, and a card that
+    collapses them tells you nothing about which one you are looking at.
+
+    The distribution bars exist for the same reason. A 4.2 built from straight 4s
+    and a 4.2 built from a pile of 5s and two 1s are not the same reputation, and
+    only the spread shows which one you have.
+
+    Unrated is a first-class state, not an error and not zero -- a new crew member
+    has no track record, which is different from a bad one.
+
+    ASCII-only in the razor tree, HTML entities for glyphs, per the Linux SDK
+    codegen issue documented in LocationPin.razor.
+*@
+
+<div class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm @CssClass">
+    <div class="mb-4 flex items-start justify-between gap-3">
+        <div>
+            <h3 class="font-bold text-gray-800">@Title</h3>
+            <p class="text-xs text-gray-400">
+                @if (_summary is null || _summary.RatedEventCount == 0)
+                {
+                    <text>No ratings yet</text>
+                }
+                else
+                {
+                    <text>Across @_summary.RatedEventCount rated event@(_summary.RatedEventCount == 1 ? "" : "s")</text>
+                }
+            </p>
+        </div>
+        @if (_summary is not null && _summary.RatedEventCount > 0)
+        {
+            <RatingStars Average="_summary.Average" Count="_summary.RatedEventCount" ShowCount="false" />
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <p class="text-sm text-gray-400">Loading ratings...</p>
+    }
+    else if (_error is not null)
+    {
+        <p class="text-sm text-red-500">@_error</p>
+    }
+    else if (_summary is null || _summary.RatedEventCount == 0)
+    {
+        @* Say WHY it is empty. "No ratings" on its own reads like something is
+           broken; naming the trigger tells the reader what to expect. *@
+        <p class="text-sm text-gray-500">
+            Ratings appear here once an event you worked is marked complete and
+            @(IsVendor ? "an admin" : "your vendor") records feedback.
+        </p>
+    }
+    else
+    {
+        <div class="grid grid-cols-2 gap-3">
+            <div class="rounded-xl bg-gray-50 px-4 py-3">
+                <p class="text-xs text-gray-500">Performance</p>
+                <p class="text-xl font-bold text-gray-800">
+                    @(_summary.AveragePerformance?.ToString("0.0") ?? "--")
+                    <span class="text-xs font-medium text-gray-400">/ 5</span>
+                </p>
+            </div>
+            <div class="rounded-xl bg-gray-50 px-4 py-3">
+                <p class="text-xs text-gray-500">Cooperation</p>
+                <p class="text-xl font-bold text-gray-800">
+                    @(_summary.AverageCooperation?.ToString("0.0") ?? "--")
+                    <span class="text-xs font-medium text-gray-400">/ 5</span>
+                </p>
+            </div>
+        </div>
+
+        @* Spread, highest bucket first so the shape reads top-down. *@
+        <div class="mt-4 space-y-1.5">
+            @for (var star = 5; star >= 1; star--)
+            {
+                var bucket = star;
+                var count  = _summary.Distribution.TryGetValue(bucket, out var c) ? c : 0;
+                var pct    = _maxBucket == 0 ? 0 : (int)Math.Round(count * 100.0 / _maxBucket);
+                <div class="flex items-center gap-2">
+                    <span class="w-8 shrink-0 text-right text-xs text-gray-500">
+                        @bucket<span class="text-amber-500">@(new MarkupString("&#9733;"))</span>
+                    </span>
+                    <div class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+                        <div class="h-full rounded-full bg-amber-400" style="width:@pct%"></div>
+                    </div>
+                    <span class="w-6 shrink-0 text-xs text-gray-400">@count</span>
+                </div>
+            }
+        </div>
+
+        @if (ShowRecent && _summary.Recent.Count > 0)
+        {
+            <div class="mt-5 border-t border-gray-100 pt-4">
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Recent feedback
+                </p>
+                <div class="space-y-3">
+                    @foreach (var item in _summary.Recent)
+                    {
+                        <div class="rounded-xl border border-gray-100 px-3 py-2.5">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold text-gray-800">@item.EventName</p>
+                                    <p class="text-xs text-gray-400">
+                                        @(item.EventDate?.ToLocalTime().ToString("dd MMM yyyy")
+                                          ?? item.RatedAt.ToLocalTime().ToString("dd MMM yyyy"))
+                                        @if (!string.IsNullOrWhiteSpace(item.RaterName))
+                                        {
+                                            <text> &middot; @item.RaterName</text>
+                                        }
+                                    </p>
+                                </div>
+                                <RatingStars Average="item.Score" Count="1" ShowCount="false"
+                                             CssClass="shrink-0 text-xs" />
+                            </div>
+
+                            @if (item.IsLegacySingleScore)
+                            {
+                                @* Carried over from the old single-star scheme, which had no
+                                   separate axes. Labelling it stops the reader assuming both
+                                   scores were genuinely given. *@
+                                <p class="mt-1 text-xs text-gray-400">Overall rating (older format)</p>
+                            }
+                            else
+                            {
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Performance @item.Performance/5 &middot; Cooperation @item.Cooperation/5
+                                </p>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(item.Comment))
+                            {
+                                <p class="mt-1.5 text-xs italic text-gray-600">&ldquo;@item.Comment&rdquo;</p>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Inject] private IUserApiService UserApi { get; set; } = default!;
+
+    /// <summary>Whose ratings to show.</summary>
+    [Parameter, EditorRequired] public Guid UserId { get; set; }
+
+    [Parameter] public string Title { get; set; } = "Your rating";
+
+    /// <summary>Only affects the empty-state wording (who does the rating).</summary>
+    [Parameter] public bool IsVendor { get; set; }
+
+    [Parameter] public bool ShowRecent { get; set; } = true;
+
+    [Parameter] public string? CssClass { get; set; }
+
+    private UserRatingSummaryDto? _summary;
+    private bool    _loading = true;
+    private string? _error;
+    private int     _maxBucket;
+    private Guid    _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (UserId == Guid.Empty) { _loading = false; return; }
+        if (_loadedFor == UserId) return;   // Already loaded for this user.
+
+        _loading = true;
+        _error   = null;
+        try
+        {
+            _summary = await UserApi.GetRatingSummaryAsync(UserId);
+            // Bars scale to the BIGGEST bucket, not the total. Against the total, a
+            // genuinely lopsided spread renders as five near-empty slivers and the
+            // shape -- the entire point of the chart -- disappears.
+            _maxBucket = _summary?.Distribution.Values.DefaultIfEmpty(0).Max() ?? 0;
+            _loadedFor = UserId;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally { _loading = false; }
+    }
+}

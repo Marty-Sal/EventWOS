@@ -1,5 +1,6 @@
 using EventWOS.Api.Authorization;
 using Asp.Versioning;
+using EventWOS.Application.Ratings.Queries;
 using EventWOS.Application.Attendance.Commands;
 using EventWOS.Application.Events.Commands;
 using EventWOS.Application.CrewGroups.Commands;
@@ -502,6 +503,24 @@ public sealed class EventsController : ControllerBase
     /// the framework's role middleware instead of our permission policy and
     /// occasionally returned a silent 403 the toast couldn't surface).
     /// </summary>
+    /// <summary>
+    /// Vendors who worked this event, flagged with whether they have been rated
+    /// for it. Drives the "rate your vendors" prompt after an event is completed.
+    /// Already-rated vendors are included and flagged rather than filtered out, so
+    /// the rater can tell "done" from "missed".
+    /// </summary>
+    [Permission("vendors:read")]
+    [HttpGet("{eventId:guid}/vendors-to-rate")]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<EventVendorToRateDto>>), 200)]
+    public async Task<IActionResult> GetVendorsToRate(Guid eventId, CancellationToken ct)
+    {
+        if (!_currentUser.HasPermission("vendors:read")) return Forbid();
+        var result = await _mediator.Send(new GetEventVendorsToRateQuery(eventId), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse<IReadOnlyList<EventVendorToRateDto>>.Ok(result.Value))
+            : BadRequest(ApiResponse<IReadOnlyList<EventVendorToRateDto>>.Fail(result.Error.Message));
+    }
+
     [Permission("crew:write")]
     [HttpPost("assignments/{assignmentId:guid}/rate-crew")]
     public async Task<IActionResult> RateCrew(Guid assignmentId, [FromBody] RateCrewRequest body, CancellationToken ct)

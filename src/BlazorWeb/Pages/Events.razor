@@ -1785,6 +1785,68 @@ else
     </div>
 }
 
+@* Rate vendors -- offered right after an event is marked Completed, the one
+   moment the rater has the event fresh in mind. Dismissable: ratings are
+   valuable but not worth blocking the status change behind. *@
+@if (_ratePromptEventId is not null && _rateVendorId is null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+         @onclick="CloseRatePrompt">
+        <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl" @onclick:stopPropagation="true">
+            <div class="border-b px-5 py-4">
+                <h3 class="font-bold text-gray-800">Rate the vendors on this event</h3>
+                <p class="text-sm text-gray-500">
+                    Now the event is complete, you can record how each vendor performed.
+                </p>
+            </div>
+
+            <div class="max-h-80 space-y-2 overflow-y-auto px-5 py-4">
+                @foreach (var v in _ratePromptVendors)
+                {
+                    <button type="button" @onclick="() => PickVendorToRate(v)"
+                            class="w-full rounded-xl border border-gray-200 px-4 py-3 text-left
+                                   hover:border-amber-300 hover:bg-amber-50 transition">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-semibold text-gray-800">@v.VendorName</p>
+                                @if (!string.IsNullOrWhiteSpace(v.BusinessName))
+                                {
+                                    <p class="truncate text-xs text-gray-400">@v.BusinessName</p>
+                                }
+                            </div>
+                            @if (v.AlreadyRated)
+                            {
+                                <span class="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-xs
+                                             font-medium text-green-700">Rated</span>
+                            }
+                            else
+                            {
+                                <span class="shrink-0 text-xs font-medium text-amber-600">Rate</span>
+                            }
+                        </div>
+                    </button>
+                }
+            </div>
+
+            <div class="flex justify-end border-t px-5 py-3">
+                <button @onclick="CloseRatePrompt"
+                        class="rounded-xl px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
+                    Later
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<RatingModal Visible="_rateVendorId is not null"
+             Title="Rate vendor"
+             SubjectName="@_rateVendorName"
+             ExistingPerformance="_rateExistingPerf"
+             ExistingCooperation="_rateExistingCoop"
+             ExistingComment="@_rateExistingComment"
+             OnSubmit="SubmitVendorRating"
+             OnClose="CloseVendorRating" />
+
 @code {
     private bool _accessDenied;
     private bool _canWrite;
@@ -3051,8 +3113,80 @@ else
     private async Task ChangeStatus(Guid id, string action)
     {
         var (ok, err) = await EventApi.ChangeEventStatusAsync(id, action);
-        if (ok) { _success = "Status updated!"; await LoadEvents(); }
-        else    { _error = err; }
+        if (!ok) { _error = err; return; }
+
+        _success = "Status updated!";
+        await LoadEvents();
+
+        // Completing an event is the moment vendor ratings become possible, and the
+        // only moment the rater has the event fresh in mind. Prompting here is why
+        // the ratings actually get filled in -- nobody navigates to a vendor later
+        // to do it voluntarily.
+        if (action.Equals("complete", StringComparison.OrdinalIgnoreCase))
+            await OpenVendorRatingPrompt(id);
+    }
+
+    // ── Post-completion vendor rating prompt ──────────────────────────────────
+    private Guid?   _ratePromptEventId;
+    private List<EventVendorToRateDto> _ratePromptVendors = new();
+    private Guid?   _rateVendorId;
+    private string? _rateVendorName;
+    private int?    _rateExistingPerf;
+    private int?    _rateExistingCoop;
+    private string? _rateExistingComment;
+
+    private async Task OpenVendorRatingPrompt(Guid eventId)
+    {
+        var vendors = await EventApi.GetVendorsToRateAsync(eventId);
+
+        // No vendors on the event means nothing to ask about. An empty dialog would
+        // just be a step to dismiss.
+        if (vendors.Count == 0) return;
+
+        _ratePromptEventId = eventId;
+        _ratePromptVendors = vendors.ToList();
+    }
+
+    private void CloseRatePrompt()
+    {
+        _ratePromptEventId = null;
+        _ratePromptVendors = new();
+    }
+
+    private void PickVendorToRate(EventVendorToRateDto v)
+    {
+        _rateVendorId        = v.VendorUserId;
+        _rateVendorName      = v.VendorName;
+        _rateExistingPerf    = v.Performance;
+        _rateExistingCoop    = v.Cooperation;
+        _rateExistingComment = v.Comment;
+    }
+
+    private void CloseVendorRating()
+    {
+        _rateVendorId        = null;
+        _rateVendorName      = null;
+        _rateExistingPerf    = null;
+        _rateExistingCoop    = null;
+        _rateExistingComment = null;
+    }
+
+    /// <summary>Returns an error for the modal to show, or null on success.</summary>
+    private async Task<string?> SubmitVendorRating(int performance, int cooperation, string? comment)
+    {
+        if (_rateVendorId is null || _ratePromptEventId is null) return "No vendor selected.";
+
+        var failure = await VendorApi.RateVendorAsync(
+            _rateVendorId.Value, _ratePromptEventId.Value, performance, cooperation, comment);
+        if (failure is not null) return failure;
+
+        CloseVendorRating();
+
+        // Refresh the list so the row flips to Rated. Without this the prompt still
+        // reads "not rated" for someone just rated, which invites a pointless
+        // second pass.
+        _ratePromptVendors = (await EventApi.GetVendorsToRateAsync(_ratePromptEventId.Value)).ToList();
+        return null;
     }
 
     // ── Vendor search for assign section ─────────────────────────────────────

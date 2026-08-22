@@ -70,6 +70,11 @@ public sealed record PagedEventAssignmentResult(
     IReadOnlyList<EventAssignmentDto> Items, int TotalCount, int Page, int PageSize);
 
 // ── Interface ─────────────────────────────────────────────────────────────────
+/// <summary>Mirrors EventVendorToRateDto in Application/Ratings/Queries.</summary>
+public sealed record EventVendorToRateDto(
+    Guid VendorUserId, string VendorName, string? BusinessName,
+    bool AlreadyRated, int? Performance, int? Cooperation, string? Comment);
+
 public interface IEventApiService
 {
     // Admin / Manager
@@ -78,6 +83,12 @@ public interface IEventApiService
     Task<(bool Ok, string? Error, EventDetailDto? Data)> CreateEventAsync(CreateEventRequest req, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> UpdateEventAsync(Guid id, CreateEventRequest req, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> ChangeEventStatusAsync(Guid id, string action, string? reason = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Vendors who worked this event, each flagged with whether they have already
+    /// been rated for it. Drives the post-completion rating prompt.
+    /// </summary>
+    Task<IReadOnlyList<EventVendorToRateDto>> GetVendorsToRateAsync(Guid eventId, CancellationToken ct = default);
     Task<PagedEventAssignmentResult?> GetAssignmentsAsync(Guid eventId, int page = 1, string? status = null, CancellationToken ct = default);
     Task<(bool Ok, Guid? AssignmentId, string? Error)> AssignCrewAsync(Guid eventId, Guid? crewId, Guid? vendorId, Guid? shiftId = null, CancellationToken ct = default);
     Task<AttendanceSummaryDto?> GetAttendanceSummaryAsync(Guid eventId, CancellationToken ct = default);
@@ -221,6 +232,21 @@ public sealed class EventApiService : IEventApiService
             return (false, body?.Errors?.FirstOrDefault() ?? "Unknown error");
         }
         catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    public async Task<IReadOnlyList<EventVendorToRateDto>> GetVendorsToRateAsync(
+        Guid eventId, CancellationToken ct = default)
+    {
+        try
+        {
+            var r = await _http.GetFromJsonAsync<ApiResult<List<EventVendorToRateDto>>>(
+                $"api/v1/events/{eventId}/vendors-to-rate", _jsonOpts, ct);
+            return r?.Data ?? new List<EventVendorToRateDto>();
+        }
+        // Empty on failure: the prompt then simply does not appear. Blocking the
+        // status change the user actually asked for would be worse than skipping
+        // an optional nudge.
+        catch { return new List<EventVendorToRateDto>(); }
     }
 
     public async Task<(bool Ok, string? Error)> ChangeEventStatusAsync(Guid id, string action, string? reason = null, CancellationToken ct = default)
