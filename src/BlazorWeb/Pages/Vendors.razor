@@ -149,11 +149,11 @@
                             </td>
                             <td class="px-5 py-3.5 text-right whitespace-nowrap">
                                 <button @onclick="() => OpenDetailsAsync(v)"
-                                        class="text-xs text-indigo-600 hover:underline mr-3">🔍 View</button>
+                                        class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline mr-3">🔍 View</button>
                                 <button @onclick="() => OpenRate(v)"
-                                        class="text-xs text-indigo-600 hover:underline mr-3">Rate</button>
+                                        class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline mr-3">Rate</button>
                                 <button @onclick="() => ToggleStatus(v)"
-                                        class="text-xs @(v.Status == "Active" ? "text-red-500" : "text-green-600") hover:underline">
+                                        class="text-xs font-medium hover:underline @(v.Status == "Active" ? "text-red-500" : "text-green-600")">
                                     @(v.Status == "Active" ? "Suspend" : "Activate")
                                 </button>
                             </td>
