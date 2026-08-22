@@ -46,7 +46,46 @@ else
     </span>
 }
 
+@if (AccuracyMeters is int acc && !string.IsNullOrWhiteSpace(Coords))
+{
+    @* The margin of error, shown next to the fix it belongs to.
+
+       Without this a reader has no way to judge a pin: six decimal places look
+       identically authoritative whether they came from a 10 m GPS lock or a 2 km
+       tower estimate. Colour encodes usability rather than decoration:
+         calm  (<=50m)   a real GPS lock; the pin means what it says
+         amber (<=500m)  roughly right; fine for a sanity check, not for a dispute
+         red   (>500m)   the pin is decorative; do not rely on it
+
+       ASCII-only per the note above: &plusmn; not a literal sign. *@
+    <span class="ml-1 text-[10px] font-medium @AccuracyClass(acc)"
+          title="@AccuracyTitle(acc)">&plusmn;@FormatAccuracy(acc)</span>
+}
+
 @code {
     [Parameter] public string? Address { get; set; }
     [Parameter] public string? Coords  { get; set; }
+
+    /// <summary>
+    /// Radius of the fix's 95% confidence circle, in metres. Null means the
+    /// accuracy was never captured (legacy row, admin manual mark, or a browser
+    /// that omitted it) -- which is why nothing is rendered rather than a
+    /// reassuring default. Unknown is not the same as good.
+    /// </summary>
+    [Parameter] public int? AccuracyMeters { get; set; }
+
+    private static string FormatAccuracy(int m)
+        => m >= 1000 ? $"{m / 1000.0:0.#} km" : $"{m} m";
+
+    private static string AccuracyClass(int m)
+        => m <= 50  ? "text-gray-400"
+         : m <= 500 ? "text-amber-600"
+         :            "text-red-600";
+
+    private static string AccuracyTitle(int m)
+        => m <= 50
+            ? $"GPS accuracy: within {FormatAccuracy(m)} - a precise fix."
+            : m <= 500
+                ? $"GPS accuracy: within {FormatAccuracy(m)} - approximate, good enough for a sanity check but not for a dispute."
+                : $"GPS accuracy: within {FormatAccuracy(m)} - too coarse to rely on. Likely a WiFi or cell-tower estimate rather than GPS.";
 }

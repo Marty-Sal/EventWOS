@@ -128,6 +128,10 @@
     // the initial tap, and re-prompting on regenerate would be user-
     // hostile.
     private string? _crewLocation;
+    // Accuracy of _crewLocation. Travels with it to the server so the eventual
+    // AttendanceRecord records how good the CREW's fix was — the vendor's
+    // scanning phone contributes neither position nor accuracy.
+    private int? _crewAccuracy;
 
     private PendingCheckInDto? _pending;
     private CancellationTokenSource? _ticker;
@@ -140,11 +144,13 @@
         : (int)Math.Max(0, (_pending.ExpiresAt - DateTimeOffset.UtcNow).TotalSeconds);
 
     // ── Public API ─────────────────────────────────────────────────────
-    public async Task OpenAsync(Guid assignmentId, string? eventTitle = null, string? crewLocation = null)
+    public async Task OpenAsync(Guid assignmentId, string? eventTitle = null, string? crewLocation = null,
+        int? crewLocationAccuracyMeters = null)
     {
         _assignmentId  = assignmentId;
         _eventTitle    = eventTitle;
         _crewLocation  = crewLocation;
+        _crewAccuracy  = crewLocationAccuracyMeters;
         _isOpen       = true;
         _loading      = true;
         _error        = null;
@@ -168,7 +174,7 @@
         }
         else
         {
-            var minted = await CheckInApi.RequestAsync(assignmentId, _crewLocation);
+            var minted = await CheckInApi.RequestAsync(assignmentId, _crewLocation, _crewAccuracy);
             if (!minted.Success || minted.Data is null)
             {
                 _error   = minted.Message ?? "Could not generate a check-in QR.";
@@ -257,7 +263,7 @@
         _error        = null;
         StateHasChanged();
 
-        var minted = await CheckInApi.RequestAsync(_assignmentId, _crewLocation);
+        var minted = await CheckInApi.RequestAsync(_assignmentId, _crewLocation, _crewAccuracy);
         _regenerating = false;
 
         if (!minted.Success || minted.Data is null)

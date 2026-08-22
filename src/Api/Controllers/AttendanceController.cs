@@ -155,7 +155,7 @@ public sealed class AttendanceController : ControllerBase
     {
         var result = await _mediator.Send(
             new RecordAttendanceCommand(assignmentId, req.Action, req.Location,
-                _currentUser.UserId?.ToString()), ct);
+                _currentUser.UserId?.ToString(), req.Accuracy), ct);
         return result.IsSuccess
             ? Ok(ApiResponse<AttendanceRecordDto>.Ok(result.Value))
             : BadRequest(ApiResponse<AttendanceRecordDto>.Fail(result.Error.Message));
@@ -197,7 +197,8 @@ public sealed class AttendanceController : ControllerBase
         if (_currentUser.UserId is null) return Unauthorized();
 
         var result = await _mediator.Send(
-            new RequestCheckInCommand(body.AssignmentId, _currentUser.UserId.Value, body.Location), ct);
+            new RequestCheckInCommand(body.AssignmentId, _currentUser.UserId.Value,
+                body.Location, body.Accuracy), ct);
 
         return result.IsSuccess
             ? Ok(ApiResponse<PendingCheckInDto>.Ok(result.Value))
@@ -246,11 +247,19 @@ public sealed class AttendanceController : ControllerBase
 /// <summary>Body for /checkin/request. Location is the crew's "lat,lng"
 /// captured on their own device — required by RequestCheckInHandler. The
 /// server rejects with CheckIn.LocationRequired if it's missing/malformed.</summary>
-public sealed record CheckInRequestBody(Guid AssignmentId, string? Location = null);
+public sealed record CheckInRequestBody(
+    Guid AssignmentId,
+    string? Location = null,
+    // Browser-reported accuracy of Location, in metres. Optional: older clients
+    // and browsers that omit coords.accuracy simply don't send it.
+    int? Accuracy = null);
 
 /// <summary>Body for /checkin/verify. Only the code is sent — the
 /// AttendanceRecord's coords come from PendingCheckIn.CrewLocation
 /// (captured on the crew's device at /checkin/request time).</summary>
 public sealed record CheckInVerifyBody(string Code);
 
-public sealed record AttendanceActionRequest(string Action, string? Location = null);
+public sealed record AttendanceActionRequest(
+    string Action,
+    string? Location = null,
+    int? Accuracy = null);

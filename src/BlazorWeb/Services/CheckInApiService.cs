@@ -29,7 +29,8 @@ public interface ICheckInApiService
     /// device — the server rejects with CheckIn.LocationRequired if
     /// missing/malformed. Callers must have already run the location gate
     /// before calling this.</summary>
-    Task<ApiResult<PendingCheckInDto>>      RequestAsync(Guid assignmentId, string? location, CancellationToken ct = default);
+    Task<ApiResult<PendingCheckInDto>>      RequestAsync(Guid assignmentId, string? location,
+        int? accuracyMeters = null, CancellationToken ct = default);
 
     /// <summary>Fetch the caller's currently-live QR for an assignment
     /// (used to rehydrate the modal after a page refresh).</summary>
@@ -56,11 +57,11 @@ public sealed class CheckInApiService : ICheckInApiService
     public CheckInApiService(HttpClient http) => _http = http;
 
     public async Task<ApiResult<PendingCheckInDto>> RequestAsync(
-        Guid assignmentId, string? location, CancellationToken ct = default)
+        Guid assignmentId, string? location, int? accuracyMeters = null, CancellationToken ct = default)
     {
         var resp = await _http.PostAsJsonAsync(
             "api/v1/attendance/checkin/request",
-            new { assignmentId, location }, ct);
+            new { assignmentId, location, accuracy = accuracyMeters }, ct);
         return await ParseAsync<PendingCheckInDto>(resp);
     }
 

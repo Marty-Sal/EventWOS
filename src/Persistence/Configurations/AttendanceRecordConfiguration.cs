@@ -27,6 +27,10 @@ public sealed class AttendanceRecordConfiguration : IEntityTypeConfiguration<Att
         // columns; see Program.cs Location-Split patch.
         builder.Property(r => r.LocationAddress).HasColumnName("location_address").HasMaxLength(200);
         builder.Property(r => r.LocationCoords) .HasColumnName("location_coords") .HasMaxLength(30);
+        // Nullable by design — null means "we don't know how good this fix was"
+        // (legacy row, admin manual mark, browser that omitted the value), never
+        // "the fix was accurate". See AttendanceRecord.LocationAccuracyMeters.
+        builder.Property(r => r.LocationAccuracyMeters).HasColumnName("location_accuracy_meters");
         builder.Property(r => r.RecordedByUserId).HasColumnName("recorded_by_user_id").HasMaxLength(100);
 
         // Audit

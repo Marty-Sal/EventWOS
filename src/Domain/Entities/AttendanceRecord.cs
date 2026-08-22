@@ -18,7 +18,8 @@ public sealed class AttendanceRecord : BaseEntity
         AttendanceAction action,
         string? locationAddress,   // Human-readable, e.g. "Airoli, Navi Mumbai".
         string? locationCoords,    // Raw "lat,lng" fix from the client, used for the map link.
-        string? recordedByUserId)
+        string? recordedByUserId,
+        int? locationAccuracyMeters = null) // GPS confidence radius; null = unknown/manual.
     {
         AssignmentId     = assignmentId;
         EventId          = eventId;
@@ -26,6 +27,7 @@ public sealed class AttendanceRecord : BaseEntity
         Action           = action;
         LocationAddress  = locationAddress;
         LocationCoords   = locationCoords;
+        LocationAccuracyMeters = locationAccuracyMeters;
         RecordedAt       = DateTime.UtcNow;
         RecordedByUserId = recordedByUserId;
     }
@@ -49,6 +51,21 @@ public sealed class AttendanceRecord : BaseEntity
     /// when the browser refused location or the fix was "unavailable:*".
     /// </summary>
     public string?          LocationCoords   { get; private set; }
+
+    /// <summary>
+    /// Radius of the 95% confidence circle for <see cref="LocationCoords"/>, in
+    /// metres, as reported by the browser.
+    ///
+    /// This exists because coordinates lie about their own quality: a 10 m GPS
+    /// fix and a 2 km cell-tower estimate are both six decimal places, and both
+    /// render as a perfectly confident pin on a map. Without this number an
+    /// auditor cannot tell "stood at the gate" from "was somewhere in the
+    /// district", and a geofence decision cannot be defended after the fact.
+    ///
+    /// Null means unknown, not accurate: legacy rows, admin manual marks, and
+    /// browsers that omit the value all land here.
+    /// </summary>
+    public int?             LocationAccuracyMeters { get; private set; }
 
     public string?          RecordedByUserId { get; private set; }
 

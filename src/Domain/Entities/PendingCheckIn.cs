@@ -37,7 +37,8 @@ public sealed class PendingCheckIn : BaseEntity
         Guid?   shiftId,
         string  code,
         string  crewLocation,
-        int     ttlMinutes = 10)
+        int     ttlMinutes = 10,
+        int?    crewLocationAccuracyMeters = null)
     {
         // CrewLocation is REQUIRED by product policy — the whole point of
         // this table is to capture WHERE THE CREW WAS the moment they hit
@@ -56,6 +57,7 @@ public sealed class PendingCheckIn : BaseEntity
         ShiftId      = shiftId;
         Code         = code;
         CrewLocation = crewLocation;
+        CrewLocationAccuracyMeters = crewLocationAccuracyMeters;
         ExpiresAt    = DateTime.UtcNow.AddMinutes(ttlMinutes);
         Status       = PendingCheckInStatus.Pending;
     }
@@ -87,6 +89,15 @@ public sealed class PendingCheckIn : BaseEntity
     /// VerifyCheckInHandler (Nominatim call, cached). Required at construction
     /// — see the ctor guard.</summary>
     public string CrewLocation { get; private set; } = default!;
+
+    /// <summary>
+    /// Accuracy (metres) of <see cref="CrewLocation"/> as reported by the crew's
+    /// browser. Carried across the QR handshake so the AttendanceRecord minted at
+    /// verify time keeps the crew device's own confidence figure — the vendor's
+    /// scanning phone never contributes a position, so it must not contribute an
+    /// accuracy either. Null when the browser didn't report one.
+    /// </summary>
+    public int? CrewLocationAccuracyMeters { get; private set; }
 
     public DateTime ExpiresAt { get; private set; }
     public PendingCheckInStatus Status { get; private set; }

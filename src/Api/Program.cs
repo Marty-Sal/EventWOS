@@ -1426,6 +1426,60 @@ BEGIN
            AND location ~ '^-?[0-9]+(\.[0-9]+)?,-?[0-9]+(\.[0-9]+)?$';
     END IF;
 
+    -- ═══ Attendance location accuracy ════════════════════════════════════
+    -- Mirrors migration 20260822224500_AddAttendanceLocationAccuracy.
+    --
+    -- Coordinates hide their own quality: a 10 m GPS fix and a 2 km
+    -- cell-tower estimate are both six decimal places and both draw an
+    -- equally confident pin. Recording the browser's accuracy figure next
+    -- to the fix is what lets an auditor tell ""stood at the gate"" from
+    -- ""was somewhere in the district"" - and it is what makes a geofence
+    -- rejection defensible after the fact.
+    --
+    -- Deliberately NOT backfilled. The information was never captured for
+    -- existing rows, and a guessed value would be worse than an honest
+    -- NULL, so NULL here means ""unknown"", never ""accurate"".
+    --
+    -- pending_checkins gets the same column so the QR flow can carry the
+    -- CREW device's accuracy across the handshake — the vendor's scanning
+    -- phone supplies no position, so it must supply no accuracy either.
+    ALTER TABLE attendance_records
+        ADD COLUMN IF NOT EXISTS location_accuracy_meters INT NULL;
+
+    -- Guarded because this whole patch is a single DO block: an ALTER against a
+    -- missing table raises, and the raise would abandon every statement below it.
+    -- attendance_records is created earlier in this script; pending_checkins is
+    -- not, so it must be proven present before being altered.
+    IF EXISTS (SELECT 1 FROM information_schema.tables
+               WHERE table_name = 'pending_checkins') THEN
+        ALTER TABLE pending_checkins
+            ADD COLUMN IF NOT EXISTS crew_location_accuracy_meters INT NULL;
+    END IF;
+
+    -- Reject negatives and absurd values. 100 km is far past any real fix,
+    -- so anything beyond it is a bug or a hostile client, not a bad GPS day.
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.constraint_column_usage
+        WHERE  constraint_name = 'ck_attendance_records_accuracy_sane'
+    ) THEN
+        ALTER TABLE attendance_records
+            ADD CONSTRAINT ck_attendance_records_accuracy_sane
+            CHECK (location_accuracy_meters IS NULL
+                   OR location_accuracy_meters BETWEEN 0 AND 100000);
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.tables
+               WHERE table_name = 'pending_checkins')
+       AND NOT EXISTS (
+        SELECT 1 FROM information_schema.constraint_column_usage
+        WHERE  constraint_name = 'ck_pending_checkins_accuracy_sane'
+    ) THEN
+        ALTER TABLE pending_checkins
+            ADD CONSTRAINT ck_pending_checkins_accuracy_sane
+            CHECK (crew_location_accuracy_meters IS NULL
+                   OR crew_location_accuracy_meters BETWEEN 0 AND 100000);
+    END IF;
+
     -- ═══ MaxCrew drift backfill ═══════════════════════════════════════════
     -- Historical bug in UpdateEventShiftCommand / AddEventShiftCommand:
     -- they recomputed events.max_crew via a SumAsync() that translated to

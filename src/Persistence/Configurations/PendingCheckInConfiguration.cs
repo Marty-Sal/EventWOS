@@ -31,6 +31,10 @@ public sealed class PendingCheckInConfiguration : IEntityTypeConfiguration<Pendi
         // future precision changes or accuracy tags.
         b.Property(p => p.CrewLocation)
             .HasColumnName("crew_location").HasMaxLength(40).IsRequired();
+        // Travels with CrewLocation across the QR handshake so the minted
+        // AttendanceRecord keeps the crew device's own confidence figure.
+        b.Property(p => p.CrewLocationAccuracyMeters)
+            .HasColumnName("crew_location_accuracy_meters");
         b.Property(p => p.ExpiresAt).HasColumnName("expires_at").IsRequired();
         b.Property(p => p.Status).HasColumnName("status").IsRequired();
         b.Property(p => p.ConsumedByVendorId).HasColumnName("consumed_by_vendor_id");

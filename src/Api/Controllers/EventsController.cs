@@ -476,7 +476,8 @@ public sealed class EventsController : ControllerBase
     public async Task<IActionResult> RecordAttendance(Guid assignmentId, [FromBody] RecordAttendanceRequest req, CancellationToken ct)
     {
         var result = await _mediator.Send(new RecordAttendanceCommand(
-            assignmentId, req.Action, req.Location, _currentUser.UserId!.Value.ToString()), ct);
+            assignmentId, req.Action, req.Location,
+            _currentUser.UserId!.Value.ToString(), req.Accuracy), ct);
 
         return result.IsSuccess
             ? Ok(ApiResponse<AttendanceRecordDto>.Ok(result.Value))
@@ -579,7 +580,10 @@ public sealed record VendorAssignCrewRequest(Guid CrewId, Guid? ShiftId = null);
 public sealed record VendorAssignGroupRequest(Guid GroupId, Guid? ShiftId = null);
 public sealed record VendorRespondToInviteRequest(string Response, string? Reason);
 public sealed record RespondAssignmentRequest(string Response, string? Reason = null);
-public sealed record RecordAttendanceRequest(string Action, string? Location = null);
+public sealed record RecordAttendanceRequest(
+    string Action,
+    string? Location = null,
+    int? Accuracy = null);
 public sealed record ReviewDecisionRequest(string? Reason = null);
 public sealed record RateCrewRequest(decimal Rating);
 

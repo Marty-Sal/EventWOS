@@ -33,7 +33,12 @@ public sealed record AttendanceListItemDto(
     // ShiftStartAt: crew regularly check in the evening before an early shift,
     // so "when the event is" and "when they tapped" are genuinely different
     // dates. The history table shows both rather than making the reader guess.
-    DateTime  EventStartAt  = default
+    DateTime  EventStartAt  = default,
+    // Accuracy of LocationCoords in metres; null = unknown (legacy row, admin
+    // manual mark, or a browser that didn't report it). Surfaced so a reader can
+    // tell a 10 m fix from a 2 km one — the coordinates themselves look equally
+    // confident either way.
+    int?      LocationAccuracyMeters = null
 );
 
 // ── Admin/Manager: filterable list ───────────────────────────────────────────
@@ -136,6 +141,7 @@ public sealed class GetAttendanceListHandler
                 Action     = r.Action.ToString(),
                 r.RecordedAt,
                 r.LocationAddress,
+                r.LocationAccuracyMeters,
                 r.LocationCoords,
                 r.RecordedByUserId,
                 RecordedByName = r.RecordedByUserId == null
@@ -174,7 +180,8 @@ public sealed class GetAttendanceListHandler
             x.Id, x.AssignmentId, x.EventId, x.EventTitle,
             x.CrewId, x.CrewName, x.Action,
             x.RecordedAt, x.LocationAddress, x.LocationCoords, x.RecordedByUserId, x.RecordedByName,
-            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt, x.EventStartAt)).ToList();
+            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt, x.EventStartAt,
+            x.LocationAccuracyMeters)).ToList();
 
         return Result.Success(PagedResult<AttendanceListItemDto>.Create(
             dtos, total, req.PageNumber, req.All ? Math.Max(dtos.Count, 1) : req.PageSize));
@@ -214,6 +221,7 @@ public sealed class GetMyAttendanceHandler
                 EventStartAt = r.Event.StartAt,
                 r.CrewId, CrewName = r.Crew.FullName, Action = r.Action.ToString(),
                 r.RecordedAt, r.LocationAddress, r.LocationCoords, r.RecordedByUserId,
+                r.LocationAccuracyMeters,
                 ShiftScopeName = _db.EventAssignments
                     .Where(a => a.Id == r.AssignmentId)
                     .Select(a => a.ShiftId)
@@ -245,7 +253,8 @@ public sealed class GetMyAttendanceHandler
             x.Id, x.AssignmentId, x.EventId, x.EventTitle,
             x.CrewId, x.CrewName, x.Action,
             x.RecordedAt, x.LocationAddress, x.LocationCoords, x.RecordedByUserId, null,
-            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt, x.EventStartAt)).ToList();
+            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt, x.EventStartAt,
+            x.LocationAccuracyMeters)).ToList();
 
         return Result.Success(PagedResult<AttendanceListItemDto>.Create(items, total, req.PageNumber, req.PageSize));
     }

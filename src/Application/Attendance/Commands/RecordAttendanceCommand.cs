@@ -15,7 +15,11 @@ public sealed record RecordAttendanceCommand(
     Guid   AssignmentId,
     string Action,        // "checkin" | "checkout"
     string? Location,
-    string? RecordedByUserId
+    string? RecordedByUserId,
+    // Accuracy of Location in metres, as reported by the browser. Recorded for
+    // the audit trail only — never consulted when deciding whether to allow the
+    // action, since a client could send any value it likes.
+    int? LocationAccuracyMeters = null
 ) : IRequest<Result<AttendanceRecordDto>>;
 
 public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCommand, Result<AttendanceRecordDto>>
@@ -115,7 +119,8 @@ public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCo
         var (coords, address) = await _geo.LookupAsync(req.Location, ct);
         var record = new AttendanceRecord(
             assignment.Id, assignment.EventId, assignment.CrewId.Value,
-            action, address, coords, req.RecordedByUserId);
+            action, address, coords, req.RecordedByUserId,
+            req.LocationAccuracyMeters);
 
         _db.AttendanceRecords.Add(record);
 

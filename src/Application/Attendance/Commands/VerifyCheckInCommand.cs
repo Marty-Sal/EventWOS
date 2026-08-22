@@ -155,7 +155,10 @@ public sealed class VerifyCheckInHandler
             action:           AttendanceAction.CheckIn,
             locationAddress:  address,
             locationCoords:   coords,
-            recordedByUserId: req.VerifierUserId.ToString());
+            recordedByUserId: req.VerifierUserId.ToString(),
+            // From the CREW's device at request time, not the vendor's scanning
+            // phone — the same reason the coordinates come from PendingCheckIn.
+            locationAccuracyMeters: pending.CrewLocationAccuracyMeters);
 
         _db.AttendanceRecords.Add(attendance);
 

@@ -20,7 +20,12 @@ namespace EventWOS.Application.Attendance.Commands;
 public sealed record RequestCheckInCommand(
     Guid AssignmentId,
     Guid CallerUserId,
-    string? CrewLocation
+    string? CrewLocation,
+    // Accuracy of CrewLocation in metres, straight from the crew's browser.
+    // Advisory only — it is recorded for the audit trail and never used to
+    // accept or reject a check-in, because a client-supplied number must not
+    // be able to influence authorisation.
+    int? CrewLocationAccuracyMeters = null
 ) : IRequest<Result<PendingCheckInDto>>;
 
 public sealed class RequestCheckInHandler
@@ -141,7 +146,8 @@ public sealed class RequestCheckInHandler
             shiftId:      assignment.ShiftId,
             code:         code,
             crewLocation: loc,
-            ttlMinutes:   TtlMinutes);
+            ttlMinutes:   TtlMinutes,
+            crewLocationAccuracyMeters: req.CrewLocationAccuracyMeters);
 
         _db.PendingCheckIns.Add(row);
         await _uow.SaveChangesAsync(ct);

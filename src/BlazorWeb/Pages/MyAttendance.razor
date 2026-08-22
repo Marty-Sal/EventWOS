@@ -182,7 +182,7 @@
                                         <span class="font-medium text-gray-700">@r.RecordedAt.ToLocalTime().ToString("HH:mm")</span>
                                         <span class="block text-[11px] text-gray-400">@r.RecordedAt.ToLocalTime().ToString("dd MMM yyyy")</span>
                                     </td>
-                                    <td class="px-5 py-3.5 text-xs"><LocationPin Address="@r.LocationAddress" Coords="@r.LocationCoords" /></td>
+                                    <td class="px-5 py-3.5 text-xs"><LocationPin Address="@r.LocationAddress" Coords="@r.LocationCoords" AccuracyMeters="@r.LocationAccuracyMeters" /></td>
                                 </tr>
                             }
                         </tbody>
@@ -241,7 +241,7 @@
         var gate = await EnsureLocationOrPromptAsync("check in", () => OpenQrAsync(a));
         if (gate.Coords is null) return;   // Gate failed → modal already up.
 
-        await _qrModal.OpenAsync(a.Id, a.EventTitle, gate.Coords);
+        await _qrModal.OpenAsync(a.Id, a.EventTitle, gate.Coords, gate.AccuracyMeters);
     }
 
     // ── Location gate ─────────────────────────────────────────────
@@ -258,7 +258,10 @@
     // happy path (the gate already resolved the fix; we just hand it
     // to the caller so RecordAttendance can POST it and OpenQrAsync
     // can pass it to the modal).
-    private readonly record struct LocationGateOutcome(string? Coords);
+    // AccuracyMeters rides along with Coords so both reach the server from the
+    // SAME fix. Reading them from separate calls would let a precise pin be
+    // filed under a coarse margin of error, or worse, the reverse.
+    private readonly record struct LocationGateOutcome(string? Coords, int? AccuracyMeters = null);
 
     private async Task<LocationGateOutcome> EnsureLocationOrPromptAsync(
         string actionLabel,
@@ -270,7 +273,7 @@
             var res = await JS.InvokeAsync<LocationGateResult>(
                 "eventwosCheckin.requireLocation");
             if (res is { Ok: true } && !string.IsNullOrWhiteSpace(res.Coords))
-                return new LocationGateOutcome(res.Coords);
+                return new LocationGateOutcome(res.Coords, res.Accuracy);
             reason = res?.Reason ?? "unavailable";
         }
         catch
@@ -308,6 +311,11 @@
 
         [System.Text.Json.Serialization.JsonPropertyName("coords")]
         public string? Coords { get; set; }
+
+        // Radius of the fix's 95% confidence circle, in metres. Null when the
+        // browser doesn't report it — recorded as unknown rather than assumed good.
+        [System.Text.Json.Serialization.JsonPropertyName("accuracy")]
+        public int? Accuracy { get; set; }
     }
 
     private async Task OnQrVerified(EventWOS.BlazorWeb.Services.CheckInVerifyResultDto result)
@@ -382,7 +390,8 @@
                 .Select(r => new MyAttendanceRecord(
                     r.EventTitle, r.Action, r.RecordedAt,
                     r.LocationAddress, r.LocationCoords,
-                    r.ShiftScopeName, r.ShiftStartAt, r.EventStartAt))
+                    r.ShiftScopeName, r.ShiftStartAt, r.LocationAccuracyMeters,
+                    r.EventStartAt))
                 .ToList();
         }
         catch (Exception ex)
@@ -412,10 +421,11 @@
             // GPS call here would just re-query for a fix at most a
             // few seconds old — same numbers, extra round-trip.
             string? location = gate.Coords;
+            int? accuracy = gate.AccuracyMeters;
 
             var resp = await Http.PostAsJsonAsync(
                 $"api/v1/events/assignments/{assignmentId}/attendance",
-                new { action, location });
+                new { action, location, accuracy });
 
             if (resp.IsSuccessStatusCode)
             {
@@ -465,6 +475,9 @@
         string EventTitle, string Action, DateTime RecordedAt,
         string? LocationAddress, string? LocationCoords,
         string? ShiftScopeName, DateTime? ShiftStartAt,
+        // Margin of error on the fix, in metres. Null = never captured, which the
+        // UI renders as nothing at all rather than implying a good fix.
+        int? LocationAccuracyMeters,
         // The event's own date — leads the history table. Deliberately separate
         // from RecordedAt: an early shift is routinely checked into the night
         // before, so the two dates differ and collapsing them would misreport
@@ -499,7 +512,8 @@
         string? ShiftScopeName = null,
         DateTime? ShiftStartAt = null,
         DateTime? ShiftEndAt = null,
-        DateTime EventStartAt = default);
+        DateTime EventStartAt = default,
+        int? LocationAccuracyMeters = null);
 
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
