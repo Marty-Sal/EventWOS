@@ -1,0 +1,58 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+@*
+    Shared tab strip for the four people-management screens so the sibling
+    routes (/crew, /vendors, /managers, /users) feel like one "Users"
+    screen instead of four separate sidebar entries. Mirrors the existing
+    ApprovalTabsHeader pattern used by /approvals/events + /approvals/people:
+    each page keeps its own route, own [Authorize]/PermGuard gate, and own
+    load logic untouched — this component just renders the tab strip on
+    top of whichever page is currently active.
+
+    Tabs:
+      • Crew    → /crew      (Admin/Manager with crew:read; also the
+                              Vendor's own "My Crew" — but callers only
+                              render this header for Admin/Manager, see
+                              each page's own AuthorizeView wrapper)
+      • Vendor  → /vendors   (Admin/Manager with vendors:read)
+      • Manager → /managers  (Admin only — Managers.razor is a hard
+                              Admin-only page, so this tab hides for
+                              anyone else)
+      • Admin   → /users     (Admin/Manager with users:read — lists
+                              Admin accounts specifically now that Crew/
+                              Vendor/Manager each have their own tab)
+*@
+
+<div class="flex gap-2 border-b border-gray-200 mb-6">
+    <a href="/crew"
+       class="@(Active == "crew"
+              ? "px-4 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-700"
+              : "px-4 py-2 text-sm text-gray-600 hover:text-indigo-600")">
+        👷 Crew
+    </a>
+    <a href="/vendors"
+       class="@(Active == "vendor"
+              ? "px-4 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-700"
+              : "px-4 py-2 text-sm text-gray-600 hover:text-indigo-600")">
+        🏢 Vendor
+    </a>
+    <AuthorizeView Roles="Admin">
+        <a href="/managers"
+           class="@(Active == "manager"
+                  ? "px-4 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-700"
+                  : "px-4 py-2 text-sm text-gray-600 hover:text-indigo-600")">
+            👔 Manager
+        </a>
+    </AuthorizeView>
+    <a href="/users"
+       class="@(Active == "admin"
+              ? "px-4 py-2 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-700"
+              : "px-4 py-2 text-sm text-gray-600 hover:text-indigo-600")">
+        🛡️ Admin
+    </a>
+</div>
+
+@code {
+    /// <summary>Which tab is currently active — "crew" | "vendor" | "manager" | "admin".</summary>
+    [Parameter, EditorRequired] public string Active { get; set; } = "crew";
+}

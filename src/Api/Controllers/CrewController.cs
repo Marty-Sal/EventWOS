@@ -81,4 +81,16 @@ public sealed class CrewController : ControllerBase
         var result = await _mediator.Send(new JoinVendorCommand(_currentUser.UserId!.Value, req.ReferralCode), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok("Joined vendor successfully.")) : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
+
+    /// <summary>Suspend / reactivate a crew member — mirrors the Vendor status endpoint.</summary>
+    [Permission("crew:write")]
+    [HttpPatch("{id:guid}/status")]
+    public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeCrewStatusRequest req, CancellationToken ct)
+    {
+        if (!_currentUser.HasPermission("crew:write")) return Forbid();
+        var result = await _mediator.Send(new ChangeCrewStatusCommand(id, req.Status, _currentUser.UserId!.Value, _currentUser.Role == UserRole.Vendor), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
+    }
 }
+
+public sealed record ChangeCrewStatusRequest(string Status);

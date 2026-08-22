@@ -1,10 +1,6 @@
 @page "/users"
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject IUserApiService UserApi
-@inject IVendorApiService VendorApi
-@inject IJSRuntime JS
-@using EventWOS.BlazorWeb.Validation
-
 
     @if (_accessDenied)
     {
@@ -16,25 +12,24 @@
         return;
     }
 
-<PageTitle>Users — EventWOS</PageTitle>
+<PageTitle>Admin Accounts — EventWOS</PageTitle>
+
+<AuthorizeView Roles="Admin,Manager">
+    <UserTabsHeader Active="admin" />
+</AuthorizeView>
 
 <div class="space-y-5">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h2 class="text-lg font-bold text-gray-800">User Management</h2>
-        <div class="flex items-center gap-3 flex-wrap">
-            <div class="relative">
-                <input value="@_search" @oninput="OnSearchChanged"
-                       type="search" placeholder="Search users…"
-                       class="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64" />
-                <span class="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
-            </div>
-            <AuthorizeView Roles="Admin">
-                @if (_canWrite) { <button @onclick="() => _showCreate = true"
-                        class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow whitespace-nowrap">
-                    + Add User
-                </button> }
-            </AuthorizeView>
+        <div>
+            <h2 class="text-lg font-bold text-gray-800">Admin Accounts</h2>
+            <p class="text-sm text-gray-500">Platform administrators. Crew, Vendor and Manager accounts have their own tabs above.</p>
+        </div>
+        <div class="relative">
+            <input value="@_search" @oninput="OnSearchChanged"
+                   type="search" placeholder="Search admins…"
+                   class="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64" />
+            <span class="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
         </div>
     </div>
 
@@ -52,8 +47,8 @@
         else if (_users?.Items.Any() != true)
         {
             <div class="text-center py-16 text-gray-400">
-                <p class="text-4xl mb-3">👥</p>
-                <p class="text-sm">No users found.</p>
+                <p class="text-4xl mb-3">🛡️</p>
+                <p class="text-sm">No admin accounts found.</p>
             </div>
         }
         else
@@ -62,63 +57,35 @@
             <table class="min-w-full divide-y divide-gray-100">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">User</th>
-                        <th class="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Role</th>
+                        <th class="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Admin</th>
                         <th class="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
                         <th class="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Joined</th>
-                        <AuthorizeView Roles="Admin">
-                            <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
-                        </AuthorizeView>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-50">
                     @foreach (var user in _users.Items)
                     {
-                        var currentUser = user;
                         <tr class="hover:bg-gray-50 transition-colors">
                             <td class="px-6 py-4">
                                 <div class="flex items-center gap-3">
                                     <div class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                                        @currentUser.FullName.FirstOrDefault()
+                                        @user.FullName.FirstOrDefault()
                                     </div>
                                     <div>
-                                        <p class="text-sm font-semibold text-gray-800">@currentUser.FullName</p>
-                                        <p class="text-xs text-gray-400">@currentUser.Mobile</p>
+                                        <p class="text-sm font-semibold text-gray-800">@user.FullName</p>
+                                        <p class="text-xs text-gray-400">@user.Mobile</p>
                                     </div>
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <span class="px-2.5 py-1 rounded-full text-xs font-medium @GetRoleBadgeClass(currentUser.Role)">
-                                    @currentUser.Role
-                                </span>
-                            </td>
-                            <td class="px-6 py-4">
-                                <span class="inline-flex items-center gap-1.5 text-xs font-medium @GetStatusClass(currentUser.Status)">
-                                    <span class="w-1.5 h-1.5 rounded-full @GetStatusDotClass(currentUser.Status)"></span>
-                                    @currentUser.Status
+                                <span class="inline-flex items-center gap-1.5 text-xs font-medium @GetStatusClass(user.Status)">
+                                    <span class="w-1.5 h-1.5 rounded-full @GetStatusDotClass(user.Status)"></span>
+                                    @user.Status
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-xs text-gray-400">
-                                @currentUser.CreatedAt.ToString("dd MMM yyyy")
+                                @user.CreatedAt.ToString("dd MMM yyyy")
                             </td>
-                            <AuthorizeView Roles="Admin">
-                                <td class="px-6 py-4 text-right">
-                                    @if (currentUser.Role == "Admin")
-                                    {
-                                        <span class="text-xs text-gray-300" title="Admin accounts can't be suspended.">—</span>
-                                    }
-                                    else if (currentUser.Status == "Active")
-                                    {
-                                        <button @onclick="@(() => ChangeStatusAsync(currentUser.Id, StatusSuspended))"
-                                                class="text-xs text-red-600 hover:underline font-medium">Suspend</button>
-                                    }
-                                    else if (currentUser.Status == "Suspended")
-                                    {
-                                        <button @onclick="@(() => ChangeStatusAsync(currentUser.Id, StatusActive))"
-                                                class="text-xs text-green-600 hover:underline font-medium">Activate</button>
-                                    }
-                                </td>
-                            </AuthorizeView>
                         </tr>
                     }
                 </tbody>
@@ -148,111 +115,9 @@
     </div>
 </div>
 
-@if (_showCreate)
-{
-    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-            <div class="flex items-center justify-between">
-                <h3 class="font-bold text-gray-800">Add New User</h3>
-                <button @onclick="CloseCreate" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
-            </div>
-
-            <!-- Role selector -->
-            <div class="flex gap-2">
-                <button @onclick='() => _createRole = "Vendor"'
-                        class="flex-1 py-2.5 rounded-xl border text-sm font-medium transition @(_createRole == "Vendor" ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50")">
-                    🏢 Vendor
-                </button>
-                <button @onclick='() => _createRole = "Crew"'
-                        class="flex-1 py-2.5 rounded-xl border text-sm font-medium transition @(_createRole == "Crew" ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50")">
-                    👷 Crew
-                </button>
-            </div>
-
-            <div class="space-y-3">
-                <div>
-                    <input @ref="_mobileInputRef" value="@_createMobile" @oninput="OnMobileInput" type="tel" inputmode="numeric" maxlength="10"
-                           placeholder="Mobile (10 digits)" autocomplete="tel"
-                           class="@FieldCss(_touchedMobile && !MobileOk)" @onblur='() => _touchedMobile = true' />
-                    @if (_touchedMobile && !MobileOk)
-                    {
-                        <p class="text-xs text-red-600 mt-1 ml-1">Mobile number must be exactly 10 digits.</p>
-                    }
-                </div>
-                <div>
-                    <input @bind="_createName" @bind:event="oninput" placeholder="Full Name"
-                           class="@FieldCss(_touchedName && !NameOk)" @onblur='() => _touchedName = true' />
-                    @if (_touchedName && !NameOk)
-                    {
-                        <p class="text-xs text-red-600 mt-1 ml-1">Full name must contain only letters and spaces.</p>
-                    }
-                </div>
-                <div>
-                    <input @bind="_createEmail" @bind:event="oninput" type="email" placeholder="Email"
-                           class="@FieldCss(_touchedEmail && !EmailOk)" @onblur='() => _touchedEmail = true' />
-                    @if (_touchedEmail && !EmailOk)
-                    {
-                        <p class="text-xs text-red-600 mt-1 ml-1">Enter a valid email address.</p>
-                    }
-                </div>
-                @if (_createRole == "Vendor")
-                {
-                    <input @bind="_createBusiness" placeholder="Business Name (optional)"
-                           class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                }
-                @if (_createRole == "Crew")
-                {
-                    <div>
-                        <select @bind="_createReferral"
-                                class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white @(string.IsNullOrWhiteSpace(_createReferral) ? "text-gray-400" : "text-gray-800")">
-                            <option value="">Select vendor…</option>
-                            @foreach (var v in _vendorOptions)
-                            {
-                                <option value="@v.ReferralCode">@(v.BusinessName ?? v.FullName) (@v.ReferralCode)</option>
-                            }
-                        </select>
-                        <p class="text-[11px] text-gray-500 mt-1 ml-1">
-                            @if (_vendorOptionsLoading)
-                            {
-                                <text>Loading vendors…</text>
-                            }
-                            else if (_vendorOptions.Count == 0)
-                            {
-                                <text>No active vendors found — add a vendor first.</text>
-                            }
-                            else
-                            {
-                                <text>Required — every crew member must belong to a vendor.</text>
-                            }
-                        </p>
-                    </div>
-                }
-            </div>
-
-            @if (_createError is not null)
-            {
-                <p class="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">⚠️ @_createError</p>
-            }
-
-            <div class="flex gap-3">
-                <button @onclick="SubmitCreate" disabled="@(_creating || !MobileOk || !NameOk || !EmailOk || (_createRole == "Crew" && string.IsNullOrWhiteSpace(_createReferral)))"
-                        class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition">
-                    @(_creating ? "Creating…" : $"Create {_createRole}")
-                </button>
-                <button @onclick="CloseCreate"
-                        class="px-5 py-2.5 rounded-xl border border-gray-200 text-sm hover:bg-gray-50 transition">Cancel</button>
-            </div>
-        </div>
-    </div>
-}
-
-
 @code {
 
     private bool _accessDenied;
-    private bool _canWrite;
-    private const string StatusActive    = "Active";
-    private const string StatusSuspended = "Suspended";
 
     private PagedResult<UserListItemDto>? _users;
     private bool _loading = true;
@@ -261,57 +126,18 @@
     private const int _pageSize = 20;
     private System.Timers.Timer? _debounce;
 
-    // Create user modal
-    private bool _showCreate;
-    private bool _creating;
-    private string? _createError;
-    private string _createRole   = "Vendor";
-    private string _createMobile = string.Empty;
-    private string _createName   = string.Empty;
-    private string? _createEmail;
-    private string? _createBusiness;
-    private string? _createReferral;
-    private List<VendorListItemDto> _vendorOptions = new();
-    private bool _vendorOptionsLoading;
-
-    // ── Add User form validation (mirrors ClientValidation — see RegisterCrew.razor) ──
-    private const string FieldCssOk    = "w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
-    private const string FieldCssError = "w-full px-4 py-2.5 rounded-xl border border-red-400 text-sm focus:outline-none focus:ring-2 focus:ring-red-400";
-    private static string FieldCss(bool hasError) => hasError ? FieldCssError : FieldCssOk;
-
-    private ElementReference _mobileInputRef;
-    private bool _touchedMobile, _touchedName, _touchedEmail;
-
-    private bool MobileOk => ClientValidation.IsValidMobile(_createMobile);
-    private bool NameOk   => ClientValidation.IsValidFullName(_createName);
-    private bool EmailOk  => ClientValidation.IsValidEmail(_createEmail);
-
     protected override async Task OnInitializedAsync()
     {
         // ── Permission gate ──────────────────────────────────────────────────────
         _accessDenied = !await PermGuard.CanAsync("users:read");
         if (_accessDenied) { StateHasChanged(); return; }
-        _canWrite = await PermGuard.CanAsync("users:write");
         await LoadAsync();
-        _ = LoadVendorOptionsAsync();
-    }
-
-    private async Task LoadVendorOptionsAsync()
-    {
-        _vendorOptionsLoading = true;
-        var result = await VendorApi.GetVendorsAsync(page: 1, pageSize: 500);
-        _vendorOptions = (result?.Items ?? Array.Empty<VendorListItemDto>())
-            .Where(v => v.Status == "Active" && !string.IsNullOrWhiteSpace(v.ReferralCode))
-            .OrderBy(v => v.BusinessName ?? v.FullName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        _vendorOptionsLoading = false;
-        StateHasChanged();
     }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        _users = await UserApi.GetUsersAsync(_page, _pageSize, _search);
+        _users = await UserApi.GetUsersAsync(_page, _pageSize, _search, role: "Admin");
         _loading = false;
     }
 
@@ -329,22 +155,8 @@
         _debounce.Start();
     }
 
-    private async Task ChangeStatusAsync(Guid userId, string status)
-    {
-        await UserApi.ChangeStatusAsync(userId, status);
-        await LoadAsync();
-    }
-
     private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
     private async Task NextPage() { if (_users != null && _page < _users.TotalPages) { _page++; await LoadAsync(); } }
-
-    private static string GetRoleBadgeClass(string role) => role switch
-    {
-        "Admin"   => "bg-purple-100 text-purple-700",
-        "Manager" => "bg-blue-100 text-blue-700",
-        "Vendor"  => "bg-amber-100 text-amber-700",
-        _         => "bg-gray-100 text-gray-700"
-    };
 
     private static string GetStatusClass(string status) => status switch
     {
@@ -360,42 +172,4 @@
         "Suspended" => "bg-red-500",
         _           => "bg-gray-400"
     };
-    private async Task OnMobileInput(ChangeEventArgs e)
-    {
-        _createMobile = ClientValidation.FilterDigits(e.Value?.ToString(), 10);
-        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _mobileInputRef, _createMobile);
-    }
-
-    private void CloseCreate()
-    {
-        _showCreate = false; _createError = null;
-        _createMobile = _createName = string.Empty;
-        _createEmail = _createBusiness = _createReferral = null;
-        _touchedMobile = _touchedName = _touchedEmail = false;
-    }
-
-    private async Task SubmitCreate()
-    {
-        _touchedMobile = _touchedName = _touchedEmail = true;
-        if (!MobileOk || !NameOk || !EmailOk) return;
-        if (_createRole == "Crew" && string.IsNullOrWhiteSpace(_createReferral))
-        {
-            _createError = "Please select a vendor.";
-            return;
-        }
-        _creating = true; _createError = null;
-
-        (bool ok, string? err) = _createRole == "Vendor"
-            ? await UserApi.CreateVendorAsync(_createMobile, _createName, _createBusiness, _createEmail)
-            : await UserApi.CreateCrewAsync(_createMobile, _createName, _createEmail, _createReferral);
-
-        if (ok)
-        {
-            CloseCreate();
-            await LoadAsync();
-        }
-        else { _createError = err; }
-        _creating = false;
-    }
-
 }

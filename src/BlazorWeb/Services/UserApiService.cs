@@ -33,7 +33,7 @@ public sealed record PagedResult<T>(
 public interface IUserApiService
 {
     Task<UserProfileDto?> GetMeAsync(CancellationToken ct = default);
-    Task<PagedResult<UserListItemDto>?> GetUsersAsync(int page = 1, int pageSize = 20, string? search = null, CancellationToken ct = default);
+    Task<PagedResult<UserListItemDto>?> GetUsersAsync(int page = 1, int pageSize = 20, string? search = null, string? role = null, CancellationToken ct = default);
     Task<bool> ChangeStatusAsync(Guid userId, string status, CancellationToken ct = default);
     Task<bool> UpdateProfileAsync(
         string fullName, string? email, string? avatarUrl, string? inviteMessageTemplate = null,
@@ -73,12 +73,13 @@ public sealed class UserApiService : IUserApiService
     }
 
     public async Task<PagedResult<UserListItemDto>?> GetUsersAsync(
-        int page = 1, int pageSize = 20, string? search = null, CancellationToken ct = default)
+        int page = 1, int pageSize = 20, string? search = null, string? role = null, CancellationToken ct = default)
     {
         try
         {
             var url = $"api/v1/users?page={page}&pageSize={pageSize}";
             if (!string.IsNullOrEmpty(search)) url += $"&search={Uri.EscapeDataString(search)}";
+            if (!string.IsNullOrEmpty(role))   url += $"&role={Uri.EscapeDataString(role)}";
             var resp = await _http.GetFromJsonAsync<ApiResult<PagedResult<UserListItemDto>>>(url, JsonOpts, ct);
             return resp?.Data;
         }

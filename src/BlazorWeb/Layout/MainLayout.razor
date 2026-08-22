@@ -72,10 +72,10 @@
 
                 @* Admin always sees all nav *@
                 <AuthorizeView Roles="Admin">
-                    <NavItem Href="/users"    Icon="👥" Label="Users" />
-                    <NavItem Href="/managers" Icon="👔" Label="Managers" />
-                    <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" />
-                    <NavItem Href="/crew"     Icon="👷" Label="Crew" />
+                    @* Users — one entry point that opens onto tabbed
+                       Crew / Vendor / Manager / Admin screens (see
+                       UserTabsHeader), instead of four separate links. *@
+                    <NavItem Href="/users" Icon="👥" Label="Users" />
                     <NavItem Href="/attendance" Icon="📍" Label="Attendance" />
                     <NavItem Href="/payments" Icon="💰" Label="Payments" />
                     <NavItem Href="/sessions" Icon="🔌" Label="Sessions" />
@@ -83,9 +83,14 @@
 
                 @* Manager sees only links matching their permissions *@
                 <AuthorizeView Roles="Manager">
-                    @if (_perms.Contains("users:read"))    { <NavItem Href="/users"    Icon="👥" Label="Users" /> }
-                    @if (_perms.Contains("vendors:read"))  { <NavItem Href="/vendors"  Icon="🏢" Label="Vendors" /> }
-                    @if (_perms.Contains("crew:read"))     { <NavItem Href="/crew"     Icon="👷" Label="Crew" /> }
+                    @* Same single "Users" entry point as Admin, but only
+                       shown if the Manager has been granted at least one
+                       of the underlying read permissions — and it opens
+                       on whichever tab they actually have access to. *@
+                    @if (_perms.Contains("users:read") || _perms.Contains("vendors:read") || _perms.Contains("crew:read"))
+                    {
+                        <NavItem Href="@UsersLandingHref" Icon="👥" Label="Users" />
+                    }
                     @if (_perms.Contains("attendance:read")) { <NavItem Href="/attendance" Icon="📍" Label="Attendance" /> }
                     @if (_perms.Contains("payments:read")) { <NavItem Href="/payments" Icon="💰" Label="Payments" /> }
                     @if (_perms.Contains("sessions:read")) { <NavItem Href="/sessions" Icon="🔌" Label="Sessions" /> }
@@ -316,6 +321,15 @@
 
     // Current Manager's effective permissions (loaded from JWT claims)
     private HashSet<string> _perms = new(StringComparer.OrdinalIgnoreCase);
+
+    // Where a Manager's single "Users" nav item should land — prefer the
+    // Admin-accounts tab if they can see it, else fall back to whichever
+    // of Vendor/Crew they actually have a read permission for. Keeps the
+    // one nav entry from 404-ing into an access-denied screen.
+    private string UsersLandingHref =>
+        _perms.Contains("users:read")   ? "/users"   :
+        _perms.Contains("vendors:read") ? "/vendors" :
+        _perms.Contains("crew:read")    ? "/crew"    : "/users";
 
     // ── Directly-added-account profile-completion gate ───────────────────────
     // An Admin/Vendor can add a Crew/Vendor account directly (skips the

@@ -19,6 +19,10 @@
 
 <PageTitle>Crew — EventWOS</PageTitle>
 
+<AuthorizeView Roles="Admin,Manager">
+    <UserTabsHeader Active="crew" />
+</AuthorizeView>
+
 <div class="space-y-5">
     <div class="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -54,6 +58,18 @@
                    class="w-64 pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
         </div>
+
+        @if (!_isVendor)
+        {
+            <select value="@_vendorFilterId" @onchange="OnVendorFilterChanged"
+                    class="px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white max-w-[14rem]">
+                <option value="">All Vendors</option>
+                @foreach (var v in _vendorOptions)
+                {
+                    <option value="@v.Id">@(v.BusinessName ?? v.FullName)</option>
+                }
+            </select>
+        }
 
         <select @bind="_sortKey"
                 class="px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -128,10 +144,19 @@
                             <p class="text-sm font-bold text-gray-700">@c.EventsAttended</p>
                         </div>
                     </div>
-                    <button type="button" @onclick="() => OpenDetailsAsync(c)"
-                            class="mt-2 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
-                        🔍 View details
-                    </button>
+                    <div class="mt-2 flex items-center gap-3">
+                        <button type="button" @onclick="() => OpenDetailsAsync(c)"
+                                class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
+                            🔍 View details
+                        </button>
+                        @if (_canWrite && (c.Status == "Active" || c.Status == "Suspended"))
+                        {
+                            <button type="button" @onclick="() => ToggleCrewStatus(c)"
+                                    class="text-xs font-medium hover:underline @(c.Status == "Active" ? "text-red-500" : "text-green-600")">
+                                @(c.Status == "Active" ? "Suspend" : "Activate")
+                            </button>
+                        }
+                    </div>
                 </div>
             }
         </div>
@@ -183,11 +208,18 @@
                                 <td class="px-4 py-3 text-center">
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium @StatusColor(c.Status)">@c.Status</span>
                                 </td>
-                                <td class="px-4 py-3 text-center">
+                                <td class="px-4 py-3 text-center whitespace-nowrap">
                                     <button type="button" @onclick="() => OpenDetailsAsync(c)"
-                                            class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
+                                            class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline mr-3">
                                         🔍 View
                                     </button>
+                                    @if (_canWrite && (c.Status == "Active" || c.Status == "Suspended"))
+                                    {
+                                        <button type="button" @onclick="() => ToggleCrewStatus(c)"
+                                                class="text-xs font-medium hover:underline @(c.Status == "Active" ? "text-red-500" : "text-green-600")">
+                                            @(c.Status == "Active" ? "Suspend" : "Activate")
+                                        </button>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -380,6 +412,16 @@
     // has enough crew to paginate.
     private readonly string[] _statusTabs = { "All", "Active Crew", "Rejected Crew" };
     private string _activeStatusTab = "All";
+
+    // Vendor filter — Admin/Manager only (a Vendor's own crew list is
+    // already scoped to just them, so there's nothing to filter there).
+    private string _vendorFilterId = string.Empty;
+    private async Task OnVendorFilterChanged(ChangeEventArgs e)
+    {
+        _vendorFilterId = e.Value?.ToString() ?? string.Empty;
+        _page = 1;
+        await LoadAsync();
+    }
     private string? StatusForTab(string tab) => tab switch
     {
         "Active Crew"   => "Active",
@@ -482,8 +524,16 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _crew    = await VendorApi.GetCrewAsync(_page, _search, status: StatusForTab(_activeStatusTab));
+        Guid? vendorFilter = !_isVendor && Guid.TryParse(_vendorFilterId, out var vId) ? vId : null;
+        _crew    = await VendorApi.GetCrewAsync(_page, _search, vendorId: vendorFilter, status: StatusForTab(_activeStatusTab));
         _loading = false;
+    }
+
+    private async Task ToggleCrewStatus(CrewMemberDto c)
+    {
+        var newStatus = c.Status == "Active" ? "suspended" : "active";
+        await VendorApi.ChangeCrewStatusAsync(c.Id, newStatus);
+        await LoadAsync();
     }
 
     private void OnSearchKeyUp(KeyboardEventArgs _)
