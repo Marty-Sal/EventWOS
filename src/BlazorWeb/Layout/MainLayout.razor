@@ -196,16 +196,27 @@
                             var sbInitialSource = !string.IsNullOrEmpty(sbUsername) ? sbUsername : (sbMobile ?? "?");
                         }
                         <div class="flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold uppercase">
-                                @sbInitialSource[0]
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-white truncate">
-                                    @@@(sbUsername ?? sbMobile)
-                                </p>
-                                <p class="text-xs text-gray-400 truncate">
-                                    @sbRole · @sbMobile
-                                </p>
+                            <!-- Clicking the avatar or name/role text jumps to My Profile --
+                                 same destination as the "My Profile" nav item above, just a
+                                 faster path from wherever the sidebar is visible. Logout
+                                 button stays outside this clickable area so it keeps its
+                                 own single-purpose click target. -->
+                            <div class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer rounded-lg -m-1 p-1 hover:bg-gray-700/60 transition-colors"
+                                 role="link" tabindex="0"
+                                 @onclick="GoToProfile"
+                                 @onkeydown="GoToProfileOnKey"
+                                 title="Go to My Profile">
+                                <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold uppercase flex-shrink-0">
+                                    @sbInitialSource[0]
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-white truncate">
+                                        @@@(sbUsername ?? sbMobile)
+                                    </p>
+                                    <p class="text-xs text-gray-400 truncate">
+                                        @sbRole · @sbMobile
+                                    </p>
+                                </div>
                             </div>
                             <button @onclick="LogoutAsync"
                                     class="text-gray-400 hover:text-white transition-colors" title="Logout">
@@ -590,6 +601,16 @@
         await AuthApi.LogoutAsync(refresh ?? string.Empty);
         await Hub.StopAsync();
         Nav.NavigateTo("/login");
+    }
+
+    // Sidebar user block: clicking the avatar/name/role area jumps to My
+    // Profile (same target as the "My Profile" nav item), keyboard-reachable
+    // too since it's a div acting as a link rather than a real <a>.
+    private void GoToProfile() => Nav.NavigateTo("/profile");
+
+    private void GoToProfileOnKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" || e.Key == " ") GoToProfile();
     }
 
     private static string GetInitials(string mobile) =>
