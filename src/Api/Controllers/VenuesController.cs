@@ -73,7 +73,7 @@ public sealed class VenuesController : ControllerBase
     }
 
     public sealed record VenueRequest(
-        string Name, string AddressLine1, string? AddressLine2, string City,
+        string Name, string AddressLine1, string? AddressLine2, string? ShortAddress, string City,
         string? State, string? PostalCode, string? Country,
         double? Latitude, double? Longitude, string? Notes);
 
@@ -82,8 +82,9 @@ public sealed class VenuesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] VenueRequest req, CancellationToken ct)
     {
         var res = await _mediator.Send(new CreateVenueCommand(
-            req.Name, req.AddressLine1, req.AddressLine2, req.City, req.State, req.PostalCode,
-            req.Country, req.Latitude, req.Longitude, req.Notes, _currentUser.UserId!.Value), ct);
+            req.Name, req.AddressLine1, req.AddressLine2, req.ShortAddress, req.City,
+            req.State, req.PostalCode, req.Country, req.Latitude, req.Longitude,
+            req.Notes, _currentUser.UserId!.Value), ct);
         return res.IsSuccess
             ? Ok(ApiResponse<VenueDto>.Ok(res.Value))
             : BadRequest(ApiResponse<VenueDto>.Fail(res.Error.Message));
@@ -94,8 +95,9 @@ public sealed class VenuesController : ControllerBase
     public async Task<IActionResult> Update(Guid id, [FromBody] VenueRequest req, CancellationToken ct)
     {
         var res = await _mediator.Send(new UpdateVenueCommand(
-            id, req.Name, req.AddressLine1, req.AddressLine2, req.City, req.State, req.PostalCode,
-            req.Country, req.Latitude, req.Longitude, req.Notes, _currentUser.UserId!.Value), ct);
+            id, req.Name, req.AddressLine1, req.AddressLine2, req.ShortAddress, req.City,
+            req.State, req.PostalCode, req.Country, req.Latitude, req.Longitude,
+            req.Notes, _currentUser.UserId!.Value), ct);
         return res.IsSuccess
             ? Ok(ApiResponse<VenueDto>.Ok(res.Value))
             : BadRequest(ApiResponse<VenueDto>.Fail(res.Error.Message));

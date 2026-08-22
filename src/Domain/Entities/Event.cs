@@ -56,6 +56,42 @@ public sealed class Event : BaseEntity
     /// </summary>
     public Guid?       VenueId         { get; private set; }
 
+    // ── Attendance geofence configuration ───────────────────────────────────
+    // Geofencing is deliberately configured HERE and not on Venue: two events
+    // at the same venue routinely need different boundaries (a 100 m fence for
+    // a single hall, 300 m for a stadium-wide festival). Venue owns the
+    // confirmed physical point; Event owns the tolerance around it.
+    //
+    // The radius is therefore meaningless without the venue's coordinates,
+    // which is why EnableGeoFence() refuses to arm a fence the server couldn't
+    // actually enforce.
+
+    /// <summary>
+    /// When true, attendance check-in must pass a server-side distance check
+    /// against the linked Venue's coordinates. False = location is recorded for
+    /// the audit trail but never blocks a check-in.
+    /// </summary>
+    public bool        GeoFenceEnabled { get; private set; }
+
+    /// <summary>
+    /// Permitted distance in metres from the Venue's coordinates. Null when the
+    /// fence is off. This is the ONLY radius the attendance path trusts — a
+    /// radius sent by a client is ignored.
+    /// </summary>
+    public int?        GeoFenceRadiusMeters { get; private set; }
+
+    /// <summary>
+    /// Floor of 20 m: consumer GPS is typically accurate to 5-20 m, so a
+    /// tighter fence would reject crew who are genuinely standing on site.
+    /// </summary>
+    public const int MinGeoFenceRadiusMeters = 20;
+
+    /// <summary>
+    /// Ceiling of 5 km. Beyond this the fence stops being a presence check;
+    /// the cap also stops a typo (500000) from silently disabling enforcement.
+    /// </summary>
+    public const int MaxGeoFenceRadiusMeters = 5_000;
+
     // Navigation
     public User                        Creator     { get; private set; } = default!;
     public ICollection<EventAssignment> Assignments { get; private set; } = new List<EventAssignment>();
@@ -168,5 +204,49 @@ public sealed class Event : BaseEntity
 
         MaxCrew   = newTotal;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    // ── Geofence behaviour ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Arm the attendance geofence at <paramref name="radiusMeters"/>.
+    ///
+    /// <paramref name="venueHasCoordinates"/> is passed in by the handler
+    /// (which has the Venue loaded) rather than read off a navigation property,
+    /// so the invariant holds even when the aggregate is used detached. The
+    /// check exists because an armed fence with no venue coordinates is
+    /// unenforceable: the attendance path would have nothing to measure from and
+    /// would have to either fail every check-in or wave everyone through. Both
+    /// are worse than refusing to save the configuration.
+    /// </summary>
+    public void EnableGeoFence(int radiusMeters, bool venueHasCoordinates)
+    {
+        if (VenueId is null)
+            throw new InvalidOperationException(
+                "Select a saved venue before enabling location verification — the geofence is measured from the venue's coordinates.");
+
+        if (!venueHasCoordinates)
+            throw new InvalidOperationException(
+                "This venue has no coordinates saved yet. Set them in Settings → Venue (search for the place and confirm the pin) before enabling location verification.");
+
+        if (radiusMeters < MinGeoFenceRadiusMeters || radiusMeters > MaxGeoFenceRadiusMeters)
+            throw new ArgumentOutOfRangeException(
+                nameof(radiusMeters),
+                $"Geofence radius must be between {MinGeoFenceRadiusMeters} and {MaxGeoFenceRadiusMeters} metres.");
+
+        GeoFenceEnabled      = true;
+        GeoFenceRadiusMeters = radiusMeters;
+        UpdatedAt            = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Disarm the fence. Clears the radius too so a disabled fence can never
+    /// leave a stale number behind for someone to misread as active.
+    /// </summary>
+    public void DisableGeoFence()
+    {
+        GeoFenceEnabled      = false;
+        GeoFenceRadiusMeters = null;
+        UpdatedAt            = DateTime.UtcNow;
     }
 }

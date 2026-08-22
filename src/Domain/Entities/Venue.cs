@@ -27,6 +27,7 @@ public sealed class Venue : BaseEntity
         string  name,
         string  addressLine1,
         string? addressLine2,
+        string? shortAddress,
         string  city,
         string? state,
         string? postalCode,
@@ -39,6 +40,7 @@ public sealed class Venue : BaseEntity
         SetName(name);
         AddressLine1 = NormaliseRequired(addressLine1, nameof(addressLine1), "Address line 1");
         AddressLine2 = Normalise(addressLine2, 200);
+        ShortAddress = Normalise(shortAddress, 200);
         City         = NormaliseRequired(city, nameof(city), "City");
         State        = Normalise(state, 100);
         PostalCode   = Normalise(postalCode, 20);
@@ -51,6 +53,16 @@ public sealed class Venue : BaseEntity
     public string  Name            { get; private set; } = default!;
     public string  AddressLine1    { get; private set; } = default!;
     public string? AddressLine2    { get; private set; }
+
+    /// <summary>
+    /// Compact "locality, city, state" label for list rows, the event screen and
+    /// notifications. Populated from the location provider's structured
+    /// components when a venue is picked from search (the provider's full
+    /// display_name is far too long to show in a table), or typed by the admin.
+    /// Display-only — never used for geocoding or matching.
+    /// </summary>
+    public string? ShortAddress    { get; private set; }
+
     public string  City            { get; private set; } = default!;
     public string? State           { get; private set; }
     public string? PostalCode      { get; private set; }
@@ -63,8 +75,8 @@ public sealed class Venue : BaseEntity
     // ── Behaviours ──────────────────────────────────────────────────────────
 
     public void Update(
-        string name, string addressLine1, string? addressLine2, string city,
-        string? state, string? postalCode, string? country,
+        string name, string addressLine1, string? addressLine2, string? shortAddress,
+        string city, string? state, string? postalCode, string? country,
         double? latitude, double? longitude, string? notes)
     {
         if (IsDeleted)
@@ -73,6 +85,7 @@ public sealed class Venue : BaseEntity
         SetName(name);
         AddressLine1 = NormaliseRequired(addressLine1, nameof(addressLine1), "Address line 1");
         AddressLine2 = Normalise(addressLine2, 200);
+        ShortAddress = Normalise(shortAddress, 200);
         City         = NormaliseRequired(city, nameof(city), "City");
         State        = Normalise(state, 100);
         PostalCode   = Normalise(postalCode, 20);
@@ -119,8 +132,12 @@ public sealed class Venue : BaseEntity
             throw new ArgumentException("Latitude must be between -90 and 90.", nameof(latitude));
         if (longitude is < -180 or > 180)
             throw new ArgumentException("Longitude must be between -180 and 180.", nameof(longitude));
-        Latitude  = latitude;
-        Longitude = longitude;
+        // Round to 6 decimal places (~11 cm). Coordinates are fixed-precision
+        // decimal data; storing more digits than the source provides implies
+        // accuracy the GPS/geocoder never had, and it makes equality checks and
+        // cache keys unstable.
+        Latitude  = latitude  is null ? null : Math.Round(latitude.Value,  6);
+        Longitude = longitude is null ? null : Math.Round(longitude.Value, 6);
     }
 
     private static string NormaliseRequired(string value, string paramName, string label)

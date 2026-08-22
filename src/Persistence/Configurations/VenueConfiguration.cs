@@ -21,12 +21,19 @@ public sealed class VenueConfiguration : IEntityTypeConfiguration<Venue>
         builder.Property(v => v.Name).HasColumnName("name").HasMaxLength(120).IsRequired();
         builder.Property(v => v.AddressLine1).HasColumnName("address_line1").HasMaxLength(200).IsRequired();
         builder.Property(v => v.AddressLine2).HasColumnName("address_line2").HasMaxLength(200);
+        builder.Property(v => v.ShortAddress).HasColumnName("short_address").HasMaxLength(200);
         builder.Property(v => v.City).HasColumnName("city").HasMaxLength(200).IsRequired();
         builder.Property(v => v.State).HasColumnName("state").HasMaxLength(100);
         builder.Property(v => v.PostalCode).HasColumnName("postal_code").HasMaxLength(20);
         builder.Property(v => v.Country).HasColumnName("country").HasMaxLength(100);
-        builder.Property(v => v.Latitude).HasColumnName("latitude");
-        builder.Property(v => v.Longitude).HasColumnName("longitude");
+        // numeric(9,6) rather than double precision: coordinates are
+        // fixed-precision decimal data, and 6 dp (~11 cm) is finer than any
+        // consumer GPS or geocoder delivers. Fixing the scale in the database
+        // also stops "same" venue coordinates from differing in the 12th
+        // decimal place depending on how they were written. Precision 9 leaves
+        // room for 3 integer digits (-180..180).
+        builder.Property(v => v.Latitude).HasColumnName("latitude").HasColumnType("numeric(9,6)");
+        builder.Property(v => v.Longitude).HasColumnName("longitude").HasColumnType("numeric(9,6)");
         builder.Property(v => v.Notes).HasColumnName("notes").HasMaxLength(1000);
 
         builder.Property(v => v.CreatedByUserId).HasColumnName("created_by_user_id");

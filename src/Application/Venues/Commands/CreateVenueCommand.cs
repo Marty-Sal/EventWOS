@@ -12,6 +12,7 @@ public sealed record CreateVenueCommand(
     string  Name,
     string  AddressLine1,
     string? AddressLine2,
+    string? ShortAddress,
     string  City,
     string? State,
     string? PostalCode,
@@ -46,8 +47,9 @@ public sealed class CreateVenueHandler : IRequestHandler<CreateVenueCommand, Res
         try
         {
             entity = new DomainVenue(
-                name, req.AddressLine1, req.AddressLine2, req.City, req.State,
-                req.PostalCode, req.Country, req.Latitude, req.Longitude, req.Notes, req.ActingUserId);
+                name, req.AddressLine1, req.AddressLine2, req.ShortAddress, req.City,
+                req.State, req.PostalCode, req.Country, req.Latitude, req.Longitude,
+                req.Notes, req.ActingUserId);
         }
         catch (ArgumentException ex)
         {
@@ -61,6 +63,7 @@ public sealed class CreateVenueHandler : IRequestHandler<CreateVenueCommand, Res
     }
 
     internal static VenueDto ToDto(DomainVenue v) => new(
-        v.Id, v.Name, v.AddressLine1, v.AddressLine2, v.City, v.State, v.PostalCode,
-        v.Country, v.Latitude, v.Longitude, v.Notes, v.IsDeleted, v.CreatedAt, v.UpdatedAt);
+        v.Id, v.Name, v.AddressLine1, v.AddressLine2, v.ShortAddress, v.City, v.State,
+        v.PostalCode, v.Country, v.Latitude, v.Longitude, v.Notes, v.IsDeleted,
+        v.CreatedAt, v.UpdatedAt);
 }

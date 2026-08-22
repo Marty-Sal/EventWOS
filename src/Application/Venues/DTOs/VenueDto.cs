@@ -6,6 +6,7 @@ public sealed record VenueDto(
     string    Name,
     string    AddressLine1,
     string?   AddressLine2,
+    string?   ShortAddress,
     string    City,
     string?   State,
     string?   PostalCode,

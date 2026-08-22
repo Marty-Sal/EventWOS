@@ -25,6 +25,14 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(e => e.CreatedByUserId).HasColumnName("created_by_user_id");
         builder.Property(e => e.VenueId)         .HasColumnName("venue_id");
 
+        // Attendance geofence config — lives on the event, not the venue, so two
+        // events at one venue can enforce different boundaries.
+        builder.Property(e => e.GeoFenceEnabled)
+               .HasColumnName("geo_fence_enabled")
+               .HasDefaultValue(false);
+        builder.Property(e => e.GeoFenceRadiusMeters)
+               .HasColumnName("geo_fence_radius_meters");
+
         // BaseEntity audit Guid (distinct from Creator nav property which uses CreatedByUserId FK)
         builder.Property(e => e.CreatedBy).HasColumnName("created_by");
         builder.Property(e => e.Notes)          .HasColumnName("notes")             .HasMaxLength(1000);

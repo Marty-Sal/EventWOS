@@ -1507,6 +1507,47 @@ BEGIN
 
     CREATE INDEX IF NOT EXISTS ix_events_venue_id ON events (venue_id);
 
+    -- ═══ Location & Geofencing ══════════════════════════════════════════════
+    -- Belt-and-braces for 20260822213000_AddVenueGeofencing. Idempotent.
+    --
+    -- venues.short_address: compact 'locality, city, state' label captured from
+    -- provider search — display_name is far too long for a table row.
+    ALTER TABLE venues ADD COLUMN IF NOT EXISTS short_address VARCHAR(200);
+
+    -- Coordinates as numeric(9,6): fixed-precision decimal data, 6 dp ~ 11 cm.
+    -- Guarded so the ALTER only runs once (it is not IF NOT EXISTS-able) —
+    -- rewriting the column on every boot would be a pointless table lock.
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE  table_name = 'venues' AND column_name = 'latitude'
+          AND  data_type <> 'numeric'
+    ) THEN
+        ALTER TABLE venues
+            ALTER COLUMN latitude  TYPE NUMERIC(9,6) USING ROUND(latitude::numeric,  6),
+            ALTER COLUMN longitude TYPE NUMERIC(9,6) USING ROUND(longitude::numeric, 6);
+        RAISE NOTICE 'venues.latitude/longitude converted to numeric(9,6)';
+    END IF;
+
+    -- Attendance geofence config lives on the EVENT, not the venue: two events
+    -- at the same venue routinely need different radii.
+    ALTER TABLE events ADD COLUMN IF NOT EXISTS geo_fence_enabled       BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE events ADD COLUMN IF NOT EXISTS geo_fence_radius_meters INT;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.constraint_column_usage
+        WHERE  constraint_name = 'ck_events_geo_fence_radius'
+    ) THEN
+        ALTER TABLE events ADD CONSTRAINT ck_events_geo_fence_radius
+            CHECK (
+                (geo_fence_enabled = FALSE AND geo_fence_radius_meters IS NULL)
+                OR (geo_fence_enabled = TRUE
+                    AND geo_fence_radius_meters IS NOT NULL
+                    AND geo_fence_radius_meters BETWEEN 20 AND 5000
+                    AND venue_id IS NOT NULL)
+            );
+        RAISE NOTICE 'Added ck_events_geo_fence_radius';
+    END IF;
+
     -- ═══ terms_and_conditions + terms_acceptances ═══════════════════════════
     -- Belt-and-braces for 20260821214500_AddTermsAndConditions. Idempotent.
     -- Settings module: versioned Terms & Conditions per audience (Vendor/

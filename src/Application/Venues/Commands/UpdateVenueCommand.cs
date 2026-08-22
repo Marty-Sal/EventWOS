@@ -12,6 +12,7 @@ public sealed record UpdateVenueCommand(
     string  Name,
     string  AddressLine1,
     string? AddressLine2,
+    string? ShortAddress,
     string  City,
     string? State,
     string? PostalCode,
@@ -45,8 +46,8 @@ public sealed class UpdateVenueHandler : IRequestHandler<UpdateVenueCommand, Res
         try
         {
             entity.Update(
-                req.Name, req.AddressLine1, req.AddressLine2, req.City, req.State,
-                req.PostalCode, req.Country, req.Latitude, req.Longitude, req.Notes);
+                req.Name, req.AddressLine1, req.AddressLine2, req.ShortAddress, req.City,
+                req.State, req.PostalCode, req.Country, req.Latitude, req.Longitude, req.Notes);
         }
         catch (InvalidOperationException ex)
         {
