@@ -141,20 +141,41 @@ public sealed class VendorAssignGroupHandler
 
         // Phase D step 19: dup detection is per-shift now. The same crew
         // member CAN be invited to a different shift of the same event;
-        // the only collision is "already on THIS shift". Active statuses
-        // only — terminal-rejected rows on this shift don't count as
-        // duplicates (the vendor-assign command will resurrect them).
-        var existingForShift = await _db.EventAssignments
+        // the only collision is "already on THIS shift".
+        //
+        // BUGFIX: this used to project only the ACTIVE crew ids, so a crew
+        // member holding a terminal row (Declined / RejectedByVendor /
+        // RejectedByManager / NoShow) on this shift looked brand new and we
+        // INSERTed a second row for the same (event, crew, shift) tuple —
+        // which collides with the partial unique index
+        // ix_event_assignments_event_crew_shift_unique (… WHERE is_deleted =
+        // false) and blew up the whole batch with Postgres 23505 /
+        // DbUpdateException. The old comment claimed "the vendor-assign
+        // command will resurrect them", but that resurrection logic lives in
+        // VendorAssignCrewHandler and was never reachable from here — which
+        // is exactly why re-inviting a manager-rejected crew worked
+        // individually but failed via group.
+        //
+        // We now load the FULL tracked rows (terminal ones included) so the
+        // loop below can resurrect in place via VendorReInvite() instead of
+        // inserting, mirroring the individual path exactly.
+        var shiftRows = await _db.EventAssignments
             .Where(a => a.EventId == req.EventId
                      && a.ShiftId == _shiftId.Value
-                     && a.CrewId != null
-                     && a.Status != AssignmentStatus.Declined
-                     && a.Status != AssignmentStatus.RejectedByVendor
-                     && a.Status != AssignmentStatus.RejectedByManager
-                     && a.Status != AssignmentStatus.NoShow)
-            .Select(a => a.CrewId!.Value)
+                     && a.CrewId != null)
             .ToListAsync(ct);
-        var existingSet = existingForShift.ToHashSet();
+        var rowByCrew = shiftRows
+            .GroupBy(a => a.CrewId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        static bool IsTerminal(EventAssignment a) => a.Status is
+            AssignmentStatus.Declined          or
+            AssignmentStatus.RejectedByVendor  or
+            AssignmentStatus.RejectedByManager or
+            AssignmentStatus.NoShow;
+
+        // Guards against a crew appearing twice in one group's member list.
+        var processed = new HashSet<Guid>();
 
         // Phase C step 3: resolve the vendor's quota ONCE before the loop.
         // We then decrement an in-memory counter as we invite, identical
@@ -184,18 +205,38 @@ public sealed class VendorAssignGroupHandler
 
         foreach (var crew in members.OrderBy(c => c.FullName))
         {
-            if (existingSet.Contains(crew.Id))
+            if (!processed.Add(crew.Id)) continue;
+
+            // Existing row on THIS shift: active → genuine duplicate (skip),
+            // terminal → resurrect it rather than inserting a colliding row.
+            rowByCrew.TryGetValue(crew.Id, out var existingRow);
+            var isResurrection = false;
+            if (existingRow is not null)
             {
-                skipped.Add(crew.FullName);
-                continue;
+                if (!IsTerminal(existingRow))
+                {
+                    skipped.Add(crew.FullName);
+                    continue;
+                }
+                isResurrection = true;
             }
+
+            // Capacity applies to resurrections too — a re-invited row flips
+            // back to Invited and therefore occupies a seat again. Matches
+            // VendorAssignCrewHandler, which also capacity-checks both paths.
             if (ev.MaxCrew > 0 && currentSeats >= ev.MaxCrew)
             {
                 failures.Add(new VendorAssignGroupFailureDto(
                     crew.Id, crew.FullName, $"Event is fully staffed (max {ev.MaxCrew})."));
                 continue;
             }
-            if (_quotaEnforced && _quotaRemaining <= 0)
+
+            // Quota gate deliberately SKIPS resurrections, mirroring
+            // VendorAssignCrewHandler's `if (!isResurrection)` branch: a
+            // re-invite refills an already-counted seat, so charging it
+            // against remaining quota would falsely block re-inviting a
+            // rejected crew member with "allocation full".
+            if (!isResurrection && _quotaEnforced && _quotaRemaining <= 0)
             {
                 // Friendly per-crew failure — partial success still wins.
                 failures.Add(new VendorAssignGroupFailureDto(
@@ -204,17 +245,57 @@ public sealed class VendorAssignGroupHandler
                 continue;
             }
 
-            var row = new EventAssignment(req.EventId, crew.Id, req.VendorUserId, req.VendorUserId);
-            row.AttachToShift(_shiftId.Value);
-            _db.EventAssignments.Add(row);
+            EventAssignment row;
+            if (isResurrection && existingRow is not null)
+            {
+                // Flips status back to Invited and clears the previous
+                // response/rejection audit fields. No INSERT → no unique
+                // index collision.
+                existingRow.VendorReInvite(req.VendorUserId);
+                existingRow.UpdatedAt = DateTime.UtcNow;
+                existingRow.UpdatedBy = req.VendorUserId;
+                row = existingRow;
+            }
+            else
+            {
+                row = new EventAssignment(req.EventId, crew.Id, req.VendorUserId, req.VendorUserId);
+                row.AttachToShift(_shiftId.Value);
+                _db.EventAssignments.Add(row);
+                rowByCrew[crew.Id] = row;
+            }
+
             invited.Add((row, crew));
-            existingSet.Add(crew.Id);
             currentSeats++;
-            if (_quotaEnforced) _quotaRemaining--;
+            if (!isResurrection && _quotaEnforced) _quotaRemaining--;
         }
 
+        // Residual-safety net: with the resurrection branch above a 23505 is
+        // no longer expected, but a raw DbUpdateException must never reach the
+        // vendor's Assign Crew modal as wall-of-text SQL. Anything that still
+        // fails is reported as per-crew failures so the UI shows its normal
+        // invited/skipped/failed summary instead of an exception dump. The
+        // whole batch shares one SaveChanges, so a throw means nothing was
+        // committed — every attempted row moves to `failures`.
         if (invited.Count > 0)
-            await _uow.SaveChangesAsync(ct);
+        {
+            try
+            {
+                await _uow.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                foreach (var (_, crew) in invited)
+                    failures.Add(new VendorAssignGroupFailureDto(
+                        crew.Id, crew.FullName,
+                        "Couldn't save this invite — the crew may already have a record on " +
+                        "this shift. Try inviting them individually."));
+
+                return Result.Success(new VendorAssignGroupResultDto(
+                    grp.Id, grp.Name,
+                    0, skipped.Count, failures.Count,
+                    Array.Empty<string>(), skipped, failures));
+            }
+        }
 
         // Fire push notifications post-save so we don't notify on a rolled-back tx.
         foreach (var (row, crew) in invited)

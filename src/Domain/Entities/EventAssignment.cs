@@ -315,7 +315,17 @@ public sealed class EventAssignment : BaseEntity
     /// / NoShow). Flips status back to Invited and clears the rejection
     /// fields so the row looks fresh to the crew.
     /// </summary>
-    public void VendorReInvite(Guid vendorUserId)
+    public void VendorReInvite(Guid vendorUserId) => ReInvite(vendorUserId, vendorUserId);
+
+    /// <summary>
+    /// Same terminal-row resurrection as <see cref="VendorReInvite"/>, but lets
+    /// the caller state the vendor ownership explicitly — including null for a
+    /// manager-direct assignment with no vendor in the middle. Needed by the
+    /// admin/manager AssignCrew path, which may re-assign a previously-rejected
+    /// crew member under a DIFFERENT vendor (or none); VendorReInvite would
+    /// have silently stamped the actor's own id into VendorId.
+    /// </summary>
+    public void ReInvite(Guid? vendorId, Guid assignedByUserId)
     {
         if (CrewId is null)
             throw new InvalidOperationException("Only crew rows can be re-invited here.");
@@ -326,8 +336,8 @@ public sealed class EventAssignment : BaseEntity
             throw new InvalidOperationException("Only terminal-rejected assignments can be re-invited.");
 
         Status            = AssignmentStatus.Invited;
-        VendorId          = vendorUserId;
-        AssignedByUserId  = vendorUserId;
+        VendorId          = vendorId;
+        AssignedByUserId  = assignedByUserId;
         CrewRespondedAt   = null;
         VendorReviewedAt  = null;
         ManagerReviewedAt = null;

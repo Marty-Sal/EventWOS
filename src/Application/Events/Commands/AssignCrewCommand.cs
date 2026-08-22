@@ -105,20 +105,35 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
         // ix_event_assignments_event_crew_shift_unique. Placeholder
         // requests (CrewId == null) skip this branch — multiple
         // placeholders per shift are valid (each anchors a slot).
+        // BUGFIX: the old check only looked for ACTIVE rows and then always
+        // INSERTed, so re-assigning a crew member who holds a terminal row
+        // (Declined / RejectedByVendor / RejectedByManager / NoShow) on this
+        // shift produced a second row for the same (event, crew, shift) tuple
+        // and tripped the partial unique index
+        // ix_event_assignments_event_crew_shift_unique (… WHERE is_deleted =
+        // false) → Postgres 23505 / DbUpdateException. We now fetch the row
+        // itself and resurrect terminal ones in place, matching
+        // VendorAssignCrewHandler.
+        EventAssignment? existingRow = null;
         if (req.CrewId.HasValue)
         {
-            var dupExists = await _db.EventAssignments.AnyAsync(
+            existingRow = await _db.EventAssignments.FirstOrDefaultAsync(
                 a => a.EventId == req.EventId
                   && a.CrewId  == req.CrewId
-                  && a.ShiftId == _shiftId.Value
-                  && a.Status != AssignmentStatus.Declined
-                  && a.Status != AssignmentStatus.RejectedByVendor
-                  && a.Status != AssignmentStatus.RejectedByManager
-                  && a.Status != AssignmentStatus.NoShow, ct);
-            if (dupExists)
-                return Result.Failure<EventAssignmentDto>(new Error(
-                    "Assignment.Duplicate",
-                    "Crew is already assigned to this shift."));
+                  && a.ShiftId == _shiftId.Value, ct);
+
+            if (existingRow is not null)
+            {
+                var isTerminal = existingRow.Status is
+                    AssignmentStatus.Declined          or
+                    AssignmentStatus.RejectedByVendor  or
+                    AssignmentStatus.RejectedByManager or
+                    AssignmentStatus.NoShow;
+                if (!isTerminal)
+                    return Result.Failure<EventAssignmentDto>(new Error(
+                        "Assignment.Duplicate",
+                        "Crew is already assigned to this shift."));
+            }
         }
 
         // Phase D step 9: enforce per-shift capacity using TOTAL reserved
@@ -142,9 +157,23 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
                 $"Shift is fully reserved ({shiftReserved}/{shiftEntity.CrewCount} seats). " +
                 "Revoke a placeholder or increase shift capacity first."));
 
-        var assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorId, req.AssignedByUserId);
-        assignment.AttachToShift(_shiftId.Value);
-        _db.EventAssignments.Add(assignment);
+        EventAssignment assignment;
+        if (existingRow is not null)
+        {
+            // Terminal row on this shift → flip back to Invited in place
+            // (clears the old response/rejection audit fields) instead of
+            // inserting a duplicate that the unique index would reject.
+            existingRow.ReInvite(req.VendorId, req.AssignedByUserId);
+            existingRow.UpdatedAt = DateTime.UtcNow;
+            existingRow.UpdatedBy = req.AssignedByUserId;
+            assignment = existingRow;
+        }
+        else
+        {
+            assignment = new EventAssignment(req.EventId, req.CrewId, req.VendorId, req.AssignedByUserId);
+            assignment.AttachToShift(_shiftId.Value);
+            _db.EventAssignments.Add(assignment);
+        }
         await _uow.SaveChangesAsync(ct);
 
         // Push notifications
