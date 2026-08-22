@@ -31,5 +31,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Application\EventWOS.Application.csproj" />
     <ProjectReference Include="..\..\src\Domain\EventWOS.Domain.csproj" />
+    <!--
+      Added for the Location & Geofencing suite: NominatimLocationService is an
+      Infrastructure concern, and it is tested through a stubbed
+      HttpMessageHandler so no test ever reaches the real OpenStreetMap servers.
+    -->
+    <ProjectReference Include="..\..\src\Infrastructure\EventWOS.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
