@@ -10,7 +10,11 @@ namespace EventWOS.Application.Crew.Queries;
 
 public sealed record GetCrewQuery(
     int Page = 1, int PageSize = 20,
-    string? Search = null, Guid? VendorId = null
+    string? Search = null, Guid? VendorId = null,
+    // Optional exact-match on UserStatus (e.g. "Active", "Rejected") — powers
+    // the "Active Crew" / "Rejected Crew" filter chips on the My Crew page.
+    // Unrecognized/blank values are ignored, same as an omitted filter.
+    string? Status = null
 ) : IRequest<Result<PagedCrewResult>>;
 
 public sealed record PagedCrewResult(
@@ -27,6 +31,9 @@ public sealed class GetCrewHandler : IRequestHandler<GetCrewQuery, Result<PagedC
 
         if (req.VendorId.HasValue)
             query = query.Where(u => u.VendorId == req.VendorId);
+
+        if (!string.IsNullOrWhiteSpace(req.Status) && Enum.TryParse<UserStatus>(req.Status, ignoreCase: true, out var statusFilter))
+            query = query.Where(u => u.Status == statusFilter);
 
         if (!string.IsNullOrWhiteSpace(req.Search))
         {

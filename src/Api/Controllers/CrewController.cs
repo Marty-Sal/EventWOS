@@ -34,6 +34,7 @@ public sealed class CrewController : ControllerBase
     public async Task<IActionResult> GetCrew(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null, [FromQuery] Guid? vendorId = null,
+        [FromQuery] string? status = null,
         CancellationToken ct = default)
     {
         if (!_currentUser.HasPermission("crew:read")) return Forbid();
@@ -43,7 +44,7 @@ public sealed class CrewController : ControllerBase
             ? _currentUser.UserId
             : vendorId;
 
-        var result = await _mediator.Send(new GetCrewQuery(page, pageSize, search, effectiveVendorId), ct);
+        var result = await _mediator.Send(new GetCrewQuery(page, pageSize, search, effectiveVendorId, status), ct);
         return Ok(ApiResponse<PagedCrewResult>.Ok(result.Value));
     }
 

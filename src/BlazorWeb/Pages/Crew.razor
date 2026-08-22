@@ -33,6 +33,20 @@
         </AuthorizeView>
     </div>
 
+    @* Roster stage filter — quickly narrow a large crew list down to just
+       the Active roster or just the ones an Admin rejected during
+       self-registration, instead of paging through everyone. *@
+    <div class="flex gap-2 flex-wrap">
+        @foreach (var tab in _statusTabs)
+        {
+            <button @onclick="() => SetStatusTab(tab)"
+                    class="px-4 py-1.5 rounded-full text-xs font-semibold transition
+                           @(_activeStatusTab == tab ? "bg-indigo-600 text-white shadow" : "bg-white text-gray-500 border border-gray-200 hover:border-indigo-300")">
+                @tab
+            </button>
+        }
+    </div>
+
     <div class="flex flex-wrap gap-3 items-center">
         <div class="relative max-w-sm">
             <input @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp"
@@ -129,12 +143,24 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-gray-50 text-[11px] uppercase tracking-widest text-gray-500">
                         <tr>
-                            <th class="px-4 py-3 text-left font-semibold">Crew</th>
+                            <th class="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-gray-700"
+                                @onclick='() => ToggleSort("name", "name_desc")'>
+                                Crew @SortArrow("name", "name_desc")
+                            </th>
                             <th class="px-4 py-3 text-left font-semibold">Mobile</th>
                             <th class="px-4 py-3 text-left font-semibold">Vendor</th>
-                            <th class="px-4 py-3 text-center font-semibold">Discipline</th>
-                            <th class="px-4 py-3 text-center font-semibold">Events</th>
-                            <th class="px-4 py-3 text-center font-semibold">Status</th>
+                            <th class="px-4 py-3 text-center font-semibold cursor-pointer select-none hover:text-gray-700"
+                                @onclick='() => ToggleSort("discipline_desc", "discipline_asc")'>
+                                Discipline @SortArrow("discipline_desc", "discipline_asc")
+                            </th>
+                            <th class="px-4 py-3 text-center font-semibold cursor-pointer select-none hover:text-gray-700"
+                                @onclick='() => ToggleSort("events_desc", "events_asc")'>
+                                Events @SortArrow("events_desc", "events_asc")
+                            </th>
+                            <th class="px-4 py-3 text-center font-semibold cursor-pointer select-none hover:text-gray-700"
+                                @onclick='() => ToggleSort("status", "status_desc")'>
+                                Status @SortArrow("status", "status_desc")
+                            </th>
                             <th class="px-4 py-3 text-center font-semibold">Details</th>
                         </tr>
                     </thead>
@@ -347,16 +373,50 @@
     private string  _sortKey  = "created_desc";
     private string  _viewMode = "list";
 
+    // ── Roster stage filter ──────────────────────────────────────────────
+    // Server-side (unlike sort, which only reorders the current page) so
+    // "Active Crew" / "Rejected Crew" reflect the WHOLE roster, not just
+    // whatever happened to be on the loaded page — matters once a vendor
+    // has enough crew to paginate.
+    private readonly string[] _statusTabs = { "All", "Active Crew", "Rejected Crew" };
+    private string _activeStatusTab = "All";
+    private string? StatusForTab(string tab) => tab switch
+    {
+        "Active Crew"   => "Active",
+        "Rejected Crew" => "Rejected",
+        _               => null
+    };
+
+    private async Task SetStatusTab(string tab)
+    {
+        if (_activeStatusTab == tab) return;
+        _activeStatusTab = tab;
+        _page = 1;
+        await LoadAsync();
+    }
+
     private IEnumerable<CrewMemberDto> SortCrew(IEnumerable<CrewMemberDto> items) => _sortKey switch
     {
         "created_asc"     => items.OrderBy(c => c.CreatedAt),
         "name"            => items.OrderBy(c => c.FullName, StringComparer.OrdinalIgnoreCase),
+        "name_desc"       => items.OrderByDescending(c => c.FullName, StringComparer.OrdinalIgnoreCase),
         "discipline_desc" => items.OrderByDescending(c => c.DisciplineScore),
         "discipline_asc"  => items.OrderBy(c => c.DisciplineScore),
         "events_desc"     => items.OrderByDescending(c => c.EventsAttended),
+        "events_asc"      => items.OrderBy(c => c.EventsAttended),
         "status"          => items.OrderBy(c => c.Status),
+        "status_desc"     => items.OrderByDescending(c => c.Status),
         _                 => items.OrderByDescending(c => c.CreatedAt)
     };
+
+    /// <summary>Click-to-sort column headers (List view). Clicking a header
+    /// flips between its asc/desc key; repeated clicks toggle back and
+    /// forth. Drives the exact same _sortKey the "sort by" dropdown uses,
+    /// so the dropdown always reflects the last header clicked too.</summary>
+    private void ToggleSort(string keyA, string keyB) => _sortKey = _sortKey == keyA ? keyB : keyA;
+
+    private string SortArrow(string ascKey, string descKey) =>
+        _sortKey == ascKey ? "▲" : _sortKey == descKey ? "▼" : "";
     private System.Timers.Timer? _debounce;
     private bool _showCreate;
     private bool _creating;
@@ -422,7 +482,7 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _crew    = await VendorApi.GetCrewAsync(_page, _search);
+        _crew    = await VendorApi.GetCrewAsync(_page, _search, status: StatusForTab(_activeStatusTab));
         _loading = false;
     }
 
@@ -476,9 +536,12 @@
 
     private static string StatusColor(string s) => s switch
     {
-        "Active"    => "bg-green-50 text-green-700 border border-green-100",
-        "Suspended" => "bg-amber-50 text-amber-700 border border-amber-100",
-        _           => "bg-gray-100 text-gray-500"
+        "Active"      => "bg-green-50 text-green-700 border border-green-100",
+        "Suspended"   => "bg-amber-50 text-amber-700 border border-amber-100",
+        "Pending"     => "bg-blue-50 text-blue-700 border border-blue-100",
+        "Rejected"    => "bg-red-50 text-red-700 border border-red-100",
+        "Deactivated" => "bg-gray-100 text-gray-500 border border-gray-200",
+        _             => "bg-gray-100 text-gray-500"
     };
 
     private static string DisciplineColor(decimal score) => score >= 80
