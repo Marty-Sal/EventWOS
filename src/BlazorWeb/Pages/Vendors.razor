@@ -94,12 +94,24 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-gray-50 border-b border-gray-100 text-[11px] uppercase tracking-widest text-gray-500">
                     <tr>
-                        <th class="text-left px-5 py-3 font-semibold">Vendor</th>
+                        <th class="text-left px-5 py-3 font-semibold cursor-pointer select-none hover:text-gray-700"
+                            @onclick='() => ToggleSort("name", "name_desc")'>
+                            Vendor @SortArrow("name", "name_desc")
+                        </th>
                         <th class="text-left px-5 py-3 font-semibold">Mobile</th>
                         <th class="text-left px-5 py-3 font-semibold">Referral</th>
-                        <th class="text-left px-5 py-3 font-semibold">Rating</th>
-                        <th class="text-left px-5 py-3 font-semibold">Crew</th>
-                        <th class="text-left px-5 py-3 font-semibold">Status</th>
+                        <th class="text-left px-5 py-3 font-semibold cursor-pointer select-none hover:text-gray-700"
+                            @onclick='() => ToggleSort("rating_desc", "rating_asc")'>
+                            Rating @SortArrow("rating_desc", "rating_asc")
+                        </th>
+                        <th class="text-left px-5 py-3 font-semibold cursor-pointer select-none hover:text-gray-700"
+                            @onclick='() => ToggleSort("crew_desc", "crew_asc")'>
+                            Crew @SortArrow("crew_desc", "crew_asc")
+                        </th>
+                        <th class="text-left px-5 py-3 font-semibold cursor-pointer select-none hover:text-gray-700"
+                            @onclick='() => ToggleSort("status", "status_desc")'>
+                            Status @SortArrow("status", "status_desc")
+                        </th>
                         <th class="px-5 py-3"></th>
                     </tr>
                 </thead>
@@ -353,12 +365,24 @@
     {
         "created_asc" => items.OrderBy(v => v.CreatedAt),
         "name"        => items.OrderBy(v => v.FullName, StringComparer.OrdinalIgnoreCase),
+        "name_desc"   => items.OrderByDescending(v => v.FullName, StringComparer.OrdinalIgnoreCase),
         "rating_desc" => items.OrderByDescending(v => v.Rating ?? -1),
         "rating_asc"  => items.OrderBy(v => v.Rating ?? decimal.MaxValue),
         "crew_desc"   => items.OrderByDescending(v => v.CrewCount),
+        "crew_asc"    => items.OrderBy(v => v.CrewCount),
         "status"      => items.OrderBy(v => v.Status),
+        "status_desc" => items.OrderByDescending(v => v.Status),
         _             => items.OrderByDescending(v => v.CreatedAt)
     };
+
+    /// <summary>Click-to-sort column headers, same convention as Crew.razor's
+    /// ToggleSort/SortArrow — flips between a header's asc/desc key and
+    /// keeps the "sort by" dropdown in sync with whichever header was
+    /// last clicked (they both just read/write _sortKey).</summary>
+    private void ToggleSort(string keyA, string keyB) => _sortKey = _sortKey == keyA ? keyB : keyA;
+
+    private string SortArrow(string ascKey, string descKey) =>
+        _sortKey == ascKey ? "▲" : _sortKey == descKey ? "▼" : "";
 
     private bool _showCreate;
     private bool _creating;
