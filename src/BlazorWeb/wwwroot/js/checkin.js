@@ -161,14 +161,87 @@ window.eventwosCheckin.requireLocation = async function () {
     if (typeof window.isSecureContext === "boolean" && !window.isSecureContext) {
         return { ok: false, reason: "no-secure-context" };
     }
+    // ── Converging on a usable fix ────────────────────────────────────
+    // A single getCurrentPosition call returns whatever the device has
+    // ready, and the FIRST high-accuracy answer indoors is often still a
+    // WiFi estimate hundreds of metres out — the GPS chip needs a few
+    // seconds to settle. That is why two check-ins minutes apart at one
+    // venue could land in different suburbs.
+    //
+    // So we watch instead of asking once: keep the most accurate fix seen,
+    // stop as soon as it is good enough, and give up after a fixed budget
+    // and use the best we got. Crucially we still return SOMETHING as long
+    // as one fix arrived — never block a check-in on precision.
+    const GOOD_ENOUGH_METRES = 50;    // stop early at this or better
+    const MAX_WAIT_MS        = 12000; // hard budget; crew are waiting
+    const HARD_TIMEOUT_MS    = 20000; // cold GPS start indoors
+    // If a fix arrives and nothing better follows within this window, take it.
+    // Without this, a desktop (one WiFi fix that never improves) would make
+    // every check-in sit through the full budget for no gain.
+    const STALL_MS           = 4000;
+
     return await new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
+        let best = null;
+        let watchId = null;
+        let settled = false;
+        let timer = null;
+        let stallTimer = null;
+
+        const cleanup = () => {
+            if (watchId !== null && navigator.geolocation.clearWatch) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            if (timer !== null) { clearTimeout(timer); timer = null; }
+            if (stallTimer !== null) { clearTimeout(stallTimer); stallTimer = null; }
+        };
+
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(result);
+        };
+
+        const emitBest = (fallbackReason) => {
+            if (!best) return finish({ ok: false, reason: fallbackReason });
+            const lat = best.coords.latitude.toFixed(6);
+            const lng = best.coords.longitude.toFixed(6);
+            const accuracy = typeof best.coords.accuracy === "number"
+                ? Math.round(best.coords.accuracy)
+                : null;
+            finish({ ok: true, coords: `${lat},${lng}`, accuracy });
+        };
+
+        // Budget expired — go with the best fix so far rather than failing.
+        timer = setTimeout(() => emitBest("timeout"), MAX_WAIT_MS);
+
+        watchId = navigator.geolocation.watchPosition(
             (pos) => {
-                const lat = pos.coords.latitude.toFixed(6);
-                const lng = pos.coords.longitude.toFixed(6);
-                resolve({ ok: true, coords: `${lat},${lng}` });
+                const acc = typeof pos.coords.accuracy === "number"
+                    ? pos.coords.accuracy
+                    : Number.POSITIVE_INFINITY;
+                const bestAcc = best && typeof best.coords.accuracy === "number"
+                    ? best.coords.accuracy
+                    : Number.POSITIVE_INFINITY;
+
+                const improved = !best || acc < bestAcc;
+                if (improved) best = pos;
+
+                // Good enough — stop burning battery and let the check-in run.
+                if (acc <= GOOD_ENOUGH_METRES) return emitBest("timeout");
+
+                // Otherwise give the chip a chance to improve, but only briefly.
+                if (improved) {
+                    if (stallTimer !== null) clearTimeout(stallTimer);
+                    stallTimer = setTimeout(() => emitBest("timeout"), STALL_MS);
+                }
             },
             (err) => {
+                // A late error after we already have a fix is irrelevant —
+                // prefer the coordinates we hold over reporting a failure.
+                if (best) return emitBest("timeout");
+
                 // GeolocationPositionError codes:
                 //   1 = PERMISSION_DENIED
                 //   2 = POSITION_UNAVAILABLE (GPS off, no signal, etc.)
@@ -178,9 +251,12 @@ window.eventwosCheckin.requireLocation = async function () {
                     code === 1 ? "denied" :
                     code === 3 ? "timeout" :
                     "unavailable";
-                resolve({ ok: false, reason });
+                finish({ ok: false, reason });
             },
-            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+            // maximumAge: 0 — never accept a cached position. A minute-old fix
+            // may be from the previous location entirely and would be recorded
+            // as though taken at the moment of tapping.
+            { enableHighAccuracy: true, timeout: HARD_TIMEOUT_MS, maximumAge: 0 }
         );
     });
 };

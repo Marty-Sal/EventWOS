@@ -140,7 +140,12 @@ public sealed class GeoLocationService : IGeoLocationService, IDisposable
             var url = $"reverse?format=jsonv2" +
                       $"&lat={lat.ToString("0.######", CultureInfo.InvariantCulture)}" +
                       $"&lon={lng.ToString("0.######", CultureInfo.InvariantCulture)}" +
-                      $"&zoom=14&addressdetails=1";
+                      // zoom=18 is building level. It was 14 (neighbourhood), which is
+                      // why an attendance row could only ever say "Amrut Nagar, Thane" —
+                      // the provider was never asked for anything finer. For an
+                      // attendance audit trail the useful answer is which building or
+                      // street, not which suburb.
+                      $"&zoom=18&addressdetails=1";
 
             using var resp = await _http.GetAsync(url, ct);
             if (!resp.IsSuccessStatusCode)
@@ -156,6 +161,11 @@ public sealed class GeoLocationService : IGeoLocationService, IDisposable
             if (!doc.RootElement.TryGetProperty("address", out var addr))
                 return null;
 
+            // The matched feature's own name ("Mahalaxmi Racecourse", "Gate 3").
+            // At zoom 18 this is usually the single most recognisable thing about
+            // a fix, so it outranks every address component below.
+            var featureName = TryGetRoot(doc.RootElement, "name");
+
             // Build "Locality, City" (or the best available pair) —
             // Nominatim\'s address block has many optional fields; we
             // pick the two most human-recognisable ones for India-ish
@@ -163,8 +173,33 @@ public sealed class GeoLocationService : IGeoLocationService, IDisposable
             // any admin field because it matches how people describe
             // where they are ("Airoli, Navi Mumbai" not "Airoli,
             // Thane, Maharashtra").
-            string? primary   = TryGet(addr, "suburb", "neighbourhood", "hamlet", "village", "town", "quarter", "city_district");
-            string? secondary = TryGet(addr, "city", "town", "municipality", "county");
+            // Precision ladder, most specific first. Two segments only — this label
+            // sits in a table cell, so "precise" must not mean "long".
+            //
+            //   1. the named place        "Mahalaxmi Racecourse"
+            //   2. house number + road    "12, Ghodbunder Road"
+            //   3. road alone             "Ghodbunder Road"
+            //   4. suburb                 "Amrut Nagar"      (the old behaviour)
+            //
+            // The locality then follows as context, so a reader gets "where
+            // exactly" and "roughly where" in one short string.
+            var houseNumber = TryGet(addr, "house_number");
+            var road        = TryGet(addr, "road", "pedestrian", "footway", "residential");
+            var locality    = TryGet(addr, "suburb", "neighbourhood", "hamlet", "quarter", "city_district", "village");
+
+            string? primary =
+                featureName
+                ?? (road is not null && houseNumber is not null ? $"{houseNumber}, {road}" : null)
+                ?? road
+                ?? locality
+                ?? TryGet(addr, "town", "village");
+
+            // Secondary is the next rung DOWN in specificity from whatever won, so
+            // the two segments never restate each other.
+            string? secondary =
+                primary is not null && !string.Equals(primary, locality, StringComparison.OrdinalIgnoreCase)
+                    ? locality ?? TryGet(addr, "city", "town", "municipality", "county")
+                    : TryGet(addr, "city", "town", "municipality", "county");
 
             // If primary == secondary (small towns Nominatim reports
             // twice), collapse and step out to the state.
@@ -176,7 +211,20 @@ public sealed class GeoLocationService : IGeoLocationService, IDisposable
                         .Where(s => !string.IsNullOrWhiteSpace(s))
                         .ToArray();
 
-            return parts.Length > 0 ? string.Join(", ", parts) : null;
+            if (parts.Length == 0) return null;
+
+            // Keep it short enough for a table cell. Some features have genuinely
+            // enormous names ("Chhatrapati Shivaji Maharaj International Airport
+            // Terminal 2"), and at zoom 18 we hit those far more often than at 14.
+            // Drop the context segment before truncating, because a whole name
+            // plus no locality reads better than half a name plus a locality.
+            var label = string.Join(", ", parts);
+            if (label.Length > MaxLabelLength && parts.Length > 1)
+                label = parts[0]!;
+
+            return label.Length <= MaxLabelLength
+                ? label
+                : label[..(MaxLabelLength - 1)].TrimEnd(',', ' ') + "\u2026";
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -191,6 +239,13 @@ public sealed class GeoLocationService : IGeoLocationService, IDisposable
         }
     }
 
+    /// <summary>
+    /// Reads a string from the response ROOT (not the address block) — used for
+    /// the matched feature's "name". Same null-tolerance as TryGet.
+    /// </summary>
+    private static string? TryGetRoot(JsonElement root, params string[] keys)
+        => TryGet(root, keys);
+
     private static string? TryGet(JsonElement addr, params string[] keys)
     {
         foreach (var k in keys)
@@ -201,6 +256,13 @@ public sealed class GeoLocationService : IGeoLocationService, IDisposable
             }
         return null;
     }
+
+    /// <summary>
+    /// Display cap for the location label. This is a UI constraint, not a
+    /// storage one: the column is unbounded, but the value lands in a narrow
+    /// table cell on a phone. Chosen to fit "Named Place, Locality" comfortably.
+    /// </summary>
+    private const int MaxLabelLength = 60;
 
     private static void EvictHalf()
     {
