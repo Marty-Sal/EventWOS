@@ -44,6 +44,20 @@ public static class FileValidationPolicy
     };
 
     /// <summary>
+    /// Every extension that legitimately goes with a declared content-type.
+    /// Used to reject MISMATCHED pairs — see Validate() below for why passing
+    /// both allow-lists separately isn't enough.
+    /// </summary>
+    private static string[] ExtensionsForContentType(string contentType) => contentType.ToLowerInvariant() switch
+    {
+        "image/jpeg"      => new[] { ".jpg", ".jpeg" },
+        "image/png"       => new[] { ".png" },
+        "image/webp"      => new[] { ".webp" },
+        "application/pdf" => new[] { ".pdf" },
+        _ => Array.Empty<string>()
+    };
+
+    /// <summary>
     /// Full server-side check: size, declared content-type, AND the actual
     /// file-extension the client sent (defense in depth — a mismatched
     /// extension/content-type pair is rejected rather than silently trusted).
@@ -65,6 +79,16 @@ public static class FileValidationPolicy
         var ext = Path.GetExtension(originalFileName);
         if (string.IsNullOrEmpty(ext) || !rule.AllowedExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))
             return (false, $"File extension '{ext}' is not allowed for this document type.");
+
+        // The extension and the content-type must also agree with EACH OTHER.
+        // Checking them only against their own allow-lists leaves a hole: for a
+        // profile photo, "image/jpeg" and ".png" are both individually allowed,
+        // so a file declaring one and named the other sailed through — exactly
+        // the shape of a spoofing attempt, and it would then be stored with a
+        // filename that contradicts how it gets served back.
+        var validExts = ExtensionsForContentType(contentType);
+        if (validExts.Length > 0 && !validExts.Contains(ext, StringComparer.OrdinalIgnoreCase))
+            return (false, $"File extension '{ext}' does not match the declared content-type '{contentType}'.");
 
         return (true, null);
     }

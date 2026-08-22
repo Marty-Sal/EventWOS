@@ -37,7 +37,12 @@ public sealed class RegisterCrewValidatorTests
         DateTime? dateOfBirth = null,
         string? referralCode = "ABC123",
         int? experience = 3,
-        FileUploadPayload? identificationProof = null)
+        FileUploadPayload? identificationProof = null,
+        // The identificationProof parameter coalesces to a valid file so most
+        // tests don't have to supply one. That makes it impossible to test the
+        // MISSING case through it (null just becomes the valid default), hence
+        // this explicit flag.
+        bool omitIdentificationProof = false)
         => new(
             Username:            username!,
             Email:               email!,
@@ -50,7 +55,7 @@ public sealed class RegisterCrewValidatorTests
             Skills:              "Rigging",
             ExperienceYears:     experience,
             Bio:                 null,
-            IdentificationProof: identificationProof ?? ValidIdProof,
+            IdentificationProof: omitIdentificationProof ? null! : (identificationProof ?? ValidIdProof),
             ProfilePhoto:        null,
             TermsAccepted:       true,
             TermsVersion:        1);
@@ -214,7 +219,7 @@ public sealed class RegisterCrewValidatorTests
     [Fact]
     public void IdentificationProof_missing_fails()
     {
-        var result = _sut.TestValidate(Valid(identificationProof: null!));
+        var result = _sut.TestValidate(Valid(omitIdentificationProof: true));
         result.ShouldHaveValidationErrorFor(x => x.IdentificationProof)
               .WithErrorMessage("Identification proof (Aadhaar card, driving licence, or voter ID) is required.");
     }
