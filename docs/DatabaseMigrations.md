@@ -26,10 +26,35 @@ just sits pending forever unless you do the second step below.
 ## The second step: the emergency schema patch
 
 `Program.cs` also runs an **idempotent raw-SQL patch** (`emergencySchemaPatchSql`)
-on **every single boot**, regardless of the migration gate. It's a big
-`DO $$ ... END $$` block full of `CREATE TABLE IF NOT EXISTS`,
-`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, etc. — safe to run repeatedly,
-safe on both a brand-new empty database and a fully-migrated one.
+on **every single boot**, regardless of the migration gate. It's a long list of
+`CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, etc.
+— safe to run repeatedly, safe on both a brand-new empty database and a
+fully-migrated one.
+
+### It runs section by section — keep the section headers intact
+
+The patch text is **split on its `-- === name ===` header comments**, and each
+section is executed as its own `DO $$ ... END $$` block with its own
+try/catch. This matters: Postgres aborts an entire `DO` block on the first
+error, so while the patch was ONE block, a single bad statement silently
+discarded every statement after it. That is how the whole back half of the
+patch stopped reaching production unnoticed — `ALTER TABLE user_sessions` threw
+`42P01` (the table only existed in migrations, which the gate skips) and killed
+~1000 lines of downstream patching on every boot, while the app booted "fine"
+because the patch is deliberately non-fatal.
+
+Consequences for anyone editing the patch:
+
+- **Put new SQL under a `-- === name ===` header.** Anything before the first
+  header is never executed.
+- **Don't let a statement span two sections** (no `IF` opened in one section
+  and closed in the next) — each section must be valid PL/pgSQL on its own.
+- **A table your section ALTERs must be CREATEd in the same or an earlier
+  section.** Migrations do not run on normal deploys, so never assume a table
+  exists just because `InitialCreate` makes it.
+- Check the boot log: `Emergency schema patch complete (N/34 sections).` means
+  clean. `PARTIALLY applied` lists the failed section names, and each failure
+  logs its Postgres `Where=` / `Detail=`.
 
 **Any new table (and any new column on an existing table) must get a
 matching block added there**, mirroring the migration. Search that file for
@@ -56,6 +81,14 @@ seeding there too — it already runs on every boot and is non-fatal.
    ```
    A `42P01: relation "..." does not exist` means step 2 was skipped or
    didn't match what the migration created.
+5. Sanity-check the patch SQL locally before pushing — it is never validated at
+   build time. Both of these are quick:
+   ```
+   # parse-only, no server needed
+   pip install pglast && python3 -c "from pglast import parse_sql; ..."
+   # or run it for real against a throwaway database
+   apt-get install -y postgresql-15 && initdb ... && psql -f patch.sql
+   ```
 
 ## If you ever DO need to run real migrations
 

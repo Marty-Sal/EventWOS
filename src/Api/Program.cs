@@ -738,9 +738,9 @@ try
         // in try/catch so a patch failure can never brick startup. The schema of
         // record is EF migrations, which already ran above.
         Log.Information("Applying emergency schema patch...");
+        // Section bodies only -- no surrounding DO/BEGIN/END. The runner below
+        // wraps and executes each ""=== name ==="" section as its own block.
         string emergencySchemaPatchSql = @"
-DO $$
-BEGIN
     -- ═══ users ═══════════════════════════════════════════════════════════════
     ALTER TABLE users ADD COLUMN IF NOT EXISTS manager_id UUID;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS device_id VARCHAR(255);
@@ -1919,8 +1919,36 @@ BEGIN
     CREATE UNIQUE INDEX IF NOT EXISTS ux_announcement_reads_pair
         ON event_announcement_reads (announcement_id, user_id);
 
-END $$;
 ";
+        // Split into sections and run each as its OWN block. Postgres aborts an
+        // entire DO block on the first error, so while this was one giant block a
+        // single bad statement silently discarded every statement after it -- that
+        // is precisely how the whole back half of this patch (event_announcements
+        // included) stopped reaching the database, unnoticed, on every boot. See
+        // the user_sessions comment above for the outage that exposed it.
+        // Now one bad section costs only that section, and the log names it.
+        var patchMarker   = "\u2550\u2550\u2550";   // the rule character in the section headers
+        var patchSections = new List<(string Name, System.Text.StringBuilder Sql)>();
+        foreach (var patchLine in emergencySchemaPatchSql.Split('\n'))
+        {
+            if (patchLine.TrimStart().StartsWith("--", StringComparison.Ordinal)
+                && patchLine.Contains(patchMarker, StringComparison.Ordinal))
+            {
+                var sectionName = patchLine.Trim().TrimStart('-').Trim().Trim('\u2550').Trim();
+                patchSections.Add((
+                    string.IsNullOrWhiteSpace(sectionName) ? $"section {patchSections.Count + 1}" : sectionName,
+                    new System.Text.StringBuilder()));
+            }
+            else if (patchSections.Count > 0)
+            {
+                // StringBuilder is a reference, so appending through the tuple copy
+                // still writes to the section's own buffer.
+                patchSections[^1].Sql.AppendLine(patchLine);
+            }
+        }
+
+        var patchApplied = 0;
+        var patchFailed  = new List<string>();
         try
         {
             // Raw ADO.NET command on the underlying connection: EF Core does not
@@ -1929,29 +1957,52 @@ END $$;
             if (patchConn.State != System.Data.ConnectionState.Open)
                 await patchConn.OpenAsync();
 
-            await using var patchCmd = patchConn.CreateCommand();
-            patchCmd.CommandText = emergencySchemaPatchSql;
-            patchCmd.CommandTimeout = 180;
-            await patchCmd.ExecuteNonQueryAsync();
+            foreach (var (sectionName, sectionSql) in patchSections)
+            {
+                var sectionBody = sectionSql.ToString();
+                if (string.IsNullOrWhiteSpace(sectionBody)) continue;
 
-            Log.Information("Emergency schema patch complete.");
+                try
+                {
+                    await using var patchCmd = patchConn.CreateCommand();
+                    patchCmd.CommandText    = "DO $$\nBEGIN\n" + sectionBody + "\nEND $$;";
+                    patchCmd.CommandTimeout = 180;
+                    await patchCmd.ExecuteNonQueryAsync();
+                    patchApplied++;
+                }
+                catch (Exception sectionEx)
+                {
+                    // Reflection keeps this free of a compile-time Npgsql dependency
+                    // while still surfacing PostgresException.Where / .Detail, which
+                    // name the exact statement that failed.
+                    patchFailed.Add(sectionName);
+                    var st = sectionEx.GetType();
+                    Log.Error("Schema patch section FAILED (non-fatal) -> [{Section}] {ExType}: {Message} | Where={Where} | Detail={Detail}",
+                        sectionName, st.Name, sectionEx.Message.Replace('\n', ' '),
+                        (st.GetProperty("Where")?.GetValue(sectionEx) as string)?.Replace('\n', ' ') ?? "(none)",
+                        (st.GetProperty("Detail")?.GetValue(sectionEx) as string)?.Replace('\n', ' ') ?? "(none)");
+                }
+            }
+
+            // One summary line either way -- Railway caps logs at 500/sec, so
+            // successful sections stay quiet and only the total is reported.
+            if (patchFailed.Count == 0)
+                Log.Information("Emergency schema patch complete ({Applied}/{Total} sections).",
+                    patchApplied, patchSections.Count);
+            else
+                Log.Error("Emergency schema patch PARTIALLY applied ({Applied}/{Total} sections). Failed: {Failed}",
+                    patchApplied, patchSections.Count, string.Join(", ", patchFailed));
         }
         catch (Exception patchEx)
         {
-            // Reflection keeps this free of a compile-time Npgsql dependency while
-            // still surfacing PostgresException.Where / .Detail, which name the
-            // exact SQL statement that failed. ex.Message already carries SqlState.
-            var t = patchEx.GetType();
-            var pgWhere = t.GetProperty("Where")?.GetValue(patchEx) as string;
-            var pgDetail = t.GetProperty("Detail")?.GetValue(patchEx) as string;
-
-            Log.Error("Emergency schema patch SKIPPED (non-fatal, startup continues) -> {ExType}: {Message} | Where={Where} | Detail={Detail} | Inner={Inner}",
-                t.Name,
+            // Connection-level failure: nothing was applied at all.
+            var t2 = patchEx.GetType();
+            Log.Error("Emergency schema patch SKIPPED entirely (non-fatal, startup continues) -> {ExType}: {Message} | Inner={Inner}",
+                t2.Name,
                 patchEx.Message.Replace('\n', ' '),
-                string.IsNullOrWhiteSpace(pgWhere) ? "(none)" : pgWhere.Replace('\n', ' '),
-                string.IsNullOrWhiteSpace(pgDetail) ? "(none)" : pgDetail.Replace('\n', ' '),
                 patchEx.InnerException?.Message?.Replace('\n', ' ') ?? "(none)");
         }
+
         // NON-FATAL: a seeding hiccup must not put the container into a
         // crash-restart loop (Railway then gives up and the whole deploy fails).
         // Boot anyway and log a concise, greppable error instead.
