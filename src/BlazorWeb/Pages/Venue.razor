@@ -4,6 +4,8 @@
 @using System.Net.Http
 @using System.Net.Http.Json
 @using EventWOS.BlazorWeb.Components
+@using EventWOS.BlazorWeb.Services
+@inject ILocationApiService LocationApi
 
 <PageTitle>Settings — Venue — EventWOS</PageTitle>
 
@@ -95,7 +97,9 @@
                     {
                         <tr class="hover:bg-gray-50 transition">
                             <td class="px-5 py-3 font-semibold text-gray-800">@v.Name</td>
-                            <td class="px-5 py-3 text-gray-500">@v.AddressLine1</td>
+                            <td class="px-5 py-3 text-gray-500">
+                                @(string.IsNullOrWhiteSpace(v.ShortAddress) ? v.AddressLine1 : v.ShortAddress)
+                            </td>
                             <td class="px-5 py-3 text-gray-500">@v.City@(string.IsNullOrEmpty(v.State) ? "" : $", {v.State}")</td>
                             <td class="px-5 py-3 text-gray-400 text-xs">
                                 @(v.Latitude is null ? "—" : $"{v.Latitude:F5}, {v.Longitude:F5}")
@@ -207,17 +211,60 @@
                                class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-xs text-gray-500 mb-1 block">Latitude (optional — for geofencing later)</label>
-                        <input @bind="_form.Latitude" type="number" step="any"
-                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                @* ── Location ────────────────────────────────────────────
+                   Search fills the address fields AND the coordinates in one
+                   step, then the pin can be nudged to the exact gate/entrance.
+                   Raw lat/lng inputs are kept below as a fallback: search can't
+                   find every venue, and an admin with survey coordinates
+                   shouldn't be forced through a map. *@
+                <div class="pt-2 border-t border-gray-100 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-sm font-semibold text-gray-700">Location</h4>
+                        @if (_form.Latitude is not null)
+                        {
+                            <span class="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+                                Coordinates set
+                            </span>
+                        }
+                        else
+                        {
+                            @* Say why it matters — an admin who skips this can't
+                               enable location verification on their events. *@
+                            <span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
+                                  title="Events at this venue can't use location verification until coordinates are saved.">
+                                No coordinates yet
+                            </span>
+                        }
                     </div>
-                    <div>
-                        <label class="text-xs text-gray-500 mb-1 block">Longitude (optional)</label>
-                        <input @bind="_form.Longitude" type="number" step="any"
-                               class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
+
+                    <LocationSearchBox Label="Search for this venue"
+                                       Placeholder="e.g. Millennium Business Park, Navi Mumbai"
+                                       OnSelected="ApplySearchResult" />
+
+                    <LocationMap @ref="_map"
+                                 Latitude="ToDecimal(_form.Latitude)"
+                                 Longitude="ToDecimal(_form.Longitude)"
+                                 Draggable="true"
+                                 Height="240px"
+                                 OnPositionChanged="OnPinMoved" />
+
+                    <details class="text-xs">
+                        <summary class="cursor-pointer text-gray-500 hover:text-gray-700">
+                            Enter coordinates manually
+                        </summary>
+                        <div class="grid grid-cols-2 gap-3 mt-2">
+                            <div>
+                                <label class="text-xs text-gray-500 mb-1 block">Latitude</label>
+                                <input @bind="_form.Latitude" type="number" step="any"
+                                       class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-500 mb-1 block">Longitude</label>
+                                <input @bind="_form.Longitude" type="number" step="any"
+                                       class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                            </div>
+                        </div>
+                    </details>
                 </div>
                 <div>
                     <label class="text-xs text-gray-500 mb-1 block">Notes (optional)</label>
@@ -331,6 +378,7 @@
         _form = new VenueForm
         {
             Name = v.Name, AddressLine1 = v.AddressLine1, AddressLine2 = v.AddressLine2,
+            ShortAddress = v.ShortAddress,
             City = v.City, State = v.State, PostalCode = v.PostalCode, Country = v.Country,
             Latitude = v.Latitude, Longitude = v.Longitude, Notes = v.Notes
         };
@@ -339,6 +387,80 @@
     }
 
     private void CloseModal() { _modalOpen = false; _formError = null; }
+
+    // ── Location picker wiring ──────────────────────────────────────────────
+
+    private LocationMap? _map;
+
+    /// <summary>
+    /// Apply a search suggestion to the form.
+    ///
+    /// Address fields are only FILLED IN, never overwritten once the admin has
+    /// typed something: the geocoder is often wrong about unit numbers and hall
+    /// names, and silently replacing hand-entered text would destroy the more
+    /// accurate value. Coordinates are the exception — they're the whole point of
+    /// picking a suggestion, so they always take the new value.
+    /// </summary>
+    private void ApplySearchResult(LocationSuggestion s)
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name))
+            _form.Name = Truncate(s.Name, 120);
+
+        if (string.IsNullOrWhiteSpace(_form.AddressLine1))
+            _form.AddressLine1 = Truncate(string.IsNullOrWhiteSpace(s.FullAddress) ? s.Name : s.FullAddress, 200);
+
+        // ShortAddress always comes from the provider's structured components —
+        // it exists precisely because the admin shouldn't have to compose it.
+        _form.ShortAddress = Truncate(s.ShortAddress, 200);
+
+        _form.Latitude  = (double)s.Latitude;
+        _form.Longitude = (double)s.Longitude;
+
+        // Clear any stale "required field" error the pick may have just resolved.
+        _formError = null;
+    }
+
+    /// <summary>
+    /// The admin dragged the pin. Coordinates win immediately (that exact point
+    /// is what gets geofenced); the address is refreshed in the background and is
+    /// allowed to fail silently, because a missing label must not block the save.
+    /// </summary>
+    private async Task OnPinMoved((decimal Latitude, decimal Longitude) pos)
+    {
+        _form.Latitude  = (double)pos.Latitude;
+        _form.Longitude = (double)pos.Longitude;
+        StateHasChanged();
+
+        var detail = await LocationApi.ReverseGeocodeAsync(pos.Latitude, pos.Longitude);
+        if (detail is null) return; // middle of a field — keep the coordinates, skip the label
+
+        // Only fill blanks, same reasoning as ApplySearchResult: dragging the pin
+        // is a positioning gesture, not a request to rewrite the address.
+        if (string.IsNullOrWhiteSpace(_form.City)       && !string.IsNullOrWhiteSpace(detail.City))
+            _form.City = Truncate(detail.City!, 200);
+        if (string.IsNullOrWhiteSpace(_form.State)      && !string.IsNullOrWhiteSpace(detail.State))
+            _form.State = detail.State;
+        if (string.IsNullOrWhiteSpace(_form.PostalCode) && !string.IsNullOrWhiteSpace(detail.PostalCode))
+            _form.PostalCode = Truncate(detail.PostalCode!, 20);
+        if (string.IsNullOrWhiteSpace(_form.Country)    && !string.IsNullOrWhiteSpace(detail.Country))
+            _form.Country = Truncate(detail.Country!, 100);
+        if (string.IsNullOrWhiteSpace(_form.AddressLine1) && !string.IsNullOrWhiteSpace(detail.Address))
+            _form.AddressLine1 = Truncate(detail.Address!, 200);
+
+        StateHasChanged();
+    }
+
+    /// <summary>double? -> decimal? for the map component, which speaks decimal.</summary>
+    private static decimal? ToDecimal(double? v)
+        => v is null ? null : Math.Round((decimal)v.Value, 6);
+
+    /// <summary>
+    /// Provider strings can exceed our column widths (display_name is routinely
+    /// 150+ chars). Trim client-side so the save fails on real validation
+    /// problems, not on a length the admin never chose.
+    /// </summary>
+    private static string Truncate(string value, int max)
+        => value.Length <= max ? value : value[..max];
 
     private async Task SaveAsync()
     {
@@ -407,6 +529,8 @@
         public string  Name         { get; set; } = "";
         public string  AddressLine1 { get; set; } = "";
         public string? AddressLine2 { get; set; }
+        /// <summary>Compact display label captured from search — see Venue.ShortAddress.</summary>
+        public string? ShortAddress { get; set; }
         public string  City         { get; set; } = "";
         public string? State        { get; set; }
         public string? PostalCode   { get; set; }
@@ -417,7 +541,7 @@
     }
 
     public sealed record VenueDto(
-        Guid Id, string Name, string AddressLine1, string? AddressLine2, string City,
+        Guid Id, string Name, string AddressLine1, string? AddressLine2, string? ShortAddress, string City,
         string? State, string? PostalCode, string? Country, double? Latitude, double? Longitude,
         string? Notes, bool IsArchived, DateTime CreatedAt, DateTime? UpdatedAt);
 
