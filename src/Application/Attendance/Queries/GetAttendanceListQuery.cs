@@ -28,7 +28,12 @@ public sealed record AttendanceListItemDto(
     // can still have ShiftId = null on the assignment.
     string?  ShiftScopeName = null,  // "Box Office" / "F&B" / "Security"
     DateTime? ShiftStartAt  = null,  // UTC
-    DateTime? ShiftEndAt    = null   // UTC; null if shift has no defined end
+    DateTime? ShiftEndAt    = null,  // UTC; null if shift has no defined end
+    // The EVENT's own start (UTC). Distinct from both RecordedAt and
+    // ShiftStartAt: crew regularly check in the evening before an early shift,
+    // so "when the event is" and "when they tapped" are genuinely different
+    // dates. The history table shows both rather than making the reader guess.
+    DateTime  EventStartAt  = default
 );
 
 // ── Admin/Manager: filterable list ───────────────────────────────────────────
@@ -124,7 +129,8 @@ public sealed class GetAttendanceListHandler
                 r.Id,
                 r.AssignmentId,
                 r.EventId,
-                EventTitle = r.Event.Title,
+                EventTitle   = r.Event.Title,
+                EventStartAt = r.Event.StartAt,
                 r.CrewId,
                 CrewName   = r.Crew.FullName,
                 Action     = r.Action.ToString(),
@@ -168,7 +174,7 @@ public sealed class GetAttendanceListHandler
             x.Id, x.AssignmentId, x.EventId, x.EventTitle,
             x.CrewId, x.CrewName, x.Action,
             x.RecordedAt, x.LocationAddress, x.LocationCoords, x.RecordedByUserId, x.RecordedByName,
-            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt)).ToList();
+            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt, x.EventStartAt)).ToList();
 
         return Result.Success(PagedResult<AttendanceListItemDto>.Create(
             dtos, total, req.PageNumber, req.All ? Math.Max(dtos.Count, 1) : req.PageSize));
@@ -205,6 +211,7 @@ public sealed class GetMyAttendanceHandler
             .Select(r => new
             {
                 r.Id, r.AssignmentId, r.EventId, EventTitle = r.Event.Title,
+                EventStartAt = r.Event.StartAt,
                 r.CrewId, CrewName = r.Crew.FullName, Action = r.Action.ToString(),
                 r.RecordedAt, r.LocationAddress, r.LocationCoords, r.RecordedByUserId,
                 ShiftScopeName = _db.EventAssignments
@@ -238,7 +245,7 @@ public sealed class GetMyAttendanceHandler
             x.Id, x.AssignmentId, x.EventId, x.EventTitle,
             x.CrewId, x.CrewName, x.Action,
             x.RecordedAt, x.LocationAddress, x.LocationCoords, x.RecordedByUserId, null,
-            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt)).ToList();
+            x.ShiftScopeName, x.ShiftStartAt, x.ShiftEndAt, x.EventStartAt)).ToList();
 
         return Result.Success(PagedResult<AttendanceListItemDto>.Create(items, total, req.PageNumber, req.PageSize));
     }

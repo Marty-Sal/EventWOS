@@ -130,10 +130,14 @@
                     <table class="min-w-full text-sm">
                         <thead class="bg-gray-50 border-b border-gray-100">
                             <tr>
+                                <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Event Date</th>
                                 <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Event</th>
                                 <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift</th>
                                 <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                                <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
+                                @* "Attendance Time", not "Time": the row also carries an event
+                                   date and a shift time, so a bare "Time" was ambiguous about
+                                   which of the three it meant. *@
+                                <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Attendance Time</th>
                                 <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
                             </tr>
                         </thead>
@@ -141,6 +145,10 @@
                             @foreach (var r in _history)
                             {
                                 <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-5 py-3.5 whitespace-nowrap">
+                                        <span class="font-medium text-gray-800">@r.EventStartAt.ToLocalTime().ToString("dd MMM yyyy")</span>
+                                        <span class="block text-[11px] text-gray-400">@r.EventStartAt.ToLocalTime().ToString("ddd")</span>
+                                    </td>
                                     <td class="px-5 py-3.5 font-medium text-gray-800">@r.EventTitle</td>
                                     <td class="px-5 py-3.5 text-xs text-gray-600">
                                         @if (!string.IsNullOrEmpty(r.ShiftScopeName))
@@ -167,7 +175,13 @@
                                             <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Check Out</span>
                                         }
                                     </td>
-                                    <td class="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">@r.RecordedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</td>
+                                    <td class="px-5 py-3.5 text-xs whitespace-nowrap">
+                                        @* Clock time leads because that's what a timesheet dispute
+                                           turns on; the date stays visible underneath because it
+                                           can legitimately differ from the event date. *@
+                                        <span class="font-medium text-gray-700">@r.RecordedAt.ToLocalTime().ToString("HH:mm")</span>
+                                        <span class="block text-[11px] text-gray-400">@r.RecordedAt.ToLocalTime().ToString("dd MMM yyyy")</span>
+                                    </td>
                                     <td class="px-5 py-3.5 text-xs"><LocationPin Address="@r.LocationAddress" Coords="@r.LocationCoords" /></td>
                                 </tr>
                             }
@@ -368,7 +382,7 @@
                 .Select(r => new MyAttendanceRecord(
                     r.EventTitle, r.Action, r.RecordedAt,
                     r.LocationAddress, r.LocationCoords,
-                    r.ShiftScopeName, r.ShiftStartAt))
+                    r.ShiftScopeName, r.ShiftStartAt, r.EventStartAt))
                 .ToList();
         }
         catch (Exception ex)
@@ -450,7 +464,12 @@
     private sealed record MyAttendanceRecord(
         string EventTitle, string Action, DateTime RecordedAt,
         string? LocationAddress, string? LocationCoords,
-        string? ShiftScopeName, DateTime? ShiftStartAt);
+        string? ShiftScopeName, DateTime? ShiftStartAt,
+        // The event's own date — leads the history table. Deliberately separate
+        // from RecordedAt: an early shift is routinely checked into the night
+        // before, so the two dates differ and collapsing them would misreport
+        // when the event actually was.
+        DateTime EventStartAt);
 
     private sealed record AssignmentDto(
         Guid Id, Guid EventId, string EventTitle,
@@ -479,7 +498,8 @@
         string? RecordedByName = null,
         string? ShiftScopeName = null,
         DateTime? ShiftStartAt = null,
-        DateTime? ShiftEndAt = null);
+        DateTime? ShiftEndAt = null,
+        DateTime EventStartAt = default);
 
     private sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
     private sealed record ApiResult<T>(bool Success, T? Data, string? Message);
