@@ -4,6 +4,7 @@
 @inject IAuthApiService AuthApi
 @inject NavigationManager Nav
 @inject TokenRefreshService RefreshSvc
+@inject DeviceIdService DeviceIds
 @inject IJSRuntime JS
 
 <PageTitle>OTP sign-in — EventWOS</PageTitle>
@@ -136,7 +137,8 @@
         _loading = true; _error = null;
         try
         {
-            var deviceId = Guid.NewGuid().ToString("N")[..16];
+            // Stable per browser -- see DeviceIdService.
+            var deviceId = await DeviceIds.GetOrCreateAsync();
             var result = await AuthApi.VerifyOtpAsync(_mobile.Trim(), _otp.Trim(), _otpRequestId, deviceId);
             if (!result.Success)
             {

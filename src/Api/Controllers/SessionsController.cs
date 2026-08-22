@@ -46,7 +46,18 @@ public sealed class SessionsController : ControllerBase
     [HttpGet("ping")]
     [ProducesResponseType(200)]
     [ProducesResponseType(401)]
-    public IActionResult Ping() => Ok(new { alive = true });
+    public async Task<IActionResult> Ping(CancellationToken ct)
+    {
+        // Doubles as the session heartbeat: reaching this action at all means
+        // the token passed auth, so stamp LastActivityAt. That stamp is what
+        // lets the Sessions page age off browsers that are simply gone --
+        // closed tab, cleared storage, sleeping laptop -- instead of listing
+        // them as active until their refresh token expires weeks later.
+        if (_currentUser.SessionId is { } sessionId)
+            await _mediator.Send(new TouchSessionCommand(sessionId), ct);
+
+        return Ok(new { alive = true });
+    }
 
     /// <summary>Revoke a specific session.</summary>
     [Permission("sessions:revoke")]

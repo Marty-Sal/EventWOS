@@ -53,6 +53,8 @@ builder.Services.AddScoped<IIndianStatesApiService, IndianStatesApiService>();
 // credential ever reaches the browser.
 builder.Services.AddScoped<ILocationApiService, LocationApiService>();
 builder.Services.AddScoped<TokenRefreshService>();
+// Stable per-browser device id so re-logins reuse one session row.
+builder.Services.AddScoped<DeviceIdService>();
 builder.Services.AddScoped<NotificationHubService>();
 
 await builder.Build().RunAsync();

@@ -141,6 +141,11 @@ public sealed class VerifyOtpHandler : IRequestHandler<VerifyOtpCommand, Result<
         var (rawRefreshToken, refreshTokenHash) = _jwtService.GenerateRefreshToken();
         var refreshExpiry = DateTime.UtcNow.AddDays(30);
 
+        // Replace this device's previous login rather than stacking a second
+        // live session (and a second usable 30-day refresh token) next to it.
+        await EventWOS.Application.Auth.Internal.SessionSuperseder.SupersedeAsync(
+            _db, user.Id, request.DeviceId ?? "unknown", cancellationToken);
+
         var refreshToken = new RefreshToken(
             user.Id,
             refreshTokenHash,

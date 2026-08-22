@@ -115,6 +115,11 @@ public sealed class LoginWithPasswordHandler : IRequestHandler<LoginWithPassword
         var (rawRefresh, refreshHash) = _jwt.GenerateRefreshToken();
         var refreshExpiry = DateTime.UtcNow.AddDays(30);
 
+        // Replace this device's previous login rather than stacking a second
+        // live session (and a second usable 30-day refresh token) next to it.
+        await EventWOS.Application.Auth.Internal.SessionSuperseder.SupersedeAsync(
+            _db, user.Id, req.DeviceId ?? "unknown", ct);
+
         _db.RefreshTokens.Add(new RefreshToken(
             user.Id, refreshHash,
             req.DeviceId ?? "unknown", req.IpAddress ?? "unknown", refreshExpiry));

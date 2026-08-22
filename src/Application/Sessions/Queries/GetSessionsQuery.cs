@@ -1,4 +1,5 @@
 using EventWOS.Application.Interfaces;
+using EventWOS.Domain.Rules;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -52,8 +53,17 @@ public sealed class GetSessionsHandler : IRequestHandler<GetSessionsQuery, Resul
             .Where(r => !r.IsRevoked && r.ExpiresAt > now)
             .Select(r => new { r.UserId, r.DeviceId });
 
+        // Second gate: a live refresh token proves the device COULD get back in,
+        // not that anyone is actually there. Every signed-in client pings
+        // /sessions/ping every 30s and that stamps LastActivityAt, so require a
+        // recent heartbeat too -- otherwise a closed browser keeps its row on
+        // this page for the refresh token's full 30-day life, which is exactly
+        // how the same admin ended up listed twice and a logged-out vendor kept
+        // showing as active.
+        var heartbeatCutoff = now - SessionActivityRules.HeartbeatGrace;
+
         var q = _db.UserSessions.AsNoTracking()
-            .Where(s => s.IsActive)
+            .Where(s => s.IsActive && s.LastActivityAt > heartbeatCutoff)
             .Join(liveDeviceKeys,
                   s => new { s.UserId, s.DeviceId },
                   k => new { k.UserId, k.DeviceId },
