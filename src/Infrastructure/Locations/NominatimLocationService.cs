@@ -275,7 +275,14 @@ public sealed class NominatimLocationService : ILocationService
             ShortAddress: BuildShortAddress(address, display, name),
             FullAddress:  display,
             Latitude:     lat,
-            Longitude:    lon);
+            Longitude:    lon,
+            // Same components BuildShortAddress already reads — passed through
+            // instead of discarded, so the client can fill the address fields
+            // without a second reverse-geocode call for data we have in hand.
+            City:         ReadCity(address),
+            State:        ReadString(address, "state"),
+            PostalCode:   ReadString(address, "postcode"),
+            Country:      ReadString(address, "country"));
     }
 
     /// <summary>

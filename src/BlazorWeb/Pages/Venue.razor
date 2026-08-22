@@ -6,6 +6,7 @@
 @using EventWOS.BlazorWeb.Components
 @using EventWOS.BlazorWeb.Services
 @inject ILocationApiService LocationApi
+@inject IIndianStatesApiService StatesApi
 
 <PageTitle>Settings — Venue — EventWOS</PageTitle>
 
@@ -401,7 +402,7 @@
     /// accurate value. Coordinates are the exception — they're the whole point of
     /// picking a suggestion, so they always take the new value.
     /// </summary>
-    private void ApplySearchResult(LocationSuggestion s)
+    private async Task ApplySearchResult(LocationSuggestion s)
     {
         if (string.IsNullOrWhiteSpace(_form.Name))
             _form.Name = Truncate(s.Name, 120);
@@ -413,11 +414,82 @@
         // it exists precisely because the admin shouldn't have to compose it.
         _form.ShortAddress = Truncate(s.ShortAddress, 200);
 
-        _form.Latitude  = (double)s.Latitude;
-        _form.Longitude = (double)s.Longitude;
+        // Address block: fill blanks only, so a hand-corrected city/postcode
+        // isn't overwritten by the geocoder's guess.
+        if (string.IsNullOrWhiteSpace(_form.City) && !string.IsNullOrWhiteSpace(s.City))
+            _form.City = Truncate(s.City!, 200);
+        if (string.IsNullOrWhiteSpace(_form.PostalCode) && !string.IsNullOrWhiteSpace(s.PostalCode))
+            _form.PostalCode = Truncate(s.PostalCode!, 20);
+        if (string.IsNullOrWhiteSpace(_form.Country) && !string.IsNullOrWhiteSpace(s.Country))
+            _form.Country = Truncate(s.Country!, 100);
+
+        if (string.IsNullOrWhiteSpace(_form.State) && !string.IsNullOrWhiteSpace(s.State))
+            _form.State = await MatchCanonicalStateAsync(s.State!);
 
         // Clear any stale "required field" error the pick may have just resolved.
         _formError = null;
+    }
+
+    /// <summary>
+    /// Map a provider state name onto the exact option text used by StateSelect.
+    ///
+    /// This matters because the dropdown is a plain select: a value that isn't an
+    /// exact option match renders as "Select state…", so an unmatched string
+    /// would look like nothing happened while quietly sitting in the form.
+    /// Returning null in that case is deliberate — an empty dropdown the admin
+    /// must fill is honest, a silently-wrong one is not.
+    ///
+    /// The alias table covers the renames OSM still carries (Orissa/Odisha,
+    /// Pondicherry/Puducherry) and the long-form Delhi variants.
+    /// </summary>
+    private async Task<string?> MatchCanonicalStateAsync(string providerState)
+    {
+        var raw = providerState.Trim();
+        if (raw.Length == 0) return null;
+
+        IReadOnlyList<IndianStateOption> states;
+        try
+        {
+            states = await StatesApi.GetStatesAsync();
+        }
+        catch
+        {
+            return null; // can't verify the option exists — don't guess
+        }
+
+        // 1. Exact (case-insensitive) match — the common path.
+        var exact = states.FirstOrDefault(x =>
+            string.Equals(x.Name, raw, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null) return exact.Name;
+
+        // 2. Known provider aliases.
+        var alias = raw.ToLowerInvariant() switch
+        {
+            "orissa"                                    => "Odisha",
+            "pondicherry"                               => "Puducherry",
+            "uttaranchal"                               => "Uttarakhand",
+            "delhi"                                     => "Delhi",
+            "nct of delhi"                              => "Delhi",
+            "national capital territory of delhi"       => "Delhi",
+            "jammu and kashmir"                         => "Jammu and Kashmir",
+            "dadra and nagar haveli and daman and diu"  => "Dadra and Nagar Haveli and Daman and Diu",
+            _                                           => null,
+        };
+        if (alias is not null)
+        {
+            var mapped = states.FirstOrDefault(x =>
+                string.Equals(x.Name, alias, StringComparison.OrdinalIgnoreCase));
+            if (mapped is not null) return mapped.Name;
+        }
+
+        // 3. Last resort: a single unambiguous containment match (handles
+        //    "Maharashtra State" style suffixes). Ambiguity means give up.
+        var contains = states.Where(x =>
+                raw.Contains(x.Name, StringComparison.OrdinalIgnoreCase) ||
+                x.Name.Contains(raw, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return contains.Count == 1 ? contains[0].Name : null;
     }
 
     /// <summary>
@@ -439,7 +511,10 @@
         if (string.IsNullOrWhiteSpace(_form.City)       && !string.IsNullOrWhiteSpace(detail.City))
             _form.City = Truncate(detail.City!, 200);
         if (string.IsNullOrWhiteSpace(_form.State)      && !string.IsNullOrWhiteSpace(detail.State))
-            _form.State = detail.State;
+            // Normalised, not assigned raw: StateSelect is a plain select, so a
+            // non-matching value renders as "Select state…" and looks like the
+            // drag did nothing.
+            _form.State = await MatchCanonicalStateAsync(detail.State!);
         if (string.IsNullOrWhiteSpace(_form.PostalCode) && !string.IsNullOrWhiteSpace(detail.PostalCode))
             _form.PostalCode = Truncate(detail.PostalCode!, 20);
         if (string.IsNullOrWhiteSpace(_form.Country)    && !string.IsNullOrWhiteSpace(detail.Country))

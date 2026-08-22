@@ -92,6 +92,59 @@ public sealed class NominatimLocationServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_returns_the_structured_address_components()
+    {
+        // Regression: these were parsed to build ShortAddress and then thrown
+        // away, so picking a suggestion filled the name and coordinates but left
+        // City/State/PostalCode/Country blank on the venue form. The provider
+        // hands them to us in the SAME response — dropping them forced the admin
+        // to retype the address or nudge the pin to trigger a reverse-geocode for
+        // data we already had.
+        var handler = new StubHttpMessageHandler(HttpStatusCode.OK, TwoResultSearchJson);
+
+        var results = await Build(handler).SearchAsync("millennium business park", CancellationToken.None);
+
+        var first = results[0];
+        first.City.Should().Be("Navi Mumbai");
+        first.State.Should().Be("Maharashtra");
+        first.PostalCode.Should().Be("400710");
+        first.Country.Should().Be("India");
+    }
+
+    [Fact]
+    public async Task SearchAsync_leaves_missing_components_null_rather_than_guessing()
+    {
+        // The second fixture has no suburb/postcode. A blank field the admin can
+        // fill beats a fabricated one they will not notice is wrong.
+        var handler = new StubHttpMessageHandler(HttpStatusCode.OK, TwoResultSearchJson);
+
+        var second = (await Build(handler).SearchAsync("dome svp", CancellationToken.None))[1];
+
+        second.City.Should().Be("Mumbai");
+        second.PostalCode.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SearchAsync_survives_a_result_with_no_address_block_at_all()
+    {
+        // Nominatim omits "address" entirely for some results. The component
+        // readers must no-op rather than throw, or one odd result kills the whole
+        // suggestion list.
+        const string noAddressJson = """
+        [ { "place_id": 1, "name": "Somewhere", "display_name": "Somewhere",
+            "lat": "19.1", "lon": "73.0" } ]
+        """;
+        var handler = new StubHttpMessageHandler(HttpStatusCode.OK, noAddressJson);
+
+        var results = await Build(handler).SearchAsync("somewhere", CancellationToken.None);
+
+        results.Should().HaveCount(1);
+        results[0].City.Should().BeNull();
+        results[0].State.Should().BeNull();
+        results[0].Country.Should().BeNull();
+    }
+
+    [Fact]
     public async Task SearchAsync_reads_place_id_whether_number_or_string()
     {
         // Nominatim has shipped place_id as both a JSON number and a string

@@ -14,11 +14,24 @@ namespace EventWOS.Application.Locations.DTOs;
 /// point cannot represent those exactly. Distance maths converts to double at
 /// the point of calculation instead — see GeoDistance.
 /// </summary>
+/// <remarks>
+/// The structured components (City/State/PostalCode/Country) are carried here
+/// as well as on <see cref="LocationDetails"/> on purpose. The provider already
+/// returns them in the SEARCH response, so picking a suggestion can fill the
+/// whole venue form in one round trip. Omitting them meant the admin picked a
+/// place, got a name and coordinates, and still had to type the city and state
+/// by hand — or drag the pin a pixel to trigger a reverse-geocode that fetched
+/// data we'd already been given and thrown away.
+/// </remarks>
 public sealed record LocationSearchResult(
     string  PlaceId,
     string  Name,
     string  ShortAddress,
     string  FullAddress,
     decimal Latitude,
-    decimal Longitude
+    decimal Longitude,
+    string? City       = null,
+    string? State      = null,
+    string? PostalCode = null,
+    string? Country    = null
 );
