@@ -1,5 +1,6 @@
 using EventWOS.Application.Auth.Interfaces;
 using EventWOS.Application.Users.DTOs;
+using EventWOS.Application.Events.Common;
 using EventWOS.Application.Interfaces;
 using EventWOS.Shared.Result;
 using MediatR;
@@ -31,6 +32,13 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
 
         var permissions = await _permissionService.GetEffectivePermissionsAsync(user.Id, user.Role, ct);
 
+        // "Total Events Done" is computed from the vendor's own assignment
+        // rows, not read from the User.EventsCompleted column -- nothing has
+        // ever written to that column, so it reported 0 for every vendor.
+        int? eventsCompleted = user.Role == Domain.Enums.UserRole.Vendor
+            ? await VendorParticipationLoader.CountEventsDoneAsync(_db, user.Id, ct)
+            : null;
+
         // Load vendor name for crew members
         string? vendorName = null;
         if (user.Role == Domain.Enums.UserRole.Crew && user.VendorId.HasValue)
@@ -50,7 +58,7 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
             user.BusinessName,
             user.Role == Domain.Enums.UserRole.Vendor ? user.Rating : null,
             user.Role == Domain.Enums.UserRole.Vendor ? user.RatingCount : null,
-            user.Role == Domain.Enums.UserRole.Vendor ? user.EventsCompleted : null,
+            eventsCompleted,
             user.Role == Domain.Enums.UserRole.Vendor ? user.InviteMessageTemplate : null,
             // Crew-specific
             user.Role == Domain.Enums.UserRole.Crew ? user.DisciplineScore : null,

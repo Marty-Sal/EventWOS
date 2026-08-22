@@ -1,4 +1,5 @@
 using EventWOS.Application.Files.DTOs;
+using EventWOS.Application.Events.Common;
 using EventWOS.Application.Interfaces;
 using EventWOS.Application.Vendors.Commands;
 using EventWOS.Application.Vendors.DTOs;
@@ -36,6 +37,8 @@ public sealed class GetVendorByIdHandler : IRequestHandler<GetVendorByIdQuery, R
                 f.ContentType, f.FileSizeBytes, f.ThumbnailStorageKey != null, f.CreatedAt))
             .ToListAsync(ct);
 
-        return Result.Success(CreateVendorHandler.MapToDto(vendor, crewCount, files));
+        var eventsDone = await VendorParticipationLoader.CountEventsDoneAsync(_db, vendor.Id, ct);
+
+        return Result.Success(CreateVendorHandler.MapToDto(vendor, crewCount, files, eventsDone));
     }
 }

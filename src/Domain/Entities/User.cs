@@ -80,7 +80,12 @@ public sealed class User : BaseEntity
     /// without its sample size invites trusting one glowing review as much as
     /// twenty.</summary>
     public int      RatingCount     { get; private set; }
-    /// <summary>Total events completed as a Vendor.</summary>
+    /// <summary>
+    /// Legacy stored counter for events completed as a Vendor. NO LONGER THE
+    /// SOURCE OF TRUTH and never written to -- the real number is computed on
+    /// read by VendorEventParticipationRules from the assignment rows. Column
+    /// is retained so existing rows/migrations stay valid; do not read it.
+    /// </summary>
     public int EventsCompleted      { get; private set; }
 
     // ── Crew-specific ─────────────────────────────────────────────────────────
@@ -275,7 +280,10 @@ public sealed class User : BaseEntity
     public void AddCrewRating(decimal rating)
         => throw new NotSupportedException(
             "Incremental crew rating was removed. Write a Rating row and recompute.");
-    public void IncrementEventsCompleted() => EventsCompleted++;
+    public void IncrementEventsCompleted()
+        => throw new NotSupportedException(
+            "Incremental vendor event counting was removed. Events done is computed "
+            + "on read from EventAssignment rows (VendorEventParticipationRules).");
 
     // ── Self-registration & password-based auth ─────────────────────────────
 

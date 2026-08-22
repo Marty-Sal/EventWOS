@@ -1,4 +1,5 @@
 using EventWOS.Application.Events.DTOs;
+using EventWOS.Application.Events.Common;
 using EventWOS.Application.Interfaces;
 using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
@@ -35,9 +36,7 @@ public sealed class GetMyEventsHandler : IRequestHandler<GetMyEventsQuery, Resul
                 .AsNoTracking()
                 .Where(a => a.VendorId == req.UserId
                          && !a.IsDeleted
-                         && a.Status != AssignmentStatus.Declined
-                         && a.Status != AssignmentStatus.RejectedByManager
-                         && a.Status != AssignmentStatus.RejectedByVendor)
+                         && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status))
                 .Select(a => a.EventId)
                 .Distinct()
                 .ToListAsync(ct);
@@ -49,9 +48,7 @@ public sealed class GetMyEventsHandler : IRequestHandler<GetMyEventsQuery, Resul
                 .AsNoTracking()
                 .Where(a => a.CrewId == req.UserId
                          && !a.IsDeleted
-                         && a.Status != AssignmentStatus.Declined
-                         && a.Status != AssignmentStatus.RejectedByManager
-                         && a.Status != AssignmentStatus.RejectedByVendor)
+                         && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status))
                 .Select(a => a.EventId)
                 .Distinct()
                 .ToListAsync(ct);

@@ -1,3 +1,4 @@
+using EventWOS.Application.Events.Common;
 using EventWOS.Application.Interfaces;
 using EventWOS.Application.Vendors.Commands;
 using EventWOS.Application.Vendors.DTOs;
@@ -56,9 +57,13 @@ public sealed class GetVendorsHandler : IRequestHandler<GetVendorsQuery, Result<
             .Select(g => new { VendorId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.VendorId, x => x.Count, ct);
 
+        // Completed-event counts for the whole page in one round trip.
+        var eventsDone = VendorEventParticipationRules.CountEventsDonePerVendor(
+            await VendorParticipationLoader.LoadAsync(_db, vendorIds, ct));
+
         var items = vendors.Select(v => new VendorListItemDto(
             v.Id, v.Mobile, v.FullName, v.BusinessName, v.Status.ToString(),
-            v.ReferralCode, v.Rating, v.RatingCount, v.EventsCompleted,
+            v.ReferralCode, v.Rating, v.RatingCount, eventsDone.GetValueOrDefault(v.Id, 0),
             crewCounts.GetValueOrDefault(v.Id, 0), v.CreatedAt
         )).ToList();
 
