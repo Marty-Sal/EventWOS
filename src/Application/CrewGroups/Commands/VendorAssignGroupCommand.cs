@@ -92,6 +92,9 @@ public sealed class VendorAssignGroupHandler
                && u.Role == UserRole.Crew
                && !u.IsDeleted
                && u.VendorId == req.VendorUserId    // belt-and-braces: still in roster
+               // A saved group can go stale -- a member suspended or rejected
+               // after being added must not get silently invited by "Invite All".
+               && u.Status == UserStatus.Active
             select u
         ).ToListAsync(ct);
 

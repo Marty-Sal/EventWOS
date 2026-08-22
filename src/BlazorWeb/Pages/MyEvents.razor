@@ -1062,7 +1062,11 @@
         // Phase D step 11: load roster + existing assignments + groups +
         // per-shift summary in parallel. The summary drives the shift
         // picker, per-shift cards, and Invite-All headroom.
-        var rosterTask     = VendorApi.GetCrewAsync(page: 1, vendorId: _userId);
+        // Active-only: a Suspended or Rejected crew member cannot work an
+        // event, so they must not be pickable in the invite list at all --
+        // this used to fetch every status and let a suspended name sit right
+        // next to an Invite button.
+        var rosterTask     = VendorApi.GetCrewAsync(page: 1, vendorId: _userId, status: "Active");
         var assignmentTask = EventApi.GetAssignmentsAsync(ev.Id, page: 1);
         var groupsTask     = GroupsApi.GetGroupsAsync(page: 1);
         var summaryTask    = EventApi.GetMyShiftSummaryAsync(ev.Id);

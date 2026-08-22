@@ -89,6 +89,11 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
             return Result.Failure<EventAssignmentDto>(new Error("Crew.NotFound", "Crew member not found."));
         if (crew.VendorId != req.VendorUserId)
             return Result.Failure<EventAssignmentDto>(new Error("Crew.NotInRoster", "That crew member is not in your roster."));
+        // Belt-and-braces: the picker already hides non-Active crew, but this
+        // guards the API directly too -- e.g. a stale page still open after
+        // the crew member got suspended mid-session.
+        if (crew.Status != UserStatus.Active)
+            return Result.Failure<EventAssignmentDto>(new Error("Crew.NotActive", "That crew member is suspended or inactive."));
 
         // Phase B / Phase C / Phase D step 19:
         //   1. Resolve the target shift FIRST. The duplicate check needs

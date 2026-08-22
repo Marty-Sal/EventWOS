@@ -3318,7 +3318,9 @@ else
         _assignCrewSearch = e.Value?.ToString() ?? "";
         if (_assignCrewSearch.Length < 1) { _assignCrewResults.Clear(); _assignCrewDropOpen = false; return; }
         var vendorId = _assignSelectedVendor?.Id;
-        var result   = await VendorApi.GetCrewAsync(search: _assignCrewSearch, vendorId: vendorId, page: 1);
+        // Active-only -- same reasoning as the vendor-side invite picker:
+        // a Suspended or Rejected crew member is not assignable to anything.
+        var result   = await VendorApi.GetCrewAsync(search: _assignCrewSearch, vendorId: vendorId, page: 1, status: "Active");
         _assignCrewResults  = result?.Items?.Take(8).ToList() ?? new();
         _assignCrewDropOpen = true;
     }
