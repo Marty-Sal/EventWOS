@@ -313,6 +313,44 @@ try
         EventWOS.Application.Attendance.Geo.IGeoLocationService,
         EventWOS.Infrastructure.Geo.GeoLocationService>();
 
+    // ── Location & Geofencing: provider-agnostic place search / geocoding ───
+    //    The application layer depends only on ILocationService; the concrete
+    //    provider is selected here from configuration
+    //    (LocationProvider:Provider). To move to Google Maps or Mappls, add the
+    //    implementation in Infrastructure/Locations and a case below — no
+    //    handler, controller or Blazor component changes.
+    //
+    //    Registered via AddHttpClient so we get the shared handler pool and
+    //    correct socket recycling; IMemoryCache backs the search cache, which
+    //    is what keeps us inside Nominatim's ~1 req/sec public-instance policy.
+    //    Credentials stay server-side: Blazor calls /api/v1/locations/*, never
+    //    the provider directly.
+    builder.Services.AddMemoryCache();
+    builder.Services.Configure<EventWOS.Infrastructure.Locations.LocationOptions>(
+        builder.Configuration.GetSection(
+            EventWOS.Infrastructure.Locations.LocationOptions.SectionName));
+
+    var locationProvider = builder.Configuration[
+        $"{EventWOS.Infrastructure.Locations.LocationOptions.SectionName}:Provider"] ?? "Nominatim";
+
+    switch (locationProvider.Trim().ToLowerInvariant())
+    {
+        case "nominatim":
+            builder.Services.AddHttpClient<EventWOS.Application.Locations.ILocationService,
+                                           EventWOS.Infrastructure.Locations.NominatimLocationService>();
+            Log.Information("Location provider: Nominatim (OpenStreetMap).");
+            break;
+
+        default:
+            // Fail fast and loudly. Silently falling back to a different
+            // provider than the one configured would make venue search
+            // mysteriously return different coordinates in production.
+            throw new InvalidOperationException(
+                $"Unknown LocationProvider:Provider value '{locationProvider}'. " +
+                "Supported: Nominatim. Add the implementation in " +
+                "Infrastructure/Locations and register it in Program.cs.");
+    }
+
     // ── Email service: SendGrid if API key is present, otherwise dev stub (logs only).
     //    Lets the app boot fine in environments without SendGrid configured.
     var sendGridKey = builder.Configuration["SendGrid:ApiKey"]
