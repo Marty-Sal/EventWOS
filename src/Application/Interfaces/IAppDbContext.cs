@@ -26,6 +26,12 @@ public interface IAppDbContext
     DbSet<VendorShiftAllocation> VendorShiftAllocations { get; }
     DbSet<EventAssignment>  EventAssignments  { get; }
     DbSet<AttendanceRecord> AttendanceRecords { get; }
+
+    /// <summary>
+    /// Source of truth for vendor and crew reputation. The averages cached on
+    /// User are derived from these rows; see Rating.cs.
+    /// </summary>
+    DbSet<Rating> Ratings { get; }
     DbSet<CrewPayment>      CrewPayments      { get; }
     DbSet<PayrollBatch>     PayrollBatches    { get; }
     // QR-verified check-in handshake table.

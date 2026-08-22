@@ -48,6 +48,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<VendorShiftAllocation> VendorShiftAllocations => Set<VendorShiftAllocation>();
     public DbSet<EventAssignment>  EventAssignments  => Set<EventAssignment>();
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+    public DbSet<Rating> Ratings => Set<Rating>();
     public DbSet<CrewPayment>      CrewPayments      => Set<CrewPayment>();
     public DbSet<PayrollBatch>     PayrollBatches    => Set<PayrollBatch>();
     // QR-verified check-in handshake — feature-flagged via presence of table.
