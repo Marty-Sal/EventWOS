@@ -798,6 +798,26 @@ BEGIN
     ALTER TABLE otp_requests ADD COLUMN IF NOT EXISTS deleted_by UUID;
 
     -- ═══ refresh_tokens ══════════════════════════════════════════════════════
+    -- CREATE, not just ALTER. This table is auth-critical and was previously
+    -- only ever created by EF migrations -- which the RUN_MIGRATIONS_ON_STARTUP
+    -- gate above means do NOT run on a normal deploy. On any database where it
+    -- is absent, the ALTERs below abort the whole patch block (see the
+    -- user_sessions note underneath).
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+        id          UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash  VARCHAR(255) NOT NULL,
+        device_id   VARCHAR(255),
+        expires_at  TIMESTAMP NOT NULL,
+        revoked_at  TIMESTAMP,
+        replaced_by VARCHAR(255),
+        ip_address  VARCHAR(45),
+        created_at  TIMESTAMP NOT NULL DEFAULT now(),
+        created_by  UUID, updated_at TIMESTAMP, updated_by UUID,
+        is_deleted  BOOL NOT NULL DEFAULT false, deleted_at TIMESTAMP, deleted_by UUID
+    );
+    CREATE INDEX IF NOT EXISTS ix_refresh_tokens_user_id ON refresh_tokens(user_id);
+
     ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS device_id VARCHAR(255);
     ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45);
     ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS is_revoked BOOL NOT NULL DEFAULT false;
@@ -806,6 +826,36 @@ BEGIN
     ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS revoke_reason VARCHAR(100);
 
     -- ═══ user_sessions ═══════════════════════════════════════════════════════
+    -- OUTAGE 2026-08-23: login died with 42P01 relation ""user_sessions"" does
+    -- not exist. The table only ever existed via EF migrations, which the
+    -- startup gate skips, so after the database was rebuilt it was simply gone.
+    -- Worse: this whole patch is ONE DO block, so the ALTERs below were the
+    -- first statement to throw and Postgres discarded EVERY remaining statement
+    -- in the block -- roughly a thousand lines of later patching (including the
+    -- event_announcements tables) silently never ran, on every single boot.
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        id                 UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        session_id         UUID NOT NULL DEFAULT gen_random_uuid(),
+        device_id          VARCHAR(255) NOT NULL DEFAULT '',
+        device_name        VARCHAR(100) NOT NULL DEFAULT '',
+        ip_address         VARCHAR(45)  NOT NULL DEFAULT '',
+        user_agent         VARCHAR(500) NOT NULL DEFAULT '',
+        is_active          BOOL NOT NULL DEFAULT true,
+        last_activity_at   TIMESTAMP NOT NULL DEFAULT now(),
+        terminated_at      TIMESTAMP,
+        termination_reason VARCHAR(100),
+        created_at         TIMESTAMP NOT NULL DEFAULT now(),
+        created_by         UUID,
+        updated_at         TIMESTAMP,
+        updated_by         UUID,
+        is_deleted         BOOL NOT NULL DEFAULT false,
+        deleted_at         TIMESTAMP,
+        deleted_by         UUID
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS ix_user_sessions_session_id ON user_sessions(session_id);
+    CREATE INDEX IF NOT EXISTS ix_user_sessions_user_active ON user_sessions(user_id, is_active);
+
     ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS device_id VARCHAR(255);
     ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS device_name VARCHAR(200);
     ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45);
