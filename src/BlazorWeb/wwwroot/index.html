@@ -246,6 +246,32 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         };
+
+        // Opens bytes in a NEW TAB instead of downloading — used by
+        // attachment LINKS on event notifications, where the spec asks for
+        // "click and view" rather than handing over a file. A plain <a href>
+        // to the API can't work here: the API is JWT-authenticated via the
+        // HttpClient handler, and a browser-initiated navigation wouldn't
+        // carry the Authorization header, so the bytes come down through
+        // HttpClient and get re-presented as a blob URL.
+        //
+        // The URL is revoked on a delay rather than immediately, because
+        // revoking it before the new tab has finished fetching the blob
+        // leaves the viewer with a blank page in Chrome.
+        window.openFileInNewTab = function (mime, b64) {
+            const bytes = atob(b64);
+            const arr   = new Uint8Array(bytes.length);
+            for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+            const blob  = new Blob([arr], { type: mime });
+            const url   = URL.createObjectURL(blob);
+            const win   = window.open(url, "_blank");
+            if (!win) {
+                // Popup blocked — fall back to same-tab navigation so the
+                // user still sees the file rather than nothing at all.
+                window.location.href = url;
+            }
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        };
     </script>
 
     <style>

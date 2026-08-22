@@ -1,0 +1,524 @@
+@*
+    Event notifications — the compose box (Admin/Manager) plus the full
+    notification history for one event.
+
+    Reused in three places, which is why it's a component and not inline
+    markup: the Admin/Manager event view modal (compose + history), the
+    vendor/crew event view (history only), and the standalone /notifications
+    inbox page.
+
+    Attachments are only ever LINKS here. Clicking one pulls the bytes
+    through the authenticated HttpClient and hands them to
+    window.openFileInNewTab so images/PDFs open in a viewer tab — the file
+    itself is never embedded in the message or pushed to WhatsApp.
+*@
+@inject IAnnouncementApiService AnnouncementApi
+@inject IFilesApiService FilesApi
+@inject IJSRuntime JS
+
+<div class="space-y-3">
+    <div class="flex items-center justify-between">
+        <h4 class="font-semibold text-gray-700 text-sm">
+            📣 Notifications
+            @if (_announcements.Count > 0)
+            {
+                <span class="ml-1 text-xs font-medium text-gray-400">(@_announcements.Count)</span>
+            }
+        </h4>
+        @if (CanSend && !_composing)
+        {
+            <button type="button" @onclick="OpenComposer"
+                    class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold transition">
+                ✚ Send Notification
+            </button>
+        }
+    </div>
+
+    @* ── Composer ─────────────────────────────────────────────────────── *@
+    @if (CanSend && _composing)
+    {
+        <div class="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide">New notification</span>
+                <button type="button" @onclick="CloseComposer" class="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+            </div>
+
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Send to</label>
+                <div class="flex gap-1 bg-white rounded-lg border border-gray-200 p-1 w-full sm:w-auto sm:inline-flex">
+                    @foreach (var (value, label) in AudienceOptions)
+                    {
+                        <button type="button" @onclick="() => _audience = value"
+                                class="flex-1 sm:flex-none px-3 py-1.5 rounded-md text-[11px] font-semibold transition
+                                       @(_audience == value ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-50")">
+                            @label
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Subject *</label>
+                <input @bind="_subject" @bind:event="oninput" maxlength="200"
+                       placeholder="e.g. Reporting time moved to 12:30 PM"
+                       class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Message *</label>
+                <div class="rounded-lg overflow-hidden border border-gray-200 bg-white">
+                    <RichTextEditor @ref="_editor" Value="@_bodyHtml" ValueChanged="html => _bodyHtml = html" Height="200px" />
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Attachments (optional)</label>
+                <InputFile multiple OnChange="HandleAttachmentsSelected"
+                           accept="image/jpeg,image/png,image/webp,application/pdf"
+                           class="block w-full text-xs text-gray-600 border border-gray-200 rounded-lg bg-white
+                                  cursor-pointer file:mr-3 file:py-2 file:px-3 file:border-0
+                                  file:bg-indigo-50 file:text-indigo-700 file:font-medium hover:file:bg-indigo-100" />
+                <p class="text-[11px] text-gray-400 mt-1">
+                    Images or PDF, up to 10MB each. Recipients get a link to view them — never the file itself.
+                </p>
+
+                @if (_uploading)
+                {
+                    <p class="text-xs text-indigo-600 mt-2">Uploading…</p>
+                }
+                @if (_pendingAttachments.Count > 0)
+                {
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        @foreach (var f in _pendingAttachments)
+                        {
+                            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white border border-gray-200 text-[11px] text-gray-600">
+                                📎 @f.OriginalFileName
+                                <span class="text-gray-400">@HumanSize(f.FileSizeBytes)</span>
+                                <button type="button" @onclick="() => RemoveAttachment(f)"
+                                        class="text-gray-400 hover:text-rose-500 font-bold">✕</button>
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <p class="text-xs text-rose-600">@_error</p>
+            }
+
+            <div class="flex items-center justify-end gap-2 pt-1">
+                <button type="button" @onclick="CloseComposer"
+                        class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-[11px] font-semibold transition">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SendAsync" disabled="@(_sending || _uploading)"
+                        class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold disabled:opacity-50 transition">
+                    @(_sending ? "Sending…" : "Send Notification")
+                </button>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successBanner))
+    {
+        <div class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+            ✓ @_successBanner
+        </div>
+    }
+
+    @* ── History ──────────────────────────────────────────────────────── *@
+    @if (_loading)
+    {
+        <p class="text-xs text-gray-400">Loading notifications…</p>
+    }
+    else if (_announcements.Count == 0)
+    {
+        <p class="text-xs text-gray-400 italic">
+            No notifications sent for this event yet.@(CanSend ? " Anything you send here reaches the event's vendors and crew on their dashboard and on WhatsApp." : "")
+        </p>
+    }
+    else
+    {
+        <div class="space-y-2">
+            @foreach (var a in _announcements)
+            {
+                var expanded = _expandedIds.Contains(a.Id);
+                <div class="rounded-xl border @(a.IsRead || CanSend ? "border-gray-100 bg-white" : "border-indigo-200 bg-indigo-50/30")">
+                    <button type="button" @onclick="() => ToggleAsync(a)"
+                            class="w-full flex items-start justify-between gap-3 text-left px-4 py-3">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                @if (!a.IsRead && !CanSend)
+                                {
+                                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0"></span>
+                                }
+                                <span class="text-sm font-semibold text-gray-800 truncate">@a.Subject</span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold @AudienceColor(a.Audience)">
+                                    @AnnouncementAudiences.Label(a.Audience)
+                                </span>
+                                @if (a.Attachments.Count > 0)
+                                {
+                                    <span class="text-[10px] font-medium text-gray-500">📎 @a.Attachments.Count</span>
+                                }
+                            </div>
+                            <p class="text-[11px] text-gray-400 mt-0.5">
+                                @a.SentByName · @a.SentAt.ToLocalTime().ToString("dd MMM yyyy, h:mm tt")
+                                @if (ShowEventTitle)
+                                {
+                                    <span> · @a.EventTitle</span>
+                                }
+                                @if (CanSend)
+                                {
+                                    <span> · @a.RecipientCount recipient@(a.RecipientCount == 1 ? "" : "s"), @a.WhatsAppSentCount via WhatsApp</span>
+                                }
+                            </p>
+                        </div>
+                        <span class="text-gray-400 text-xs flex-shrink-0">@(expanded ? "▲" : "▼")</span>
+                    </button>
+
+                    @if (expanded)
+                    {
+                        <div class="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
+                            <div class="prose prose-sm max-w-none text-sm text-gray-700 announcement-body">
+                                @((MarkupString)a.BodyHtml)
+                            </div>
+
+                            @if (a.Attachments.Count > 0)
+                            {
+                                <div class="space-y-1.5">
+                                    <p class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Attachments</p>
+                                    @foreach (var att in a.Attachments)
+                                    {
+                                        var busy = _openingFileIds.Contains(att.FileId);
+                                        <button type="button" @onclick="() => OpenAttachmentAsync(a.Id, att)" disabled="@busy"
+                                                class="flex items-center gap-2 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline disabled:opacity-50">
+                                            <span>@(att.IsViewableInline ? "🔍" : "⬇")</span>
+                                            <span>@att.FileName</span>
+                                            <span class="text-gray-400 font-normal">@HumanSize(att.FileSizeBytes)</span>
+                                            @if (busy)
+                                            {
+                                                <span class="text-gray-400 font-normal">opening…</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(_attachmentError))
+                            {
+                                <p class="text-xs text-rose-600">@_attachmentError</p>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Event to show notifications for. Null in inbox mode (see <see cref="InboxMode"/>).</summary>
+    [Parameter] public Guid? EventId { get; set; }
+
+    /// <summary>True for Admin/Manager — shows the composer and the delivery counts.</summary>
+    [Parameter] public bool CanSend { get; set; }
+
+    /// <summary>Inbox mode: loads the caller's notifications across all their events instead of one event's history.</summary>
+    [Parameter] public bool InboxMode { get; set; }
+
+    /// <summary>Show which event each notification belongs to — on by default in inbox mode.</summary>
+    [Parameter] public bool ShowEventTitle { get; set; }
+
+    /// <summary>Auto-expand this announcement on load — used by the /notifications?id=… deep link from WhatsApp.</summary>
+    [Parameter] public Guid? HighlightId { get; set; }
+
+    /// <summary>Raised after a successful send / after unread counts change, so a parent badge can refresh.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private static readonly (int Value, string Label)[] AudienceOptions =
+    {
+        (AnnouncementAudiences.Both,    "Vendors & Crew"),
+        (AnnouncementAudiences.Vendors, "Vendors only"),
+        (AnnouncementAudiences.Crew,    "Crew only")
+    };
+
+    private List<EventAnnouncementDto> _announcements = new();
+    private readonly HashSet<Guid> _expandedIds = new();
+    private readonly HashSet<Guid> _openingFileIds = new();
+    private bool _loading = true;
+    private string? _attachmentError;
+
+    // Composer state
+    private bool _composing;
+    private bool _sending;
+    private bool _uploading;
+    private int _audience = AnnouncementAudiences.Both;
+    private string _subject = string.Empty;
+    private string _bodyHtml = string.Empty;
+    private readonly List<FileDocumentDto> _pendingAttachments = new();
+    private RichTextEditor? _editor;
+    private string? _error;
+    private string? _successBanner;
+
+    private Guid? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload when the panel is pointed at a different event (the parent
+        // modal reuses this component across events without remounting it).
+        var key = InboxMode ? Guid.Empty : (EventId ?? Guid.Empty);
+        if (_loadedFor == key) return;
+        _loadedFor = key;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            _announcements = InboxMode
+                ? await AnnouncementApi.MineAsync()
+                : EventId.HasValue
+                    ? await AnnouncementApi.ForEventAsync(EventId.Value)
+                    : new List<EventAnnouncementDto>();
+
+            if (HighlightId.HasValue && _announcements.Any(a => a.Id == HighlightId.Value))
+            {
+                var target = _announcements.First(a => a.Id == HighlightId.Value);
+                _expandedIds.Add(target.Id);
+                await MarkReadAsync(target);
+            }
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Lets a parent refresh the list after it knows something changed (e.g. a live push arrived).</summary>
+    public Task RefreshAsync() => LoadAsync();
+
+    private async Task ToggleAsync(EventAnnouncementDto a)
+    {
+        if (_expandedIds.Contains(a.Id))
+        {
+            _expandedIds.Remove(a.Id);
+            return;
+        }
+
+        _attachmentError = null;
+        _expandedIds.Add(a.Id);
+        await MarkReadAsync(a);
+    }
+
+    /// <summary>
+    /// Read receipts are only recorded for actual recipients — an Admin
+    /// opening the history on the event screen isn't "reading" their own
+    /// broadcast, and marking it would pollute the recipient-side badge.
+    /// </summary>
+    private async Task MarkReadAsync(EventAnnouncementDto a)
+    {
+        if (CanSend || a.IsRead) return;
+
+        if (await AnnouncementApi.MarkReadAsync(a.Id))
+        {
+            var idx = _announcements.FindIndex(x => x.Id == a.Id);
+            if (idx >= 0) _announcements[idx] = _announcements[idx] with { IsRead = true };
+            await OnChanged.InvokeAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenAttachmentAsync(Guid announcementId, AnnouncementAttachmentDto att)
+    {
+        _attachmentError = null;
+        _openingFileIds.Add(att.FileId);
+        StateHasChanged();
+        try
+        {
+            var (ok, content, contentType, error) = await AnnouncementApi.DownloadAttachmentAsync(announcementId, att.FileId);
+            if (!ok || content is null)
+            {
+                _attachmentError = error ?? "The attachment could not be opened.";
+                return;
+            }
+
+            var b64 = Convert.ToBase64String(content);
+            if (att.IsViewableInline)
+                await JS.InvokeVoidAsync("openFileInNewTab", contentType ?? att.ContentType, b64);
+            else
+                await JS.InvokeVoidAsync("downloadFileFromBytes", att.FileName, contentType ?? att.ContentType, b64);
+        }
+        catch (Exception ex)
+        {
+            _attachmentError = ex.Message;
+        }
+        finally
+        {
+            _openingFileIds.Remove(att.FileId);
+            StateHasChanged();
+        }
+    }
+
+    // ── Composer ─────────────────────────────────────────────────────────
+
+    private void OpenComposer()
+    {
+        _composing = true;
+        _successBanner = null;
+        _error = null;
+    }
+
+    private void CloseComposer()
+    {
+        _composing = false;
+        ResetComposer();
+    }
+
+    private void ResetComposer()
+    {
+        _subject = string.Empty;
+        _bodyHtml = string.Empty;
+        _audience = AnnouncementAudiences.Both;
+        _pendingAttachments.Clear();
+        _error = null;
+    }
+
+    private const long MaxAttachmentBytes = 10 * 1024 * 1024;
+
+    private async Task HandleAttachmentsSelected(InputFileChangeEventArgs e)
+    {
+        if (!EventId.HasValue) return;
+
+        _error = null;
+        _uploading = true;
+        StateHasChanged();
+        try
+        {
+            // Uploaded as EventDocuments tagged to this event; the send
+            // endpoint re-validates that every id it's handed is exactly
+            // that, so a stray file id can't ride along.
+            foreach (var file in e.GetMultipleFiles(10))
+            {
+                if (file.Size > MaxAttachmentBytes)
+                {
+                    _error = $"{file.Name} is larger than 10MB and was skipped.";
+                    continue;
+                }
+
+                using var stream = file.OpenReadStream(MaxAttachmentBytes);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+
+                var (ok, uploaded, error) = await FilesApi.UploadAsync(
+                    ms.ToArray(), file.Name, file.ContentType, DocumentTypes.EventDocument,
+                    ownerId: null, entityId: EventId.Value);
+
+                if (ok && uploaded is not null)
+                    _pendingAttachments.Add(uploaded);
+                else
+                    _error = error ?? $"{file.Name} could not be uploaded.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _uploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RemoveAttachment(FileDocumentDto f)
+    {
+        _pendingAttachments.Remove(f);
+        // Best-effort cleanup of the orphaned upload — if it fails the file
+        // simply stays unreferenced, which is harmless (it was never linked
+        // to an announcement).
+        await FilesApi.DeleteAsync(f.Id);
+    }
+
+    private async Task SendAsync()
+    {
+        if (!EventId.HasValue) return;
+
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_subject))
+        {
+            _error = "Subject is required.";
+            return;
+        }
+        if (IsBodyEmpty(_bodyHtml))
+        {
+            _error = "Message is required.";
+            return;
+        }
+
+        _sending = true;
+        StateHasChanged();
+        try
+        {
+            var (ok, result, error) = await AnnouncementApi.SendAsync(
+                EventId.Value, _audience, _subject.Trim(), _bodyHtml,
+                _pendingAttachments.Select(f => f.Id).ToList());
+
+            if (!ok || result is null)
+            {
+                _error = error ?? "Could not send the notification.";
+                return;
+            }
+
+            _successBanner = result.RecipientCount == 0
+                ? "Notification saved, but nobody is assigned to this event yet — it'll be waiting for them when they are."
+                : $"Sent to {result.RecipientCount} recipient{(result.RecipientCount == 1 ? "" : "s")}" +
+                  $" ({result.WhatsAppSentCount} via WhatsApp)" +
+                  (result.AttachmentCount > 0 ? $", {result.AttachmentCount} attachment{(result.AttachmentCount == 1 ? "" : "s")} linked." : ".");
+
+            _composing = false;
+            ResetComposer();
+            if (_editor is not null) await _editor.SetContentAsync(string.Empty);
+
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Quill leaves "&lt;p&gt;&lt;br&gt;&lt;/p&gt;" behind when the user clears the box, so strip tags before checking.</summary>
+    private static bool IsBodyEmpty(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return true;
+        var text = System.Text.RegularExpressions.Regex.Replace(html, "<.*?>", string.Empty)
+            .Replace("&nbsp;", " ").Trim();
+        return string.IsNullOrWhiteSpace(text);
+    }
+
+    private static string AudienceColor(string audience) => audience switch
+    {
+        "Vendors" => "bg-amber-50 text-amber-700 border border-amber-100",
+        "Crew"    => "bg-sky-50 text-sky-700 border border-sky-100",
+        _         => "bg-violet-50 text-violet-700 border border-violet-100"
+    };
+
+    private static string HumanSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F0} KB";
+        return $"{bytes / (1024.0 * 1024):F1} MB";
+    }
+}

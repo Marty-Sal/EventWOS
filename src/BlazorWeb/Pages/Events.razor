@@ -1025,6 +1025,15 @@
                     }
                 </div>
 
+                @* ── Notifications ────────────────────────────────────────
+                   Admin/Manager composes here; the same list is what the
+                   event's vendors and crew see on their dashboard, so the
+                   history stays readable to anyone who opens the event
+                   later. *@
+                <div class="pt-4 border-t border-gray-100">
+                    <EventNotificationsPanel EventId="@_selectedEvent.Id" CanSend="@_canWrite" />
+                </div>
+
                 </div>
                 @* ── /scrollable body ── *@
             </div>
