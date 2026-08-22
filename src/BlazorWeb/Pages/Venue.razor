@@ -404,6 +404,18 @@
     /// </summary>
     private async Task ApplySearchResult(LocationSuggestion s)
     {
+        // ── Coordinates first, and ALWAYS overwritten ────────────────────────
+        // These are the whole point of picking a suggestion: they drive the map,
+        // the "Coordinates set" badge and every geofence downstream. Unlike the
+        // address text they are never treated as "fill blanks only" — a pick is
+        // an explicit instruction to move the pin here.
+        //
+        // Assigned before the first await so the map jumps immediately instead of
+        // waiting on the states lookup below.
+        _form.Latitude  = (double)s.Latitude;
+        _form.Longitude = (double)s.Longitude;
+        StateHasChanged();
+
         if (string.IsNullOrWhiteSpace(_form.Name))
             _form.Name = Truncate(s.Name, 120);
 
