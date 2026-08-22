@@ -410,7 +410,7 @@
     // "Active Crew" / "Rejected Crew" reflect the WHOLE roster, not just
     // whatever happened to be on the loaded page — matters once a vendor
     // has enough crew to paginate.
-    private readonly string[] _statusTabs = { "All", "Active Crew", "Rejected Crew" };
+    private readonly string[] _statusTabs = { "All", "Active Crew", "Suspended Crew", "Rejected Crew" };
     private string _activeStatusTab = "All";
 
     // Vendor filter — Admin/Manager only (a Vendor's own crew list is
@@ -424,9 +424,10 @@
     }
     private string? StatusForTab(string tab) => tab switch
     {
-        "Active Crew"   => "Active",
-        "Rejected Crew" => "Rejected",
-        _               => null
+        "Active Crew"    => "Active",
+        "Suspended Crew" => "Suspended",
+        "Rejected Crew"  => "Rejected",
+        _                => null
     };
 
     private async Task SetStatusTab(string tab)

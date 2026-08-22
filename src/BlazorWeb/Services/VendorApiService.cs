@@ -71,7 +71,7 @@ public sealed record VendorCrewStatDto(
 
 public interface IVendorApiService
 {
-    Task<PagedVendorResult?> GetVendorsAsync(int page = 1, string? search = null, int pageSize = 20, CancellationToken ct = default);
+    Task<PagedVendorResult?> GetVendorsAsync(int page = 1, string? search = null, int pageSize = 20, string? status = null, CancellationToken ct = default);
     Task<VendorDetailDto?> GetVendorAsync(Guid id, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateVendorAsync(string mobile, string fullName, string? businessName, string? email, CancellationToken ct = default);
     Task<bool> RateVendorAsync(Guid id, decimal rating, CancellationToken ct = default);
@@ -95,12 +95,13 @@ public sealed class VendorApiService : IVendorApiService
 
     public VendorApiService(HttpClient http) => _http = http;
 
-    public async Task<PagedVendorResult?> GetVendorsAsync(int page = 1, string? search = null, int pageSize = 20, CancellationToken ct = default)
+    public async Task<PagedVendorResult?> GetVendorsAsync(int page = 1, string? search = null, int pageSize = 20, string? status = null, CancellationToken ct = default)
     {
         try
         {
             var url = $"api/v1/vendors?page={page}&pageSize={pageSize}";
             if (search != null) url += $"&search={Uri.EscapeDataString(search)}";
+            if (!string.IsNullOrWhiteSpace(status)) url += $"&status={Uri.EscapeDataString(status)}";
             var r = await _http.GetFromJsonAsync<ApiResult<PagedVendorResult>>(url, _jsonOpts, ct);
             return r?.Data;
         }

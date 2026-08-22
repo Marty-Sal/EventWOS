@@ -8,8 +8,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EventWOS.Application.Vendors.Queries;
 
-public sealed record GetVendorsQuery(int Page = 1, int PageSize = 20, string? Search = null)
-    : IRequest<Result<PagedVendorResult>>;
+public sealed record GetVendorsQuery(
+    int Page = 1, int PageSize = 20, string? Search = null,
+    // Optional exact-match on UserStatus (e.g. "Active", "Suspended") — powers
+    // the status filter chips on the Vendors page, same convention as
+    // GetCrewQuery.Status. Unrecognized/blank values are ignored.
+    string? Status = null
+) : IRequest<Result<PagedVendorResult>>;
 
 public sealed record PagedVendorResult(
     IReadOnlyList<VendorListItemDto> Items, int TotalCount, int Page, int PageSize);
@@ -22,6 +27,9 @@ public sealed class GetVendorsHandler : IRequestHandler<GetVendorsQuery, Result<
     public async Task<Result<PagedVendorResult>> Handle(GetVendorsQuery req, CancellationToken ct)
     {
         var query = _db.Users.Where(u => u.Role == UserRole.Vendor && !u.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(req.Status) && Enum.TryParse<UserStatus>(req.Status, ignoreCase: true, out var statusFilter))
+            query = query.Where(u => u.Status == statusFilter);
 
         if (!string.IsNullOrWhiteSpace(req.Search))
         {

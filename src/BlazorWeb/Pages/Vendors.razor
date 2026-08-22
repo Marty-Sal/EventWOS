@@ -38,12 +38,36 @@
         }
     </div>
 
-    <!-- Search -->
-    <div class="relative max-w-sm">
-        <input @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp"
-               placeholder="Search vendors…"
-               class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+    @* Roster stage filter — same convention as the Crew page's chips. *@
+    <div class="flex gap-2 flex-wrap">
+        @foreach (var tab in _statusTabs)
+        {
+            <button @onclick="() => SetStatusTab(tab)"
+                    class="px-4 py-1.5 rounded-full text-xs font-semibold transition
+                           @(_activeStatusTab == tab ? "bg-indigo-600 text-white shadow" : "bg-white text-gray-500 border border-gray-200 hover:border-indigo-300")">
+                @tab
+            </button>
+        }
+    </div>
+
+    <div class="flex flex-wrap gap-3 items-center">
+        <div class="relative max-w-sm">
+            <input @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp"
+                   placeholder="Search vendors…"
+                   class="w-64 pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+        </div>
+
+        <select @bind="_sortKey"
+                class="px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="created_desc">Recently added</option>
+            <option value="created_asc">Oldest first</option>
+            <option value="name">Name A→Z</option>
+            <option value="rating_desc">Rating (high→low)</option>
+            <option value="rating_asc">Rating (low→high)</option>
+            <option value="crew_desc">Most crew</option>
+            <option value="status">Status</option>
+        </select>
     </div>
 
     <!-- Table -->
@@ -68,19 +92,19 @@
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div class="overflow-x-auto -mx-1 sm:mx-0">
             <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-100">
+                <thead class="bg-gray-50 border-b border-gray-100 text-[11px] uppercase tracking-widest text-gray-500">
                     <tr>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Vendor</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Mobile</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Referral</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rating</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Crew</th>
-                        <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="text-left px-5 py-3 font-semibold">Vendor</th>
+                        <th class="text-left px-5 py-3 font-semibold">Mobile</th>
+                        <th class="text-left px-5 py-3 font-semibold">Referral</th>
+                        <th class="text-left px-5 py-3 font-semibold">Rating</th>
+                        <th class="text-left px-5 py-3 font-semibold">Crew</th>
+                        <th class="text-left px-5 py-3 font-semibold">Status</th>
                         <th class="px-5 py-3"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
-                    @foreach (var v in _vendors!.Items)
+                    @foreach (var v in SortVendors(_vendors!.Items))
                     {
                         <tr class="hover:bg-gray-50 transition-colors">
                             <td class="px-5 py-3.5">
@@ -89,7 +113,7 @@
                                         @(v.FullName.FirstOrDefault())
                                     </div>
                                     <div>
-                                        <p class="font-medium text-gray-800">@v.FullName</p>
+                                        <p class="font-semibold text-gray-800">@v.FullName</p>
                                         <p class="text-xs text-gray-400">@(v.BusinessName ?? "—")</p>
                                     </div>
                                 </div>
@@ -301,7 +325,40 @@
     private bool _loading = true;
     private int  _page    = 1;
     private string? _search;
+    private string  _sortKey = "created_desc";
     private System.Timers.Timer? _debounce;
+
+    // ── Status filter chips — same convention as Crew's roster tabs. ─────
+    private readonly string[] _statusTabs = { "All", "Active Vendors", "Suspended Vendors", "Rejected Vendors" };
+    private string _activeStatusTab = "All";
+    private string? StatusForTab(string tab) => tab switch
+    {
+        "Active Vendors"    => "Active",
+        "Suspended Vendors" => "Suspended",
+        "Rejected Vendors"  => "Rejected",
+        _                   => null
+    };
+
+    private async Task SetStatusTab(string tab)
+    {
+        if (_activeStatusTab == tab) return;
+        _activeStatusTab = tab;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    // Client-side, like Crew's SortCrew — only reorders whatever page is
+    // currently loaded (search/status filters are the server-side ones).
+    private IEnumerable<VendorListItemDto> SortVendors(IEnumerable<VendorListItemDto> items) => _sortKey switch
+    {
+        "created_asc" => items.OrderBy(v => v.CreatedAt),
+        "name"        => items.OrderBy(v => v.FullName, StringComparer.OrdinalIgnoreCase),
+        "rating_desc" => items.OrderByDescending(v => v.Rating ?? -1),
+        "rating_asc"  => items.OrderBy(v => v.Rating ?? decimal.MaxValue),
+        "crew_desc"   => items.OrderByDescending(v => v.CrewCount),
+        "status"      => items.OrderBy(v => v.Status),
+        _             => items.OrderByDescending(v => v.CreatedAt)
+    };
 
     private bool _showCreate;
     private bool _creating;
@@ -351,7 +408,7 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _vendors = await VendorApi.GetVendorsAsync(_page, _search);
+        _vendors = await VendorApi.GetVendorsAsync(_page, _search, status: StatusForTab(_activeStatusTab));
         _loading = false;
     }
 

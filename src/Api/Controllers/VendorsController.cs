@@ -38,6 +38,7 @@ public sealed class VendorsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetVendors(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
         CancellationToken ct = default)
     {
         // Vendors can only see themselves — return their own record as single-item page
@@ -54,7 +55,7 @@ public sealed class VendorsController : ControllerBase
         }
 
         if (!_currentUser.HasPermission("vendors:read")) return Forbid();
-        var result = await _mediator.Send(new GetVendorsQuery(page, pageSize, search), ct);
+        var result = await _mediator.Send(new GetVendorsQuery(page, pageSize, search, status), ct);
         return Ok(ApiResponse<PagedVendorResult>.Ok(result.Value));
     }
 
