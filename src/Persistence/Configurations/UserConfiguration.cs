@@ -63,6 +63,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.BusinessName).HasColumnName("business_name").HasMaxLength(200);
         builder.Property(u => u.ReferralCode).HasColumnName("referral_code").HasMaxLength(20);
         builder.Property(u => u.Rating).HasColumnName("rating").HasPrecision(3, 2);
+        builder.Property(u => u.RatingCount).HasColumnName("rating_count").HasDefaultValue(0);
         builder.Property(u => u.EventsCompleted).HasColumnName("events_completed").HasDefaultValue(0);
 
         // Crew-specific

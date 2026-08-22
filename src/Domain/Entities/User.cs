@@ -70,8 +70,16 @@ public sealed class User : BaseEntity
     public string? BusinessName     { get; set; }
     /// <summary>Unique code Crew uses to join this Vendor.</summary>
     public string? ReferralCode     { get; private set; }
-    /// <summary>Admin-rated vendor score (0.0 – 5.0).</summary>
+    /// <summary>
+    /// Cached average of this Vendor's per-event ratings (0.0 - 5.0), derived from
+    /// the ratings table. Null means NOT YET RATED, which is not the same as zero:
+    /// zero would render as no stars and read as "rated terribly".
+    /// </summary>
     public decimal? Rating          { get; private set; }
+    /// <summary>How many events back the <see cref="Rating"/> average. An average
+    /// without its sample size invites trusting one glowing review as much as
+    /// twenty.</summary>
+    public int      RatingCount     { get; private set; }
     /// <summary>Total events completed as a Vendor.</summary>
     public int EventsCompleted      { get; private set; }
 
@@ -80,7 +88,9 @@ public sealed class User : BaseEntity
     public Guid? VendorId           { get; private set; }
     /// <summary>Discipline score 0–100 (auto-updated by attendance records).</summary>
     public decimal DisciplineScore  { get; private set; } = 100m;
-    public decimal? CrewRating        { get; private set; }  // Average rating by Vendors (0–5)
+    /// <summary>Cached average of this Crew member's per-event ratings (0-5),
+    /// derived from the ratings table. Null = not yet rated, not zero.</summary>
+    public decimal? CrewRating        { get; private set; }
     public int      CrewRatingCount    { get; private set; }
     /// <summary>Total events attended as Crew.</summary>
     public int EventsAttended       { get; private set; }
@@ -210,11 +220,29 @@ public sealed class User : BaseEntity
         LastLoginAt = DateTime.UtcNow;
     }
 
-    /// <summary>Admin rates a Vendor (0.0–5.0).</summary>
-    public void SetRating(decimal rating)
+    /// <summary>
+    /// Overwrites the cached Vendor reputation with a freshly computed aggregate
+    /// from the ratings table. Call it only from the recompute path -- these are
+    /// derived fields, and hand-setting them is what lets a cache lie.
+    ///
+    /// No role check: subject_type on the rating already records the capacity the
+    /// person was judged in, and a crew member later promoted to Vendor must not
+    /// make their own recompute throw.
+    /// </summary>
+    public void SetVendorReputation(decimal? average, int count)
     {
-        if (Role != UserRole.Vendor) throw new InvalidOperationException("Only Vendors can be rated.");
-        Rating = Math.Clamp(rating, 0m, 5m);
+        Rating      = average.HasValue ? Math.Clamp(average.Value, 0m, 5m) : null;
+        RatingCount = count < 0 ? 0 : count;
+    }
+
+    /// <summary>
+    /// Overwrites the cached Crew reputation with a freshly computed aggregate.
+    /// Same contract as <see cref="SetVendorReputation"/>.
+    /// </summary>
+    public void SetCrewReputation(decimal? average, int count)
+    {
+        CrewRating      = average.HasValue ? Math.Clamp(average.Value, 0m, 5m) : null;
+        CrewRatingCount = count < 0 ? 0 : count;
     }
 
     /// <summary>Crew joins a Vendor (called after referral code validation).</summary>
@@ -233,16 +261,20 @@ public sealed class User : BaseEntity
     public void IncrementEventsAttended() => EventsAttended++;
 
     /// <summary>
-    /// Called when a Vendor rates this crew member (0–5 stars).
-    /// Uses a rolling average: ((existing * count) + new) / (count + 1).
+    /// Folds one more star into a rolling mean.
     /// </summary>
+    /// <remarks>
+    /// Superseded by the ratings table plus <see cref="SetCrewReputation"/>.
+    /// This discarded the individual scores, so a rating could never be revised,
+    /// withdrawn or recomputed -- the same incremental-cache trap behind the
+    /// max_crew drift bug. Kept only so any straggling caller fails loudly at
+    /// compile time rather than silently corrupting an average.
+    /// </remarks>
+    [Obsolete("Write a Rating row and call SetCrewReputation with a full recompute. " +
+              "Incremental averaging cannot be corrected. See Rating.cs.", error: true)]
     public void AddCrewRating(decimal rating)
-    {
-        rating = Math.Clamp(rating, 0m, 5m);
-        var total = (CrewRating ?? 0m) * CrewRatingCount + rating;
-        CrewRatingCount++;
-        CrewRating = Math.Round(total / CrewRatingCount, 2);
-    }
+        => throw new NotSupportedException(
+            "Incremental crew rating was removed. Write a Rating row and recompute.");
     public void IncrementEventsCompleted() => EventsCompleted++;
 
     // ── Self-registration & password-based auth ─────────────────────────────

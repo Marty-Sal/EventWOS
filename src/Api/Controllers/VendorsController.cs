@@ -84,14 +84,22 @@ public sealed class VendorsController : ControllerBase
             : BadRequest(ApiResponse<VendorDto>.Fail(result.Error.Message));
     }
 
-    /// <summary>Rate a vendor (0.0–5.0). Admin only.</summary>
+    /// <summary>
+    /// Admin/Manager rates a vendor's performance and cooperation on ONE completed
+    /// event. Event-scoped because a vendor's reputation is the average of the
+    /// events they worked -- the previous global PATCH overwrote the single score
+    /// each time, so a second event silently erased the first.
+    /// </summary>
     [Permission("vendors:write")]
-    [HttpPatch("{id:guid}/rating")]
-    public async Task<IActionResult> RateVendor(Guid id, [FromBody] RateVendorRequest req, CancellationToken ct)
+    [HttpPost("{id:guid}/events/{eventId:guid}/rating")]
+    public async Task<IActionResult> RateVendor(
+        Guid id, Guid eventId, [FromBody] RateVendorRequest req, CancellationToken ct)
     {
         if (!_currentUser.HasPermission("vendors:write")) return Forbid();
-        var result = await _mediator.Send(new RateVendorCommand(id, req.Rating), ct);
-        return result.IsSuccess ? Ok(ApiResponse.Ok("Rating updated.")) : BadRequest(ApiResponse.Fail(result.Error.Message));
+        var result = await _mediator.Send(
+            new RateVendorCommand(eventId, id, req.Performance, req.Cooperation, req.Comment), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok("Rating saved."))
+                                : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 
     /// <summary>Change vendor status. Admin only.</summary>

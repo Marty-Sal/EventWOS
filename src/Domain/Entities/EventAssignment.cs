@@ -294,18 +294,36 @@ public sealed class EventAssignment : BaseEntity
     }
 
     // ── Rating ────────────────────────────────────────────────────────────────
-    /// <summary>Vendor rates this crew member 1–5 stars. Can only be called once per assignment.</summary>
+    /// <summary>Vendor rates this crew member 1-5 stars, once per assignment.</summary>
+    /// <remarks>
+    /// Superseded by the ratings table, which scores performance and cooperation
+    /// separately and per EVENT rather than per shift -- this per-assignment
+    /// version let a crew member working three shifts be rated three times and
+    /// outvote a one-shift colleague in their own average. Obsolete as an error so
+    /// no caller keeps writing ratings that averaging no longer reads.
+    /// </remarks>
+    [Obsolete("Write a Rating row via RatingWriter, then MirrorRatingScore. " +
+              "See Rating.cs.", error: true)]
     public void RateCrewMember(decimal stars)
+        => throw new NotSupportedException("Per-assignment rating was removed; write a Rating row.");
+
+    /// <summary>
+    /// Mirrors the event-level rating's score onto this assignment so screens
+    /// still reading VendorRating (the vendor's assignment list) keep working.
+    ///
+    /// Display copy only -- the ratings table owns the real value and its
+    /// uniqueness. Intentionally has no once-only guard: a revised rating must be
+    /// able to refresh the mirror, and blocking that would leave the visible star
+    /// count contradicting the stored rating.
+    /// </summary>
+    public void MirrorRatingScore(decimal score)
     {
-        if (Status != AssignmentStatus.Attended)
-            throw new InvalidOperationException("Can only rate crew after they have attended.");
-        if (VendorRating.HasValue)
-            throw new InvalidOperationException("This crew member has already been rated for this assignment.");
-        if (stars < 1 || stars > 5)
-            throw new ArgumentOutOfRangeException(nameof(stars), "Rating must be between 1 and 5.");
-        VendorRating = stars;
+        VendorRating = Math.Clamp(score, 0m, 5m);
         RatedAt      = DateTime.UtcNow;
     }
+
+    /// <summary>True once this assignment's crew member may be rated.</summary>
+    public bool IsRateable => Status == AssignmentStatus.Attended;
 
     // ── Vendor re-invite & revoke (crew rows) ────────────────────────────────
 

@@ -508,7 +508,9 @@ public sealed class EventsController : ControllerBase
     {
         if (_currentUser.Role != UserRole.Vendor) return Forbid();
 
-        var result = await _mediator.Send(new RateCrewCommand(assignmentId, _currentUser.UserId!.Value, body.Rating), ct);
+        var result = await _mediator.Send(new RateCrewCommand(
+            assignmentId, _currentUser.UserId!.Value,
+            body.Performance, body.Cooperation, body.Comment), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok("Crew rated successfully."))
                                 : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
@@ -585,6 +587,11 @@ public sealed record RecordAttendanceRequest(
     string? Location = null,
     int? Accuracy = null);
 public sealed record ReviewDecisionRequest(string? Reason = null);
-public sealed record RateCrewRequest(decimal Rating);
+/// <summary>
+/// Two axes, 1-5 each, plus an optional note. Both are required: allowing one to
+/// stand in for the other is how the old single-score model ended up unable to
+/// say whether someone did good work or was merely easy to work with.
+/// </summary>
+public sealed record RateCrewRequest(int Performance, int Cooperation, string? Comment = null);
 
 

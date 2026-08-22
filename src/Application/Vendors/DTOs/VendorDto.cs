@@ -53,7 +53,12 @@ public sealed record CreateVendorRequest(
     string? Email
 );
 
-public sealed record RateVendorRequest(decimal Rating);
+/// <summary>
+/// Two axes, 1-5 each, plus an optional note. The event is a route value rather
+/// than a body field, because a rating with no event attached is exactly what the
+/// old model allowed and could never average.
+/// </summary>
+public sealed record RateVendorRequest(int Performance, int Cooperation, string? Comment = null);
 
 public sealed record CreateCrewRequest(
     string Mobile,

@@ -33,6 +33,10 @@ namespace EventWOS.Persistence.Migrations
             migrationBuilder.Sql(@"
                 DO $$
                 BEGIN
+    -- Sample size behind users.rating. An average without its count invites
+    -- trusting one glowing review as much as twenty.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_count INT NOT NULL DEFAULT 0;
+
     -- ═══ ratings ═════════════════════════════════════════════════════════
     -- Single source of truth for vendor + crew reputation, scored on two axes
     -- (performance, cooperation) and scoped to ONE event.
@@ -151,14 +155,17 @@ namespace EventWOS.Persistence.Migrations
          OR u.crew_rating_count IS DISTINCT FROM agg.cnt);
 
     UPDATE users u
-       SET rating = agg.avg_score
+       SET rating       = agg.avg_score,
+           rating_count = agg.cnt
       FROM (SELECT subject_user_id,
-                   ROUND(AVG((performance + cooperation) / 2.0), 2) AS avg_score
+                   ROUND(AVG((performance + cooperation) / 2.0), 2) AS avg_score,
+                   COUNT(*)                                         AS cnt
               FROM ratings
              WHERE subject_type = 1 AND is_deleted = false
           GROUP BY subject_user_id) agg
      WHERE u.id = agg.subject_user_id
-       AND u.rating IS DISTINCT FROM agg.avg_score;
+       AND (u.rating       IS DISTINCT FROM agg.avg_score
+         OR u.rating_count IS DISTINCT FROM agg.cnt);
                 END $$;
             ");
         }
