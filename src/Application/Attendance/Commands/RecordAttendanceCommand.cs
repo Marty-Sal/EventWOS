@@ -75,6 +75,40 @@ public sealed class RecordAttendanceHandler : IRequestHandler<RecordAttendanceCo
                 "Attendance.AlreadyCheckedOut",
                 "You have already checked out for this event."));
 
+        // ── Geofence enforcement (check-IN only) ────────────────────────────
+        // Second of the two attendance write-paths. RequestCheckInCommand
+        // already gates QR minting, but this endpoint can be reached directly,
+        // so the same rule is enforced here — otherwise the fence would be
+        // bypassable by skipping the QR flow entirely.
+        //
+        // Check-OUT is deliberately NOT fenced: crew legitimately leave the
+        // site and a blocked checkout would corrupt their discipline score and
+        // hours. Presence is proven at check-in.
+        //
+        // Radius and venue coordinates come from the database. The client's
+        // req.Location is the only untrusted input in the decision, and a
+        // radius supplied by a caller has no path into this call at all.
+        if (action == AttendanceAction.CheckIn)
+        {
+            var venueCoords = assignment.Event.VenueId is null
+                ? null
+                : await _db.Venues
+                    .Where(v => v.Id == assignment.Event.VenueId)
+                    .Select(v => new { v.Latitude, v.Longitude })
+                    .FirstOrDefaultAsync(ct);
+
+            var fence = GeoFenceEvaluator.Evaluate(
+                geoFenceEnabled:      assignment.Event.GeoFenceEnabled,
+                geoFenceRadiusMeters: assignment.Event.GeoFenceRadiusMeters,
+                venueLatitude:        venueCoords?.Latitude,
+                venueLongitude:       venueCoords?.Longitude,
+                crewLocationRaw:      req.Location);
+
+            if (!fence.Allowed)
+                return Result.Failure<AttendanceRecordDto>(new Error(
+                    fence.FailureCode!, fence.FailureMessage!));
+        }
+
         // Reverse-geocode the client's "lat,lng" via Nominatim. Same
         // pattern as VerifyCheckInHandler — awaited with a 2 s timeout;
         // (coords, null) is the graceful-fallback on any hiccup.

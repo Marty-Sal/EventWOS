@@ -1,4 +1,5 @@
 using EventWOS.Application.Attendance.DTOs;
+using EventWOS.Application.Attendance.Geo;
 using EventWOS.Application.Interfaces;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
@@ -96,14 +97,40 @@ public sealed class RequestCheckInHandler
         // don't enforce that here; a future device rounding tweak
         // shouldn't trigger a server-side reject.
         var loc = (req.CrewLocation ?? string.Empty).Trim();
-        if (string.IsNullOrEmpty(loc)
-            || !System.Text.RegularExpressions.Regex.IsMatch(
-                loc, @"^-?\d{1,3}\.\d+,-?\d{1,3}\.\d+$"))
+        if (!GeoFenceEvaluator.TryParseCoordinates(loc, out _, out _))
         {
             return Result.Failure<PendingCheckInDto>(new Error(
                 "CheckIn.LocationRequired",
                 "Location is required to check in. Please enable location access and try again."));
         }
+
+        // ── Guard 5: geofence ──────────────────────────────────────────
+        // This runs BEFORE the QR is minted, which is the whole point: if the
+        // event requires location verification, a crew member standing outside
+        // the fence never gets a code at all. Gating only at scan time would
+        // let them generate a QR from home and have someone on site scan it.
+        //
+        // The radius and the venue coordinates are loaded from the database
+        // here — never taken from the request. A client can influence exactly
+        // one value in this decision (its own GPS fix), which is why the
+        // parse above is strict and why the comparison happens server-side.
+        var venueCoords = assignment.Event.VenueId is null
+            ? null
+            : await _db.Venues
+                .Where(v => v.Id == assignment.Event.VenueId)
+                .Select(v => new { v.Latitude, v.Longitude })
+                .FirstOrDefaultAsync(ct);
+
+        var fence = GeoFenceEvaluator.Evaluate(
+            geoFenceEnabled:      assignment.Event.GeoFenceEnabled,
+            geoFenceRadiusMeters: assignment.Event.GeoFenceRadiusMeters,
+            venueLatitude:        venueCoords?.Latitude,
+            venueLongitude:       venueCoords?.Longitude,
+            crewLocationRaw:      loc);
+
+        if (!fence.Allowed)
+            return Result.Failure<PendingCheckInDto>(new Error(
+                fence.FailureCode!, fence.FailureMessage!));
 
         // ── Mint the new row ───────────────────────────────────────────
         var code = GenerateCode();

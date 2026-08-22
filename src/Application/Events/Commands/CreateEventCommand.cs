@@ -56,7 +56,16 @@ public sealed record CreateEventCommand(
     // actually picked -- the venue catalog is the source of truth for the
     // full address details (incl. lat/lng); the event just carries the
     // display copy plus this VenueId back-reference.
-    Guid?    VenueId = null
+    Guid?    VenueId = null,
+
+    // ── Attendance geofence configuration ───────────────────────────────────
+    // Set when the admin ticks "Location / GPS" under Attendance Verification.
+    // The radius belongs to the EVENT (not the Venue) so two events at the
+    // same venue can enforce different boundaries. The handler validates it
+    // against the venue's coordinates and clamps it via Event.EnableGeoFence —
+    // a client-supplied radius is never taken on trust beyond that.
+    bool     GeoFenceEnabled      = false,
+    int?     GeoFenceRadiusMeters = null
 ) : IRequest<Result<EventDto>>;
 
 public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Result<EventDto>>
@@ -64,6 +73,13 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
     private readonly IAppDbContext       _db;
     private readonly IUnitOfWork         _uow;
     private readonly INotificationPusher _push;
+    /// <summary>
+    /// Applied when the admin enables the fence but sends no radius. 150 m is a
+    /// deliberate middle ground: comfortably outside GPS jitter, tight enough
+    /// that "at the venue" still means it.
+    /// </summary>
+    private const int DefaultGeoFenceRadiusMeters = 150;
+
     public CreateEventHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
     { _db = db; _uow = uow; _push = push; }
 
@@ -78,6 +94,12 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
         // always matches the catalog entry it was picked from.
         var venueName = req.Venue;
         var venueAddr = req.Address;
+
+        // Whether the picked venue actually has coordinates. Captured here
+        // while the venue is already loaded so the geofence step below doesn't
+        // need a second round trip.
+        var venueHasCoordinates = false;
+
         if (req.VenueId is not null)
         {
             var venue = await _db.Venues.FirstOrDefaultAsync(v => v.Id == req.VenueId, ct);
@@ -85,7 +107,17 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
                 return Result.Failure<EventDto>(new Error("Event.InvalidVenue", "Selected venue not found or archived."));
             venueName = venue.Name;
             venueAddr = $"{venue.AddressLine1}, {venue.City}".Trim(' ', ',');
+            venueHasCoordinates = venue.Latitude is not null && venue.Longitude is not null;
         }
+
+        // Geofencing requires a catalog venue — there is nothing to measure
+        // from otherwise. Event creation deliberately cannot mint a venue
+        // implicitly: venues are centrally managed master data, and a
+        // half-specified ad-hoc venue would produce an unenforceable fence.
+        if (req.GeoFenceEnabled && req.VenueId is null)
+            return Result.Failure<EventDto>(new Error(
+                "Event.GeoFenceNeedsVenue",
+                "Select a saved venue before enabling location verification — the geofence is measured from the venue's coordinates."));
 
         var providedShifts = req.Shifts ?? Array.Empty<CreateEventShiftDto>();
 
@@ -101,6 +133,24 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
             req.Title, req.Description, venueName, venueAddr,
             req.StartAt, req.EndAt, req.CreatedByUserId,
             maxCrew: effectiveMaxCrew, venueId: req.VenueId);
+
+        // Arm the attendance geofence. The domain enforces the venue-has-
+        // coordinates invariant and the 20 m..5 km clamp, so an out-of-range
+        // radius from any client surfaces as a clean validation failure rather
+        // than a silently mis-sized fence.
+        if (req.GeoFenceEnabled)
+        {
+            try
+            {
+                ev.EnableGeoFence(
+                    req.GeoFenceRadiusMeters ?? DefaultGeoFenceRadiusMeters,
+                    venueHasCoordinates);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException)
+            {
+                return Result.Failure<EventDto>(new Error("Event.GeoFenceInvalid", ex.Message));
+            }
+        }
 
         _db.Events.Add(ev);
 
