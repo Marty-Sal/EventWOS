@@ -263,6 +263,7 @@
                                        @onchange="e => ToggleSelectAll((bool)(e.Value ?? false))"
                                        class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
                             </th>
+                            <th class="text-left px-4 py-2.5 font-semibold">Date</th>
                             <th class="text-left px-4 py-2.5 font-semibold">Crew</th>
                             <th class="text-left px-4 py-2.5 font-semibold">Event</th>
                             <th class="text-left px-4 py-2.5 font-semibold">Shift</th>
@@ -281,6 +282,7 @@
                                            @onchange="e => ToggleSelect(item.AssignmentId, (bool)(e.Value ?? false))"
                                            class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
                                 </td>
+                                <td class="px-4 py-2.5 text-gray-600 whitespace-nowrap">@FormatItemDate(item)</td>
                                 <td class="px-4 py-2.5">
                                     <div class="font-semibold text-gray-800">@item.CrewName</div>
                                     <div class="text-[11px] text-gray-400">@item.CrewMobile</div>
@@ -599,6 +601,13 @@
 
     private static string DisciplineColor(decimal score) =>
         score >= 80 ? "text-green-600" : score >= 50 ? "text-amber-600" : "text-red-600";
+
+    /// <summary>Dedicated "Date" column for the List view — mirrors the same
+    /// addition on the Vendor's Events tab. Prefers the shift's own start
+    /// (per-shift accuracy); falls back to the event's start for legacy rows
+    /// with no ShiftId/ShiftStartAt so the column is never blank.</summary>
+    private static string FormatItemDate(ManagerApprovalItemDto a) =>
+        (a.ShiftStartAt ?? a.EventStartAt).ToLocalTime().ToString("d MMM yyyy");
 
     /// <summary>Phase D step 12: shift chip text "Box Office · 18:00–23:00 · 5h".</summary>
     private static string? BuildShiftLabel(ManagerApprovalItemDto a)
