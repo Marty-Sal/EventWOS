@@ -89,11 +89,37 @@ public sealed class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, R
 
         _db.RefreshTokens.Add(newToken);
 
-        // 4. Update or create session
+        // 4. Point the session row at the NEW session_id.
+        //
+        // This used to call UpdateActivity() only, leaving SessionId pointed at
+        // the just-revoked value. The auth middleware checks the access token's
+        // session_id claim against UserSessions.SessionId+IsActive on every
+        // request -- so the freshly minted token (carrying the new sessionId)
+        // matched no row and was rejected as "revoked" on its very next use.
+        // The client treated that bogus 401 as "your session ended", cleared
+        // local storage, and forced a brand-new login -- abandoning this row
+        // still marked IsActive=true forever instead of terminating it. Repeat
+        // that every ~60 minutes and you get exactly what showed up in
+        // production: dozens of "active" sessions for the same account that
+        // were each actually dead within an hour of being created.
+        //
+        // If no matching row exists (e.g. this device's session already ended,
+        // or DeviceId wasn't supplied on the very first refresh), create one --
+        // a valid, trackable token must never end up with no session backing it.
+        var deviceId = request.DeviceId ?? existing.DeviceId;
         var session = await _db.UserSessions
-            .FirstOrDefaultAsync(s => s.UserId == user.Id && s.DeviceId == (request.DeviceId ?? existing.DeviceId) && s.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(s => s.UserId == user.Id && s.DeviceId == deviceId && s.IsActive, cancellationToken);
 
-        session?.UpdateActivity();
+        if (session is not null)
+        {
+            session.RotateSessionId(sessionId);
+        }
+        else
+        {
+            _db.UserSessions.Add(new UserSession(
+                user.Id, sessionId, deviceId, "Unknown Device",
+                request.IpAddress ?? existing.IpAddress, "unknown"));
+        }
 
         await _uow.SaveChangesAsync(cancellationToken);
 

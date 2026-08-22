@@ -44,6 +44,22 @@ public sealed class UserSession : BaseEntity
 
     public void UpdateActivity() => LastActivityAt = DateTime.UtcNow;
 
+    /// <summary>
+    /// Points this session row at a NEW JWT session_id, following a token
+    /// refresh. Every access token carries a session_id claim, and the auth
+    /// middleware rejects any token whose claim has no matching active row --
+    /// so if this is not called on rotation, the very next request after a
+    /// refresh is rejected as "revoked" even though the user never logged out.
+    /// That silent break was the actual cause of session pileup: the client
+    /// reacted to the bogus 401 by clearing local storage and forcing a fresh
+    /// login, abandoning this row instead of ending it.
+    /// </summary>
+    public void RotateSessionId(Guid newSessionId)
+    {
+        SessionId = newSessionId;
+        LastActivityAt = DateTime.UtcNow;
+    }
+
     public void Terminate(string reason)
     {
         IsActive = false;

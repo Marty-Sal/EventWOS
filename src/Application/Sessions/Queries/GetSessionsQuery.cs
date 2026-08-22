@@ -34,7 +34,30 @@ public sealed class GetSessionsHandler : IRequestHandler<GetSessionsQuery, Resul
 
     public async Task<Result<IReadOnlyList<SessionDto>>> Handle(GetSessionsQuery request, CancellationToken ct)
     {
-        var q = _db.UserSessions.AsNoTracking().Where(s => s.IsActive);
+        var now = DateTime.UtcNow;
+
+        // A session row's own IsActive flag is not enough on its own -- it only
+        // flips to false on an EXPLICIT logout or admin revoke. A token that
+        // simply expired, or a device whose refresh token already ran out its
+        // 30-day window, never triggers either of those, so the row would sit
+        // here marked "active" forever with a Revoke button that has nothing
+        // left underneath it to revoke.
+        //
+        // The thing that actually determines whether someone can still get back
+        // in on this device is whether a non-revoked, non-expired RefreshToken
+        // still exists for that (user, device) pair -- so require one to exist
+        // before a session counts as "logged in" for this list.
+        var liveDeviceKeys = _db.RefreshTokens
+            .AsNoTracking()
+            .Where(r => !r.IsRevoked && r.ExpiresAt > now)
+            .Select(r => new { r.UserId, r.DeviceId });
+
+        var q = _db.UserSessions.AsNoTracking()
+            .Where(s => s.IsActive)
+            .Join(liveDeviceKeys,
+                  s => new { s.UserId, s.DeviceId },
+                  k => new { k.UserId, k.DeviceId },
+                  (s, k) => s);
 
         if (!request.AdminMode)
             q = q.Where(s => s.UserId == request.UserId);
@@ -50,6 +73,10 @@ public sealed class GetSessionsHandler : IRequestHandler<GetSessionsQuery, Resul
                 x.s.Id, x.s.SessionId, x.u.Id, x.u.FullName, x.u.Role.ToString(),
                 x.s.DeviceId, x.s.DeviceName,
                 x.s.IpAddress, x.s.LastActivityAt, x.s.IsActive, x.s.CreatedAt))
+            // A user with several refresh tokens for the same device (rotation
+            // keeps the latest, but a stale one can briefly overlap) would
+            // otherwise duplicate the join match into one row per token.
+            .Distinct()
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<SessionDto>>(sessions);
