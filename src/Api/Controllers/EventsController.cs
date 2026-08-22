@@ -134,7 +134,8 @@ public sealed class EventsController : ControllerBase
 
         var result = await _mediator.Send(new CreateEventCommand(
             req.Title, req.Description, req.Venue, req.Address,
-            req.StartAt, req.EndAt, req.MaxCrew, _currentUser.UserId!.Value, shifts, req.VenueId), ct);
+            req.StartAt, req.EndAt, req.MaxCrew, _currentUser.UserId!.Value, shifts, req.VenueId,
+            req.GeoFenceEnabled, req.GeoFenceRadiusMeters), ct);
 
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetEvent), new { id = result.Value.Id, version = "1" },
@@ -554,7 +555,13 @@ public sealed record CreateEventRequest(
     DateTime StartAt, DateTime EndAt, int MaxCrew = 0,
     IReadOnlyList<CreateEventShiftRequest>? Shifts = null,
     // Optional catalog Venue picked via the state-filtered venue dropdown.
-    Guid? VenueId = null);
+    Guid? VenueId = null,
+    // Attendance geofence config. Both values are re-validated server-side
+    // against the venue's coordinates (Event.EnableGeoFence) — a radius sent
+    // here is a request, and it is never used at check-in time. The attendance
+    // path reads the persisted Event row instead.
+    bool  GeoFenceEnabled      = false,
+    int?  GeoFenceRadiusMeters = null);
 
 public sealed record UpdateEventRequest(
     string Title, string? Description, string Venue, string? Address,

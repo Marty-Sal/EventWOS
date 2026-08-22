@@ -125,7 +125,13 @@ public sealed record CreateEventRequest(
     DateTime StartAt, DateTime EndAt, int MaxCrew,
     IReadOnlyList<CreateEventShiftRequest>? Shifts = null,
     // Optional catalog Venue picked via the state-filtered venue dropdown.
-    Guid? VenueId = null);
+    Guid? VenueId = null,
+    // Attendance geofence: set when "Location (Geo Fencing)" is ticked. The
+    // radius is per-EVENT, not per-venue, so two events at one address can
+    // enforce different boundaries. The server re-validates both against the
+    // venue's coordinates — this is a request, not a decision.
+    bool  GeoFenceEnabled      = false,
+    int?  GeoFenceRadiusMeters = null);
 
 /// <summary>
 /// Phase B read-back shape — matches API EventShiftDto exactly.

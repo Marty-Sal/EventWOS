@@ -1191,15 +1191,11 @@
                         }
                     </div>
 
-                    @* ─── Attendance Verification Type — UI PLACEHOLDER ONLY ───
-                       Owner request: show right after Venue, before Start/End.
-                       No functionality wired up yet — these three checkboxes
-                       don't post anywhere and don't gate anything. Purely
-                       laying out the future options (QR Code, Face
-                       Recognition, Location/Geofencing) so the form shape is
-                       visible before any of the actual verification logic is
-                       built. Location defaults checked per request; do not
-                       treat these as functioning toggles. *@
+                    @* ─── Attendance Verification Type ─────────────────────────
+                       Location (Geo Fencing) is now LIVE: it posts to the API
+                       and is enforced server-side at check-in. QR Code and Face
+                       Recognition remain layout-only placeholders — they don't
+                       post anywhere and don't gate anything yet. *@
                     <div class="space-y-2">
                         <label class="text-xs text-gray-500">Attendance Verification Type</label>
                         <div class="flex flex-wrap gap-4">
@@ -1214,11 +1210,75 @@
                                 Face Recognition
                             </label>
                             <label class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-                                <input type="checkbox" @bind="_attendanceVerifyLocation"
+                                <input type="checkbox" checked="@_attendanceVerifyLocation"
+                                       @onchange="OnGeoFenceToggled"
                                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                                 Location (Geo Fencing)
                             </label>
                         </div>
+
+                        @* Radius + map preview, shown only when the fence is on so
+                           the form stays compact for events that don't use it. *@
+                        @if (_attendanceVerifyLocation)
+                        {
+                            @if (_form.VenueId is null)
+                            {
+                                @* Can't fence without a venue to measure from. Say
+                                   so here rather than failing on submit. *@
+                                <div class="rounded-lg bg-amber-50 border border-amber-200 p-2.5">
+                                    <p class="text-xs text-amber-800">
+                                        Pick a saved venue above to use location verification —
+                                        the boundary is measured from the venue's coordinates.
+                                    </p>
+                                </div>
+                            }
+                            else if (_pickedVenueCoords is null)
+                            {
+                                @* Venue exists but was never geocoded. Name the
+                                   exact fix so the admin isn't left guessing. *@
+                                <div class="rounded-lg bg-amber-50 border border-amber-200 p-2.5">
+                                    <p class="text-xs text-amber-800">
+                                        <strong>@_form.Venue</strong> has no coordinates saved.
+                                        Add them in Settings → Venue (search the place and confirm the pin),
+                                        then location verification can be enabled here.
+                                    </p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rounded-lg border border-gray-200 p-3 space-y-2.5">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <label class="text-xs text-gray-600">
+                                            Allowed distance from venue
+                                        </label>
+                                        <select @bind="_geoFenceRadiusMeters"
+                                                class="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                            @* Presets rather than a free number box:
+                                               they map to real site sizes and remove
+                                               the chance of a 5 m or 50 km typo. *@
+                                            <option value="50">50 m — single room / small hall</option>
+                                            <option value="100">100 m — one building</option>
+                                            <option value="150">150 m — building + car park</option>
+                                            <option value="300">300 m — large venue / stadium</option>
+                                            <option value="500">500 m — festival ground</option>
+                                            <option value="1000">1 km — very large site</option>
+                                        </select>
+                                    </div>
+
+                                    <LocationMap Latitude="_pickedVenueCoords.Value.Latitude"
+                                                 Longitude="_pickedVenueCoords.Value.Longitude"
+                                                 RadiusMeters="_geoFenceRadiusMeters"
+                                                 Draggable="false"
+                                                 Height="200px"
+                                                 Caption="Crew must be inside this circle to check in." />
+
+                                    <p class="text-[11px] text-gray-400">
+                                        Checked against the crew member's GPS on the server at check-in.
+                                        Check-out is not restricted.
+                                    </p>
+                                </div>
+                            }
+                        }
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">
@@ -1968,15 +2028,74 @@ else
     private List<VenuePickItem>  _venueSearchResults  = new();
     private bool                 _manualVenueEntry    = false;   // escape hatch: type Venue/Address by hand
 
-    // ── Attendance Verification Type — UI PLACEHOLDER ONLY ──────────────────
-    // Not read anywhere, not sent to the API, not persisted. Purely the
-    // checkbox state for the placeholder row shown after Venue in the
-    // Create Event modal. Location defaults to checked per owner request.
-    // Wire these into the real create-event submission once the actual
-    // verification-type feature is built.
+    // ── Attendance Verification Type ─────────────────────────────────────────
+    // QR Code and Face Recognition are still UI-only placeholders: not read,
+    // not sent, not persisted.
+    //
+    // Location IS live — it posts GeoFenceEnabled/GeoFenceRadiusMeters and is
+    // enforced server-side at check-in. It stays defaulted ON per owner request,
+    // but the submit path only sends it when a venue with coordinates is picked,
+    // so the default can never silently arm an unenforceable fence.
     private bool _attendanceVerifyQrCode           = false;
     private bool _attendanceVerifyFaceRecognition  = false;
     private bool _attendanceVerifyLocation         = true;
+
+    /// <summary>
+    /// Chosen radius. 150 m default: comfortably outside GPS jitter, tight
+    /// enough that "at the venue" still means it. Mirrors the server-side
+    /// default in CreateEventHandler.
+    /// </summary>
+    private int _geoFenceRadiusMeters = 150;
+
+    /// <summary>
+    /// Coordinates of the currently picked venue, loaded when it's selected so
+    /// the map preview and the "no coordinates" warning don't need a lookup on
+    /// every render. Null = venue has none (or none picked).
+    /// </summary>
+    private (decimal Latitude, decimal Longitude)? _pickedVenueCoords;
+
+    /// <summary>
+    /// True only when the fence is genuinely armable: ticked, a catalog venue is
+    /// picked, and that venue has coordinates. The submit path uses this rather
+    /// than the checkbox alone — the server would reject an unenforceable fence
+    /// anyway, and failing the whole event creation over a verification toggle
+    /// would be a poor trade.
+    /// </summary>
+    private bool GeoFenceIsArmable
+        => _attendanceVerifyLocation && _form.VenueId is not null && _pickedVenueCoords is not null;
+
+    private void OnGeoFenceToggled(ChangeEventArgs e)
+    {
+        _attendanceVerifyLocation = e.Value is true;
+    }
+
+    /// <summary>
+    /// Fetch the picked venue's coordinates. Called on venue selection rather
+    /// than during render so the map preview appears immediately after a pick.
+    /// </summary>
+    private async Task LoadPickedVenueCoordsAsync()
+    {
+        _pickedVenueCoords = null;
+        if (_form.VenueId is not { } venueId) return;
+
+        try
+        {
+            var r = await Http.GetFromJsonAsync<VenueCoordsResult>(
+                $"/api/v1/venues/{venueId}");
+
+            if (r?.Data?.Latitude is { } lat && r.Data.Longitude is { } lng)
+                _pickedVenueCoords = ((decimal)lat, (decimal)lng);
+        }
+        catch
+        {
+            // Non-fatal: without coordinates the UI shows the "add them in
+            // Settings" hint, which is the correct state anyway.
+            _pickedVenueCoords = null;
+        }
+    }
+
+    private sealed record VenueCoordsResult(bool Success, VenueCoordsData? Data);
+    private sealed record VenueCoordsData(Guid Id, double? Latitude, double? Longitude);
     private bool                 _showAddVenueForm    = false;
     private AddVenueForm         _addVenueForm        = new();
     private string?              _addVenueError;
@@ -2448,13 +2567,16 @@ else
         _form.VenueDropOpen = true;
     }
 
-    private void SelectVenue(VenuePickItem v)
+    private async Task SelectVenue(VenuePickItem v)
     {
         _form.VenueId       = v.Id;
         _form.Venue         = v.Name;
         _form.Address       = string.IsNullOrWhiteSpace(v.City) ? v.AddressLine1 : $"{v.AddressLine1}, {v.City}";
         _form.VenueSearch    = "";
         _form.VenueDropOpen  = false;
+
+        // Pull coordinates now so the geofence preview can render straight away.
+        await LoadPickedVenueCoordsAsync();
     }
 
     private void ClearPickedVenue()
@@ -2462,6 +2584,10 @@ else
         _form.VenueId = null;
         _form.Venue   = "";
         _form.Address = null;
+
+        // Stale coordinates would keep the geofence panel showing a map for a
+        // venue that is no longer selected.
+        _pickedVenueCoords = null;
     }
 
     private void SwitchToVenuePicker()
@@ -2707,6 +2833,12 @@ else
         _addShiftDraft  = new() { ScopeOfWorkId = _scopeCatalog.FirstOrDefault()?.Id ?? Guid.Empty };
         _manualVenueEntry = _form.VenueId is null;   // no catalog link -> show free-text so existing text isn't lost
         _showAddVenueForm = false;
+
+        // Editing: load the linked venue's coordinates so the geofence panel
+        // reflects reality instead of showing the "no coordinates" hint for a
+        // venue that has them.
+        await LoadPickedVenueCoordsAsync();
+
         _showEventModal = true;
         }
         finally { _loadingEditEventId = null; }   // modal is visible now — clear the row spinner
@@ -2858,7 +2990,12 @@ else
         var req = new CreateEventRequest(
             _form.Title, _form.Description, _form.Venue, _form.Address,
             _form.StartAt!.Value.ToUniversalTime(), _form.EndAt!.Value.ToUniversalTime(),
-            derivedMaxCrew, shifts, _form.VenueId);
+            derivedMaxCrew, shifts, _form.VenueId,
+            // Only send an armed fence when it's actually enforceable. The
+            // checkbox defaults to on, so posting it blindly would fail event
+            // creation for every event without geocoded venue coordinates.
+            GeoFenceEnabled:      GeoFenceIsArmable,
+            GeoFenceRadiusMeters: GeoFenceIsArmable ? _geoFenceRadiusMeters : null);
 
         if (_editingEvent is null)
         {
