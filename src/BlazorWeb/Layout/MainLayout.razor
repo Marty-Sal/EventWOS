@@ -7,6 +7,7 @@
 @inject IUserApiService UserApi
 @inject NotificationHubService Hub
 @inject IEventApiService EventApi
+@inject IAnnouncementApiService AnnouncementApi
 @inject HttpClient Http
 @inject IJSRuntime JS
 
@@ -116,6 +117,16 @@
                     </div>
                     <NavItem Href="/my-attendance" Icon="📍" Label="My Attendance" />
                     <NavItem Href="/my-payments"    Icon="💸" Label="My Payments" />
+                    <div class="relative">
+                        <NavItem Href="/notifications" Icon="📣" Label="Notifications" />
+                        @if (_unreadNotifications > 0)
+                        {
+                            <span class="absolute top-1 right-2 w-4 h-4 rounded-full bg-red-500 text-white
+                                         text-[9px] font-bold flex items-center justify-center pointer-events-none">
+                                @_unreadNotifications
+                            </span>
+                        }
+                    </div>
                 </AuthorizeView>
 
                 @* Vendor — My Crew + Crew Assignments + Attendance + Approvals + Payments + Report *@
@@ -128,6 +139,16 @@
                     <NavItem Href="/attendance"          Icon="📍" Label="Attendance" />
                     <NavItem Href="/vendor-payments"     Icon="💸" Label="My Payments" />
                     <NavItem Href="/vendor-report"       Icon="📊" Label="My Report" />
+                    <div class="relative">
+                        <NavItem Href="/notifications" Icon="📣" Label="Notifications" />
+                        @if (_unreadNotifications > 0)
+                        {
+                            <span class="absolute top-1 right-2 w-4 h-4 rounded-full bg-red-500 text-white
+                                         text-[9px] font-bold flex items-center justify-center pointer-events-none">
+                                @_unreadNotifications
+                            </span>
+                        }
+                    </div>
                 </AuthorizeView>
 
                 @* Approval queue — every action role gets one entry.
@@ -436,6 +457,7 @@
 
         await LoadPendingInvites();
         await LoadApprovalCountAsync();
+        await LoadUnreadNotificationsAsync();
         try { await Hub.StartAsync(); }
         catch { }
         Hub.ConnectionStateChanged += () => InvokeAsync(StateHasChanged);
@@ -498,11 +520,17 @@
         Hub.ManagerApprovedReceived      += OnInviteCountChanged;
         Hub.ManagerRejectedReceived      += OnInviteCountChanged;
         Hub.PendingManagerApprovalReceived += OnApprovalCountChanged; // manager: queue grew
+        Hub.EventAnnouncementReceived      += OnAnnouncementReceived; // vendor/crew: new event notification
     }
 
     private void OnInviteCountChanged(NotificationPayload payload)
     {
         _ = InvokeAsync(async () => { await LoadPendingInvites(); StateHasChanged(); });
+    }
+
+    private void OnAnnouncementReceived(NotificationPayload payload)
+    {
+        _ = InvokeAsync(async () => { await LoadUnreadNotificationsAsync(); StateHasChanged(); });
     }
 
     private void OnApprovalCountChanged(NotificationPayload payload)
@@ -582,6 +610,28 @@
 
             var data = await EventApi.GetMyAssignmentsAsync(page: 1);
             _pendingInvites = data?.Items.Count(a => a.Status == "Invited") ?? 0;
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    // ── Unread event-notification badge (Crew + Vendor) ──────────────────────
+    // Unread = an announcement for one of my events with no read receipt.
+    // Only recipients have receipts, so this is meaningless for Admin/Manager
+    // and skipped for them entirely.
+    private int _unreadNotifications;
+
+    private async Task LoadUnreadNotificationsAsync()
+    {
+        try
+        {
+            var authState = await AuthState.GetAuthenticationStateAsync();
+            var role      = authState.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                         ?? authState.User.FindFirst("role")?.Value;
+            if (role is not ("Crew" or "Vendor")) return;
+
+            var items = await AnnouncementApi.MineAsync(take: 100);
+            _unreadNotifications = items.Count(a => !a.IsRead);
             StateHasChanged();
         }
         catch { }

@@ -27,6 +27,7 @@ public sealed class NotificationHubService : IAsyncDisposable
     // the actual AttendanceRecord. Payload = { assignmentId, eventId,
     // eventTitle, checkedInAt }. Consumed by CheckInQrModal to auto-close.
     public event Action<NotificationPayload>?  CheckInVerifiedReceived;       // → crew
+    public event Action<NotificationPayload>?  EventAnnouncementReceived;     // → vendors + crew of an event
     // Payments
     public event Action<NotificationPayload>?  PaymentChangedReceived;        // payment created / approved / paid / rejected / hold
     public event Action<NotificationPayload>?  PayrollChangedReceived;        // batch submitted / approved / disbursed / rejected
@@ -91,6 +92,14 @@ public sealed class NotificationHubService : IAsyncDisposable
         // group once VerifyCheckInHandler commits the attendance row.
         _connection.On<NotificationPayload>("CheckInVerified",
             payload => CheckInVerifiedReceived?.Invoke(payload));
+
+        // Event notification broadcast by an Admin/Manager. The payload's
+        // shape is wider server-side (subject, preview, attachment count,
+        // deep link) but NotificationPayload only picks up EventTitle —
+        // enough for the toast; the full message is fetched from the API by
+        // whichever panel is listening.
+        _connection.On<NotificationPayload>("EventAnnouncement",
+            payload => EventAnnouncementReceived?.Invoke(payload));
 
         // Payments — all payment-lifecycle events fold into a single subscription
         // so consumers just refetch the list. (crew owner + vendor + admins/managers)

@@ -369,7 +369,16 @@
                     </div>
                 </div>
             }
-        </Authorized>
+        
+            @* ── Event notifications ──────────────────────────────────────
+               Everything the Admin/Manager team has broadcast for the events
+               this user is on, including anything sent before they were
+               assigned. Attachments open as links. *@
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
+            </div>
+
+</Authorized>
     </AuthorizeView>
 
     <AuthorizeView Roles="Vendor">
@@ -481,7 +490,16 @@
                     </div>
                 </div>
             }
-        </Authorized>
+        
+            @* ── Event notifications ──────────────────────────────────────
+               Everything the Admin/Manager team has broadcast for the events
+               this user is on, including anything sent before they were
+               assigned. Attachments open as links. *@
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
+            </div>
+
+</Authorized>
     </AuthorizeView>
 
 </div>
