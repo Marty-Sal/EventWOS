@@ -1,0 +1,197 @@
+@using System.Globalization
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@*
+    Leaflet map wrapper.
+
+    Two modes:
+      * Draggable (Settings → Venue): the admin positions the pin and we report
+        the coordinates back so the parent can reverse-geocode them.
+      * Read-only (Event screen): shows the venue pin plus the geofence circle.
+
+    The circle is a VISUALISATION of the event's configured radius. It has no
+    authority — check-in is allowed or rejected server-side from the Event row.
+    Drawing it here is what lets an admin see that a 100 m fence doesn't actually
+    cover their stadium before crew turn up and get rejected.
+*@
+
+<div class="space-y-2">
+    @if (!string.IsNullOrEmpty(Caption))
+    {
+        <p class="text-xs text-gray-500">@Caption</p>
+    }
+
+    @if (!HasCoordinates && !Draggable)
+    {
+        @* Read-only with nothing to show: an empty grey map is confusing, so say
+           what's missing and who can fix it. *@
+        <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-center">
+            <svg class="w-6 h-6 text-gray-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <p class="text-sm text-gray-600">No coordinates saved for this venue.</p>
+            <p class="text-xs text-gray-400 mt-0.5">Set them in Settings → Venue to show it on a map.</p>
+        </div>
+    }
+    else
+    {
+        <div id="@_elementId"
+             style="height:@Height; width:100%;"
+             class="rounded-lg border border-gray-300 overflow-hidden z-0"></div>
+
+        @if (Draggable)
+        {
+            <p class="text-xs text-gray-500">
+                Click the map or drag the pin to set the exact location.
+                @if (HasCoordinates)
+                {
+                    <span class="font-mono text-gray-600">
+                        @Latitude!.Value.ToString("0.000000", CultureInfo.InvariantCulture),
+                        @Longitude!.Value.ToString("0.000000", CultureInfo.InvariantCulture)
+                    </span>
+                }
+            </p>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>Unique per instance — two maps on one page must not share a container id.</summary>
+    private readonly string _elementId = $"eventwos-map-{Guid.NewGuid():N}";
+
+    [Parameter] public decimal? Latitude  { get; set; }
+    [Parameter] public decimal? Longitude { get; set; }
+
+    /// <summary>True in the venue editor; false for read-only previews.</summary>
+    [Parameter] public bool Draggable { get; set; }
+
+    /// <summary>Geofence radius to draw. Null/0 = no circle.</summary>
+    [Parameter] public int? RadiusMeters { get; set; }
+
+    [Parameter] public string  Height  { get; set; } = "280px";
+    [Parameter] public string? Caption { get; set; }
+
+    /// <summary>Raised with the new position after a drag or map click.</summary>
+    [Parameter] public EventCallback<(decimal Latitude, decimal Longitude)> OnPositionChanged { get; set; }
+
+    private bool HasCoordinates => Latitude is not null && Longitude is not null;
+
+    private DotNetObjectReference<LocationMap>? _selfRef;
+    private bool _initialised;
+
+    // Last values pushed to JS. Without this the OnAfterRender comparison would
+    // re-issue setMarker on every unrelated re-render, fighting the admin's drag.
+    private decimal? _lastLat, _lastLng;
+    private int?     _lastRadius;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Nothing rendered a container in read-only/no-coordinates mode.
+        if (!HasCoordinates && !Draggable) return;
+
+        if (!_initialised)
+        {
+            _selfRef ??= DotNetObjectReference.Create(this);
+
+            try
+            {
+                await JS.InvokeAsync<bool>("eventwosMap.init",
+                    _elementId,
+                    ToJsNumber(Latitude), ToJsNumber(Longitude),
+                    Draggable,
+                    Draggable ? _selfRef : null);
+            }
+            catch (JSException)
+            {
+                // Leaflet failed to load (blocked CDN, offline). The form must
+                // still be usable — coordinates can be typed or come from search
+                // — so swallow it rather than breaking the page.
+                return;
+            }
+
+            _initialised = true;
+            _lastLat = Latitude; _lastLng = Longitude;
+
+            await SyncCircleAsync();
+            return;
+        }
+
+        if (Latitude != _lastLat || Longitude != _lastLng)
+        {
+            _lastLat = Latitude; _lastLng = Longitude;
+            await SafeInvokeAsync("eventwosMap.setMarker",
+                _elementId, ToJsNumber(Latitude), ToJsNumber(Longitude), Draggable, true);
+            await SyncCircleAsync();
+        }
+        else if (RadiusMeters != _lastRadius)
+        {
+            await SyncCircleAsync();
+        }
+    }
+
+    private async Task SyncCircleAsync()
+    {
+        _lastRadius = RadiusMeters;
+        await SafeInvokeAsync("eventwosMap.setCircle",
+            _elementId, ToJsNumber(Latitude), ToJsNumber(Longitude), RadiusMeters);
+    }
+
+    /// <summary>
+    /// Called from locationMap.js after a drag or click. This is the only inbound
+    /// path from JS, and it carries display coordinates only — the geofence
+    /// decision is always made server-side from the saved Venue row.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnMarkerMoved(double latitude, double longitude)
+    {
+        var lat = Math.Round((decimal)latitude,  6);
+        var lng = Math.Round((decimal)longitude, 6);
+
+        // Record what JS already shows so OnAfterRender doesn't bounce the pin
+        // back by re-issuing setMarker with the same value.
+        _lastLat = lat; _lastLng = lng;
+
+        await OnPositionChanged.InvokeAsync((lat, lng));
+        StateHasChanged();
+    }
+
+    /// <summary>Recompute size after the container becomes visible (modal/tab open).</summary>
+    public Task RefreshAsync() => SafeInvokeAsync("eventwosMap.refresh", _elementId);
+
+    private async Task SafeInvokeAsync(string identifier, params object?[] args)
+    {
+        if (!_initialised) return;
+        try
+        {
+            await JS.InvokeAsync<bool>(identifier, args);
+        }
+        catch (JSException) { /* map gone or Leaflet unavailable — non-fatal */ }
+        catch (JSDisconnectedException) { /* circuit closed during teardown */ }
+    }
+
+    /// <summary>
+    /// Leaflet needs a JS number or null; a boxed decimal marshals as a string
+    /// and every isFinite check on the JS side would reject it.
+    /// </summary>
+    private static double? ToJsNumber(decimal? value)
+        => value is null ? null : (double)value.Value;
+
+    public async ValueTask DisposeAsync()
+    {
+        // Destroy the map before dropping the reference: a live Leaflet instance
+        // keeps DOM listeners and this DotNetObjectReference alive, which leaks
+        // on every modal open in a long-lived WASM session.
+        if (_initialised)
+        {
+            try { await JS.InvokeAsync<bool>("eventwosMap.destroy", _elementId); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+
+        _selfRef?.Dispose();
+        _selfRef = null;
+    }
+}

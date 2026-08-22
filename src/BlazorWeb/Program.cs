@@ -49,6 +49,9 @@ builder.Services.AddScoped<IVendorAllocationApiService, VendorAllocationApiServi
 builder.Services.AddScoped<IFilesApiService, FilesApiService>();
 builder.Services.AddScoped<IAnnouncementApiService, AnnouncementApiService>();
 builder.Services.AddScoped<IIndianStatesApiService, IndianStatesApiService>();
+// Location search / reverse geocoding — proxied through our API so no provider
+// credential ever reaches the browser.
+builder.Services.AddScoped<ILocationApiService, LocationApiService>();
 builder.Services.AddScoped<TokenRefreshService>();
 builder.Services.AddScoped<NotificationHubService>();
 
