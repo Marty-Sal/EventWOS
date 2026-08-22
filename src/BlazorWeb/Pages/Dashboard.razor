@@ -360,9 +360,13 @@
             @* ── Event notifications ──────────────────────────────────────
                Everything the Admin/Manager team has broadcast for the events
                this user is on, including anything sent before they were
-               assigned. Attachments open as links. Sits above Permissions
-               per owner request — it's the thing you actually need to check
-               daily; the permissions list is reference material. *@
+               assigned. Attachments open as links. Sits above Ratings and
+               Permissions per owner request — it's the thing you actually
+               need to check daily; ratings/permissions are reference material. *@
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
+            </div>
+
             @* Reputation breakdown. The stat tile above gives the single number;
                this shows what it is made of -- both axes, the spread, and the
                actual comments. A crew member seeing only "3.4" cannot tell whether
@@ -371,10 +375,6 @@
             {
                 <RatingSummaryCard UserId="_profile.Id" Title="Your rating" />
             }
-
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
-            </div>
 
             @if (_profile?.Permissions.Any() == true)
             {
@@ -492,18 +492,18 @@
             @* ── Event notifications ──────────────────────────────────────
                Everything the Admin/Manager team has broadcast for the events
                this user is on, including anything sent before they were
-               assigned. Attachments open as links. Sits above Permissions
-               per owner request — it's the thing you actually need to check
-               daily; the permissions list is reference material. *@
+               assigned. Attachments open as links. Sits above Ratings and
+               Permissions per owner request — it's the thing you actually
+               need to check daily; ratings/permissions are reference material. *@
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
+            </div>
+
             @* Same breakdown as the crew view, rated by admins rather than vendors. *@
             @if (_profile is not null)
             {
                 <RatingSummaryCard UserId="_profile.Id" Title="Your rating" IsVendor="true" />
             }
-
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
-            </div>
 
             @if (_profile?.Permissions.Any() == true)
             {
