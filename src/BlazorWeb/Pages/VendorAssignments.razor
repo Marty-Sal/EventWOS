@@ -98,7 +98,7 @@
                         class="px-3 py-1.5 rounded-xl bg-white text-red-600 text-xs font-bold hover:bg-red-50 disabled:opacity-50 transition">
                     ✕ Reject selected
                 </button>
-                <button @onclick="DoBulkApprove" disabled="@_bulkBusy"
+                <button @onclick="OnApproveSelectedClicked" disabled="@_bulkBusy"
                         class="px-4 py-1.5 rounded-xl bg-green-500 text-white text-xs font-bold hover:bg-green-600 disabled:opacity-50 transition shadow">
                     @(_bulkBusy && _bulkAction == "approve" ? "Working…" : "✓ Approve selected")
                 </button>
@@ -358,6 +358,43 @@
     }
 </div>
 
+@* Not-yet-accepted confirmation — gates "Approve selected" when the
+   batch includes crew still sitting at Invited (i.e. they haven't
+   accepted/declined yet). Forwarding them is a deliberate "Force Forward"
+   per row already; this just makes the vendor consciously confirm it
+   before it happens silently as part of a bigger bulk action. *@
+@if (_bulkApproveConfirmOpen)
+{
+    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 class="font-bold text-gray-800">Forward crew who haven't accepted?</h3>
+            <p class="text-sm text-gray-600">
+                You're forwarding
+                <span class="font-semibold text-gray-800">@_bulkApproveUnacceptedNames.Count</span>
+                crew @(_bulkApproveUnacceptedNames.Count == 1 ? "member" : "members")
+                who @(_bulkApproveUnacceptedNames.Count == 1 ? "hasn't" : "haven't") accepted
+                @(_bulkApproveUnacceptedNames.Count == 1 ? "their" : "their") invite yet:
+            </p>
+            <p class="text-sm font-medium text-gray-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                @string.Join(", ", _bulkApproveUnacceptedNames)
+            </p>
+            <p class="text-xs text-gray-500">
+                Click Yes to force-forward them to the Manager anyway, or No to go back and deselect them first.
+            </p>
+            <div class="flex gap-2 pt-1">
+                <button @onclick="CancelBulkApproveConfirm"
+                        class="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition">
+                    No, go back
+                </button>
+                <button @onclick="ConfirmBulkApprove"
+                        class="flex-1 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition">
+                    Yes, proceed
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @* Bulk reject modal — one reason applies to every selected row, same
    pattern as the Manager's Events tab (ManagerApprovals.razor). *@
 @if (_bulkRejectOpen)
@@ -464,6 +501,11 @@
     private string  _bulkRejectReason = "";
     private bool    _bulkReasonError;
 
+    // Confirmation gate for "Approve selected" when some selected rows are
+    // still Invited (crew hasn't responded to the invite yet).
+    private bool          _bulkApproveConfirmOpen;
+    private List<string>  _bulkApproveUnacceptedNames = new();
+
     private static bool IsSelectable(AssignmentDto a) => a.Status is "VendorApproved" or "Invited";
 
     private bool AllSelected =>
@@ -483,6 +525,38 @@
     }
 
     private void ClearSelection() => _selectedIds.Clear();
+
+    // Gate in front of DoBulkApprove: if any selected row is still Invited
+    // (crew hasn't accepted/declined yet), stop and make the vendor
+    // consciously confirm before we force-forward those specific people.
+    // Rows already past Invited (VendorApproved — crew already
+    // accepted) never trigger this and go straight through.
+    private void OnApproveSelectedClicked()
+    {
+        if (_selectedIds.Count == 0) return;
+        _bulkApproveUnacceptedNames = _all
+            .Where(a => _selectedIds.Contains(a.Id) && IsSelectable(a) && a.Status == "Invited")
+            .Select(a => a.CrewName)
+            .ToList();
+
+        if (_bulkApproveUnacceptedNames.Count > 0)
+        {
+            _bulkApproveConfirmOpen = true;
+            StateHasChanged();
+        }
+        else
+        {
+            _ = DoBulkApprove();
+        }
+    }
+
+    private void CancelBulkApproveConfirm() => _bulkApproveConfirmOpen = false;
+
+    private async Task ConfirmBulkApprove()
+    {
+        _bulkApproveConfirmOpen = false;
+        await DoBulkApprove();
+    }
 
     // "Approve" means different things depending on the row's own status:
     // VendorApproved -> Send to Manager (vendor-approve), Invited ->
