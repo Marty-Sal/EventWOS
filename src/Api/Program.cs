@@ -1577,6 +1577,66 @@ BEGIN
         RAISE NOTICE 'Created indian_states table';
     END IF;
 
+    -- ═══ event notifications (announcements) ════════════════════════════════
+    -- Mirrors migration 20260822200000_AddEventAnnouncements. Duplicated here
+    -- because the startup migration gate means a migration alone never reaches
+    -- prod (see the comment on the gate above) — this block runs every boot.
+    -- Admin/Manager broadcasts a rich-text message to an event's vendors
+    -- and/or crew; attachments stay in object storage and are joined in.
+    CREATE TABLE IF NOT EXISTS event_announcements (
+        id                   UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        event_id             UUID NOT NULL,
+        audience             VARCHAR(20) NOT NULL,
+        subject              VARCHAR(200) NOT NULL,
+        body_html            TEXT NOT NULL,
+        recipient_count      INT NOT NULL DEFAULT 0,
+        whatsapp_sent_count  INT NOT NULL DEFAULT 0,
+        created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_by           UUID,
+        updated_at           TIMESTAMPTZ,
+        updated_by           UUID,
+        is_deleted           BOOLEAN NOT NULL DEFAULT false,
+        deleted_at           TIMESTAMPTZ,
+        deleted_by           UUID
+    );
+    CREATE INDEX IF NOT EXISTS ix_event_announcements_event_created
+        ON event_announcements (event_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS event_announcement_attachments (
+        id                UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        announcement_id   UUID NOT NULL,
+        file_document_id  UUID NOT NULL,
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_by        UUID,
+        updated_at        TIMESTAMPTZ,
+        updated_by        UUID,
+        is_deleted        BOOLEAN NOT NULL DEFAULT false,
+        deleted_at        TIMESTAMPTZ,
+        deleted_by        UUID
+    );
+    CREATE INDEX IF NOT EXISTS ix_announcement_attachments_announcement
+        ON event_announcement_attachments (announcement_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_announcement_attachments_pair
+        ON event_announcement_attachments (announcement_id, file_document_id);
+
+    -- Read receipts. Absence of a row = unread, so nothing needs backfilling
+    -- for a user who joins an event after a notification was sent.
+    CREATE TABLE IF NOT EXISTS event_announcement_reads (
+        id                UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        announcement_id   UUID NOT NULL,
+        user_id           UUID NOT NULL,
+        read_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_by        UUID,
+        updated_at        TIMESTAMPTZ,
+        updated_by        UUID,
+        is_deleted        BOOLEAN NOT NULL DEFAULT false,
+        deleted_at        TIMESTAMPTZ,
+        deleted_by        UUID
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_announcement_reads_pair
+        ON event_announcement_reads (announcement_id, user_id);
+
 END $$;
 ";
         try
