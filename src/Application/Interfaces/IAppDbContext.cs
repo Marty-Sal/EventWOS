@@ -34,6 +34,11 @@ public interface IAppDbContext
     // File & Image Storage module
     DbSet<FileDocument>     FileDocuments     { get; }
 
+    // Event notifications — Admin/Manager broadcasts to an event's vendors/crew.
+    DbSet<EventAnnouncement>           EventAnnouncements           { get; }
+    DbSet<EventAnnouncementAttachment> EventAnnouncementAttachments { get; }
+    DbSet<EventAnnouncementRead>       EventAnnouncementReads       { get; }
+
     // Settings module — Venue catalog.
     DbSet<Venue>             Venues            { get; }
     DbSet<TermsAndConditions> TermsAndConditions { get; }

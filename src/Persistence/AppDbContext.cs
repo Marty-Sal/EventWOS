@@ -58,6 +58,11 @@ public sealed class AppDbContext : DbContext, IAppDbContext
 
     // Settings module — Venue catalog.
     public DbSet<Venue>             Venues            => Set<Venue>();
+    // Event notifications module.
+    public DbSet<EventAnnouncement>           EventAnnouncements           => Set<EventAnnouncement>();
+    public DbSet<EventAnnouncementAttachment> EventAnnouncementAttachments => Set<EventAnnouncementAttachment>();
+    public DbSet<EventAnnouncementRead>       EventAnnouncementReads       => Set<EventAnnouncementRead>();
+
     public DbSet<TermsAndConditions> TermsAndConditions => Set<TermsAndConditions>();
     public DbSet<TermsAcceptance>    TermsAcceptances    => Set<TermsAcceptance>();
 
