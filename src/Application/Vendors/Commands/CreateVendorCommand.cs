@@ -93,7 +93,7 @@ public sealed class CreateVendorHandler : IRequestHandler<CreateVendorCommand, R
         User v, int crewCount,
         IReadOnlyList<EventWOS.Application.Files.DTOs.FileDocumentDto>? files = null) => new(
         v.Id, v.Mobile, v.FullName, v.BusinessName, v.Email, v.AvatarUrl,
-        v.Status.ToString(), v.ReferralCode, v.Rating, v.EventsCompleted, crewCount, v.CreatedAt,
+        v.Status.ToString(), v.ReferralCode, v.Rating, v.RatingCount, v.EventsCompleted, crewCount, v.CreatedAt,
         v.ContactPersonName, v.GstNumber, v.Address, v.City, v.State, v.Website, v.Bio, v.DateOfBirth,
         files ?? Array.Empty<EventWOS.Application.Files.DTOs.FileDocumentDto>(),
         v.InvitedByUserId.HasValue, v.ProfileCompletedAt.HasValue);

@@ -58,7 +58,7 @@ public sealed class GetVendorsHandler : IRequestHandler<GetVendorsQuery, Result<
 
         var items = vendors.Select(v => new VendorListItemDto(
             v.Id, v.Mobile, v.FullName, v.BusinessName, v.Status.ToString(),
-            v.ReferralCode, v.Rating, v.EventsCompleted,
+            v.ReferralCode, v.Rating, v.RatingCount, v.EventsCompleted,
             crewCounts.GetValueOrDefault(v.Id, 0), v.CreatedAt
         )).ToList();
 

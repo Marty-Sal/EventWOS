@@ -49,7 +49,9 @@ public sealed class GetUsersHandler : IRequestHandler<GetUsersQuery, Result<Page
             .Take(request.PageSize)
             .Select(u => new UserDto(
                 u.Id, u.Mobile, u.FullName, u.Email,
-                u.AvatarUrl, u.Role, u.Status, u.ManagerId, u.LastLoginAt, u.CreatedAt))
+                u.AvatarUrl, u.Role, u.Status, u.ManagerId, u.LastLoginAt, u.CreatedAt,
+                // Cached aggregates, so listing users costs no extra query per row.
+                u.Rating, u.RatingCount, u.CrewRating, u.CrewRatingCount))
             .ToListAsync(ct);
 
         return Result.Success(PagedResult<UserDto>.Create(items, total, request.PageNumber, request.PageSize));

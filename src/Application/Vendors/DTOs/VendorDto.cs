@@ -11,7 +11,10 @@ public sealed record VendorDto(
     string? AvatarUrl,
     string  Status,
     string? ReferralCode,
+    /// <summary>Average across this vendor's rated events. Null = not yet rated.</summary>
     decimal? Rating,
+    /// <summary>How many rated events back that average.</summary>
+    int     RatingCount,
     int     EventsCompleted,
     int     CrewCount,
     DateTime CreatedAt,
@@ -41,6 +44,7 @@ public sealed record VendorListItemDto(
     string  Status,
     string? ReferralCode,
     decimal? Rating,
+    int     RatingCount,
     int     EventsCompleted,
     int     CrewCount,
     DateTime CreatedAt

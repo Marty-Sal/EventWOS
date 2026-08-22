@@ -12,7 +12,23 @@ public sealed record UserDto(
     UserStatus Status,
     Guid? ManagerId,
     DateTime? LastLoginAt,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    // ── Reputation ────────────────────────────────────────────────────────────
+    // Cached averages derived from the ratings table. Whichever pair is relevant
+    // depends on Role: Rating/RatingCount for a Vendor, CrewRating/
+    // CrewRatingCount for Crew.
+    //
+    // Null average means NOT YET RATED and must render as "no rating", never as
+    // zero stars -- an unrated new vendor and a genuinely terrible one are not
+    // the same claim to put next to someone's name in a list.
+    //
+    // The counts travel with the averages on purpose: "4.8" from one event is a
+    // very different signal from "4.8" from thirty, and a list that hides the
+    // sample size invites acting on the wrong one.
+    decimal? Rating          = null,
+    int      RatingCount     = 0,
+    decimal? CrewRating      = null,
+    int      CrewRatingCount = 0
 );
 
 public sealed record UserProfileDto(
@@ -30,6 +46,7 @@ public sealed record UserProfileDto(
     string? ReferralCode,
     string? BusinessName,
     decimal? Rating,
+    int? RatingCount,
     int? EventsCompleted,
     string? InviteMessageTemplate,
     // Crew-specific

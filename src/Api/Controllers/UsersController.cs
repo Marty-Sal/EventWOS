@@ -3,6 +3,7 @@ using Asp.Versioning;
 using EventWOS.Application.Sessions.Commands;
 using EventWOS.Application.Sessions.Queries;
 using EventWOS.Application.Users.Commands;
+using EventWOS.Application.Ratings.Queries;
 using EventWOS.Application.Users.DTOs;
 using EventWOS.Application.Users.Queries;
 using EventWOS.Domain.Enums;
@@ -28,6 +29,29 @@ public sealed class UsersController : ControllerBase
     {
         _mediator    = mediator;
         _currentUser = currentUser;
+    }
+
+    /// <summary>
+    /// A user's rating breakdown: overall average, each axis separately, the
+    /// star distribution, and recent feedback.
+    ///
+    /// Anyone may read their OWN summary -- crew and vendors need to see how they
+    /// are being scored. Reading someone else's needs users:read, since ratings
+    /// carry the rater's name and free-text comments about a named person.
+    /// </summary>
+    [Permission("profile:read")]
+    [HttpGet("{id:guid}/rating-summary")]
+    [ProducesResponseType(typeof(ApiResponse<UserRatingSummaryDto>), 200)]
+    public async Task<IActionResult> GetRatingSummary(
+        Guid id, [FromQuery] int recent = 10, CancellationToken ct = default)
+    {
+        if (id != _currentUser.UserId && !_currentUser.HasPermission("users:read"))
+            return Forbid();
+
+        var result = await _mediator.Send(new GetUserRatingSummaryQuery(id, recent), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse<UserRatingSummaryDto>.Ok(result.Value))
+            : NotFound(ApiResponse<UserRatingSummaryDto>.Fail(result.Error.Message));
     }
 
     /// <summary>

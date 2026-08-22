@@ -49,7 +49,8 @@ public sealed class VendorsController : ControllerBase
             var v = selfResult.Value;
             var item = new VendorListItemDto(
                 v.Id, v.Mobile, v.FullName, v.BusinessName,
-                v.Status, v.ReferralCode, v.Rating, v.EventsCompleted, v.CrewCount, v.CreatedAt);
+                v.Status, v.ReferralCode, v.Rating, v.RatingCount,
+                v.EventsCompleted, v.CrewCount, v.CreatedAt);
             var single = new PagedVendorResult(new[] { item }, 1, 1, 1);
             return Ok(ApiResponse<PagedVendorResult>.Ok(single));
         }
