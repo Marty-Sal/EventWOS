@@ -1190,6 +1190,37 @@
                             }
                         }
                     </div>
+
+                    @* ─── Attendance Verification Type — UI PLACEHOLDER ONLY ───
+                       Owner request: show right after Venue, before Start/End.
+                       No functionality wired up yet — these three checkboxes
+                       don't post anywhere and don't gate anything. Purely
+                       laying out the future options (QR Code, Face
+                       Recognition, Location/Geofencing) so the form shape is
+                       visible before any of the actual verification logic is
+                       built. Location defaults checked per request; do not
+                       treat these as functioning toggles. *@
+                    <div class="space-y-2">
+                        <label class="text-xs text-gray-500">Attendance Verification Type</label>
+                        <div class="flex flex-wrap gap-4">
+                            <label class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                                <input type="checkbox" @bind="_attendanceVerifyQrCode"
+                                       class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                QR Code
+                            </label>
+                            <label class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                                <input type="checkbox" @bind="_attendanceVerifyFaceRecognition"
+                                       class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                Face Recognition
+                            </label>
+                            <label class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                                <input type="checkbox" @bind="_attendanceVerifyLocation"
+                                       class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                Location (Geo Fencing)
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="text-xs text-gray-500 mb-1 block">Start *</label>
@@ -1936,6 +1967,16 @@ else
     private List<VenuePickItem>  _venuesForState      = new();
     private List<VenuePickItem>  _venueSearchResults  = new();
     private bool                 _manualVenueEntry    = false;   // escape hatch: type Venue/Address by hand
+
+    // ── Attendance Verification Type — UI PLACEHOLDER ONLY ──────────────────
+    // Not read anywhere, not sent to the API, not persisted. Purely the
+    // checkbox state for the placeholder row shown after Venue in the
+    // Create Event modal. Location defaults to checked per owner request.
+    // Wire these into the real create-event submission once the actual
+    // verification-type feature is built.
+    private bool _attendanceVerifyQrCode           = false;
+    private bool _attendanceVerifyFaceRecognition  = false;
+    private bool _attendanceVerifyLocation         = true;
     private bool                 _showAddVenueForm    = false;
     private AddVenueForm         _addVenueForm        = new();
     private string?              _addVenueError;
