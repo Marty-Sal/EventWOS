@@ -402,152 +402,67 @@
     /// accurate value. Coordinates are the exception — they're the whole point of
     /// picking a suggestion, so they always take the new value.
     /// </summary>
+    /// <summary>
+    /// Apply a chosen suggestion. All field rules live in VenueLocationMapper —
+    /// this method only fetches the canonical state list and pushes the result
+    /// into the form, so a future edit here cannot quietly change (or delete) the
+    /// coordinate assignment the way it did once already.
+    /// </summary>
     private async Task ApplySearchResult(LocationSuggestion s)
     {
-        // ── Coordinates first, and ALWAYS overwritten ────────────────────────
-        // These are the whole point of picking a suggestion: they drive the map,
-        // the "Coordinates set" badge and every geofence downstream. Unlike the
-        // address text they are never treated as "fill blanks only" — a pick is
-        // an explicit instruction to move the pin here.
-        //
-        // Assigned before the first await so the map jumps immediately instead of
-        // waiting on the states lookup below.
-        _form.Latitude  = (double)s.Latitude;
-        _form.Longitude = (double)s.Longitude;
-        StateHasChanged();
-
-        if (string.IsNullOrWhiteSpace(_form.Name))
-            _form.Name = Truncate(s.Name, 120);
-
-        if (string.IsNullOrWhiteSpace(_form.AddressLine1))
-            _form.AddressLine1 = Truncate(string.IsNullOrWhiteSpace(s.FullAddress) ? s.Name : s.FullAddress, 200);
-
-        // ShortAddress always comes from the provider's structured components —
-        // it exists precisely because the admin shouldn't have to compose it.
-        _form.ShortAddress = Truncate(s.ShortAddress, 200);
-
-        // Address block: fill blanks only, so a hand-corrected city/postcode
-        // isn't overwritten by the geocoder's guess.
-        if (string.IsNullOrWhiteSpace(_form.City) && !string.IsNullOrWhiteSpace(s.City))
-            _form.City = Truncate(s.City!, 200);
-        if (string.IsNullOrWhiteSpace(_form.PostalCode) && !string.IsNullOrWhiteSpace(s.PostalCode))
-            _form.PostalCode = Truncate(s.PostalCode!, 20);
-        if (string.IsNullOrWhiteSpace(_form.Country) && !string.IsNullOrWhiteSpace(s.Country))
-            _form.Country = Truncate(s.Country!, 100);
-
-        if (string.IsNullOrWhiteSpace(_form.State) && !string.IsNullOrWhiteSpace(s.State))
-            _form.State = await MatchCanonicalStateAsync(s.State!);
+        _form.Apply(VenueLocationMapper.ApplySuggestion(_form.ToLocationFields(), s, await CanonicalStatesAsync()));
 
         // Clear any stale "required field" error the pick may have just resolved.
         _formError = null;
+        StateHasChanged();
     }
 
     /// <summary>
-    /// Map a provider state name onto the exact option text used by StateSelect.
-    ///
-    /// This matters because the dropdown is a plain select: a value that isn't an
-    /// exact option match renders as "Select state…", so an unmatched string
-    /// would look like nothing happened while quietly sitting in the form.
-    /// Returning null in that case is deliberate — an empty dropdown the admin
-    /// must fill is honest, a silently-wrong one is not.
-    ///
-    /// The alias table covers the renames OSM still carries (Orissa/Odisha,
-    /// Pondicherry/Puducherry) and the long-form Delhi variants.
-    /// </summary>
-    private async Task<string?> MatchCanonicalStateAsync(string providerState)
-    {
-        var raw = providerState.Trim();
-        if (raw.Length == 0) return null;
-
-        IReadOnlyList<IndianStateOption> states;
-        try
-        {
-            states = await StatesApi.GetStatesAsync();
-        }
-        catch
-        {
-            return null; // can't verify the option exists — don't guess
-        }
-
-        // 1. Exact (case-insensitive) match — the common path.
-        var exact = states.FirstOrDefault(x =>
-            string.Equals(x.Name, raw, StringComparison.OrdinalIgnoreCase));
-        if (exact is not null) return exact.Name;
-
-        // 2. Known provider aliases.
-        var alias = raw.ToLowerInvariant() switch
-        {
-            "orissa"                                    => "Odisha",
-            "pondicherry"                               => "Puducherry",
-            "uttaranchal"                               => "Uttarakhand",
-            "delhi"                                     => "Delhi",
-            "nct of delhi"                              => "Delhi",
-            "national capital territory of delhi"       => "Delhi",
-            "jammu and kashmir"                         => "Jammu and Kashmir",
-            "dadra and nagar haveli and daman and diu"  => "Dadra and Nagar Haveli and Daman and Diu",
-            _                                           => null,
-        };
-        if (alias is not null)
-        {
-            var mapped = states.FirstOrDefault(x =>
-                string.Equals(x.Name, alias, StringComparison.OrdinalIgnoreCase));
-            if (mapped is not null) return mapped.Name;
-        }
-
-        // 3. Last resort: a single unambiguous containment match (handles
-        //    "Maharashtra State" style suffixes). Ambiguity means give up.
-        var contains = states.Where(x =>
-                raw.Contains(x.Name, StringComparison.OrdinalIgnoreCase) ||
-                x.Name.Contains(raw, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        return contains.Count == 1 ? contains[0].Name : null;
-    }
-
-    /// <summary>
-    /// The admin dragged the pin. Coordinates win immediately (that exact point
-    /// is what gets geofenced); the address is refreshed in the background and is
-    /// allowed to fail silently, because a missing label must not block the save.
+    /// The admin dragged the pin. The dragged coordinates are applied immediately
+    /// and unconditionally; the address is refreshed afterwards and is allowed to
+    /// fail silently, because a missing label must never block the save.
     /// </summary>
     private async Task OnPinMoved((decimal Latitude, decimal Longitude) pos)
     {
-        _form.Latitude  = (double)pos.Latitude;
-        _form.Longitude = (double)pos.Longitude;
+        var lat = (double)pos.Latitude;
+        var lng = (double)pos.Longitude;
+
+        // Coordinates land before the network calls so the form reflects the drag
+        // instantly rather than after a round trip.
+        _form.Apply(VenueLocationMapper.ApplyReverseGeocode(
+            _form.ToLocationFields(), detail: null, lat, lng, Array.Empty<string>()));
         StateHasChanged();
 
         var detail = await LocationApi.ReverseGeocodeAsync(pos.Latitude, pos.Longitude);
-        if (detail is null) return; // middle of a field — keep the coordinates, skip the label
+        if (detail is null) return;
 
-        // Only fill blanks, same reasoning as ApplySearchResult: dragging the pin
-        // is a positioning gesture, not a request to rewrite the address.
-        if (string.IsNullOrWhiteSpace(_form.City)       && !string.IsNullOrWhiteSpace(detail.City))
-            _form.City = Truncate(detail.City!, 200);
-        if (string.IsNullOrWhiteSpace(_form.State)      && !string.IsNullOrWhiteSpace(detail.State))
-            // Normalised, not assigned raw: StateSelect is a plain select, so a
-            // non-matching value renders as "Select state…" and looks like the
-            // drag did nothing.
-            _form.State = await MatchCanonicalStateAsync(detail.State!);
-        if (string.IsNullOrWhiteSpace(_form.PostalCode) && !string.IsNullOrWhiteSpace(detail.PostalCode))
-            _form.PostalCode = Truncate(detail.PostalCode!, 20);
-        if (string.IsNullOrWhiteSpace(_form.Country)    && !string.IsNullOrWhiteSpace(detail.Country))
-            _form.Country = Truncate(detail.Country!, 100);
-        if (string.IsNullOrWhiteSpace(_form.AddressLine1) && !string.IsNullOrWhiteSpace(detail.Address))
-            _form.AddressLine1 = Truncate(detail.Address!, 200);
-
+        _form.Apply(VenueLocationMapper.ApplyReverseGeocode(
+            _form.ToLocationFields(), detail, lat, lng, await CanonicalStatesAsync()));
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// The exact option list StateSelect renders. Empty on failure, which makes
+    /// the mapper leave State blank rather than guess an unselectable value.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> CanonicalStatesAsync()
+    {
+        try
+        {
+            var states = await StatesApi.GetStatesAsync();
+            return states.Select(x => x.Name).ToList();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
     }
 
     /// <summary>double? -> decimal? for the map component, which speaks decimal.</summary>
     private static decimal? ToDecimal(double? v)
         => v is null ? null : Math.Round((decimal)v.Value, 6);
 
-    /// <summary>
-    /// Provider strings can exceed our column widths (display_name is routinely
-    /// 150+ chars). Trim client-side so the save fails on real validation
-    /// problems, not on a length the admin never chose.
-    /// </summary>
-    private static string Truncate(string value, int max)
-        => value.Length <= max ? value : value[..max];
+
 
     private async Task SaveAsync()
     {
@@ -625,6 +540,24 @@
         public double? Latitude     { get; set; }
         public double? Longitude    { get; set; }
         public string? Notes        { get; set; }
+
+        /// <summary>Snapshot the location fields for the pure mapper.</summary>
+        public VenueLocationFields ToLocationFields() => new(
+            Name, AddressLine1, ShortAddress, City, State, PostalCode, Country, Latitude, Longitude);
+
+        /// <summary>Write a mapper result back. Notes and the id are untouched.</summary>
+        public void Apply(VenueLocationFields f)
+        {
+            Name         = f.Name ?? "";
+            AddressLine1 = f.AddressLine1 ?? "";
+            ShortAddress = f.ShortAddress;
+            City         = f.City ?? "";
+            State        = f.State;
+            PostalCode   = f.PostalCode;
+            Country      = f.Country;
+            Latitude     = f.Latitude;
+            Longitude    = f.Longitude;
+        }
     }
 
     public sealed record VenueDto(

@@ -30,6 +30,18 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Application\EventWOS.Application.csproj" />
+  </ItemGroup>
+
+  <!--
+    Two dependency-free source files from the Blazor project, compiled directly
+    rather than via a ProjectReference: referencing a WASM project from a test
+    project drags in browser-targeted assets we don't want here, but the venue
+    location mapping rules are pure logic and genuinely need covering — an
+    untested inline version of them lost the coordinate assignment once already.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\src\BlazorWeb\Services\LocationDtos.cs" />
+    <Compile Include="..\..\src\BlazorWeb\Services\VenueLocationMapper.cs" />
     <ProjectReference Include="..\..\src\Domain\EventWOS.Domain.csproj" />
     <!--
       Added for the Location & Geofencing suite: NominatimLocationService is an
