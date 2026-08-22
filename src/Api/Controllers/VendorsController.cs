@@ -3,6 +3,7 @@ using EventWOS.Domain.Enums;
 using Asp.Versioning;
 using EventWOS.Application.Vendors.Commands;
 using EventWOS.Application.Analytics.Queries;
+using EventWOS.Application.Ratings.Queries;
 using EventWOS.Application.Vendors.DTOs;
 using EventWOS.Application.Vendors.Queries;
 using EventWOS.Domain.Interfaces;
@@ -83,6 +84,24 @@ public sealed class VendorsController : ControllerBase
             ? CreatedAtAction(nameof(GetVendor), new { id = result.Value.Id, version = "1" },
                 ApiResponse<VendorDto>.Ok(result.Value))
             : BadRequest(ApiResponse<VendorDto>.Fail(result.Error.Message));
+    }
+
+    /// <summary>
+    /// Completed events this vendor worked, each with the rating already given if
+    /// there is one. Feeds the event picker in the rating dialog -- a vendor
+    /// rating has to be attached to a specific event, so the rater needs to see
+    /// which ones are open to rate.
+    /// </summary>
+    [Permission("vendors:read")]
+    [HttpGet("{id:guid}/rateable-events")]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<RateableEventDto>>), 200)]
+    public async Task<IActionResult> GetRateableEvents(Guid id, CancellationToken ct)
+    {
+        if (!_currentUser.HasPermission("vendors:read")) return Forbid();
+        var result = await _mediator.Send(new GetRateableEventsQuery(id), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse<IReadOnlyList<RateableEventDto>>.Ok(result.Value))
+            : BadRequest(ApiResponse<IReadOnlyList<RateableEventDto>>.Fail(result.Error.Message));
     }
 
     /// <summary>

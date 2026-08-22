@@ -1,0 +1,179 @@
+@*
+    RatingModal -- collects a two-axis rating (performance + cooperation) plus an
+    optional note. Used by BOTH flows: Admin/Manager rating a Vendor when an event
+    is completed, and a Vendor rating a Crew member at checkout.
+
+    One component for both on purpose. The two flows ask the same question about
+    different people, and a second copy would drift -- one side would gain a
+    validation rule or a label change the other never got.
+
+    Submit stays disabled until BOTH axes are set. The previous single-star UI
+    submitted the instant a star was clicked, so a stray tap on a row was
+    immediately a permanent rating with no chance to reconsider. Requiring both
+    axes plus an explicit Submit makes an accidental rating much harder, and the
+    server treats a repeat as a revision if one does slip through.
+
+    ASCII-only in the razor tree (HTML entities for the star glyphs) -- see
+    LocationPin.razor for the Linux SDK codegen issue this avoids.
+*@
+
+@if (Visible)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+         @onclick="Cancel">
+        <div class="w-full max-w-md rounded-xl bg-white shadow-xl" @onclick:stopPropagation="true">
+
+            <div class="border-b px-5 py-4">
+                <h3 class="text-lg font-semibold text-gray-800">@Title</h3>
+                @if (!string.IsNullOrWhiteSpace(SubjectName))
+                {
+                    <p class="text-sm text-gray-500">@SubjectName</p>
+                }
+            </div>
+
+            <div class="space-y-5 px-5 py-4">
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">
+                        Performance
+                    </label>
+                    <p class="mb-2 text-xs text-gray-400">Quality of the work delivered.</p>
+                    @RenderPicker(_performance, v => _performance = v)
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">
+                        Cooperation
+                    </label>
+                    <p class="mb-2 text-xs text-gray-400">
+                        Conduct, communication, willingness to work with the team.
+                    </p>
+                    @RenderPicker(_cooperation, v => _cooperation = v)
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">
+                        Note <span class="font-normal text-gray-400">(optional)</span>
+                    </label>
+                    <textarea @bind="_comment" rows="3" maxlength="1000"
+                              placeholder="Anything worth recording for next time..."
+                              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                                     focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"></textarea>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">@_error</p>
+                }
+            </div>
+
+            <div class="flex justify-end gap-2 border-t px-5 py-3">
+                <button type="button" @onclick="Cancel" disabled="@_busy"
+                        class="rounded-lg px-4 py-2 text-sm font-medium text-gray-600
+                               hover:bg-gray-100 disabled:opacity-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="Submit" disabled="@(!CanSubmit)"
+                        class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white
+                               hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    @(_busy ? "Saving..." : SubmitLabel)
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool    Visible     { get; set; }
+    [Parameter] public string  Title       { get; set; } = "Rate performance";
+    [Parameter] public string? SubjectName { get; set; }
+    [Parameter] public string  SubmitLabel { get; set; } = "Submit rating";
+
+    /// <summary>Existing rating being revised, if any -- prefills the pickers.</summary>
+    [Parameter] public int?    ExistingPerformance { get; set; }
+    [Parameter] public int?    ExistingCooperation { get; set; }
+    [Parameter] public string? ExistingComment     { get; set; }
+
+    /// <summary>
+    /// Returns an error message to display, or null on success. Letting the
+    /// caller own the HTTP call keeps this component usable for both endpoints.
+    /// </summary>
+    [Parameter] public Func<int, int, string?, Task<string?>>? OnSubmit { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private int?    _performance;
+    private int?    _cooperation;
+    private string? _comment;
+    private string? _error;
+    private bool    _busy;
+    private bool    _wasVisible;
+
+    private bool CanSubmit => !_busy && _performance is not null && _cooperation is not null;
+
+    protected override void OnParametersSet()
+    {
+        // Reset on each open so a previous subject's stars are never sitting there
+        // pre-filled for the next person -- that is how the wrong crew member ends
+        // up with someone else's score.
+        if (Visible && !_wasVisible)
+        {
+            _performance = ExistingPerformance;
+            _cooperation = ExistingCooperation;
+            _comment     = ExistingComment;
+            _error       = null;
+            _busy        = false;
+        }
+        _wasVisible = Visible;
+    }
+
+    private RenderFragment RenderPicker(int? selected, Action<int> set) => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "flex items-center gap-1");
+        for (var i = 1; i <= 5; i++)
+        {
+            var star = i;
+            builder.OpenElement(2, "button");
+            builder.AddAttribute(3, "type", "button");
+            builder.AddAttribute(4, "class",
+                "text-2xl leading-none transition-colors " +
+                (selected >= star ? "text-amber-500" : "text-gray-300 hover:text-amber-300"));
+            builder.AddAttribute(5, "onclick",
+                Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () =>
+                {
+                    set(star);
+                    _error = null;
+                }));
+            builder.AddMarkupContent(6, "&#9733;");
+            builder.CloseElement();
+        }
+        if (selected is not null)
+        {
+            builder.OpenElement(7, "span");
+            builder.AddAttribute(8, "class", "ml-2 text-sm text-gray-500");
+            builder.AddContent(9, $"{selected} / 5");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    private async Task Submit()
+    {
+        if (!CanSubmit || OnSubmit is null) return;
+        _busy = true; _error = null;
+        try
+        {
+            var failure = await OnSubmit(_performance!.Value, _cooperation!.Value,
+                                         string.IsNullOrWhiteSpace(_comment) ? null : _comment!.Trim());
+            if (failure is not null) { _error = failure; return; }
+            await OnClose.InvokeAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Cancel()
+    {
+        if (_busy) return;   // Never close mid-save; the result would be invisible.
+        await OnClose.InvokeAsync();
+    }
+}

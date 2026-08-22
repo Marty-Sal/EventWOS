@@ -224,31 +224,29 @@
                                 </div>
                             </div>
                         }
-                        @* Star rating — only for Attended, not yet rated *@
-                        @if (a.Status == "Attended" && !a.VendorRating.HasValue)
+                        @* Rating -- Attended only. Opens the two-axis modal rather than
+                           submitting on a single click: the old inline stars turned one
+                           stray tap into a permanent rating with no chance to reconsider. *@
+                        @if (a.Status == "Attended")
                         {
                             <div class="shrink-0 flex flex-col items-end gap-1">
-                                <p class="text-xs text-gray-400">Rate crew performance</p>
-                                <div class="flex gap-1">
-                                    @for (int s = 1; s <= 5; s++)
-                                    {
-                                        var star = s; // capture loop variable
-                                        <button @onclick="() => SubmitRating(a.Id, star)"
-                                                class="text-xl leading-none @(_hoverStar >= star && _hoverTarget == a.Id ? "text-amber-400" : "text-gray-300")
-                                                       hover:text-amber-400 transition-colors"
-                                                @onmouseover="() => SetHover(a.Id, star)"
-                                                @onmouseout="() => ClearHover()">
-                                            ★
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-                        }
-                        @if (a.Status == "Attended" && a.VendorRating.HasValue)
-                        {
-                            <div class="shrink-0 text-right">
-                                <p class="text-xs text-gray-400">Your rating</p>
-                                <p class="text-amber-500 font-bold">@string.Concat(Enumerable.Repeat("★", (int)a.VendorRating.Value))@string.Concat(Enumerable.Repeat("☆", 5 - (int)a.VendorRating.Value))</p>
+                                @if (a.VendorRating.HasValue)
+                                {
+                                    <p class="text-xs text-gray-400">Your rating</p>
+                                    <RatingStars Average="a.VendorRating" Count="1" ShowCount="false" />
+                                    <button @onclick="() => OpenRating(a)"
+                                            class="text-xs font-medium text-indigo-600 hover:underline">
+                                        Change
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button @onclick="() => OpenRating(a)"
+                                            class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5
+                                                   text-xs font-semibold text-amber-700 hover:bg-amber-100">
+                                        Rate crew
+                                    </button>
+                                }
                             </div>
                         }
                     </div>
@@ -464,6 +462,16 @@
         </div>
     </div>
 }
+
+@* Crew rating -- two axes plus an optional note. Shared with the admin/vendor
+   rating flow so the two cannot drift apart. *@
+<RatingModal Visible="_ratingAssignmentId is not null"
+             Title="Rate crew performance"
+             SubjectName="@_ratingCrewName"
+             ExistingPerformance="_ratingExistingScore"
+             ExistingCooperation="_ratingExistingScore"
+             OnSubmit="SubmitRating"
+             OnClose="CloseRating" />
 
 @code {
     private readonly string[] _tabs = { "All", "Awaiting Review", "Forwarded", "Rejected", "Confirmed" };
@@ -877,51 +885,66 @@
         DateTime? ShiftEndAt = null);
 
     // Star rating hover state
-    private Guid _hoverTarget;
-    private int  _hoverStar;
-    private void SetHover(Guid id, int star) { _hoverTarget = id; _hoverStar = star; }
-    private void ClearHover() { _hoverTarget = Guid.Empty; _hoverStar = 0; }
 
-    private async Task SubmitRating(Guid assignmentId, int stars)
+    // ── Rating ────────────────────────────────────────────────────────────────
+    private Guid?   _ratingAssignmentId;
+    private string? _ratingCrewName;
+    private int?    _ratingExistingScore;
+
+    private void OpenRating(AssignmentDto a)
     {
-        _busy = assignmentId; StateHasChanged();
+        _ratingAssignmentId = a.Id;
+        _ratingCrewName     = a.CrewName;
+        // The mirrored per-assignment score is one number covering both axes, so it
+        // can only prefill both equally. Good enough to show what was submitted;
+        // the rater re-picks whichever axis they meant to change.
+        _ratingExistingScore = a.VendorRating.HasValue
+            ? (int)Math.Round(a.VendorRating.Value, MidpointRounding.AwayFromZero)
+            : null;
+    }
+
+    private void CloseRating()
+    {
+        _ratingAssignmentId  = null;
+        _ratingCrewName      = null;
+        _ratingExistingScore = null;
+    }
+
+    /// <summary>
+    /// Returns an error message for the modal to show, or null on success.
+    /// Reloads on success so the row reflects the stored rating rather than an
+    /// optimistic guess.
+    /// </summary>
+    private async Task<string?> SubmitRating(int performance, int cooperation, string? comment)
+    {
+        if (_ratingAssignmentId is null) return "No assignment selected.";
         try
         {
             var resp = await Http.PostAsJsonAsync(
-                $"api/v1/events/assignments/{assignmentId}/rate-crew",
-                new { rating = (decimal)stars });
+                $"api/v1/events/assignments/{_ratingAssignmentId}/rate-crew",
+                new { performance, cooperation, comment });
 
-            if (resp.IsSuccessStatusCode)
+            if (!resp.IsSuccessStatusCode)
             {
-                ShowToast($"{stars}★ rating submitted!", false);
-            }
-            else
-            {
-                // Surface the actual server reason instead of a generic toast
-                // so issues like 'Forbidden' or 'AlreadyRated' don't read as a
-                // mystery failure. Falls back to the HTTP status if the body
-                // isn't a structured ApiResponse.
-                string reason;
+                // Surface the server's actual reason -- 'Forbidden' or
+                // 'NotAttended' must not read as a mystery failure.
                 try
                 {
                     var body = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(JsonOpts);
-                    reason = body?.Errors?.FirstOrDefault() ?? body?.Message ?? $"{(int)resp.StatusCode} {resp.StatusCode}";
+                    return body?.Errors?.FirstOrDefault() ?? body?.Message
+                           ?? $"{(int)resp.StatusCode} {resp.StatusCode}";
                 }
-                catch
-                {
-                    reason = $"{(int)resp.StatusCode} {resp.StatusCode}";
-                }
-                ShowToast($"Couldn't submit rating: {reason}", true);
+                catch { return $"{(int)resp.StatusCode} {resp.StatusCode}"; }
             }
+
+            ShowToast("Rating saved.", false);
+            CloseRating();
+            await Load();
+            return null;
         }
         catch (Exception ex)
         {
-            ShowToast($"Couldn't submit rating: {ex.Message}", true);
-        }
-        finally
-        {
-            _busy = null;
-            await Load();
+            return ex.Message;
         }
     }
 

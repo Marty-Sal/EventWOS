@@ -135,11 +135,7 @@
                                 <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">@(v.ReferralCode ?? "—")</span>
                             </td>
                             <td class="px-5 py-3.5">
-                                @if (v.Rating.HasValue)
-                                {
-                                    <span class="text-amber-500 font-semibold">★ @v.Rating.Value.ToString("F1")</span>
-                                }
-                                else { <span class="text-gray-400 text-xs">Unrated</span> }
+                                <RatingStars Average="v.Rating" Count="v.RatingCount" />
                             </td>
                             <td class="px-5 py-3.5">
                                 <span class="font-semibold text-indigo-600">@v.CrewCount</span>
@@ -284,7 +280,10 @@
                     <DetailField Label="Contact person" Value="@_detailsTarget.ContactPersonName" />
                     <DetailField Label="Referral code" Value="@_detailsTarget.ReferralCode" />
                     <DetailField Label="Status" Value="@_detailsTarget.Status" />
-                    <DetailField Label="Rating" Value="@(_detailsTarget.Rating.HasValue ? $"★ {_detailsTarget.Rating.Value:F1}" : "Unrated")" />
+                    <div>
+                        <p class="text-xs text-gray-400 mb-0.5">Rating</p>
+                        <RatingStars Average="_detailsTarget.Rating" Count="_detailsTarget.RatingCount" />
+                    </div>
                     <DetailField Label="Crew count" Value="@_detailsTarget.CrewCount.ToString()" />
                     <DetailField Label="Events completed" Value="@_detailsTarget.EventsCompleted.ToString()" />
                     <DetailField Label="GST number" Value="@_detailsTarget.GstNumber" />
@@ -306,28 +305,78 @@
     </div>
 }
 
-<!-- Rate Vendor Modal -->
-@if (_rateTarget is not null)
+<!-- Rate Vendor: pick the completed event, then rate two axes -->
+@if (_rateTarget is not null && _ratingEventId is null)
 {
-    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 class="font-bold text-gray-800">Rate @_rateTarget.FullName</h3>
-            <div class="flex gap-2 items-center">
-                <input @bind="_newRating" type="number" min="0" max="5" step="0.1"
-                       class="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
-                <span class="text-amber-500 text-xl">★</span>
+    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+         @onclick="CloseRate">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md" @onclick:stopPropagation="true">
+            <div class="border-b px-5 py-4">
+                <h3 class="font-bold text-gray-800">Rate @_rateTarget.FullName</h3>
+                <p class="text-sm text-gray-500">Choose the event this rating is for.</p>
             </div>
-            <div class="flex gap-3">
-                <button @onclick="SubmitRating"
-                        class="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition">
-                    Submit Rating
+
+            <div class="max-h-80 overflow-y-auto px-5 py-4">
+                @if (_loadingEvents)
+                {
+                    <p class="text-sm text-gray-400">Loading events...</p>
+                }
+                else if (_rateableEvents.Count == 0)
+                {
+                    @* Not an error state. A vendor with no completed events simply
+                       has nothing to rate yet, and saying so is more useful than an
+                       empty list. *@
+                    <p class="text-sm text-gray-500">
+                        No completed events for this vendor yet. Ratings can only be given
+                        once an event is marked Completed.
+                    </p>
+                }
+                else
+                {
+                    <div class="space-y-2">
+                        @foreach (var ev in _rateableEvents)
+                        {
+                            <button type="button" @onclick="() => PickRatingEvent(ev)"
+                                    class="w-full rounded-xl border border-gray-200 px-4 py-3 text-left
+                                           hover:border-amber-300 hover:bg-amber-50 transition">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="truncate font-semibold text-gray-800 text-sm">@ev.EventTitle</p>
+                                        <p class="truncate text-xs text-gray-400">
+                                            @ev.Venue &middot; @ev.StartAt.ToLocalTime().ToString("dd MMM yyyy")
+                                        </p>
+                                    </div>
+                                    @if (ev.AlreadyRated)
+                                    {
+                                        <span class="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-xs
+                                                     font-medium text-green-700">Rated</span>
+                                    }
+                                </div>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="flex justify-end border-t px-5 py-3">
+                <button @onclick="CloseRate"
+                        class="rounded-xl px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
+                    Cancel
                 </button>
-                <button @onclick="() => _rateTarget = null"
-                        class="px-5 py-2.5 rounded-xl border border-gray-200 text-sm hover:bg-gray-50 transition">Cancel</button>
             </div>
         </div>
     </div>
 }
+
+@* Same modal the vendor-rates-crew flow uses, so the two cannot drift. *@
+<RatingModal Visible="_ratingEventId is not null"
+             Title="@($"Rate {_rateTarget?.FullName}")"
+             SubjectName="@_ratingEventTitle"
+             ExistingPerformance="_ratingExistingPerf"
+             ExistingCooperation="_ratingExistingCoop"
+             ExistingComment="@_ratingExistingComment"
+             OnSubmit="SubmitRating"
+             OnClose="CloseRate" />
 
 @code {
 
@@ -366,8 +415,10 @@
         "created_asc" => items.OrderBy(v => v.CreatedAt),
         "name"        => items.OrderBy(v => v.FullName, StringComparer.OrdinalIgnoreCase),
         "name_desc"   => items.OrderByDescending(v => v.FullName, StringComparer.OrdinalIgnoreCase),
-        "rating_desc" => items.OrderByDescending(v => v.Rating ?? -1),
-        "rating_asc"  => items.OrderBy(v => v.Rating ?? decimal.MaxValue),
+        "rating_desc" => items.OrderByDescending(v => v.Rating.HasValue)
+                              .ThenByDescending(v => v.Rating ?? 0m),
+        "rating_asc"  => items.OrderByDescending(v => v.Rating.HasValue)
+                              .ThenBy(v => v.Rating ?? 0m),
         "crew_desc"   => items.OrderByDescending(v => v.CrewCount),
         "crew_asc"    => items.OrderBy(v => v.CrewCount),
         "status"      => items.OrderBy(v => v.Status),
@@ -418,7 +469,6 @@
         _detailsTarget = await VendorApi.GetVendorAsync(v.Id);
         _detailsLoading = false;
     }
-    private decimal _newRating = 5.0m;
 
     protected override async Task OnInitializedAsync()
     {
@@ -485,14 +535,70 @@
         _creating = false;
     }
 
-    private void OpenRate(VendorListItemDto v) { _rateTarget = v; _newRating = v.Rating ?? 5.0m; }
+    // ── Rating ────────────────────────────────────────────────────────────────
+    private bool _loadingEvents;
+    private List<RateableEventDto> _rateableEvents = new();
+    private Guid?   _ratingEventId;
+    private string? _ratingEventTitle;
+    private int?    _ratingExistingPerf;
+    private int?    _ratingExistingCoop;
+    private string? _ratingExistingComment;
 
-    private async Task SubmitRating()
+    private async Task OpenRate(VendorListItemDto v)
     {
-        if (_rateTarget is null) return;
-        await VendorApi.RateVendorAsync(_rateTarget.Id, _newRating);
-        _rateTarget = null;
-        await LoadAsync();
+        _rateTarget     = v;
+        _ratingEventId  = null;
+        _rateableEvents = new();
+        _loadingEvents  = true;
+        try
+        {
+            _rateableEvents = (await VendorApi.GetRateableEventsAsync(v.Id)).ToList();
+        }
+        catch
+        {
+            // Leave the list empty; the dialog then says there is nothing to rate
+            // rather than showing a half-loaded picker.
+            _rateableEvents = new();
+        }
+        finally { _loadingEvents = false; }
+    }
+
+    private void PickRatingEvent(RateableEventDto ev)
+    {
+        _ratingEventId         = ev.EventId;
+        _ratingEventTitle      = ev.EventTitle;
+        // Prefill when re-rating, so a rater changing one axis does not have to
+        // re-enter the other from memory.
+        _ratingExistingPerf    = ev.Performance;
+        _ratingExistingCoop    = ev.Cooperation;
+        _ratingExistingComment = ev.Comment;
+    }
+
+    private void CloseRate()
+    {
+        _rateTarget            = null;
+        _ratingEventId         = null;
+        _ratingEventTitle      = null;
+        _ratingExistingPerf    = null;
+        _ratingExistingCoop    = null;
+        _ratingExistingComment = null;
+    }
+
+    /// <summary>Returns an error for the modal to show, or null on success.</summary>
+    private async Task<string?> SubmitRating(int performance, int cooperation, string? comment)
+    {
+        if (_rateTarget is null || _ratingEventId is null) return "No event selected.";
+        try
+        {
+            var failure = await VendorApi.RateVendorAsync(
+                _rateTarget.Id, _ratingEventId.Value, performance, cooperation, comment);
+            if (failure is not null) return failure;
+
+            CloseRate();
+            await LoadAsync();
+            return null;
+        }
+        catch (Exception ex) { return ex.Message; }
     }
 
     private async Task ToggleStatus(VendorListItemDto v)

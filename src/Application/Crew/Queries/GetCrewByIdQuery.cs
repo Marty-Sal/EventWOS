@@ -61,6 +61,7 @@ public sealed class GetCrewByIdHandler : IRequestHandler<GetCrewByIdQuery, Resul
             crew.DisciplineScore, crew.EventsAttended, crew.CreatedAt,
             crew.City, crew.State, crew.Bio, crew.Skills, crew.ExperienceYears,
             crew.ReferralCodeUsed, crew.DateOfBirth, files,
-            crew.InvitedByUserId.HasValue, crew.ProfileCompletedAt.HasValue));
+            crew.InvitedByUserId.HasValue, crew.ProfileCompletedAt.HasValue,
+            crew.CrewRating, crew.CrewRatingCount));
     }
 }

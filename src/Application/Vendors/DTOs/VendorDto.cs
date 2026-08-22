@@ -82,7 +82,15 @@ public sealed record CrewDto(
     string? VendorName,
     decimal DisciplineScore,
     int     EventsAttended,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    /// <summary>
+    /// Average of this crew member's ratings. Null = not yet rated, which must
+    /// render as "no rating" rather than zero stars -- a new hire and a bad one
+    /// are not the same claim.
+    /// </summary>
+    decimal? CrewRating = null,
+    /// <summary>Ratings behind the average, so a single review is not mistaken for a track record.</summary>
+    int     CrewRatingCount = 0
 );
 
 /// <summary>
@@ -113,7 +121,9 @@ public sealed record CrewDetailDto(
     DateTime? DateOfBirth,
     IReadOnlyList<FileDocumentDto> Files,
     bool WasDirectlyAdded = false,
-    bool ProfileCompleted = false
+    bool ProfileCompleted = false,
+    decimal? CrewRating = null,
+    int      CrewRatingCount = 0
 );
 
 public sealed record JoinVendorRequest(string ReferralCode);

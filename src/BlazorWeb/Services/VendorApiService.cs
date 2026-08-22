@@ -7,12 +7,12 @@ namespace EventWOS.BlazorWeb.Services;
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 public sealed record VendorListItemDto(
     Guid Id, string Mobile, string FullName, string? BusinessName,
-    string Status, string? ReferralCode, decimal? Rating,
+    string Status, string? ReferralCode, decimal? Rating, int RatingCount,
     int EventsCompleted, int CrewCount, DateTime CreatedAt);
 
 public sealed record VendorDetailDto(
     Guid Id, string Mobile, string FullName, string? BusinessName, string? Email,
-    string? AvatarUrl, string Status, string? ReferralCode, decimal? Rating,
+    string? AvatarUrl, string Status, string? ReferralCode, decimal? Rating, int RatingCount,
     int EventsCompleted, int CrewCount, DateTime CreatedAt,
     string? ContactPersonName = null, string? GstNumber = null, string? Address = null,
     string? City = null, string? State = null, string? Website = null, string? Bio = null,
@@ -22,7 +22,9 @@ public sealed record VendorDetailDto(
 public sealed record CrewMemberDto(
     Guid Id, string Mobile, string FullName, string? Email, string? AvatarUrl,
     string Status, Guid? VendorId, string? VendorName,
-    decimal DisciplineScore, int EventsAttended, DateTime CreatedAt);
+    decimal DisciplineScore, int EventsAttended, DateTime CreatedAt,
+    // Null average = not yet rated. Rendered as "Not rated", never zero stars.
+    decimal? CrewRating = null, int CrewRatingCount = 0);
 
 /// <summary>Full profile for the Crew page's "View details" modal — see CrewDetailDto (server-side) in Application/Vendors/DTOs/VendorDto.cs.</summary>
 public sealed record CrewDetailDto(
@@ -31,7 +33,17 @@ public sealed record CrewDetailDto(
     decimal DisciplineScore, int EventsAttended, DateTime CreatedAt,
     string? City, string? State, string? Bio, string? Skills, int? ExperienceYears,
     string? ReferralCodeUsed, DateTime? DateOfBirth, IReadOnlyList<FileDocumentDto> Files,
-    bool WasDirectlyAdded = false, bool ProfileCompleted = false);
+    bool WasDirectlyAdded = false, bool ProfileCompleted = false,
+    decimal? CrewRating = null, int CrewRatingCount = 0);
+
+/// <summary>
+/// A completed event a vendor worked, plus the rating already given for it.
+/// Mirrors RateableEventDto in Application/Ratings/Queries.
+/// </summary>
+public sealed record RateableEventDto(
+    Guid EventId, string EventTitle, string Venue, DateTime StartAt,
+    bool AlreadyRated, int? Performance, int? Cooperation,
+    string? Comment, DateTime? RatedAt);
 
 public sealed record PagedVendorResult(
     IReadOnlyList<VendorListItemDto> Items, int TotalCount, int Page, int PageSize);
@@ -74,7 +86,17 @@ public interface IVendorApiService
     Task<PagedVendorResult?> GetVendorsAsync(int page = 1, string? search = null, int pageSize = 20, string? status = null, CancellationToken ct = default);
     Task<VendorDetailDto?> GetVendorAsync(Guid id, CancellationToken ct = default);
     Task<(bool Ok, string? Error)> CreateVendorAsync(string mobile, string fullName, string? businessName, string? email, CancellationToken ct = default);
-    Task<bool> RateVendorAsync(Guid id, decimal rating, CancellationToken ct = default);
+    /// <summary>Completed events this vendor worked, for the rating event picker.</summary>
+    Task<IReadOnlyList<RateableEventDto>> GetRateableEventsAsync(Guid vendorId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Rates a vendor on ONE completed event. Returns an error message, or null on
+    /// success. Event-scoped because a vendor's reputation is the average across
+    /// the events they worked -- the previous global call overwrote the single
+    /// stored score, so each new rating silently erased the last one.
+    /// </summary>
+    Task<string?> RateVendorAsync(Guid vendorId, Guid eventId, int performance,
+                                  int cooperation, string? comment, CancellationToken ct = default);
     Task<bool> ChangeVendorStatusAsync(Guid id, string status, CancellationToken ct = default);
     Task<bool> ChangeCrewStatusAsync(Guid id, string status, CancellationToken ct = default);
     Task<PagedCrewResult?> GetCrewAsync(int page = 1, string? search = null, Guid? vendorId = null, int pageSize = 20, string? status = null, CancellationToken ct = default);
@@ -141,14 +163,43 @@ public sealed class VendorApiService : IVendorApiService
         catch (Exception ex) { return (false, ex.Message); }
     }
 
-    public async Task<bool> RateVendorAsync(Guid id, decimal rating, CancellationToken ct = default)
+    public async Task<IReadOnlyList<RateableEventDto>> GetRateableEventsAsync(
+        Guid vendorId, CancellationToken ct = default)
     {
         try
         {
-            var resp = await _http.PatchAsJsonAsync($"api/v1/vendors/{id}/rating", new { rating }, ct);
-            return resp.IsSuccessStatusCode;
+            var r = await _http.GetFromJsonAsync<ApiResult<List<RateableEventDto>>>(
+                $"api/v1/vendors/{vendorId}/rateable-events", _jsonOpts, ct);
+            return r?.Data ?? new List<RateableEventDto>();
         }
-        catch { return false; }
+        // Empty rather than throwing: the dialog then reports "nothing to rate"
+        // instead of leaving a half-loaded picker on screen.
+        catch { return new List<RateableEventDto>(); }
+    }
+
+    public async Task<string?> RateVendorAsync(
+        Guid vendorId, Guid eventId, int performance, int cooperation,
+        string? comment, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync(
+                $"api/v1/vendors/{vendorId}/events/{eventId}/rating",
+                new { performance, cooperation, comment }, ct);
+
+            if (resp.IsSuccessStatusCode) return null;
+
+            // Surface the server's reason -- 'event not completed' or 'vendor not on
+            // this event' are actionable, where a bare failure is not.
+            try
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(_jsonOpts, ct);
+                return body?.Errors?.FirstOrDefault() ?? body?.Message
+                       ?? $"{(int)resp.StatusCode} {resp.StatusCode}";
+            }
+            catch { return $"{(int)resp.StatusCode} {resp.StatusCode}"; }
+        }
+        catch (Exception ex) { return ex.Message; }
     }
 
     public async Task<bool> ChangeVendorStatusAsync(Guid id, string status, CancellationToken ct = default)

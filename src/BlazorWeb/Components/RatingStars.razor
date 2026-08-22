@@ -1,0 +1,84 @@
+@*
+    RatingStars -- read-only reputation display, used anywhere a crew member or
+    vendor is listed.
+
+    Null average renders as "Not rated", NEVER as zero stars. An unrated new
+    vendor and a genuinely terrible one must not look the same: zero stars reads
+    as a verdict, when in fact nobody has voted yet.
+
+    The count is shown alongside because "4.8" from one event is a very different
+    signal from "4.8" from thirty, and hiding the sample size invites acting on
+    the wrong one.
+
+    Half-stars are rendered, since averages land between whole numbers far more
+    often than on them and rounding 4.5 down to four full stars quietly
+    understates someone by half a point.
+
+    ASCII-only in the razor tree -- HTML entities for the glyphs. A previous build
+    failed on the Linux .NET SDK when a razor file emitted raw multi-byte
+    characters inline; see LocationPin.razor for the same workaround.
+*@
+
+@if (Average is null || Count <= 0)
+{
+    <span class="inline-flex items-center gap-1 @CssClass">
+        <span class="text-gray-300">@(new MarkupString(string.Concat(Enumerable.Repeat("&#9734;", 5))))</span>
+        <span class="text-xs text-gray-400">Not rated</span>
+    </span>
+}
+else
+{
+    var value = Math.Clamp(Average.Value, 0m, 5m);
+    <span class="inline-flex items-center gap-1.5 @CssClass" title="@Tooltip(value)">
+        <span class="leading-none">
+            @foreach (var star in Stars(value))
+            {
+                <span class="@star.Css">@star.Glyph</span>
+            }
+        </span>
+        <span class="font-semibold text-gray-700">@value.ToString("0.0")</span>
+        @if (ShowCount)
+        {
+            <span class="text-xs text-gray-400">(@Count)</span>
+        }
+    </span>
+}
+
+@code {
+    /// <summary>Average score 0-5. Null means not yet rated.</summary>
+    [Parameter] public decimal? Average { get; set; }
+
+    /// <summary>How many ratings back the average. Zero is treated as unrated.</summary>
+    [Parameter] public int Count { get; set; }
+
+    [Parameter] public bool ShowCount { get; set; } = true;
+
+    [Parameter] public string? CssClass { get; set; }
+
+    /// <summary>
+    /// One entry per star, rounded to the nearest HALF. A half is drawn as a
+    /// filled glyph at reduced opacity rather than a full one -- showing 4.5 as
+    /// five solid stars would overstate the score by half a point, and showing it
+    /// as four would understate it by the same.
+    /// </summary>
+    private static IEnumerable<(MarkupString Glyph, string Css)> Stars(decimal value)
+    {
+        const string Full  = "&#9733;";   // filled star
+        const string Empty = "&#9734;";   // hollow star
+        var halves = (int)Math.Round(value * 2, MidpointRounding.AwayFromZero);
+
+        for (var star = 1; star <= 5; star++)
+        {
+            var need = star * 2;
+            if (halves >= need)
+                yield return (new MarkupString(Full),  "text-amber-500");
+            else if (halves == need - 1)
+                yield return (new MarkupString(Full),  "text-amber-500 opacity-50");
+            else
+                yield return (new MarkupString(Empty), "text-gray-300");
+        }
+    }
+
+    private string Tooltip(decimal value)
+        => $"{value:0.00} average from {Count} rated event{(Count == 1 ? "" : "s")}";
+}

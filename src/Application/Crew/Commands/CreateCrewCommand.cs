@@ -107,5 +107,6 @@ public sealed class CreateCrewHandler : IRequestHandler<CreateCrewCommand, Resul
     internal static CrewDto MapToDto(User c, string? vendorName) => new(
         c.Id, c.Mobile, c.FullName, c.Email, c.AvatarUrl,
         c.Status.ToString(), c.VendorId, vendorName,
-        c.DisciplineScore, c.EventsAttended, c.CreatedAt);
+        c.DisciplineScore, c.EventsAttended, c.CreatedAt,
+        c.CrewRating, c.CrewRatingCount);
 }

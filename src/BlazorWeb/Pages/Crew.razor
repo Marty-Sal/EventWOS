@@ -130,7 +130,7 @@
                         </div>
                         <span class="px-2 py-0.5 rounded-full text-xs font-medium @StatusColor(c.Status)">@c.Status</span>
                     </div>
-                    <div class="mt-3 pt-3 border-t border-gray-50 grid grid-cols-3 gap-2 text-center">
+                    <div class="mt-3 pt-3 border-t border-gray-50 grid grid-cols-4 gap-2 text-center">
                         <div>
                             <p class="text-xs text-gray-400">Vendor</p>
                             <p class="text-xs font-medium text-gray-700 truncate">@(c.VendorName ?? "—")</p>
@@ -138,6 +138,11 @@
                         <div>
                             <p class="text-xs text-gray-400">Discipline</p>
                             <p class="text-sm font-bold @DisciplineColor(c.DisciplineScore)">@c.DisciplineScore.ToString("F0")</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-400">Rating</p>
+                            <RatingStars Average="c.CrewRating" Count="c.CrewRatingCount"
+                                         CssClass="justify-center text-xs" />
                         </div>
                         <div>
                             <p class="text-xs text-gray-400">Events</p>
@@ -179,6 +184,10 @@
                                 Discipline @SortArrow("discipline_desc", "discipline_asc")
                             </th>
                             <th class="px-4 py-3 text-center font-semibold cursor-pointer select-none hover:text-gray-700"
+                                @onclick='() => ToggleSort("rating_desc", "rating_asc")'>
+                                Rating @SortArrow("rating_desc", "rating_asc")
+                            </th>
+                            <th class="px-4 py-3 text-center font-semibold cursor-pointer select-none hover:text-gray-700"
                                 @onclick='() => ToggleSort("events_desc", "events_asc")'>
                                 Events @SortArrow("events_desc", "events_asc")
                             </th>
@@ -204,6 +213,10 @@
                                 <td class="px-4 py-3 font-mono text-xs text-gray-600">@c.Mobile</td>
                                 <td class="px-4 py-3 text-xs text-gray-700">@(c.VendorName ?? "—")</td>
                                 <td class="px-4 py-3 text-center font-bold text-sm @DisciplineColor(c.DisciplineScore)">@c.DisciplineScore.ToString("F0")</td>
+                                <td class="px-4 py-3 text-center">
+                                    <RatingStars Average="c.CrewRating" Count="c.CrewRatingCount"
+                                                 CssClass="justify-center text-sm" />
+                                </td>
                                 <td class="px-4 py-3 text-center text-sm font-semibold text-gray-700">@c.EventsAttended</td>
                                 <td class="px-4 py-3 text-center">
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium @StatusColor(c.Status)">@c.Status</span>
@@ -279,6 +292,10 @@
                     <DetailField Label="Vendor" Value="@(_detailsCrew.VendorName ?? "—")" />
                     <DetailField Label="Status" Value="@_detailsCrew.Status" />
                     <DetailField Label="Discipline score" Value="@_detailsCrew.DisciplineScore.ToString("F0")" />
+                    <div>
+                        <p class="text-xs text-gray-400 mb-0.5">Rating</p>
+                        <RatingStars Average="_detailsCrew.CrewRating" Count="_detailsCrew.CrewRatingCount" />
+                    </div>
                     <DetailField Label="Events attended" Value="@_detailsCrew.EventsAttended.ToString()" />
                     <DetailField Label="Date of birth" Value="@(_detailsCrew.DateOfBirth?.ToString("dd MMM yyyy"))" />
                     <DetailField Label="Experience" Value="@(_detailsCrew.ExperienceYears.HasValue ? $"{_detailsCrew.ExperienceYears} yr" : null)" />
@@ -445,6 +462,10 @@
         "name_desc"       => items.OrderByDescending(c => c.FullName, StringComparer.OrdinalIgnoreCase),
         "discipline_desc" => items.OrderByDescending(c => c.DisciplineScore),
         "discipline_asc"  => items.OrderBy(c => c.DisciplineScore),
+        "rating_desc"     => items.OrderByDescending(c => c.CrewRating.HasValue)
+                                .ThenByDescending(c => c.CrewRating ?? 0m),
+        "rating_asc"      => items.OrderByDescending(c => c.CrewRating.HasValue)
+                                .ThenBy(c => c.CrewRating ?? 0m),
         "events_desc"     => items.OrderByDescending(c => c.EventsAttended),
         "events_asc"      => items.OrderBy(c => c.EventsAttended),
         "status"          => items.OrderBy(c => c.Status),
