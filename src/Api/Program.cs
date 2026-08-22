@@ -274,59 +274,20 @@ try
         });
     }
 
-    builder.Services.AddAuthorization(options =>
-    {
-        options.AddPolicy("perm:attendance:read",   policy => policy.Requirements.Add(new PermissionRequirement("attendance:read")));
-        options.AddPolicy("perm:attendance:write",  policy => policy.Requirements.Add(new PermissionRequirement("attendance:write")));
-        options.AddPolicy("perm:attendance:verify", policy => policy.Requirements.Add(new PermissionRequirement("attendance:verify")));
-        options.AddPolicy("perm:audit:read",        policy => policy.Requirements.Add(new PermissionRequirement("audit:read")));
-        options.AddPolicy("perm:crew:approve",      policy => policy.Requirements.Add(new PermissionRequirement("crew:approve")));
-        options.AddPolicy("perm:crew:invite",       policy => policy.Requirements.Add(new PermissionRequirement("crew:invite")));
-        options.AddPolicy("perm:crew:read",         policy => policy.Requirements.Add(new PermissionRequirement("crew:read")));
-        options.AddPolicy("perm:crew:write",        policy => policy.Requirements.Add(new PermissionRequirement("crew:write")));
-        options.AddPolicy("perm:events:read",       policy => policy.Requirements.Add(new PermissionRequirement("events:read")));
-        options.AddPolicy("perm:events:write",      policy => policy.Requirements.Add(new PermissionRequirement("events:write")));
-        options.AddPolicy("perm:payments:read",     policy => policy.Requirements.Add(new PermissionRequirement("payments:read")));
-        options.AddPolicy("perm:payments:write",    policy => policy.Requirements.Add(new PermissionRequirement("payments:write")));
-        options.AddPolicy("perm:payments:self",     policy => policy.Requirements.Add(new PermissionRequirement("payments:self")));
-        options.AddPolicy("perm:payments:disburse", policy => policy.Requirements.Add(new PermissionRequirement("payments:disburse")));
-        options.AddPolicy("perm:payments:acknowledge", policy => policy.Requirements.Add(new PermissionRequirement("payments:acknowledge")));
-        options.AddPolicy("perm:permissions:read",  policy => policy.Requirements.Add(new PermissionRequirement("permissions:read")));
-        options.AddPolicy("perm:permissions:write", policy => policy.Requirements.Add(new PermissionRequirement("permissions:write")));
-        options.AddPolicy("perm:profile:read",      policy => policy.Requirements.Add(new PermissionRequirement("profile:read")));
-        options.AddPolicy("perm:profile:write",     policy => policy.Requirements.Add(new PermissionRequirement("profile:write")));
-        options.AddPolicy("perm:reports:read",      policy => policy.Requirements.Add(new PermissionRequirement("reports:read")));
-        options.AddPolicy("perm:roles:read",        policy => policy.Requirements.Add(new PermissionRequirement("roles:read")));
-        options.AddPolicy("perm:roles:write",       policy => policy.Requirements.Add(new PermissionRequirement("roles:write")));
-        // Phase A of Scope-of-Work feature — controller uses [Permission(...)]
-        // which builds policies named "perm:<perm-string>". These two were
-        // missed in the original Phase A commit; without them the controller
-        // returns "AuthorizationPolicy not found" on first request.
-        options.AddPolicy("perm:scope_of_work:read",  policy => policy.Requirements.Add(new PermissionRequirement("scope_of_work:read")));
-        options.AddPolicy("perm:scope_of_work:write", policy => policy.Requirements.Add(new PermissionRequirement("scope_of_work:write")));
-        options.AddPolicy("perm:sessions:read",     policy => policy.Requirements.Add(new PermissionRequirement("sessions:read")));
-        options.AddPolicy("perm:sessions:revoke",   policy => policy.Requirements.Add(new PermissionRequirement("sessions:revoke")));
-        options.AddPolicy("perm:users:delete",      policy => policy.Requirements.Add(new PermissionRequirement("users:delete")));
-        options.AddPolicy("perm:users:read",        policy => policy.Requirements.Add(new PermissionRequirement("users:read")));
-        options.AddPolicy("perm:users:status",      policy => policy.Requirements.Add(new PermissionRequirement("users:status")));
-        options.AddPolicy("perm:users:write",       policy => policy.Requirements.Add(new PermissionRequirement("users:write")));
-        options.AddPolicy("perm:vendor_allocations:read",  policy => policy.Requirements.Add(new PermissionRequirement("vendor_allocations:read")));
-        options.AddPolicy("perm:vendor_allocations:write", policy => policy.Requirements.Add(new PermissionRequirement("vendor_allocations:write")));
-        options.AddPolicy("perm:vendors:read",      policy => policy.Requirements.Add(new PermissionRequirement("vendors:read")));
-        options.AddPolicy("perm:vendors:write",     policy => policy.Requirements.Add(new PermissionRequirement("vendors:write")));
-        // Venue catalog + Terms & Conditions (Settings tabs) — same class of
-        // bug as the scope_of_work comment above: [Permission("...")] builds
-        // a policy name from whatever string you pass it, but that policy
-        // only actually EXISTS if it's also registered here. Both features'
-        // permission strings were already seeded into the Permissions table
-        // (DatabaseSeeder) and granted to Admin, but nobody had added the
-        // matching AddPolicy calls, so every write attempt 500'd with
-        // "AuthorizationPolicy named 'perm:terms:write' was not found."
-        options.AddPolicy("perm:venues:read",       policy => policy.Requirements.Add(new PermissionRequirement("venues:read")));
-        options.AddPolicy("perm:venues:write",      policy => policy.Requirements.Add(new PermissionRequirement("venues:write")));
-        options.AddPolicy("perm:terms:read",        policy => policy.Requirements.Add(new PermissionRequirement("terms:read")));
-        options.AddPolicy("perm:terms:write",       policy => policy.Requirements.Add(new PermissionRequirement("terms:write")));
-    });
+    // ─── Permission policies ─────────────────────────────────────────────────
+    // No per-permission AddPolicy list here on purpose. PermissionPolicyProvider
+    // manufactures every "perm:<permission>" policy on demand straight from the
+    // [Permission("...")] attribute, so adding a new permission to a controller
+    // needs no second registration step.
+    //
+    // The 38 hand-written registrations that used to live here were exactly the
+    // kind of list that rots: three separate features shipped with a missing
+    // entry and 500'd in production on first request ("The AuthorizationPolicy
+    // named 'perm:x' was not found") - most recently the whole files module,
+    // which meant every upload and download, including crew ID proofs, was dead.
+    // See PermissionPolicyProvider for the full story.
+    builder.Services.AddAuthorization();
+    builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
     builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
     // ─── Application Services ─────────────────────────────────────────────────

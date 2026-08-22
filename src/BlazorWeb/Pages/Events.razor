@@ -369,6 +369,20 @@
                     </div>
                 </div>
 
+                @* ── Notifications ────────────────────────────────────────
+                   Sits directly above Assign Crew per owner request, so the
+                   thing you're most likely to send while looking at an event
+                   isn't buried at the bottom of the panel.
+
+                   Deliberately OUTSIDE the !_isEventLocked guard below: the
+                   crew-assignment UI disappears once an event is locked, but
+                   the notification history must stay readable (and sendable)
+                   for completed events too. Admin/Manager composes here; the
+                   same list is what the event's vendors and crew see. *@
+                <div class="pb-4 mb-4 border-b border-gray-100">
+                    <EventNotificationsPanel EventId="@_selectedEvent.Id" CanSend="@_canWrite" />
+                </div>
+
                 <!-- Assign Crew (Admin/Manager) — first per UX -->
                 @if (!_isEventLocked)
                 {
@@ -1023,15 +1037,6 @@
                             }
                         </div>
                     }
-                </div>
-
-                @* ── Notifications ────────────────────────────────────────
-                   Admin/Manager composes here; the same list is what the
-                   event's vendors and crew see on their dashboard, so the
-                   history stays readable to anyone who opens the event
-                   later. *@
-                <div class="pt-4 border-t border-gray-100">
-                    <EventNotificationsPanel EventId="@_selectedEvent.Id" CanSend="@_canWrite" />
                 </div>
 
                 </div>
