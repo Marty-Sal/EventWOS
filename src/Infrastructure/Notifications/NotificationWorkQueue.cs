@@ -38,6 +38,15 @@ public sealed class NotificationWorkQueue : INotificationWorkQueue
     public async Task<IReadOnlyList<OutboxMessage>> ClaimOutboxBatchAsync(
         string workerId, int batchSize, CancellationToken ct = default)
     {
+        // The context is configured with EnableRetryOnFailure, and that
+        // execution strategy refuses user-initiated transactions unless the
+        // whole unit of work is inside it -- a retry has to be able to replay
+        // the transaction from the start, not resume half of one. Every pass
+        // failed on this in production until the claim was wrapped.
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
         // Oldest first: notification order should follow the order the business
@@ -58,7 +67,7 @@ public sealed class NotificationWorkQueue : INotificationWorkQueue
         if (claimed.Count == 0)
         {
             await tx.CommitAsync(ct);
-            return Array.Empty<OutboxMessage>();
+            return (IReadOnlyList<OutboxMessage>)Array.Empty<OutboxMessage>();
         }
 
         var now = DateTime.UtcNow;
@@ -72,12 +81,17 @@ public sealed class NotificationWorkQueue : INotificationWorkQueue
         await tx.CommitAsync(ct);
 
         _logger.LogDebug("Worker {WorkerId} claimed {Count} outbox message(s)", workerId, claimed.Count);
-        return claimed;
+        return (IReadOnlyList<OutboxMessage>)claimed;
+        });
     }
 
     public async Task<IReadOnlyList<NotificationDelivery>> ClaimDeliveryBatchAsync(
         string workerId, int batchSize, CancellationToken ct = default)
     {
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
         // Priority is stored as its enum NAME, so ordering has to be explicit --
@@ -105,7 +119,7 @@ public sealed class NotificationWorkQueue : INotificationWorkQueue
         if (claimed.Count == 0)
         {
             await tx.CommitAsync(ct);
-            return Array.Empty<NotificationDelivery>();
+            return (IReadOnlyList<NotificationDelivery>)Array.Empty<NotificationDelivery>();
         }
 
         var now = DateTime.UtcNow;
@@ -116,7 +130,8 @@ public sealed class NotificationWorkQueue : INotificationWorkQueue
         await tx.CommitAsync(ct);
 
         _logger.LogDebug("Worker {WorkerId} claimed {Count} delivery row(s)", workerId, claimed.Count);
-        return claimed;
+        return (IReadOnlyList<NotificationDelivery>)claimed;
+        });
     }
 
     public async Task<int> ReleaseStaleLocksAsync(TimeSpan lockTimeout, CancellationToken ct = default)
