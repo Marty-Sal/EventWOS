@@ -1,5 +1,8 @@
 using EventWOS.Application.Events.DTOs;
+using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Application.Events.Shifts;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Domain.Entities;
@@ -7,6 +10,7 @@ using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace EventWOS.Application.Events.Commands;
 
@@ -41,9 +45,15 @@ public sealed class AddEventShiftHandler
     private readonly IUnitOfWork         _uow;
     private readonly INotificationPusher _push;
 
-    public AddEventShiftHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    private readonly INotificationDispatcher _notifications;
+    private readonly AppUrlOptions _appUrls;
+
+    public AddEventShiftHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
+        INotificationDispatcher notifications, IOptions<AppUrlOptions> appUrls)
     {
         _db = db; _uow = uow; _push = push;
+        _notifications = notifications; _appUrls = appUrls.Value;
     }
 
     public async Task<Result<EventShiftDto>> Handle(AddEventShiftCommand req, CancellationToken ct)
@@ -145,6 +155,32 @@ public sealed class AddEventShiftHandler
             .SumAsync(s => s.CrewCount, ct);
         var newTotal = existingTotal + req.CrewCount;
         ev.RecomputeCapacityFromShifts(newTotal);
+
+        // Durable invitation, staged before the save so the shift, the placeholder and
+        // the message commit together.
+        if (vendor is not null)
+        {
+            _notifications.Enqueue(new NotificationRequest(
+                NotificationTemplateCodes.VendorEventInvited,
+                RecipientUserId: vendor.Id,
+                // Same (event, vendor) key the create-event path uses, on purpose. Adding
+                // a second shift for a vendor already on this event produces a message
+                // identical to the first word for word -- VENDOR_EVENT_INVITED names only
+                // the event, date and venue -- so the platform suppressing it is the right
+                // outcome, not a lost notification. The shift itself shows up on their My
+                // Events page and in their quota panel.
+                BusinessEventKey: $"event:{req.EventId}:vendor-invited:{vendor.Id}",
+                Data: new Dictionary<string, string?>
+                {
+                    [NotificationTokens.RecipientName] = vendor.FullName,
+                    [NotificationTokens.EventName]     = ev.Title,
+                    [NotificationTokens.EventDate]     = ev.StartAt.ToString("dd MMM yyyy"),
+                    [NotificationTokens.EventTime]     = ev.StartAt.ToString("HH:mm"),
+                    [NotificationTokens.VenueName]     = ev.Venue,
+                    [NotificationTokens.Link]          = _appUrls.BaseUrl.TrimEnd('/') + "/vendor-assignments"
+                },
+                ActorUserId: req.ActorUserId));
+        }
 
         await _uow.SaveChangesAsync(ct);
 

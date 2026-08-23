@@ -1,5 +1,8 @@
 using EventWOS.Application.Events.DTOs;
+using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Application.Events.Shifts;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
@@ -7,6 +10,7 @@ using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace EventWOS.Application.Events.Commands;
 
@@ -80,8 +84,16 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
     /// </summary>
     private const int DefaultGeoFenceRadiusMeters = 150;
 
-    public CreateEventHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
-    { _db = db; _uow = uow; _push = push; }
+    private readonly INotificationDispatcher _notifications;
+    private readonly AppUrlOptions _appUrls;
+
+    public CreateEventHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
+        INotificationDispatcher notifications, IOptions<AppUrlOptions> appUrls)
+    {
+        _db = db; _uow = uow; _push = push;
+        _notifications = notifications; _appUrls = appUrls.Value;
+    }
 
     public async Task<Result<EventDto>> Handle(CreateEventCommand req, CancellationToken ct)
     {
@@ -290,6 +302,46 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Res
             _db.EventShifts.Add(new EventShift(
                 ev.Id, general, effectiveMaxCrew,
                 req.StartAt, req.EndAt, req.CreatedByUserId));
+        }
+
+        // Durable invitation for every vendor picked on a shift, staged before the save
+        // so the event, the placeholder rows and the messages commit as one.
+        //
+        // Deliberately ONE message per vendor, not one per placeholder. A vendor picked
+        // on four shifts of the same event gets four placeholder rows, but the
+        // VENDOR_EVENT_INVITED template says only "you have been invited to {{EventName}}
+        // on {{EventDate}} at {{VenueName}}" -- it carries nothing shift-specific, so
+        // four copies would be four word-for-word repeats. Their My Events page and the
+        // quota panel show the per-shift detail.
+        if (vendorInvites.Count > 0)
+        {
+            var vendorIds = vendorInvites.Select(v => v.VendorId).Distinct().ToList();
+            var vendorNames = await _db.Users
+                .Where(u => vendorIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.FullName })
+                .ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+
+            var link = _appUrls.BaseUrl.TrimEnd('/') + "/vendor-assignments";
+
+            _notifications.Enqueue(vendorIds.Select(vendorId => new NotificationRequest(
+                NotificationTemplateCodes.VendorEventInvited,
+                RecipientUserId: vendorId,
+                // Keyed on (event, vendor) rather than on the placeholder row, which is
+                // what collapses the multi-shift case above. Idempotency is permanent
+                // here, so a vendor is told about THIS event exactly once -- and if the
+                // invitation is later revoked and re-issued, ReinviteVendor uses a
+                // timestamped key of its own, so recovery still reaches them.
+                BusinessEventKey: $"event:{ev.Id}:vendor-invited:{vendorId}",
+                Data: new Dictionary<string, string?>
+                {
+                    [NotificationTokens.RecipientName] = vendorNames.TryGetValue(vendorId, out var n) ? n : "there",
+                    [NotificationTokens.EventName]     = ev.Title,
+                    [NotificationTokens.EventDate]     = ev.StartAt.ToString("dd MMM yyyy"),
+                    [NotificationTokens.EventTime]     = ev.StartAt.ToString("HH:mm"),
+                    [NotificationTokens.VenueName]     = ev.Venue,
+                    [NotificationTokens.Link]          = link
+                },
+                ActorUserId: req.CreatedByUserId)));
         }
 
         await _uow.SaveChangesAsync(ct);

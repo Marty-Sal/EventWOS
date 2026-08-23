@@ -55,10 +55,14 @@
         string.IsNullOrWhiteSpace(p.Reason) ? ToastType.Success : ToastType.Error);
 
     // Vendor invited to an event / re-invited / invite revoked.
-    private void OnAssignmentChanged(NotificationPayload p) => Push(
-        "🗓️ Assignment Updated",
-        string.IsNullOrWhiteSpace(p.EventTitle) ? "Your event assignments changed." : $"Change on {p.EventTitle}.",
-        ToastType.Info);
+    // OnAssignmentChanged is gone. It toasted "Assignment Updated -- Change on
+    // <event>" for four different server events, which was all it could say when one
+    // handler served all four. Every one of them is now on the notification platform
+    // (VENDOR_EVENT_INVITED, VENDOR_INVITE_REVOKED, CREW_INVITE_REVOKED), and those
+    // messages say what actually happened -- "your invitation to <event> has been
+    // withdrawn" -- so the platform feed toasts them instead and the codes are no
+    // longer suppressed below. The hub still raises AssignmentChangedReceived for any
+    // future subscriber; it simply no longer produces a vague toast.
 
     // ─── Notification platform feed ─────────────────────────────────────────
     // Codes whose legacy push ALREADY raises a toast. While both paths run in
@@ -89,9 +93,6 @@
         "CREW_ASSIGNMENT_REJECTED",  // OnVendorRejected / OnManagerRejected
         "ACCOUNT_APPROVED",          // OnRegistrationDecision
         "ACCOUNT_REJECTED",          // OnRegistrationDecision
-        "VENDOR_EVENT_INVITED",      // OnAssignmentChanged
-        "CREW_INVITE_REVOKED",       // OnAssignmentChanged
-        "VENDOR_INVITE_REVOKED",     // OnAssignmentChanged
         "REGISTRATION_PENDING_APPROVAL", // OnRegistrationSubmitted
         "ASSIGNMENT_PENDING_APPROVAL",   // OnPendingManagerApproval
         "CREW_ACCEPTED_ASSIGNMENT",      // OnCrewAccepted
@@ -100,14 +101,10 @@
         // closes the QR modal, so suppressing it would remove the bell entry and put
         // nothing in its place.
         //
-        // Note on the three AssignmentChanged codes above: their legacy toast is
-        // generic ("Assignment Updated -- Change on Sunburn Arena"), while the platform
-        // message actually says the invitation was withdrawn. Suppressing the better
-        // message is the wrong way round, but the legacy handler is one subscription
-        // shared by four server events -- including VendorEventAssigned, which is not
-        // on the platform yet -- so it cannot tell which fired. Retire the legacy
-        // AssignmentChanged toast and drop all three codes from this list once the
-        // event-creation paths are wired.
+        // The three AssignmentChanged codes that used to sit here were removed when the
+        // event-creation paths were wired: their legacy toast said only "Assignment
+        // Updated", the platform message says the invitation was withdrawn, and
+        // suppressing the better of the two was the wrong way round.
     };
 
     private void OnPlatformNotification(PlatformNotification n)
@@ -150,7 +147,6 @@
         Hub.SystemNotificationReceived     += OnSystem;
         Hub.RegistrationSubmittedReceived  += OnRegistrationSubmitted;
         Hub.RegistrationDecisionReceived   += OnRegistrationDecision;
-        Hub.AssignmentChangedReceived      += OnAssignmentChanged;
         Hub.PlatformNotificationReceived   += OnPlatformNotification;
     }
 
@@ -179,7 +175,6 @@
         Hub.SystemNotificationReceived     -= OnSystem;
         Hub.RegistrationSubmittedReceived  -= OnRegistrationSubmitted;
         Hub.RegistrationDecisionReceived   -= OnRegistrationDecision;
-        Hub.AssignmentChangedReceived      -= OnAssignmentChanged;
         Hub.PlatformNotificationReceived   -= OnPlatformNotification;
     }
 
