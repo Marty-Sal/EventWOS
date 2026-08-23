@@ -170,7 +170,7 @@
                                 }
                                 @if (CanSend)
                                 {
-                                    <span> · @a.RecipientCount recipient@(a.RecipientCount == 1 ? "" : "s"), @a.WhatsAppSentCount via WhatsApp</span>
+                                    <span> · @a.RecipientCount recipient@(a.RecipientCount == 1 ? "" : "s") · queued for delivery</span>
                                 }
                             </p>
                         </div>
@@ -477,8 +477,12 @@
 
             _successBanner = result.RecipientCount == 0
                 ? "Notification saved, but nobody is assigned to this event yet — it'll be waiting for them when they are."
+                // Deliberately says "queued", not "sent via WhatsApp". Delivery now runs
+                // in the outbox worker with retries, so at this moment nothing has been
+                // confirmed delivered and the old wording was a guess dressed up as a
+                // receipt. Per-recipient status is visible in the notification history.
                 : $"Sent to {result.RecipientCount} recipient{(result.RecipientCount == 1 ? "" : "s")}" +
-                  $" ({result.WhatsAppSentCount} via WhatsApp)" +
+                  ", queued for delivery" +
                   (result.AttachmentCount > 0 ? $", {result.AttachmentCount} attachment{(result.AttachmentCount == 1 ? "" : "s")} linked." : ".");
 
             _composing = false;

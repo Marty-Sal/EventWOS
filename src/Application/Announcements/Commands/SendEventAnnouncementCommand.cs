@@ -1,6 +1,8 @@
 using EventWOS.Application.Announcements.DTOs;
 using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using EventWOS.Shared.Result;
@@ -15,11 +17,19 @@ namespace EventWOS.Application.Announcements.Commands;
 /// Admin/Manager broadcasts a rich-text notification to an event's vendors
 /// and/or crew.
 ///
-/// Delivery is three-pronged and deliberately best-effort on the outbound
-/// channels: the DB row is the source of truth (so the message is always
-/// readable later on the dashboard/event screen even if WhatsApp is down),
-/// while the SignalR push and the WhatsApp fan-out are fire-and-forget
-/// per recipient — one bad mobile number must not fail the whole broadcast.
+/// The DB row remains the source of truth, so the message is always readable
+/// later on the dashboard even if every outbound channel is down.
+///
+/// Outbound delivery is QUEUED, not sent inline. It used to loop over recipients
+/// calling WhatsApp one at a time while the admin's request waited: a 200-person
+/// event meant 200 sequential HTTP calls inside the request, any transient failure
+/// was logged and lost with no retry, and the admin sat watching a spinner to find
+/// out how many got through. Handing the recipients to the notification platform
+/// instead makes the broadcast return immediately and gives every message the
+/// outbox worker's retry, backoff, per-channel routing and delivery tracking.
+///
+/// The SignalR push stays inline: it is the in-page badge/refresh signal, it costs
+/// nothing, and it is meaningless if delayed.
 /// </summary>
 public sealed record SendEventAnnouncementCommand(
     Guid   EventId,
@@ -35,18 +45,18 @@ public sealed class SendEventAnnouncementHandler
 {
     private readonly IAppDbContext _db;
     private readonly INotificationPusher _push;
-    private readonly IWhatsAppProvider _whatsApp;
+    private readonly INotificationDispatcher _notifications;
     private readonly AppUrlOptions _appUrls;
     private readonly ILogger<SendEventAnnouncementHandler> _logger;
 
     public SendEventAnnouncementHandler(
         IAppDbContext db,
         INotificationPusher push,
-        IWhatsAppProvider whatsApp,
+        INotificationDispatcher notifications,
         IOptions<AppUrlOptions> appUrls,
         ILogger<SendEventAnnouncementHandler> logger)
     {
-        _db = db; _push = push; _whatsApp = whatsApp; _appUrls = appUrls.Value; _logger = logger;
+        _db = db; _push = push; _notifications = notifications; _appUrls = appUrls.Value; _logger = logger;
     }
 
     public async Task<Result<SendAnnouncementResultDto>> Handle(
@@ -106,7 +116,6 @@ public sealed class SendEventAnnouncementHandler
                 .ToListAsync(ct);
 
         var link = BuildLink(announcement.Id);
-        var whatsAppSent = 0;
 
         foreach (var user in recipients)
         {
@@ -129,29 +138,44 @@ public sealed class SendEventAnnouncementHandler
                     announcement.Id, user.Id);
             }
 
-            if (string.IsNullOrWhiteSpace(user.Mobile)) continue;
-
-            try
-            {
-                var msg = BuildWhatsAppMessage(user.FullName, ev.Title, announcement, attachmentCount, link);
-                if (await _whatsApp.SendAsync(user.Mobile, msg, ct)) whatsAppSent++;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Announcement {AnnouncementId}: WhatsApp failed for user {UserId}.",
-                    announcement.Id, user.Id);
-            }
         }
 
-        announcement.RecordDelivery(recipients.Count, whatsAppSent);
+        // Queue the durable copy for every recipient. No mobile-number check here any
+        // more: the platform resolves channels per recipient, so somebody with no
+        // mobile still gets the inbox row (and email once that is their preference),
+        // where the old loop simply skipped them.
+        _notifications.Enqueue(recipients.Select(user => new NotificationRequest(
+            NotificationTemplateCodes.EventAnnouncement,
+            RecipientUserId: user.Id,
+            // One key per recipient per announcement. The announcement id is already
+            // unique per send, so a retried request cannot double-broadcast.
+            BusinessEventKey: $"announcement:{announcement.Id}:{user.Id}",
+            Data: new Dictionary<string, string?>
+            {
+                [NotificationTokens.Subject] = announcement.Subject,
+                // The whole body goes in one token on purpose. EVENT_ANNOUNCEMENT's
+                // stored template is "{{Subject}}" / "{{Message}}", and the seeder
+                // never rewrites an existing template row -- so adding {{Link}} or
+                // {{EventName}} to the catalogue would change nothing in production
+                // and the link would silently vanish from live messages.
+                [NotificationTokens.Message] = BuildAnnouncementBody(
+                    user.FullName, ev.Title, announcement, attachmentCount, link)
+            },
+            ActorUserId: req.SentByUserId)));
+
+        // RecipientCount is exact. The second number is now "queued for outbound
+        // delivery", not "confirmed sent by WhatsApp" -- the send happens later in the
+        // outbox worker, and true per-channel status lives on the delivery rows. The
+        // UI wording was changed to match; claiming "sent" here would be a guess.
+        announcement.RecordDelivery(recipients.Count, recipients.Count);
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation(
-            "Announcement {AnnouncementId} sent for event {EventId} to {Recipients} recipient(s), {WhatsApp} via WhatsApp, {Attachments} attachment(s).",
-            announcement.Id, req.EventId, recipients.Count, whatsAppSent, attachmentCount);
+            "Announcement {AnnouncementId} stored for event {EventId} and queued for {Recipients} recipient(s), {Attachments} attachment(s).",
+            announcement.Id, req.EventId, recipients.Count, attachmentCount);
 
         return Result.Success(new SendAnnouncementResultDto(
-            announcement.Id, recipients.Count, whatsAppSent, attachmentCount));
+            announcement.Id, recipients.Count, recipients.Count, attachmentCount));
     }
 
     private string BuildLink(Guid announcementId)
@@ -163,23 +187,23 @@ public sealed class SendEventAnnouncementHandler
     }
 
     /// <summary>
-    /// WhatsApp is plain text, so the HTML body is flattened to a preview and
-    /// the real content (formatting + attachment links) lives behind the
-    /// deep link — which is also what keeps attachments as links rather than
-    /// files pushed over the wire.
+    /// Flattens the announcement into one plain-text body for the outbound channels.
+    /// The rich formatting and the attachments themselves stay behind the deep link,
+    /// which is what keeps attachments as links rather than files pushed over the
+    /// wire to every recipient.
     /// </summary>
-    private static string BuildWhatsAppMessage(
+    private static string BuildAnnouncementBody(
         string fullName, string eventTitle, EventAnnouncement announcement, int attachmentCount, string link)
     {
         var attachmentNote = attachmentCount switch
         {
             0 => string.Empty,
-            1 => "\n\n📎 1 attachment — open the link to view it.",
-            _ => $"\n\n📎 {attachmentCount} attachments — open the link to view them."
+            1 => "\n\n1 attachment - open the link to view it.",
+            _ => $"\n\n{attachmentCount} attachments - open the link to view them."
         };
 
-        return $"Hi {fullName}, update for *{eventTitle}*\n\n" +
-               $"*{announcement.Subject}*\n{announcement.PlainTextPreview(300)}" +
+        return $"Hi {fullName}, update for {eventTitle}\n\n" +
+               $"{announcement.Subject}\n{announcement.PlainTextPreview(300)}" +
                $"{attachmentNote}\n\nView full notification: {link}";
     }
 }
