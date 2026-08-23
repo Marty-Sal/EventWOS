@@ -1967,6 +1967,150 @@ try
     CREATE UNIQUE INDEX IF NOT EXISTS ux_announcement_reads_pair
         ON event_announcement_reads (announcement_id, user_id);
 
+    -- ═══ notification platform ══════
+    -- Mirrors migration 20260823190000_AddNotificationPlatform. Same reason as
+    -- the block above: the startup migration gate means a migration alone never
+    -- reaches prod, so the tables are created here on every boot.
+    --
+    -- Postgres is the source of truth for notification state. Business handlers
+    -- write a notification plus an outbox row in the same transaction as the
+    -- business data; a background worker calls AiSensy/SES/FCM afterwards.
+    CREATE TABLE IF NOT EXISTS notifications (
+        id                 UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        recipient_user_id  UUID NOT NULL,
+        event_id           UUID,
+        actor_user_id      UUID,
+        template_code      VARCHAR(60) NOT NULL,
+        priority           VARCHAR(10) NOT NULL,
+        status             VARCHAR(15) NOT NULL,
+        data               JSONB NOT NULL DEFAULT '{}'::jsonb,
+        idempotency_key    VARCHAR(200) NOT NULL,
+        correlation_id     VARCHAR(100),
+        read_at            TIMESTAMPTZ,
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_by         UUID,
+        updated_at         TIMESTAMPTZ,
+        updated_by         UUID,
+        is_deleted         BOOLEAN NOT NULL DEFAULT false,
+        deleted_at         TIMESTAMPTZ,
+        deleted_by         UUID
+    );
+
+    -- The guard that actually prevents duplicate messages. Application-level
+    -- checks race; a unique index does not.
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_notifications_idempotency_key
+        ON notifications (idempotency_key);
+    CREATE INDEX IF NOT EXISTS ix_notifications_recipient_created
+        ON notifications (recipient_user_id, created_at);
+    CREATE INDEX IF NOT EXISTS ix_notifications_event
+        ON notifications (event_id);
+
+    CREATE TABLE IF NOT EXISTS notification_deliveries (
+        id                          UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        notification_id             UUID NOT NULL,
+        channel                     VARCHAR(15) NOT NULL,
+        destination                 VARCHAR(320),
+        provider                    VARCHAR(40) NOT NULL,
+        template_version            INT NOT NULL DEFAULT 1,
+        priority                    VARCHAR(10) NOT NULL,
+        status                      VARCHAR(15) NOT NULL,
+        provider_message_id         VARCHAR(200),
+        provider_response_reference VARCHAR(200),
+        attempt_count               INT NOT NULL DEFAULT 0,
+        last_attempt_at             TIMESTAMPTZ,
+        next_attempt_at             TIMESTAMPTZ,
+        accepted_at                 TIMESTAMPTZ,
+        delivered_at                TIMESTAMPTZ,
+        read_at                     TIMESTAMPTZ,
+        failed_at                   TIMESTAMPTZ,
+        failure_reason              VARCHAR(500),
+        locked_by                   VARCHAR(100),
+        locked_at                   TIMESTAMPTZ,
+        created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_by                  UUID,
+        updated_at                  TIMESTAMPTZ,
+        updated_by                  UUID,
+        is_deleted                  BOOLEAN NOT NULL DEFAULT false,
+        deleted_at                  TIMESTAMPTZ,
+        deleted_by                  UUID
+    );
+
+    -- The FK is declared here as well as in the migration, on purpose: the
+    -- patch has historically created tables WITHOUT their foreign keys, which
+    -- let a patch-built database tolerate ordering bugs that a migrated
+    -- database rejects (that mismatch caused the 2026-08-23 registration
+    -- outage). Both paths should produce the same schema.
+    DO $inner$
+    BEGIN
+        ALTER TABLE notification_deliveries
+            ADD CONSTRAINT fk_notification_deliveries_notification
+            FOREIGN KEY (notification_id) REFERENCES notifications (id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $inner$;
+
+    -- The worker claim query: due + pending, best priority first.
+    CREATE INDEX IF NOT EXISTS ix_notification_deliveries_claim
+        ON notification_deliveries (status, priority, next_attempt_at);
+    -- Webhook correlation: providers identify a message only by their own id.
+    CREATE INDEX IF NOT EXISTS ix_notification_deliveries_provider_message
+        ON notification_deliveries (provider_message_id);
+    CREATE INDEX IF NOT EXISTS ix_notification_deliveries_notification
+        ON notification_deliveries (notification_id);
+    -- One delivery per channel per notification: a replayed outbox row cannot
+    -- produce a second WhatsApp message.
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_deliveries_notification_channel
+        ON notification_deliveries (notification_id, channel);
+
+    CREATE TABLE IF NOT EXISTS notification_templates (
+        id                    UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        code                  VARCHAR(60) NOT NULL,
+        channel               VARCHAR(15) NOT NULL,
+        language              VARCHAR(10) NOT NULL DEFAULT 'en',
+        subject               VARCHAR(300),
+        body                  TEXT NOT NULL,
+        provider_template_id  VARCHAR(200),
+        version               INT NOT NULL DEFAULT 1,
+        is_active             BOOLEAN NOT NULL DEFAULT true,
+        created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_by            UUID,
+        updated_at            TIMESTAMPTZ,
+        updated_by            UUID,
+        is_deleted            BOOLEAN NOT NULL DEFAULT false,
+        deleted_at            TIMESTAMPTZ,
+        deleted_by            UUID
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_templates_code_channel_lang
+        ON notification_templates (code, channel, language);
+
+    CREATE TABLE IF NOT EXISTS outbox_messages (
+        id              UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        aggregate_type  VARCHAR(60) NOT NULL,
+        aggregate_id    UUID,
+        message_type    VARCHAR(60) NOT NULL,
+        payload         JSONB NOT NULL,
+        status          VARCHAR(15) NOT NULL,
+        attempt_count   INT NOT NULL DEFAULT 0,
+        available_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+        locked_at       TIMESTAMPTZ,
+        locked_by       VARCHAR(100),
+        processed_at    TIMESTAMPTZ,
+        last_error      VARCHAR(1000),
+        correlation_id  VARCHAR(100),
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_by      UUID,
+        updated_at      TIMESTAMPTZ,
+        updated_by      UUID,
+        is_deleted      BOOLEAN NOT NULL DEFAULT false,
+        deleted_at      TIMESTAMPTZ,
+        deleted_by      UUID
+    );
+
+    CREATE INDEX IF NOT EXISTS ix_outbox_messages_status_available
+        ON outbox_messages (status, available_at);
+    CREATE INDEX IF NOT EXISTS ix_outbox_messages_status_locked
+        ON outbox_messages (status, locked_at);
+
 ";
         // Split into sections and run each as its OWN block. Postgres aborts an
         // entire DO block on the first error, so while this was one giant block a

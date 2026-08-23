@@ -45,6 +45,15 @@ public interface IAppDbContext
     DbSet<EventAnnouncementAttachment> EventAnnouncementAttachments { get; }
     DbSet<EventAnnouncementRead>       EventAnnouncementReads       { get; }
 
+    // Notification platform -- durable notification state. Postgres is the
+    // source of truth here: business handlers write a Notification plus an
+    // OutboxMessage in the same SaveChanges, and a background worker does the
+    // provider calls afterwards.
+    DbSet<Notification>         Notifications        { get; }
+    DbSet<NotificationDelivery> NotificationDeliveries { get; }
+    DbSet<NotificationTemplate> NotificationTemplates { get; }
+    DbSet<OutboxMessage>        OutboxMessages       { get; }
+
     // Settings module — Venue catalog.
     DbSet<Venue>             Venues            { get; }
     DbSet<TermsAndConditions> TermsAndConditions { get; }

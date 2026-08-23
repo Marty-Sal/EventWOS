@@ -70,6 +70,12 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     // Reference data — canonical India states + union territories list.
     public DbSet<IndianState> IndianStates => Set<IndianState>();
 
+    // Notification platform.
+    public DbSet<Notification>         Notifications          => Set<Notification>();
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
+    public DbSet<NotificationTemplate> NotificationTemplates  => Set<NotificationTemplate>();
+    public DbSet<OutboxMessage>        OutboxMessages         => Set<OutboxMessage>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
