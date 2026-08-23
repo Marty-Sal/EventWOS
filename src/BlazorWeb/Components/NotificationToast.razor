@@ -92,7 +92,12 @@
         "CREW_INVITE_REVOKED",       // OnAssignmentChanged
         "VENDOR_INVITE_REVOKED",     // OnAssignmentChanged
         "REGISTRATION_PENDING_APPROVAL", // OnRegistrationSubmitted
-        "ASSIGNMENT_PENDING_APPROVAL"    // OnPendingManagerApproval
+        "ASSIGNMENT_PENDING_APPROVAL",   // OnPendingManagerApproval
+        "CREW_ACCEPTED_ASSIGNMENT",      // OnCrewAccepted
+        "CREW_DECLINED_ASSIGNMENT"       // OnCrewDeclined
+        // CHECK_IN_VERIFIED is NOT listed: CheckInVerifiedReceived only refetches and
+        // closes the QR modal, so suppressing it would remove the bell entry and put
+        // nothing in its place.
     };
 
     private void OnPlatformNotification(PlatformNotification n)

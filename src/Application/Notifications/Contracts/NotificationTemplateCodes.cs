@@ -46,6 +46,20 @@ public static class NotificationTemplateCodes
     /// </summary>
     public const string AssignmentPendingApproval = "ASSIGNMENT_PENDING_APPROVAL";
 
+    /// <summary>
+    /// Sent to the vendor when their crew member accepts. It is an action item, not
+    /// news: acceptance parks the row in the vendor's queue waiting to be forwarded
+    /// to the manager, so nothing moves until the vendor looks.
+    /// </summary>
+    public const string CrewAcceptedAssignment = "CREW_ACCEPTED_ASSIGNMENT";
+
+    /// <summary>
+    /// Sent to the vendor when their crew member declines. The urgent one of the pair:
+    /// a slot they had counted as filled is now empty and somebody has to be found
+    /// before the event.
+    /// </summary>
+    public const string CrewDeclinedAssignment = "CREW_DECLINED_ASSIGNMENT";
+
     // Event operations
     public const string EventAnnouncement     = "EVENT_ANNOUNCEMENT";
     public const string EventUpdated          = "EVENT_UPDATED";

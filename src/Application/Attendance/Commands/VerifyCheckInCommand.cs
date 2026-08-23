@@ -1,5 +1,7 @@
 using EventWOS.Application.Attendance.DTOs;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Application.Attendance.Geo;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
@@ -37,15 +39,17 @@ public sealed class VerifyCheckInHandler
     private readonly IUnitOfWork   _uow;
     private readonly INotificationPusher _push;
     private readonly IGeoLocationService _geo;
+    private readonly INotificationDispatcher _notifications;
 
     public VerifyCheckInHandler(
         IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
-        IGeoLocationService geo)
+        IGeoLocationService geo, INotificationDispatcher notifications)
     {
         _db   = db;
         _uow  = uow;
         _push = push;
         _geo  = geo;
+        _notifications = notifications;
     }
 
     public async Task<Result<CheckInVerifyResultDto>> Handle(
@@ -166,6 +170,33 @@ public sealed class VerifyCheckInHandler
             assignment.MarkAttended();
 
         pending.MarkConsumed(req.VerifierUserId);
+
+        // A durable receipt for the crew member, staged so it commits inside the same
+        // transaction as the attendance row -- a receipt for a check-in that rolled
+        // back would be worse than none.
+        //
+        // InApp ONLY, deliberately. The crew member is standing in front of the person
+        // scanning them and watches their own QR modal close, so this is evidence, not
+        // news: something they can point at later when a shift is queried or a payment
+        // is disputed. Pushing it to WhatsApp and email as well would mean a 200-person
+        // event fires 200 messages telling people what they just saw happen, which is
+        // how recipients learn to ignore the channel that later carries the messages
+        // that matter.
+        _notifications.Enqueue(new NotificationRequest(
+            NotificationTemplateCodes.CheckInVerified,
+            RecipientUserId: assignment.Crew.Id,
+            // One receipt per assignment. Re-verifying the same assignment is blocked
+            // upstream by the already-checked-in guard, but if that ever changes the
+            // crew member should not collect duplicate receipts for one shift.
+            BusinessEventKey: $"assignment:{assignment.Id}:check-in-verified",
+            Data: new Dictionary<string, string?>
+            {
+                [NotificationTokens.RecipientName] = assignment.Crew.FullName,
+                [NotificationTokens.EventName]     = assignment.Event.Title,
+                [NotificationTokens.EventDate]     = assignment.Event.StartAt.ToString("dd MMM yyyy")
+            },
+            ActorUserId: req.VerifierUserId,
+            Channels: new[] { NotificationChannel.InApp }));
 
         await _uow.SaveChangesAsync(ct);
 

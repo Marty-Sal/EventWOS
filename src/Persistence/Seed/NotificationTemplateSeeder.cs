@@ -72,6 +72,12 @@ public sealed class NotificationTemplateSeeder
         [NotificationTemplateCodes.AssignmentPendingApproval] =
             new("Crew awaiting your approval",
                 "{{RecipientName}}, {{CrewName}} was approved by {{VendorName}} for {{EventName}} on {{EventDate}} and needs your final approval. Review: {{Link}}"),
+        [NotificationTemplateCodes.CrewAcceptedAssignment] =
+            new("{{CrewName}} accepted",
+                "{{RecipientName}}, {{CrewName}} accepted {{EventName}} on {{EventDate}} and is waiting for you to forward them for approval: {{Link}}"),
+        [NotificationTemplateCodes.CrewDeclinedAssignment] =
+            new("{{CrewName}} declined",
+                "{{RecipientName}}, {{CrewName}} declined {{EventName}} on {{EventDate}}. Reason: {{Reason}}. You will need to fill the slot: {{Link}}"),
         [NotificationTemplateCodes.CrewInviteRevoked] =
             new("Invitation withdrawn", "Hi {{RecipientName}}, your invitation for {{EventName}} has been withdrawn."),
         [NotificationTemplateCodes.CrewAssignmentReminder] =
