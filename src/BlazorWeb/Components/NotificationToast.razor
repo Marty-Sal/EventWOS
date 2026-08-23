@@ -61,28 +61,36 @@
         ToastType.Info);
 
     // ─── Notification platform feed ─────────────────────────────────────────
-    // Codes that a legacy push ALREADY toasts. While both paths run in parallel,
-    // the platform feed stays quiet for these -- otherwise one crew assignment
-    // produces two identical toasts, which reads as a bug to the user and is a
-    // worse regression than the duplication it comes from.
+    // Codes whose legacy push ALREADY raises a toast. While both paths run in
+    // parallel, the platform feed stays quiet for these -- otherwise one crew
+    // assignment produces two identical toasts, which reads as a bug and is a worse
+    // regression than the duplication it comes from.
     //
-    // Each entry is deleted as its legacy push is retired, so the feed takes over
-    // one notification type at a time and this set shrinks to empty.
+    // VERIFIED against the actual toast subscriptions below, one code at a time,
+    // rather than against the list of legacy push names. Four codes were removed
+    // after that check: PAYMENT_APPROVED, PAYMENT_REJECTED, PAYROLL_RELEASED and
+    // CHECK_IN_VERIFIED. Their legacy pushes exist, but they fold into
+    // PaymentChangedReceived / CheckInVerifiedReceived, which only REFETCH tables
+    // and open modals -- no toast is raised. Suppressing them here produced silence,
+    // not de-duplication: a crew member would have been told nothing when their
+    // payment was approved. EVENT_ANNOUNCEMENT went for the same reason; nothing
+    // toasts EventAnnouncementReceived, only the sidebar badge listens.
+    //
+    // The lesson, for whoever edits this next: a legacy push existing is NOT
+    // evidence that a toast exists. Check the subscription, not the push.
+    //
+    // Each remaining entry is deleted as its legacy push is retired, so the feed
+    // takes over one notification type at a time and this set shrinks to empty.
     private static readonly HashSet<string> LegacyToastedCodes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "CREW_ASSIGNMENT",           // AssignmentInvite
-        "VENDOR_EVENT_INVITED",      // VendorEventAssigned
-        "CREW_ASSIGNMENT_APPROVED",  // VendorApprovedYou / ManagerApprovedYou
-        "CREW_ASSIGNMENT_REJECTED",  // VendorRejectedYou / ManagerRejectedYou
-        "CREW_INVITE_REVOKED",       // CrewInviteRevoked
-        "VENDOR_INVITE_REVOKED",     // VendorInviteRevoked
-        "ACCOUNT_APPROVED",          // RegistrationApproved
-        "ACCOUNT_REJECTED",          // RegistrationRejected
-        "CHECK_IN_VERIFIED",         // CheckInVerified
-        "EVENT_ANNOUNCEMENT",        // EventAnnouncement
-        "PAYMENT_APPROVED",          // PaymentApproved
-        "PAYMENT_REJECTED",          // PaymentRejected
-        "PAYROLL_RELEASED"           // PayrollUpdated
+        "CREW_ASSIGNMENT",           // OnAssignmentInvite
+        "CREW_ASSIGNMENT_APPROVED",  // OnVendorApproved / OnManagerApproved
+        "CREW_ASSIGNMENT_REJECTED",  // OnVendorRejected / OnManagerRejected
+        "ACCOUNT_APPROVED",          // OnRegistrationDecision
+        "ACCOUNT_REJECTED",          // OnRegistrationDecision
+        "VENDOR_EVENT_INVITED",      // OnAssignmentChanged
+        "CREW_INVITE_REVOKED",       // OnAssignmentChanged
+        "VENDOR_INVITE_REVOKED"      // OnAssignmentChanged
     };
 
     private void OnPlatformNotification(PlatformNotification n)

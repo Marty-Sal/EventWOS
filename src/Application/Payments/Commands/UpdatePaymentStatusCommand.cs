@@ -1,4 +1,6 @@
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Result;
@@ -37,15 +39,21 @@ public sealed class UpdatePaymentStatusValidator : AbstractValidator<UpdatePayme
 
 public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentStatusCommand, Result>
 {
-    private readonly IAppDbContext       _db;
-    private readonly IUnitOfWork         _uow;
-    private readonly INotificationPusher _push;
+    private readonly IAppDbContext           _db;
+    private readonly IUnitOfWork             _uow;
+    private readonly INotificationPusher     _push;
+    private readonly INotificationDispatcher _notifications;
 
-    public UpdatePaymentStatusHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    public UpdatePaymentStatusHandler(
+        IAppDbContext db,
+        IUnitOfWork uow,
+        INotificationPusher push,
+        INotificationDispatcher notifications)
     {
-        _db   = db;
-        _uow  = uow;
-        _push = push;
+        _db            = db;
+        _uow           = uow;
+        _push          = push;
+        _notifications = notifications;
     }
 
     public async Task<Result> Handle(UpdatePaymentStatusCommand cmd, CancellationToken ct)
@@ -146,9 +154,78 @@ public sealed class UpdatePaymentStatusHandler : IRequestHandler<UpdatePaymentSt
             return Result.Failure(Error.Custom("Payment.InvalidTransition", ex.Message));
         }
 
+        // Notify the crew member about their OWN money, before the save, so the
+        // status change and the notification commit together: a payment that is
+        // marked Paid but whose notification was lost is how someone ends up
+        // chasing a payment they already received.
+        //
+        // Only the person-affecting transitions are notified. "hold" is deliberately
+        // silent -- it is an internal review state that routinely flips back within
+        // minutes, and telling someone their payment is on hold before anyone has
+        // looked at it generates a support call, not clarity. The two "ack" actions
+        // are the crew's OWN clicks, and notifying you about your own click is spam.
+        var notified = action switch
+        {
+            "approve" => NotificationTemplateCodes.PaymentApproved,
+            "pay"     => NotificationTemplateCodes.PayrollReleased,
+            "reject"  => NotificationTemplateCodes.PaymentRejected,
+            _         => null
+        };
+
+        if (notified is not null)
+        {
+            // Loaded for the wording only, and tolerated as null: a missing event
+            // title must not block the money notification. The recipient cares that
+            // the amount moved far more than which event it was for.
+            var ev = await _db.Events
+                .AsNoTracking()
+                .Where(e => e.Id == payment.EventId)
+                .Select(e => new { e.Title })
+                .FirstOrDefaultAsync(ct);
+
+            var crewName = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == payment.CrewId)
+                .Select(u => u.FullName)
+                .FirstOrDefaultAsync(ct);
+
+            // The amount actually involved in THIS transition: what was paid for a
+            // payout, what was agreed for an approval. Showing the agreed figure in
+            // a "released" message when a different sum went out would be a lie the
+            // recipient can check against their bank.
+            var amount = action == "pay"
+                ? payment.PaidAmount ?? payment.AgreedAmount
+                : payment.AgreedAmount;
+
+            _notifications.Enqueue(new NotificationRequest(
+                notified,
+                RecipientUserId: payment.CrewId,
+                // Keyed on the payment and the transition: a double-clicked Approve
+                // button, or a retried request, resolves to the same key and sends once.
+                BusinessEventKey: $"payment:{payment.Id}:{action}",
+                Data: new Dictionary<string, string?>
+                {
+                    [NotificationTokens.RecipientName] = crewName ?? "there",
+                    [NotificationTokens.EventName]     = ev?.Title ?? "your event",
+                    [NotificationTokens.Amount]        = amount.ToString("N2"),
+                    [NotificationTokens.Reason]        = string.IsNullOrWhiteSpace(cmd.Reason)
+                        ? "No reason given"
+                        : cmd.Reason
+                },
+                EventId: payment.EventId,
+                ActorUserId: cmd.ActorId));
+        }
+
         await _uow.SaveChangesAsync(ct);
 
         // Real-time fan-out so payment screens refresh without a page reload.
+        //
+        // KEPT, not replaced. These are cache-invalidation signals, not messages:
+        // the role-wide pushes exist so the admin payments table refetches, and
+        // MyPayments/VendorPayments reload their rows. Turning them into platform
+        // notifications would email an administrator every time a list changed.
+        // The platform handles "your payment was approved"; this handles "the table
+        // on screen is now stale".
         var evt = cmd.Action.ToLower() switch
         {
             "approve"      => "PaymentApproved",

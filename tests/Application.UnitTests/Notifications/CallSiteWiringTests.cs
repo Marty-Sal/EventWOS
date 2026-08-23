@@ -1,4 +1,6 @@
 using EventWOS.Application.Events.Commands;
+using EventWOS.Application.Interfaces;
+using EventWOS.Application.Payments.Commands;
 using EventWOS.Application.Notifications.Abstractions;
 using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Domain.Entities;
@@ -239,4 +241,230 @@ public class CallSiteWiringTests
         public bool IsInRole(UserRole role) => false;
         public bool HasPermission(string permission) => false;
     }
+
+    // ── Payments ─────────────────────────────────────────────────────────────
+    // Money is the thing people chase support about, so these are the
+    // notifications with the least tolerance for being silently dropped.
+
+    /// <summary>Records the legacy pushes so tests can prove they still happen.</summary>
+    private sealed class RecordingPusher : INotificationPusher
+    {
+        public List<string> UserPushes { get; } = new();
+        public List<string> RolePushes { get; } = new();
+
+        public Task PushToUserAsync(Guid userId, string eventName, object payload, CancellationToken ct = default)
+        {
+            UserPushes.Add(eventName);
+            return Task.CompletedTask;
+        }
+
+        public Task PushToRoleAsync(string role, string eventName, object payload, CancellationToken ct = default)
+        {
+            RolePushes.Add($"{role}:{eventName}");
+            return Task.CompletedTask;
+        }
+
+        public Task PushToAllAsync(string eventName, object payload, CancellationToken ct = default)
+            => Task.CompletedTask;
+    }
+
+    private static (CrewPayment payment, Guid crewId) SeedPayment(
+        AppDbContext db, Guid eventId, decimal agreed = 4500m, Guid? vendorId = null)
+    {
+        var crewId = Guid.NewGuid();
+
+        db.Users.Add(new User("Ravi Kumar", "9876543210", UserRole.Crew) { });
+        db.SaveChanges();
+
+        // The seeded user's real id is what the handler will look up for the name.
+        var crew = db.Users.OrderByDescending(u => u.CreatedAt).First();
+
+        var payment = new CrewPayment(eventId, Guid.NewGuid(), crew.Id, vendorId, agreed);
+        db.CrewPayments.Add(payment);
+        db.SaveChanges();
+
+        return (payment, crew.Id);
+    }
+
+    [Theory]
+    [InlineData("approve", "PAYMENT_APPROVED")]
+    [InlineData("reject",  "PAYMENT_REJECTED")]
+    public async Task Approving_or_rejecting_a_payment_notifies_the_crew_member_before_the_save(
+        string action, string expectedCode)
+    {
+        using var db = NewContext();
+        var ev = SeedEvent(db);
+        var (payment, crewId) = SeedPayment(db, ev.Id);
+
+        var dispatcher = new RecordingDispatcher();
+        var uow        = new SnapshottingUnitOfWork(dispatcher);
+
+        var result = await new UpdatePaymentStatusHandler(db, uow, new RecordingPusher(), dispatcher)
+            .Handle(new UpdatePaymentStatusCommand(
+                payment.Id, action, null, null, null, "Missing bank details",
+                ActorId: Guid.NewGuid(), ActorIsAdminOrManager: true), default);
+
+        result.IsSuccess.Should().BeTrue();
+
+        var request = dispatcher.Requests.Should().ContainSingle().Subject;
+        request.TemplateCode.Should().Be(expectedCode);
+        request.RecipientUserId.Should().Be(crewId);
+        request.EventId.Should().Be(ev.Id);
+
+        // Keyed on the payment and the transition, so a double-clicked Approve
+        // button cannot tell someone twice that their money is coming.
+        request.BusinessEventKey.Should().Be($"payment:{payment.Id}:{action}");
+
+        // Staged before the save: a payment marked Approved whose notification was
+        // lost is how someone ends up chasing money they were never told about.
+        uow.RequestsStagedAtSaveTime.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_payout_reports_the_amount_that_actually_moved()
+    {
+        using var db = NewContext();
+        var ev = SeedEvent(db);
+
+        // Agreed 4,500 -- and the client will try to claim 9,999 was paid.
+        var (payment, _) = SeedPayment(db, ev.Id, agreed: 4500m);
+
+        // The domain refuses to pay an unapproved payment, so reach the real state.
+        payment.Approve();
+        db.SaveChanges();
+
+        var dispatcher = new RecordingDispatcher();
+
+        await new UpdatePaymentStatusHandler(db, new SnapshottingUnitOfWork(dispatcher), new RecordingPusher(), dispatcher)
+            .Handle(new UpdatePaymentStatusCommand(
+                payment.Id, "pay", PaidAmount: 9999m, Method: "Upi",
+                TransactionRef: "TX1", Reason: null,
+                ActorId: Guid.NewGuid(), ActorIsAdminOrManager: true), default);
+
+        var request = dispatcher.Requests.Should().ContainSingle().Subject;
+        request.TemplateCode.Should().Be("PAYROLL_RELEASED");
+
+        // The domain locks payout to the agreed contract, and the message must say
+        // the same number the bank will -- a figure the recipient can check.
+        request.Data!["Amount"].Should().Be("4,500.00");
+    }
+
+    [Theory]
+    [InlineData("hold")]
+    [InlineData("ack-received")]
+    [InlineData("ack-pending")]
+    public async Task Internal_and_self_inflicted_transitions_notify_nobody(string action)
+    {
+        using var db = NewContext();
+        var ev = SeedEvent(db);
+        var (payment, crewId) = SeedPayment(db, ev.Id);
+
+        // Each action is only legal from a particular state, so put the payment in
+        // the real one rather than asserting against a transition the domain
+        // rejected for unrelated reasons.
+        payment.Approve();
+        if (action != "hold") payment.MarkPaid(4500m, PaymentMethod.UPI, "TX-SEED");
+        db.SaveChanges();
+
+        var dispatcher = new RecordingDispatcher();
+
+        // The ack actions are the crew's own clicks, so the caller IS the crew.
+        var result = await new UpdatePaymentStatusHandler(db, new SnapshottingUnitOfWork(dispatcher), new RecordingPusher(), dispatcher)
+            .Handle(new UpdatePaymentStatusCommand(
+                payment.Id, action, null, null, null, "note",
+                ActorId: crewId, ActorIsAdminOrManager: action == "hold"), default);
+
+        result.IsSuccess.Should().BeTrue();
+
+        // "On hold" flips back within minutes and is nobody's business outside
+        // finance; telling you about your own acknowledgement is spam.
+        dispatcher.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task The_legacy_table_refresh_pushes_are_kept_not_replaced()
+    {
+        using var db = NewContext();
+        var ev = SeedEvent(db);
+        var (payment, _) = SeedPayment(db, ev.Id);
+
+        var dispatcher = new RecordingDispatcher();
+        var pusher     = new RecordingPusher();
+
+        await new UpdatePaymentStatusHandler(db, new SnapshottingUnitOfWork(dispatcher), pusher, dispatcher)
+            .Handle(new UpdatePaymentStatusCommand(
+                payment.Id, "approve", null, null, null, null,
+                ActorId: Guid.NewGuid(), ActorIsAdminOrManager: true), default);
+
+        // These are cache invalidation, not messages: MyPayments and the admin
+        // payments table REFETCH on them. Migrating them into the platform would
+        // email an administrator every time a list changed, and deleting them would
+        // silently freeze the tables people are looking at.
+        pusher.RolePushes.Should().Contain("Admin:PaymentApproved");
+        pusher.RolePushes.Should().Contain("Manager:PaymentApproved");
+        pusher.UserPushes.Should().Contain("PaymentApproved");
+    }
+
+    [Fact]
+    public async Task Disbursing_a_batch_notifies_the_vendor_and_not_their_crew()
+    {
+        using var db = NewContext();
+        var ev = SeedEvent(db);
+
+        var vendorId = Guid.NewGuid();
+        var batch = new PayrollBatch(vendorId, ev.Id, "BATCH-001");
+        batch.SetTotal(120000m);
+        batch.Submit();
+        batch.Approve(Guid.NewGuid());
+        db.PayrollBatches.Add(batch);
+        db.SaveChanges();
+
+        var dispatcher = new RecordingDispatcher();
+        var uow        = new SnapshottingUnitOfWork(dispatcher);
+
+        var result = await new UpdatePayrollStatusHandler(db, uow, new RecordingPusher(), dispatcher)
+            .Handle(new UpdatePayrollStatusCommand(batch.Id, "disburse", Guid.NewGuid(), null), default);
+
+        result.IsSuccess.Should().BeTrue();
+
+        var request = dispatcher.Requests.Should().ContainSingle().Subject;
+        request.TemplateCode.Should().Be("PAYROLL_RELEASED");
+
+        // The vendor, who now holds the money -- NOT the crew, whose own payments
+        // are still Pending. Announcing money to crew here would have them asking
+        // where it is for days.
+        request.RecipientUserId.Should().Be(vendorId);
+        request.Data!["Amount"].Should().Be("120,000.00");
+        request.BusinessEventKey.Should().Be($"payroll:{batch.Id}:disbursed");
+
+        uow.RequestsStagedAtSaveTime.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("submit")]
+    [InlineData("reject")]
+    public async Task Internal_payroll_workflow_steps_notify_nobody(string action)
+    {
+        using var db = NewContext();
+        var ev = SeedEvent(db);
+
+        var batch = new PayrollBatch(Guid.NewGuid(), ev.Id, "BATCH-002");
+        batch.SetTotal(5000m);
+        if (action == "reject") batch.Submit();
+        db.PayrollBatches.Add(batch);
+        db.SaveChanges();
+
+        var dispatcher = new RecordingDispatcher();
+
+        var result = await new UpdatePayrollStatusHandler(db, new SnapshottingUnitOfWork(dispatcher), new RecordingPusher(), dispatcher)
+            .Handle(new UpdatePayrollStatusCommand(batch.Id, action, Guid.NewGuid(), "reason"), default);
+
+        result.IsSuccess.Should().BeTrue();
+
+        // submit/approve/reject are steps between admins and managers who are
+        // already looking at the payments screen. "Your batch was submitted" tells
+        // a vendor nothing they can act on.
+        dispatcher.Requests.Should().BeEmpty();
+    }
+
 }

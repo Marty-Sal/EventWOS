@@ -113,6 +113,16 @@ public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPayment
             await _uow.SaveChangesAsync(ct);
         }
 
+        // NO platform notification here, deliberately. A payment is created as
+        // Pending -- an internal draft the finance team still has to approve -- so
+        // telling a crew member "a payment of 4,500 exists" would announce money
+        // that nobody has agreed to release yet, and they would start chasing it.
+        // The crew member hears about it at approval and at payout, both of which
+        // dispatch from UpdatePaymentStatusCommand. Please do not "fix" this by
+        // adding a PAYMENT_CREATED notification.
+        //
+        // The pushes below stay: they are table-refresh signals for screens that
+        // are already open, not messages addressed to a person.
         // Fan out so each role's payment screen surfaces the new row live.
         var payload = new
         {
