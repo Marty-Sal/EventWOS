@@ -4,6 +4,9 @@
 @inject IAnalyticsApiService AnalyticsApi
 @inject IEventApiService     EventApi
 @inject IVendorApiService    VendorApi
+@inject IApprovalApiService  ApprovalApi
+@inject NotificationHubService Hub
+@implements IDisposable
 @inject HttpClient           Http
 @inject NavigationManager    Nav
 
@@ -85,6 +88,88 @@
                                 <p class="text-2xl font-bold text-gray-800">@_stats.AttendanceRate%</p>
                                 <p class="text-xs text-gray-400 mt-0.5">@_stats.TotalCheckIns check-ins</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* -- Action Center (Admin/Manager) ---------------------------
+                   Same treatment the Vendor and Crew dashboards already get:
+                   what is waiting on YOU, with a live count and one click to
+                   the queue. Before this, a new self-registration was visible
+                   only if you thought to open the Approval Queue page -- the
+                   dashboard gave no hint anything was waiting. Counts come from
+                   the same endpoints the target pages use, so the numbers here
+                   and the badge there always agree. *@
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-semibold text-gray-700">Action Center</h3>
+                        @if (_adminTotalAwaiting > 0)
+                        {
+                            <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+                                @_adminTotalAwaiting awaiting you
+                            </span>
+                        }
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                        <div class="rounded-xl border p-4 flex items-center justify-between gap-3 cursor-pointer transition
+                                    @(_pendingVendorRegs > 0 ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50" : "border-gray-100 hover:bg-gray-50")"
+                             @onclick="@(() => Nav.NavigateTo("/approvals/people"))">
+                            <div class="flex items-center gap-3">
+                                <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">🏢</div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-800">Vendor Registrations</p>
+                                    <p class="text-xs text-gray-500">
+                                        @(_pendingVendorRegs > 0
+                                            ? $"{_pendingVendorRegs} vendor registration(s) pending approval"
+                                            : "No pending vendor registrations")
+                                    </p>
+                                </div>
+                            </div>
+                            @if (_pendingVendorRegs > 0)
+                            {
+                                <span class="px-2.5 py-1 rounded-full bg-amber-400 text-white text-xs font-bold flex-shrink-0">@_pendingVendorRegs</span>
+                            }
+                        </div>
+
+                        <div class="rounded-xl border p-4 flex items-center justify-between gap-3 cursor-pointer transition
+                                    @(_pendingCrewRegs > 0 ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50" : "border-gray-100 hover:bg-gray-50")"
+                             @onclick="@(() => Nav.NavigateTo("/approvals/people"))">
+                            <div class="flex items-center gap-3">
+                                <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">🧑‍🤝‍🧑</div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-800">Crew Registrations</p>
+                                    <p class="text-xs text-gray-500">
+                                        @(_pendingCrewRegs > 0
+                                            ? $"{_pendingCrewRegs} crew registration(s) pending approval"
+                                            : "No pending crew registrations")
+                                    </p>
+                                </div>
+                            </div>
+                            @if (_pendingCrewRegs > 0)
+                            {
+                                <span class="px-2.5 py-1 rounded-full bg-amber-400 text-white text-xs font-bold flex-shrink-0">@_pendingCrewRegs</span>
+                            }
+                        </div>
+
+                        <div class="rounded-xl border p-4 flex items-center justify-between gap-3 cursor-pointer transition
+                                    @(_pendingManagerQueue > 0 ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50" : "border-gray-100 hover:bg-gray-50")"
+                             @onclick="@(() => Nav.NavigateTo("/manager-approvals"))">
+                            <div class="flex items-center gap-3">
+                                <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">✅</div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-800">Crew Event Approval</p>
+                                    <p class="text-xs text-gray-500">
+                                        @(_pendingManagerQueue > 0
+                                            ? $"{_pendingManagerQueue} crew forwarded for your final decision"
+                                            : "Nothing awaiting your decision")
+                                    </p>
+                                </div>
+                            </div>
+                            @if (_pendingManagerQueue > 0)
+                            {
+                                <span class="px-2.5 py-1 rounded-full bg-amber-400 text-white text-xs font-bold flex-shrink-0">@_pendingManagerQueue</span>
+                            }
                         </div>
                     </div>
                 </div>
@@ -538,6 +623,14 @@
             _loading = true;
             _stats   = await AnalyticsApi.GetDashboardStatsAsync();
             _loading = false;
+            await LoadAdminActionCenterAsync();
+
+            // Live update: a self-registration arriving while this page is open
+            // should bump the card, not wait for a manual refresh. That push did
+            // not exist until now -- the registration handlers pushed nothing at
+            // all, so nobody could have listened for it.
+            Hub.RegistrationSubmittedReceived += OnRegistrationSubmitted;
+            _subscribedToRegistrations         = true;
         }
         else if (_profile?.Role == "Crew")
         {
@@ -547,6 +640,55 @@
         {
             await LoadVendorActionCenterAsync();
         }
+    }
+
+    // ── Admin/Manager: Action Center counts ─────────────────────────────────
+    private bool _subscribedToRegistrations;
+
+    public void Dispose()
+    {
+        // Leaving the handler attached would keep this disposed page alive and
+        // re-fire its reload on every future registration push.
+        if (_subscribedToRegistrations)
+            Hub.RegistrationSubmittedReceived -= OnRegistrationSubmitted;
+    }
+
+    private int _pendingVendorRegs;
+    private int _pendingCrewRegs;
+    private int _pendingManagerQueue;
+    private int _adminTotalAwaiting => _pendingVendorRegs + _pendingCrewRegs + _pendingManagerQueue;
+
+    private async Task LoadAdminActionCenterAsync()
+    {
+        // Registration counts come from the same queue endpoint the People tab
+        // renders, so the dashboard number and that tab's badge cannot disagree.
+        try
+        {
+            var queue = await ApprovalApi.GetQueueAsync();
+            _pendingVendorRegs = queue?.Data?.Vendors?.Count ?? 0;
+            _pendingCrewRegs   = queue?.Data?.Crew?.Count    ?? 0;
+        }
+        catch { /* best-effort: a dashboard card must never break the page */ }
+
+        // Manager queue: TotalCount, not the first page's length -- with more
+        // than one page of forwarded crew, Items.Count would under-report.
+        try
+        {
+            var resp = await Http.GetFromJsonAsync<ApiResult<PagedCountOnly>>(
+                "api/v1/events/assignments/manager-queue?page=1&pageSize=1",
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            _pendingManagerQueue = resp?.Data?.TotalCount ?? 0;
+        }
+        catch { /* best-effort */ }
+    }
+
+    // Only TotalCount is read, so the rows themselves are never deserialized.
+    private sealed record PagedCountOnly(int TotalCount);
+
+    private async void OnRegistrationSubmitted(NotificationPayload _)
+    {
+        await LoadAdminActionCenterAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
     // ── Vendor: Total Active Crew + Action Center counts ────────────────────
