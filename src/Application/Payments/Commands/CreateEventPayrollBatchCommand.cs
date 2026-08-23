@@ -194,6 +194,23 @@ public sealed class CreateEventPayrollBatchHandler
 
         await _uow.SaveChangesAsync(ct);
 
+        // ── Deliberately no durable notification on creation ────────────────────
+        // A fresh payment is Pending and a fresh batch is Draft: no money has moved,
+        // no decision has been taken, and the row can still be rejected. The moments
+        // that actually concern the crew member are already on the notification
+        // platform in UpdatePaymentStatusCommand / UpdatePayrollStatusCommand --
+        // PAYMENT_APPROVED, PAYROLL_RELEASED, PAYMENT_REJECTED -- each carrying the
+        // amount involved in that specific transition.
+        //
+        // "A payment has been recorded, pending approval" would instead put a WhatsApp
+        // message in front of every crew member on a batch (hundreds on a big event)
+        // about money nobody has approved yet, and any message about a payment reads
+        // as "I have been paid" to someone skimming. The channel stays worth reading
+        // only if it is spent on facts the recipient can act on.
+        //
+        // The pushes below are NOT user-facing news: they are cache-invalidation
+        // signals that make MyPayments / Payments / VendorPayments refetch, and no
+        // toast subscribes to them. Keep them.
         // ── 5. Fan out live updates so payment screens refresh in real time
         foreach (var pmt in allCreatedPmt)
         {
@@ -206,6 +223,7 @@ public sealed class CreateEventPayrollBatchHandler
                 action    = "created"
             };
             await _push.PushToUserAsync(pmt.CrewId, "PaymentCreated", payload, ct);
+
             if (pmt.VendorId is { } vid)
                 await _push.PushToUserAsync(vid, "PaymentCreated", payload, ct);
         }

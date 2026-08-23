@@ -113,6 +113,23 @@ public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPayment
             await _uow.SaveChangesAsync(ct);
         }
 
+        // ── Deliberately no durable notification on creation ────────────────────
+        // A fresh payment is Pending and a fresh batch is Draft: no money has moved,
+        // no decision has been taken, and the row can still be rejected. The moments
+        // that actually concern the crew member are already on the notification
+        // platform in UpdatePaymentStatusCommand / UpdatePayrollStatusCommand --
+        // PAYMENT_APPROVED, PAYROLL_RELEASED, PAYMENT_REJECTED -- each carrying the
+        // amount involved in that specific transition.
+        //
+        // "A payment has been recorded, pending approval" would instead put a WhatsApp
+        // message in front of every crew member on a batch (hundreds on a big event)
+        // about money nobody has approved yet, and any message about a payment reads
+        // as "I have been paid" to someone skimming. The channel stays worth reading
+        // only if it is spent on facts the recipient can act on.
+        //
+        // The pushes below are NOT user-facing news: they are cache-invalidation
+        // signals that make MyPayments / Payments / VendorPayments refetch, and no
+        // toast subscribes to them. Keep them.
         // NO platform notification here, deliberately. A payment is created as
         // Pending -- an internal draft the finance team still has to approve -- so
         // telling a crew member "a payment of 4,500 exists" would announce money
@@ -133,6 +150,7 @@ public sealed class CreateCrewPaymentHandler : IRequestHandler<CreateCrewPayment
             action    = "created"
         };
         await _push.PushToUserAsync(payment.CrewId,   "PaymentCreated", payload, ct);
+
         if (payment.VendorId is { } _vid_pc) await _push.PushToUserAsync(_vid_pc, "PaymentCreated", payload, ct);
         await _push.PushToRoleAsync("Admin",          "PaymentCreated", payload, ct);
         await _push.PushToRoleAsync("Manager",        "PaymentCreated", payload, ct);

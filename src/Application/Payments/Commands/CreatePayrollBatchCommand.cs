@@ -164,6 +164,23 @@ public sealed class CreatePayrollBatchHandler : IRequestHandler<CreatePayrollBat
         batch.SetTotal(total);
         await _uow.SaveChangesAsync(ct);
 
+        // ── Deliberately no durable notification on creation ────────────────────
+        // A fresh payment is Pending and a fresh batch is Draft: no money has moved,
+        // no decision has been taken, and the row can still be rejected. The moments
+        // that actually concern the crew member are already on the notification
+        // platform in UpdatePaymentStatusCommand / UpdatePayrollStatusCommand --
+        // PAYMENT_APPROVED, PAYROLL_RELEASED, PAYMENT_REJECTED -- each carrying the
+        // amount involved in that specific transition.
+        //
+        // "A payment has been recorded, pending approval" would instead put a WhatsApp
+        // message in front of every crew member on a batch (hundreds on a big event)
+        // about money nobody has approved yet, and any message about a payment reads
+        // as "I have been paid" to someone skimming. The channel stays worth reading
+        // only if it is spent on facts the recipient can act on.
+        //
+        // The pushes below are NOT user-facing news: they are cache-invalidation
+        // signals that make MyPayments / Payments / VendorPayments refetch, and no
+        // toast subscribes to them. Keep them.
         // 5. Live-refresh: tell every affected role the world just changed.
         //    Auto-created payments also fire individual PaymentCreated pushes
         //    so crew see their row appear in /my-payments instantly.
@@ -178,6 +195,7 @@ public sealed class CreatePayrollBatchHandler : IRequestHandler<CreatePayrollBat
                 action    = "created"
             };
             await _push.PushToUserAsync(pmt.CrewId,   "PaymentCreated", payload, ct);
+
             if (pmt.VendorId is { } _vid_pmt) await _push.PushToUserAsync(_vid_pmt, "PaymentCreated", payload, ct);
         }
         var batchPayload = new { batchId = batch.Id, status = batch.Status.ToString(), action = "created" };
