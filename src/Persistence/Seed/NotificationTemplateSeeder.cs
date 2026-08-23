@@ -58,6 +58,12 @@ public sealed class NotificationTemplateSeeder
             new("New event invitation", "Hi {{RecipientName}}, you have been invited to {{EventName}} on {{EventDate}} at {{VenueName}}."),
         [NotificationTemplateCodes.VendorInviteRevoked] =
             new("Event invitation withdrawn", "Hi {{RecipientName}}, your invitation to {{EventName}} has been withdrawn."),
+        [NotificationTemplateCodes.VendorAcceptedEvent] =
+            new("{{VendorName}} accepted {{EventName}}",
+                "{{RecipientName}}, {{VendorName}} accepted the invitation to staff {{EventName}} on {{EventDate}}: {{Link}}"),
+        [NotificationTemplateCodes.VendorRejectedEvent] =
+            new("{{VendorName}} turned down {{EventName}}",
+                "{{RecipientName}}, {{VendorName}} turned down {{EventName}} on {{EventDate}}. Reason: {{Reason}}. The staffing for that shift is now unassigned: {{Link}}"),
         [NotificationTemplateCodes.VendorEventReminder] =
             new("Event reminder", "Reminder: {{EventName}} is on {{EventDate}} at {{VenueName}}."),
 

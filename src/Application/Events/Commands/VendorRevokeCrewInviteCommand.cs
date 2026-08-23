@@ -1,9 +1,13 @@
+using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace EventWOS.Application.Events.Commands;
 
@@ -25,10 +29,15 @@ public sealed class VendorRevokeCrewInviteHandler
     private readonly IAppDbContext       _db;
     private readonly IUnitOfWork         _uow;
     private readonly INotificationPusher _push;
+    private readonly INotificationDispatcher _notifications;
+    private readonly AppUrlOptions _appUrls;
 
-    public VendorRevokeCrewInviteHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    public VendorRevokeCrewInviteHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
+        INotificationDispatcher notifications, IOptions<AppUrlOptions> appUrls)
     {
         _db = db; _uow = uow; _push = push;
+        _notifications = notifications; _appUrls = appUrls.Value;
     }
 
     public async Task<Result> Handle(VendorRevokeCrewInviteCommand req, CancellationToken ct)
@@ -37,6 +46,8 @@ public sealed class VendorRevokeCrewInviteHandler
         // pair owned by the acting vendor.
         var a = await _db.EventAssignments
             .Include(x => x.Event)
+            // Crew loaded for the greeting on the message telling them not to come.
+            .Include(x => x.Crew)
             .FirstOrDefaultAsync(x => x.EventId == req.EventId
                                    && x.CrewId  == req.CrewId
                                    && x.VendorId == req.VendorUserId, ct);
@@ -55,6 +66,24 @@ public sealed class VendorRevokeCrewInviteHandler
         {
             return Result.Failure(new Error("Invitation.NotRevokable", ex.Message));
         }
+
+        // Full channel set, and of everything in this batch this is the message that
+        // most has to land: a crew member holding an invitation will otherwise travel
+        // to a venue for a shift that no longer exists.
+        _notifications.Enqueue(new NotificationRequest(
+            NotificationTemplateCodes.CrewInviteRevoked,
+            RecipientUserId: req.CrewId,
+            // Safe as a per-row key because revoking soft-deletes this row and a later
+            // re-invite inserts a FRESH row with a new id -- so a second revoke can
+            // never collide with this key and get de-duplicated into silence.
+            BusinessEventKey: $"assignment:{a.Id}:crew-invite-revoked",
+            Data: new Dictionary<string, string?>
+            {
+                [NotificationTokens.RecipientName] = a.Crew?.FullName ?? "there",
+                [NotificationTokens.EventName]     = a.Event.Title,
+                [NotificationTokens.EventDate]     = a.Event.StartAt.ToString("dd MMM yyyy")
+            },
+            ActorUserId: req.VendorUserId));
 
         await _uow.SaveChangesAsync(ct);
 

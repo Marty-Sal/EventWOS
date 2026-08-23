@@ -30,6 +30,19 @@ public static class NotificationTemplateCodes
     public const string VendorInviteRevoked   = "VENDOR_INVITE_REVOKED";
     public const string VendorEventReminder   = "VENDOR_EVENT_REMINDER";
 
+    /// <summary>
+    /// To the manager who invited the vendor, when the vendor accepts the event.
+    /// InApp only -- good news that needs no action beyond the queue reflecting it.
+    /// </summary>
+    public const string VendorAcceptedEvent   = "VENDOR_ACCEPTED_EVENT";
+
+    /// <summary>
+    /// To the manager who invited the vendor, when the vendor turns the event down.
+    /// The urgent one: that staffing is now unassigned and the manager has to find
+    /// another vendor before the event happens.
+    /// </summary>
+    public const string VendorRejectedEvent   = "VENDOR_REJECTED_EVENT";
+
     // Crew lifecycle on an event
     public const string CrewInvitation        = "CREW_INVITATION";
     public const string CrewAssignment        = "CREW_ASSIGNMENT";

@@ -1,10 +1,14 @@
+using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Rules;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace EventWOS.Application.Events.Commands;
 
@@ -25,16 +29,23 @@ public sealed class RevokeVendorInviteHandler
     private readonly IAppDbContext       _db;
     private readonly IUnitOfWork         _uow;
     private readonly INotificationPusher _push;
+    private readonly INotificationDispatcher _notifications;
+    private readonly AppUrlOptions _appUrls;
 
-    public RevokeVendorInviteHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    public RevokeVendorInviteHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
+        INotificationDispatcher notifications, IOptions<AppUrlOptions> appUrls)
     {
         _db = db; _uow = uow; _push = push;
+        _notifications = notifications; _appUrls = appUrls.Value;
     }
 
     public async Task<Result> Handle(RevokeVendorInviteCommand req, CancellationToken ct)
     {
         var a = await _db.EventAssignments
             .Include(x => x.Event)
+            // Vendor loaded for the notification greeting.
+            .Include(x => x.Vendor)
             .FirstOrDefaultAsync(x => x.Id == req.AssignmentId, ct);
         if (a is null)
             return Result.Failure(new Error("Invitation.NotFound", "Invitation not found."));
@@ -97,6 +108,27 @@ public sealed class RevokeVendorInviteHandler
                     // the whole revoke.
                 }
             }
+        }
+
+        if (a.VendorId.HasValue)
+        {
+            // Full channel set. A withdrawn event is the kind of thing a vendor plans
+            // staff around, and if the only trace is a toast in a tab they did not have
+            // open, they keep holding people for an event that is no longer theirs.
+            _notifications.Enqueue(new NotificationRequest(
+                NotificationTemplateCodes.VendorInviteRevoked,
+                RecipientUserId: a.VendorId.Value,
+                // One key per placeholder row is enough: this path soft-deletes the row,
+                // and a later re-invite goes through ManagerReinviteVendor, which stamps
+                // its own distinct key.
+                BusinessEventKey: $"assignment:{a.Id}:vendor-invite-revoked",
+                Data: new Dictionary<string, string?>
+                {
+                    [NotificationTokens.RecipientName] = a.Vendor?.FullName ?? "there",
+                    [NotificationTokens.EventName]     = a.Event.Title,
+                    [NotificationTokens.EventDate]     = a.Event.StartAt.ToString("dd MMM yyyy")
+                },
+                ActorUserId: req.RevokedByUserId));
         }
 
         await _uow.SaveChangesAsync(ct);
