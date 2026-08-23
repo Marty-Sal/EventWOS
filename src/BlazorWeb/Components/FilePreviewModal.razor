@@ -36,6 +36,18 @@
                     </div>
                 </div>
 
+                @* Not every browser will render a PDF inside a frame (headless Chrome
+                   and some locked-down builds ship without the PDF viewer, and show a
+                   grey placeholder instead). A new tab always works, so PDFs get that
+                   escape hatch rather than leaving the reviewer stuck. *@
+                @if (_kind == PreviewKind.Pdf && _bytesB64 is not null)
+                {
+                    <button type="button" @onclick="OpenInNewTabAsync"
+                            class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline flex-shrink-0 mt-0.5">
+                        Open in new tab
+                    </button>
+                }
+
                 @if (_file is not null)
                 {
                     <button type="button" @onclick="DownloadAsync" disabled="@_downloading"
@@ -102,6 +114,11 @@
     private PreviewKind _kind;
     private FileDocumentDto? _file;
 
+    // Kept so "Open in new tab" and Download reuse the bytes already fetched
+    // instead of hitting the API a second time for the same file.
+    private string? _bytesB64;
+    private string? _mime;
+
     /// <summary>
     /// Opens the viewer for a file and streams its bytes. Called from a parent
     /// via @ref. <paramref name="title"/> is the human label for the document
@@ -112,6 +129,8 @@
     {
         await ReleaseBlobAsync();
 
+        _bytesB64 = null;
+        _mime     = null;
         _file    = file;
         _title   = string.IsNullOrWhiteSpace(title) ? file.OriginalFileName : title!;
         _kind    = Classify(file.ContentType);
@@ -131,13 +150,13 @@
 
             // Trust the server's content type when it sends one: it describes
             // what the bytes actually are, whereas the metadata row can disagree.
-            var mime = respContentType ?? file.ContentType;
-            _kind = Classify(mime);
+            _mime = respContentType ?? file.ContentType;
+            _kind = Classify(_mime);
+            _bytesB64 = Convert.ToBase64String(content);
 
             if (_kind != PreviewKind.Unsupported)
             {
-                _blobUrl = await JS.InvokeAsync<string>("createBlobUrlFromBytes", mime,
-                                                        Convert.ToBase64String(content));
+                _blobUrl = await JS.InvokeAsync<string>("createBlobUrlFromBytes", _mime, _bytesB64);
             }
         }
         catch (Exception ex)
@@ -162,12 +181,27 @@
         return PreviewKind.Unsupported;
     }
 
+    private async Task OpenInNewTabAsync()
+    {
+        if (_bytesB64 is null) return;
+        await JS.InvokeVoidAsync("openFileInNewTab", _mime ?? "application/pdf", _bytesB64);
+    }
+
     private async Task DownloadAsync()
     {
         if (_file is null) return;
         _downloading = true;
         try
         {
+            // Already-loaded previews hand over the bytes in hand; the unsupported
+            // -type case has none, so it still has to fetch.
+            if (_bytesB64 is not null)
+            {
+                await JS.InvokeVoidAsync("downloadFileFromBytes", _file.OriginalFileName,
+                    _mime ?? _file.ContentType, _bytesB64);
+                return;
+            }
+
             var (ok, content, contentType, error) = await FilesApi.DownloadAsync(_file.Id);
             if (ok && content is not null)
             {
@@ -188,9 +222,11 @@
 
     private async Task CloseAsync()
     {
-        _open  = false;
-        _file  = null;
-        _error = null;
+        _open     = false;
+        _file     = null;
+        _error    = null;
+        _bytesB64 = null;
+        _mime     = null;
         await ReleaseBlobAsync();
         StateHasChanged();
     }
