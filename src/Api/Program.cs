@@ -2249,6 +2249,47 @@ try
     CREATE INDEX IF NOT EXISTS ix_outbox_messages_status_locked
         ON outbox_messages (status, locked_at);
 
+    -- ═══ push device registrations ═══════════════════════
+    -- One row per browser/installed PWA that accepted push. Its own section so a
+    -- failure here cannot silently discard whatever follows (see the note above).
+    CREATE TABLE IF NOT EXISTS device_registrations (
+        id                    UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        user_id               UUID NOT NULL,
+        provider              VARCHAR(20) NOT NULL,
+        endpoint              VARCHAR(500),
+        p256dh_key            VARCHAR(200),
+        auth_secret           VARCHAR(100),
+        push_token            VARCHAR(500),
+        device_id             VARCHAR(100),
+        platform              VARCHAR(40),
+        user_agent            VARCHAR(400),
+        is_active             BOOLEAN NOT NULL DEFAULT true,
+        last_seen_at          TIMESTAMPTZ,
+        last_success_at       TIMESTAMPTZ,
+        deactivated_at        TIMESTAMPTZ,
+        deactivation_reason   VARCHAR(200),
+        consecutive_failures  INT NOT NULL DEFAULT 0,
+        created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_by            UUID,
+        updated_at            TIMESTAMPTZ,
+        updated_by            UUID,
+        is_deleted            BOOLEAN NOT NULL DEFAULT false,
+        deleted_at            TIMESTAMPTZ,
+        deleted_by            UUID,
+        -- FK inline, unlike terms_acceptances, which the patch created without
+        -- one and the migration created with one. That divergence is what let a
+        -- missing EF mapping pass here and fail on a properly migrated database.
+        CONSTRAINT fk_device_registrations_user_id
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_device_registrations_endpoint
+        ON device_registrations (endpoint) WHERE is_deleted = false;
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_device_registrations_push_token
+        ON device_registrations (push_token) WHERE is_deleted = false;
+    CREATE INDEX IF NOT EXISTS ix_device_registrations_user_active
+        ON device_registrations (user_id, is_active);
+
 ";
         // Split into sections and run each as its OWN block. Postgres aborts an
         // entire DO block on the first error, so while this was one giant block a

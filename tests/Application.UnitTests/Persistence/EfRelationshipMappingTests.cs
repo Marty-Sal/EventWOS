@@ -76,6 +76,10 @@ public class EfRelationshipMappingTests
         => AssertMapped<NotificationDelivery, Notification>(nameof(NotificationDelivery.NotificationId));
 
     [Fact]
+    public void Device_registrations_declare_their_user()
+        => AssertMapped<DeviceRegistration, User>(nameof(DeviceRegistration.UserId));
+
+    [Fact]
     public void Every_notification_table_is_in_the_model()
     {
         // Cheap guard that a DbSet was not forgotten, which would make the

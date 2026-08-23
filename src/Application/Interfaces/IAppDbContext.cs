@@ -53,6 +53,7 @@ public interface IAppDbContext
     DbSet<NotificationDelivery> NotificationDeliveries { get; }
     DbSet<NotificationTemplate> NotificationTemplates { get; }
     DbSet<OutboxMessage>        OutboxMessages       { get; }
+    DbSet<DeviceRegistration>   DeviceRegistrations  { get; }
 
     // Settings module — Venue catalog.
     DbSet<Venue>             Venues            { get; }

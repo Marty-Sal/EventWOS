@@ -75,6 +75,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
     public DbSet<NotificationTemplate> NotificationTemplates  => Set<NotificationTemplate>();
     public DbSet<OutboxMessage>        OutboxMessages         => Set<OutboxMessage>();
+    public DbSet<DeviceRegistration>   DeviceRegistrations    => Set<DeviceRegistration>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
