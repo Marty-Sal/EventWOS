@@ -357,16 +357,16 @@ try
         options.FromEmail ??= builder.Configuration["SENDGRID_FROM_EMAIL"];
     });
 
-    var sendGridKey = builder.Configuration["SendGrid:ApiKey"] ?? builder.Configuration["SENDGRID_API_KEY"];
+    var notificationSendGridKey = builder.Configuration["SendGrid:ApiKey"] ?? builder.Configuration["SENDGRID_API_KEY"];
 
-    if (!string.IsNullOrWhiteSpace(sendGridKey))
+    if (!string.IsNullOrWhiteSpace(notificationSendGridKey))
     {
         builder.Services.AddHttpClient<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
                                        EventWOS.Infrastructure.Notifications.Channels.EmailNotificationSender>(client =>
         {
             client.BaseAddress = new Uri("https://api.sendgrid.com/");
             client.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", sendGridKey);
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", notificationSendGridKey);
             client.Timeout = TimeSpan.FromSeconds(20);
         });
         Log.Information("Email notifications: EmailNotificationSender (SendGrid) registered.");
@@ -409,6 +409,12 @@ try
     {
         Log.Information("WhatsApp notifications: no provider configured (WhatsApp__Provider=None) -- the channel is skipped.");
     }
+
+    // Secrets for verifying inbound provider callbacks. The webhook endpoints are
+    // anonymous by necessity and mutate delivery state, so the signature is the
+    // only authentication they have.
+    builder.Services.Configure<EventWOS.Infrastructure.Notifications.Webhooks.WebhookOptions>(
+        builder.Configuration.GetSection(EventWOS.Infrastructure.Notifications.Webhooks.WebhookOptions.SectionName));
 
     builder.Services.AddScoped<EventWOS.Persistence.Seed.NotificationTemplateSeeder>();
     builder.Services.AddHostedService<EventWOS.Api.Workers.NotificationWorker>();
