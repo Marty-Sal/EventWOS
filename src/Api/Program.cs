@@ -573,10 +573,30 @@ try
         // emergencySchemaPatchSql below (it runs on every boot, gate or no gate).
         // See docs/DatabaseMigrations.md — this exact mistake already caused one
         // outage (indian_states, 2026-08-22).
-        var runMigrationsOnStartup = string.Equals(
+        var gateArmedByConfig = string.Equals(
             Environment.GetEnvironmentVariable("RUN_MIGRATIONS_ON_STARTUP")
                 ?? app.Configuration["Database:RunMigrationsOnStartup"],
             "true", StringComparison.OrdinalIgnoreCase);
+
+        // ─── Auto-arm on a virgin database ──────────────────────────────────
+        // The gate exists to stop unattended schema changes on a database that
+        // holds live data. A database with ZERO applied migrations holds no live
+        // data by definition, so the gate protects nothing there -- it just
+        // leaves the app serving 500s until a human notices and flips a Railway
+        // variable. That is exactly what happened on 2026-08-23: the database was
+        // reset, every migration stayed pending, and login was down until the
+        // variable was set by hand.
+        //
+        // So: nothing applied yet => migrate without being asked. Any database
+        // with history is still gated and needs the variable, unchanged.
+        var appliedBefore = (await db.Database.GetAppliedMigrationsAsync()).Count();
+        var autoArmedForEmptyDb = appliedBefore == 0 && !gateArmedByConfig;
+        if (autoArmedForEmptyDb)
+            Log.Warning("Database has no applied migrations -> treating it as a fresh install and "
+                      + "auto-applying the full migration set. The startup gate is bypassed on purpose "
+                      + "here: an unmigrated database has no data to protect.");
+
+        var runMigrationsOnStartup = gateArmedByConfig || autoArmedForEmptyDb;
 
         if (!runMigrationsOnStartup)
         {
@@ -744,6 +764,27 @@ try
         // flood Railway's 500 logs/sec cap and hide the real error) and wrapped
         // in try/catch so a patch failure can never brick startup. The schema of
         // record is EF migrations, which already ran above.
+        // ─── Is the emergency patch still needed on this database? ─────────
+        // The patch and the migrations do NOT produce identical schemas -- the
+        // patch creates several tables WITHOUT their foreign keys (verified by
+        // schema-diffing two live databases). On a fully migrated database the
+        // patch therefore adds nothing and can only re-introduce divergence, so
+        // it is skipped: EF migrations are the schema of record.
+        //
+        // It still runs on a database that is behind (pending > 0), which is the
+        // legacy delivery path this project has relied on while the gate is shut.
+        var schemaIsMigrationManaged =
+            BuildInfo.MigrationsApplied > 0 && BuildInfo.MigrationsPending == 0;
+
+        if (schemaIsMigrationManaged)
+        {
+            BuildInfo.SchemaPatchStatus = "skipped";
+            Log.Information("Skipping emergency schema patch -- database is fully migrated "
+                          + "({Applied} migrations applied, none pending), so EF migrations own the schema.",
+                BuildInfo.MigrationsApplied);
+        }
+        else
+        {
         Log.Information("Applying emergency schema patch...");
         // Section bodies only -- no surrounding DO/BEGIN/END. The runner below
         // wraps and executes each ""=== name ==="" section as its own block.
@@ -2016,6 +2057,7 @@ try
                 patchEx.Message.Replace('\n', ' '),
                 patchEx.InnerException?.Message?.Replace('\n', ' ') ?? "(none)");
         }
+        }   // end: emergency patch only runs when the database is behind
 
         // NON-FATAL: a seeding hiccup must not put the container into a
         // crash-restart loop (Railway then gives up and the whole deploy fails).
