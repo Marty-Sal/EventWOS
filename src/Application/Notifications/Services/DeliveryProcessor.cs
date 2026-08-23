@@ -110,7 +110,7 @@ public sealed class DeliveryProcessor
                         string.Join(", ", rendered.MissingTokens), notification.Id);
                 }
 
-                var context = new NotificationSendContext(notification, delivery, template, rendered);
+                var context = new NotificationSendContext(notification, delivery, template, rendered, data);
                 var result  = await sender.SendAsync(context, ct);
 
                 ApplyResult(delivery, result, now);

@@ -20,6 +20,7 @@ public sealed class NotificationTemplateConfiguration : IEntityTypeConfiguration
         // Unbounded text: email bodies are HTML, same treatment as terms content.
         builder.Property(t => t.Body).HasColumnName("body").IsRequired();
         builder.Property(t => t.ProviderTemplateId).HasColumnName("provider_template_id").HasMaxLength(200);
+        builder.Property(t => t.ProviderParams).HasColumnName("provider_params").HasMaxLength(500);
         builder.Property(t => t.Version).HasColumnName("version").HasDefaultValue(1);
         builder.Property(t => t.IsActive).HasColumnName("is_active").HasDefaultValue(true);
 

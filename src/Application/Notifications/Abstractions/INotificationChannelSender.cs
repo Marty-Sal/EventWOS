@@ -38,7 +38,8 @@ public sealed record NotificationSendContext(
     Notification Notification,
     NotificationDelivery Delivery,
     NotificationTemplate Template,
-    RenderedNotification Message)
+    RenderedNotification Message,
+    IReadOnlyDictionary<string, string?> Data)
 {
     public Guid RecipientUserId => Notification.RecipientUserId;
     public string? Destination  => Delivery.Destination;

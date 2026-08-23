@@ -27,4 +27,16 @@
     <ProjectReference Include="..\Application\EventWOS.Application.csproj" />
     <ProjectReference Include="..\Persistence\EventWOS.Persistence.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The WhatsApp retry classifiers are internal: they are implementation detail,
+      not API. Exposed to the test project rather than made public, so tests can
+      cover the decision table without widening the surface other code can call.
+    -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>EventWOS.Application.UnitTests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

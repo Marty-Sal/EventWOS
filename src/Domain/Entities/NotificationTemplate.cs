@@ -23,7 +23,8 @@ public sealed class NotificationTemplate : BaseEntity
         string body,
         string? subject = null,
         string language = "en",
-        string? providerTemplateId = null)
+        string? providerTemplateId = null,
+        string? providerParams = null)
     {
         if (string.IsNullOrWhiteSpace(code))
             throw new ArgumentException("Code is required.", nameof(code));
@@ -36,6 +37,7 @@ public sealed class NotificationTemplate : BaseEntity
         Subject            = subject;
         Language           = string.IsNullOrWhiteSpace(language) ? "en" : language.Trim().ToLowerInvariant();
         ProviderTemplateId = providerTemplateId;
+        ProviderParams     = providerParams;
         Version            = 1;
         IsActive           = true;
     }
@@ -60,6 +62,39 @@ public sealed class NotificationTemplate : BaseEntity
 
     /// <summary>The provider-side template/campaign name (AiSensy campaign, Meta template) when the channel requires one.</summary>
     public string? ProviderTemplateId { get; private set; }
+
+    /// <summary>
+    /// Ordered token names fed into the provider's numbered placeholders, e.g.
+    /// "RecipientName,EventName,EventDate" for a template whose approved text is
+    /// "Hi {{1}}, you are assigned to {{2}} on {{3}}".
+    ///
+    /// Explicit rather than inferred from the body's token order, because the
+    /// approved provider text and our body are edited in different places by
+    /// different people. If they drift, inferring order would silently put the
+    /// venue name where the date belongs -- a wrong message is worse than a
+    /// failed one, since nobody ever finds out.
+    ///
+    /// Null means "no positional parameters" (a template with static text).
+    /// </summary>
+    public string? ProviderParams { get; private set; }
+
+    /// <summary>
+    /// Points this template at an approved provider template and declares its
+    /// parameter order. Bumps Version, since what the recipient receives changed.
+    /// </summary>
+    public void SetProviderTemplate(string? providerTemplateId, string? providerParams, DateTime nowUtc)
+    {
+        ProviderTemplateId = string.IsNullOrWhiteSpace(providerTemplateId) ? null : providerTemplateId.Trim();
+        ProviderParams     = string.IsNullOrWhiteSpace(providerParams) ? null : providerParams.Trim();
+        Version++;
+        UpdatedAt = nowUtc;
+    }
+
+    /// <summary>Parameter names in provider order; empty when the template takes none.</summary>
+    public IReadOnlyList<string> ParameterOrder()
+        => string.IsNullOrWhiteSpace(ProviderParams)
+            ? Array.Empty<string>()
+            : ProviderParams.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>Bumped on every content change and stamped onto deliveries, so history shows the wording actually sent.</summary>
     public int Version { get; private set; }

@@ -336,6 +336,47 @@ try
     builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
                                EventWOS.Application.Notifications.Channels.InAppNotificationSender>();
 
+    // WhatsApp: AiSensy or Meta, chosen by WhatsApp__Provider. Both implement the
+    // same channel, and exactly one is registered, so the resolver never has to
+    // guess. Provider=None (the default) leaves the channel unregistered, which
+    // makes the resolver skip WhatsApp instead of queueing sends that cannot work.
+    builder.Services.Configure<EventWOS.Infrastructure.Notifications.Channels.WhatsAppOptions>(
+        builder.Configuration.GetSection(EventWOS.Infrastructure.Notifications.Channels.WhatsAppOptions.SectionName));
+
+    var whatsAppProvider = builder.Configuration["WhatsApp:Provider"] ?? "None";
+
+    if (whatsAppProvider.Equals("AiSensy", StringComparison.OrdinalIgnoreCase))
+    {
+        builder.Services.AddHttpClient<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
+                                       EventWOS.Infrastructure.Notifications.Channels.AiSensyWhatsAppSender>(client =>
+        {
+            var baseUrl = builder.Configuration["WhatsApp:AiSensy:BaseUrl"] ?? "https://backend.aisensy.com";
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            // Providers occasionally hang. A bounded timeout turns that into a
+            // retryable transient failure instead of a worker stuck holding a lock.
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+        Log.Information("WhatsApp notifications: AiSensyWhatsAppSender registered.");
+    }
+    else if (whatsAppProvider.Equals("Meta", StringComparison.OrdinalIgnoreCase))
+    {
+        builder.Services.AddHttpClient<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
+                                       EventWOS.Infrastructure.Notifications.Channels.MetaWhatsAppSender>(client =>
+        {
+            client.BaseAddress = new Uri("https://graph.facebook.com/");
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue(
+                    "Bearer", builder.Configuration["WhatsApp:Meta:AccessToken"]
+                              ?? builder.Configuration["WHATSAPP_ACCESS_TOKEN"]);
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+        Log.Information("WhatsApp notifications: MetaWhatsAppSender registered.");
+    }
+    else
+    {
+        Log.Information("WhatsApp notifications: no provider configured (WhatsApp__Provider=None) -- the channel is skipped.");
+    }
+
     builder.Services.AddScoped<EventWOS.Persistence.Seed.NotificationTemplateSeeder>();
     builder.Services.AddHostedService<EventWOS.Api.Workers.NotificationWorker>();
     builder.Services.AddSingleton<EventWOS.Application.Auth.Interfaces.IPasswordHasher, EventWOS.Infrastructure.Auth.BCryptPasswordHasher>();
@@ -2113,6 +2154,12 @@ try
 
     CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_templates_code_channel_lang
         ON notification_templates (code, channel, language);
+
+    -- Ordered token names for provider templates ({{1}}, {{2}} ...). Added after
+    -- the table shipped, so it is an idempotent ALTER rather than a column in the
+    -- CREATE above -- databases built by the earlier patch must pick it up too.
+    ALTER TABLE notification_templates
+        ADD COLUMN IF NOT EXISTS provider_params VARCHAR(500);
 
     CREATE TABLE IF NOT EXISTS outbox_messages (
         id              UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
