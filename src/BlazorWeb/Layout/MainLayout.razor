@@ -8,6 +8,7 @@
 @inject NotificationHubService Hub
 @inject IEventApiService EventApi
 @inject IAnnouncementApiService AnnouncementApi
+@inject INotificationApiService NotificationApi
 @inject HttpClient Http
 @inject IJSRuntime JS
 
@@ -525,6 +526,10 @@
         });
 
         // Keep sidebar counters live so the badge bumps without a refresh.
+        // Any platform notification can change the badge, whatever produced it, so
+        // this one subscription replaces the per-event wiring the legacy pushes need.
+        Hub.PlatformNotificationReceived += OnPlatformCountChanged;
+
         Hub.AssignmentInviteReceived     += OnInviteCountChanged; // crew: new invite
         Hub.VendorApprovedReceived       += OnInviteCountChanged; // crew: state moved
         Hub.VendorRejectedReceived       += OnInviteCountChanged;
@@ -542,6 +547,18 @@
     private void OnAnnouncementReceived(NotificationPayload payload)
     {
         _ = InvokeAsync(async () => { await LoadUnreadNotificationsAsync(); StateHasChanged(); });
+    }
+
+    private void OnPlatformCountChanged(PlatformNotification incoming)
+    {
+        // Refetched instead of incrementing locally: the same notification can
+        // arrive twice across a reconnect, and an incremented badge would then
+        // claim an unread that does not exist and never clear.
+        _ = InvokeAsync(async () =>
+        {
+            _unreadPlatform = await NotificationApi.UnreadCountAsync();
+            StateHasChanged();
+        });
     }
 
     private void OnApprovalCountChanged(NotificationPayload payload)
@@ -640,7 +657,15 @@
     // Unread = an announcement for one of my events with no read receipt.
     // Only recipients have receipts, so this is meaningless for Admin/Manager
     // and skipped for them entirely.
-    private int _unreadNotifications;
+    // Two independent sources behind ONE badge, because the /notifications page now
+    // shows both feeds: admin-composed announcements and the notification
+    // platform's activity. Kept as separate fields so a failure in one does not
+    // zero the other -- a badge that silently drops half its count is worse than
+    // one that is briefly high.
+    private int _unreadAnnouncements;
+    private int _unreadPlatform;
+
+    private int _unreadNotifications => _unreadAnnouncements + _unreadPlatform;
 
     private async Task LoadUnreadNotificationsAsync()
     {
@@ -652,7 +677,13 @@
             if (role is not ("Crew" or "Vendor")) return;
 
             var items = await AnnouncementApi.MineAsync(take: 100);
-            _unreadNotifications = items.Count(a => !a.IsRead);
+            _unreadAnnouncements = items.Count(a => !a.IsRead);
+
+            // Counted server-side rather than by fetching rows and filtering: the
+            // badge needs one number, and rendering thirty message bodies to
+            // display it would be paid for on every page load.
+            _unreadPlatform = await NotificationApi.UnreadCountAsync();
+
             StateHasChanged();
         }
         catch { }
@@ -745,5 +776,19 @@
     public void Dispose()
     {
         Nav.LocationChanged -= OnLocationChanged;
+
+        // These were subscribed and NEVER removed. The layout usually outlives the
+        // session so it rarely bit, but it is recreated on re-login -- and each new
+        // instance left the previous one's handlers alive on the singleton-ish hub
+        // service, so one invite refetched the counters once per stale layout and
+        // the count could be written by a disposed component.
+        Hub.PlatformNotificationReceived   -= OnPlatformCountChanged;
+        Hub.AssignmentInviteReceived       -= OnInviteCountChanged;
+        Hub.VendorApprovedReceived         -= OnInviteCountChanged;
+        Hub.VendorRejectedReceived         -= OnInviteCountChanged;
+        Hub.ManagerApprovedReceived        -= OnInviteCountChanged;
+        Hub.ManagerRejectedReceived        -= OnInviteCountChanged;
+        Hub.PendingManagerApprovalReceived -= OnApprovalCountChanged;
+        Hub.EventAnnouncementReceived      -= OnAnnouncementReceived;
     }
 }
