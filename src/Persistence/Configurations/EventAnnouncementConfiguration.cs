@@ -30,6 +30,16 @@ public sealed class EventAnnouncementConfiguration : IEntityTypeConfiguration<Ev
         builder.Property(a => a.DeletedAt).HasColumnName("deleted_at");
         builder.Property(a => a.DeletedBy).HasColumnName("deleted_by");
 
+        // The database has this FK; EF did not know about it. Harmless today
+        // (an announcement is always created against an event that already
+        // exists) but mapped for the same reason as the attachment rows: the
+        // model should describe the schema, not a subset of it.
+        builder.HasOne<Event>()
+               .WithMany()
+               .HasForeignKey(a => a.EventId)
+               .HasConstraintName("fk_event_announcements_event_id")
+               .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasIndex(a => new { a.EventId, a.CreatedAt }).HasDatabaseName("ix_event_announcements_event_created");
 
         builder.HasQueryFilter(a => !a.IsDeleted);

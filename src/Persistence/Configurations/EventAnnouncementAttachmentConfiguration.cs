@@ -24,6 +24,29 @@ public sealed class EventAnnouncementAttachmentConfiguration : IEntityTypeConfig
         builder.Property(a => a.DeletedAt).HasColumnName("deleted_at");
         builder.Property(a => a.DeletedBy).HasColumnName("deleted_by");
 
+        // These relationships have no navigation properties by design (an
+        // announcement deliberately does not own its attachments -- they are
+        // ordinary FileDocuments), but they MUST still be mapped, because a
+        // relationship EF does not know about is a relationship EF cannot order
+        // inserts for.
+        //
+        // This is the bug that 500'd POST /announcements in production: the
+        // handler adds the announcement and its attachment rows in one
+        // SaveChanges, and with no mapped relationship EF was free to insert the
+        // attachment first -- 23503 on fk_announcement_attachments_announcement_id.
+        // Same root cause as the terms_acceptances registration outage.
+        builder.HasOne<EventAnnouncement>()
+               .WithMany()
+               .HasForeignKey(a => a.AnnouncementId)
+               .HasConstraintName("fk_announcement_attachments_announcement_id")
+               .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<FileDocument>()
+               .WithMany()
+               .HasForeignKey(a => a.FileDocumentId)
+               .HasConstraintName("fk_announcement_attachments_file_id")
+               .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasIndex(a => a.AnnouncementId).HasDatabaseName("ix_announcement_attachments_announcement");
         builder.HasIndex(a => new { a.AnnouncementId, a.FileDocumentId })
                .IsUnique().HasDatabaseName("ux_announcement_attachments_pair");

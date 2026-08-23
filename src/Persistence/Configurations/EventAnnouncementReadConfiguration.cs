@@ -31,6 +31,20 @@ public sealed class EventAnnouncementReadConfiguration : IEntityTypeConfiguratio
                .IsUnique().HasDatabaseName("ux_announcement_reads_pair");
         builder.HasIndex(r => r.UserId).HasDatabaseName("ix_announcement_reads_user");
 
+        // Mapped for the same reason as the attachments above: EF must know the
+        // dependency exists, even though neither side exposes a navigation.
+        builder.HasOne<EventAnnouncement>()
+               .WithMany()
+               .HasForeignKey(r => r.AnnouncementId)
+               .HasConstraintName("fk_announcement_reads_announcement_id")
+               .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<User>()
+               .WithMany()
+               .HasForeignKey(r => r.UserId)
+               .HasConstraintName("fk_announcement_reads_user_id")
+               .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasQueryFilter(r => !r.IsDeleted);
     }
 }
