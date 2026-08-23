@@ -53,6 +53,64 @@ public sealed class FileAccessPolicyTests
             callerCanManageOthers: true, callerCanReadIdentity: false).Should().BeTrue();
     }
 
+    // ── Vendor-scoped access to their own crew's registration documents ─────
+    // Crew approval is delegated to the referring vendor, so that vendor must be
+    // able to open the photo and ID proof they are being asked to verify.
+
+    [Fact]
+    public void Owning_vendor_can_download_their_crews_profile_photo()
+    {
+        FileAccessPolicy.CanDownload(DocumentType.CrewProfilePhoto, Owner, Stranger,
+            callerCanManageOthers: false, callerCanReadIdentity: false,
+            callerIsOwningVendor: true).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Owning_vendor_can_download_their_crews_identity_proof_without_read_identity()
+    {
+        // The vendor IS the identity verifier for their own crew; the access is
+        // audit-logged rather than blocked.
+        FileAccessPolicy.CanDownload(DocumentType.CrewIdentificationProof, Owner, Stranger,
+            callerCanManageOthers: false, callerCanReadIdentity: false,
+            callerIsOwningVendor: true).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Vendor_relationship_does_NOT_unlock_non_registration_documents()
+    {
+        // Scoped deliberately: being someone's vendor is not blanket access to
+        // every file that user owns.
+        FileAccessPolicy.CanDownload(DocumentType.VendorDocument, Owner, Stranger,
+            callerCanManageOthers: false, callerCanReadIdentity: false,
+            callerIsOwningVendor: true).Should().BeFalse();
+
+        FileAccessPolicy.CanDownload(DocumentType.EventDocument, Owner, Stranger,
+            callerCanManageOthers: false, callerCanReadIdentity: false,
+            callerIsOwningVendor: true).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Unrelated_vendor_still_cannot_download_crew_registration_documents()
+    {
+        // callerIsOwningVendor is false for a vendor the crew member has no link
+        // to, which must stay a denial for both registration document types.
+        FileAccessPolicy.CanDownload(DocumentType.CrewProfilePhoto, Owner, Stranger,
+            callerCanManageOthers: false, callerCanReadIdentity: false,
+            callerIsOwningVendor: false).Should().BeFalse();
+
+        FileAccessPolicy.CanDownload(DocumentType.CrewIdentificationProof, Owner, Stranger,
+            callerCanManageOthers: false, callerCanReadIdentity: false,
+            callerIsOwningVendor: false).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Vendor_relationship_does_not_grant_delete()
+    {
+        // Reviewing a document is not the same as being able to destroy it.
+        FileAccessPolicy.CanDelete(DocumentType.CrewIdentificationProof, Owner, Stranger,
+            callerCanManageOthers: false).Should().BeFalse();
+    }
+
     [Fact]
     public void Owner_can_always_delete_their_own_file()
         => FileAccessPolicy.CanDelete(DocumentType.EventDocument, Owner, Owner, callerCanManageOthers: false).Should().BeTrue();
