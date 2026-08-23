@@ -343,6 +343,39 @@ try
     builder.Services.Configure<EventWOS.Infrastructure.Notifications.Channels.WhatsAppOptions>(
         builder.Configuration.GetSection(EventWOS.Infrastructure.Notifications.Channels.WhatsAppOptions.SectionName));
 
+    // Email for notifications: same SendGrid credentials as the existing
+    // transactional mail, so there is one key to rotate. Accepts either the
+    // sectioned form (SendGrid:ApiKey) or the flat env names Railway already has
+    // set (SENDGRID_API_KEY), which do not bind to a section on their own.
+    builder.Services.Configure<EventWOS.Infrastructure.Notifications.Channels.EmailSenderOptions>(options =>
+    {
+        builder.Configuration
+            .GetSection(EventWOS.Infrastructure.Notifications.Channels.EmailSenderOptions.SectionName)
+            .Bind(options);
+
+        options.ApiKey    ??= builder.Configuration["SENDGRID_API_KEY"];
+        options.FromEmail ??= builder.Configuration["SENDGRID_FROM_EMAIL"];
+    });
+
+    var sendGridKey = builder.Configuration["SendGrid:ApiKey"] ?? builder.Configuration["SENDGRID_API_KEY"];
+
+    if (!string.IsNullOrWhiteSpace(sendGridKey))
+    {
+        builder.Services.AddHttpClient<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
+                                       EventWOS.Infrastructure.Notifications.Channels.EmailNotificationSender>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.sendgrid.com/");
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", sendGridKey);
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+        Log.Information("Email notifications: EmailNotificationSender (SendGrid) registered.");
+    }
+    else
+    {
+        Log.Information("Email notifications: SENDGRID_API_KEY not set -- the email channel is skipped.");
+    }
+
     var whatsAppProvider = builder.Configuration["WhatsApp:Provider"] ?? "None";
 
     if (whatsAppProvider.Equals("AiSensy", StringComparison.OrdinalIgnoreCase))
