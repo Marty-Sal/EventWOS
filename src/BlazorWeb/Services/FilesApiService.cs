@@ -91,9 +91,27 @@ public sealed class FilesApiService : IFilesApiService
             var resp = await _http.GetAsync($"api/v1/files/{fileId}/download", ct);
             if (!resp.IsSuccessStatusCode)
             {
-                var err = resp.StatusCode == System.Net.HttpStatusCode.Forbidden
-                    ? "You don't have permission to view this file."
-                    : "File could not be downloaded.";
+                // Prefer the API's own message: "The file could not be found in
+                // storage." is the one failure a user can actually act on (the
+                // document needs re-uploading), and hiding it behind a generic
+                // "could not be downloaded" is what made this look like a dead
+                // button rather than a missing file.
+                string? serverMessage = null;
+                try
+                {
+                    var body = await resp.Content.ReadFromJsonAsync<ApiResult<object>>(cancellationToken: ct);
+                    serverMessage = body?.Errors?.FirstOrDefault();
+                }
+                catch { /* non-JSON body (404 from the pipeline, HTML error page) */ }
+
+                var err = serverMessage
+                       ?? resp.StatusCode switch
+                          {
+                              System.Net.HttpStatusCode.Forbidden    => "You don't have permission to view this file.",
+                              System.Net.HttpStatusCode.Unauthorized => "Your session expired — sign in again to view this file.",
+                              System.Net.HttpStatusCode.NotFound     => "This file is no longer available.",
+                              _                                      => "File could not be downloaded."
+                          };
                 return (false, null, null, err);
             }
             var bytes = await resp.Content.ReadAsByteArrayAsync(ct);

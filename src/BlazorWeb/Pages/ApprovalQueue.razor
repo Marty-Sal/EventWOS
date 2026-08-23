@@ -271,8 +271,12 @@
                                 <div class="flex-1 min-w-0">
                                     <div class="text-xs font-medium text-gray-800">@DocumentTypes.Label(f.DocumentType)</div>
                                     <div class="text-[11px] text-gray-500 truncate">@f.OriginalFileName · @HumanSize(f.FileSizeBytes)</div>
+                                    @if (_previewErrors.TryGetValue(f.Id, out var rowErr))
+                                    {
+                                        <div class="text-[11px] text-red-600 truncate">@rowErr</div>
+                                    }
                                 </div>
-                                @if (f.ContentType.StartsWith("image/") && !_previewDataUrls.ContainsKey(f.Id))
+                                @if (f.ContentType.StartsWith("image/") && !_previewDataUrls.ContainsKey(f.Id) && !_previewErrors.ContainsKey(f.Id))
                                 {
                                     <button type="button" @onclick="() => LoadPreviewAsync(f.Id, f.ContentType)"
                                             disabled="@_previewLoadingIds.Contains(f.Id)"
@@ -590,17 +594,29 @@
 
     private void CloseDetails() => _detailsRow = null;
 
+    // Preview failures are shown per row (and toasted) instead of swallowed:
+    // the common cause is the stored bytes being gone, which the approver has
+    // to act on by asking for a re-upload -- not something to hide behind a
+    // button that appears to do nothing.
+    private readonly Dictionary<Guid, string> _previewErrors = new();
+
     private async Task LoadPreviewAsync(Guid fileId, string contentType)
     {
         _previewLoadingIds.Add(fileId);
+        _previewErrors.Remove(fileId);
         StateHasChanged();
         try
         {
-            var (ok, content, respContentType, _) = await FilesApi.DownloadAsync(fileId);
+            var (ok, content, respContentType, error) = await FilesApi.DownloadAsync(fileId);
             if (ok && content is not null)
             {
                 var mime = respContentType ?? contentType;
                 _previewDataUrls[fileId] = $"data:{mime};base64,{Convert.ToBase64String(content)}";
+            }
+            else
+            {
+                _previewErrors[fileId] = error ?? "Preview failed.";
+                Toast(error ?? "Preview failed.", isError: true);
             }
         }
         finally
