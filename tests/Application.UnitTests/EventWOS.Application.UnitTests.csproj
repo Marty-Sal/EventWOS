@@ -26,6 +26,14 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="FluentAssertions" Version="6.12.2" />
     <PackageReference Include="FluentValidation" Version="11.11.0" />
+    <!--
+      In-memory EF provider, added for the notification dispatcher suite: the
+      dispatcher's contract is "stage outbox rows on the caller's DbContext and
+      do not save", and the only honest way to assert that is against a real
+      DbContext. No test touches Postgres.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -49,5 +57,6 @@
       HttpMessageHandler so no test ever reaches the real OpenStreetMap servers.
     -->
     <ProjectReference Include="..\..\src\Infrastructure\EventWOS.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Persistence\EventWOS.Persistence.csproj" />
   </ItemGroup>
 </Project>

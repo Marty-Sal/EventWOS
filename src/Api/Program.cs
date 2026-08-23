@@ -307,6 +307,14 @@ try
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddScoped<IAuditLogger, AuditLogger>();
     builder.Services.AddScoped<EventWOS.Application.Common.ISmsProvider, EventWOS.Infrastructure.Auth.StubSmsProvider>();
+
+    // Notification platform. The dispatcher only stages transactional-outbox
+    // rows on the request's DbContext, so it is scoped alongside it; the
+    // renderer is stateless.
+    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.INotificationDispatcher,
+                               EventWOS.Application.Notifications.Services.NotificationDispatcher>();
+    builder.Services.AddSingleton<EventWOS.Application.Notifications.Rendering.INotificationTemplateRenderer,
+                                  EventWOS.Application.Notifications.Rendering.NotificationTemplateRenderer>();
     builder.Services.AddSingleton<EventWOS.Application.Auth.Interfaces.IPasswordHasher, EventWOS.Infrastructure.Auth.BCryptPasswordHasher>();
 
     // Reverse-geocoding for AttendanceRecord.LocationAddress via
