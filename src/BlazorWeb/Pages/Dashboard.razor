@@ -56,7 +56,7 @@
                             <div>
                                 <p class="text-xs text-gray-400 uppercase tracking-wider font-medium">Total Events</p>
                                 <p class="text-2xl font-bold text-gray-800">@_stats.TotalEvents</p>
-                                <p class="text-xs text-gray-400 mt-0.5">@_stats.InProgressEvents live · @_stats.PublishedEvents upcoming</p>
+                                <p class="text-xs text-gray-400 mt-0.5">@_stats.InProgressEvents live · @_stats.PublishedEvents upcoming · @_stats.CompletedEvents completed</p>
                             </div>
                         </div>
                     </div>
@@ -110,7 +110,7 @@
                             </span>
                         }
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                         <div class="rounded-xl border p-4 flex items-center justify-between gap-3 cursor-pointer transition
                                     @(_pendingVendorRegs > 0 ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50" : "border-gray-100 hover:bg-gray-50")"
@@ -129,26 +129,6 @@
                             @if (_pendingVendorRegs > 0)
                             {
                                 <span class="px-2.5 py-1 rounded-full bg-amber-400 text-white text-xs font-bold flex-shrink-0">@_pendingVendorRegs</span>
-                            }
-                        </div>
-
-                        <div class="rounded-xl border p-4 flex items-center justify-between gap-3 cursor-pointer transition
-                                    @(_pendingCrewRegs > 0 ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50" : "border-gray-100 hover:bg-gray-50")"
-                             @onclick="@(() => Nav.NavigateTo("/approvals/people"))">
-                            <div class="flex items-center gap-3">
-                                <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">🧑‍🤝‍🧑</div>
-                                <div>
-                                    <p class="text-sm font-semibold text-gray-800">Crew Registrations</p>
-                                    <p class="text-xs text-gray-500">
-                                        @(_pendingCrewRegs > 0
-                                            ? $"{_pendingCrewRegs} crew registration(s) pending approval"
-                                            : "No pending crew registrations")
-                                    </p>
-                                </div>
-                            </div>
-                            @if (_pendingCrewRegs > 0)
-                            {
-                                <span class="px-2.5 py-1 rounded-full bg-amber-400 text-white text-xs font-bold flex-shrink-0">@_pendingCrewRegs</span>
                             }
                         </div>
 
@@ -654,9 +634,8 @@
     }
 
     private int _pendingVendorRegs;
-    private int _pendingCrewRegs;
     private int _pendingManagerQueue;
-    private int _adminTotalAwaiting => _pendingVendorRegs + _pendingCrewRegs + _pendingManagerQueue;
+    private int _adminTotalAwaiting => _pendingVendorRegs + _pendingManagerQueue;
 
     private async Task LoadAdminActionCenterAsync()
     {
@@ -664,9 +643,11 @@
         // renders, so the dashboard number and that tab's badge cannot disagree.
         try
         {
+            // Crew self-registrations are delegated to the referring vendor for
+            // first-pass review (GetApprovalQueueHandler scopes Admin/Manager to
+            // Vendor rows only) -- so only the vendor count belongs on this card.
             var queue = await ApprovalApi.GetQueueAsync();
             _pendingVendorRegs = queue?.Data?.Vendors?.Count ?? 0;
-            _pendingCrewRegs   = queue?.Data?.Crew?.Count    ?? 0;
         }
         catch { /* best-effort: a dashboard card must never break the page */ }
 
