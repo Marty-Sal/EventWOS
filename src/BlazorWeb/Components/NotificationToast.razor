@@ -60,6 +60,58 @@
         string.IsNullOrWhiteSpace(p.EventTitle) ? "Your event assignments changed." : $"Change on {p.EventTitle}.",
         ToastType.Info);
 
+    // ─── Notification platform feed ─────────────────────────────────────────
+    // Codes that a legacy push ALREADY toasts. While both paths run in parallel,
+    // the platform feed stays quiet for these -- otherwise one crew assignment
+    // produces two identical toasts, which reads as a bug to the user and is a
+    // worse regression than the duplication it comes from.
+    //
+    // Each entry is deleted as its legacy push is retired, so the feed takes over
+    // one notification type at a time and this set shrinks to empty.
+    private static readonly HashSet<string> LegacyToastedCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CREW_ASSIGNMENT",           // AssignmentInvite
+        "VENDOR_EVENT_INVITED",      // VendorEventAssigned
+        "CREW_ASSIGNMENT_APPROVED",  // VendorApprovedYou / ManagerApprovedYou
+        "CREW_ASSIGNMENT_REJECTED",  // VendorRejectedYou / ManagerRejectedYou
+        "CREW_INVITE_REVOKED",       // CrewInviteRevoked
+        "VENDOR_INVITE_REVOKED",     // VendorInviteRevoked
+        "ACCOUNT_APPROVED",          // RegistrationApproved
+        "ACCOUNT_REJECTED",          // RegistrationRejected
+        "CHECK_IN_VERIFIED",         // CheckInVerified
+        "EVENT_ANNOUNCEMENT",        // EventAnnouncement
+        "PAYMENT_APPROVED",          // PaymentApproved
+        "PAYMENT_REJECTED",          // PaymentRejected
+        "PAYROLL_RELEASED"           // PayrollUpdated
+    };
+
+    private void OnPlatformNotification(PlatformNotification n)
+    {
+        // Suppressed rather than skipped entirely: the notification is still
+        // stored and still counts towards the unread badge. Only the toast is
+        // withheld, because the legacy push is already showing one.
+        if (n.Code is not null && LegacyToastedCodes.Contains(n.Code)) return;
+
+        Push(
+            n.Title ?? "Notification",
+            Shorten(n.Body),
+            n.IsUrgent ? ToastType.Warning : ToastType.Info);
+    }
+
+    /// <summary>
+    /// Template bodies are written for email and WhatsApp, where length is fine.
+    /// A toast is 380px wide, so an untrimmed body pushes the rest of the stack
+    /// off screen.
+    /// </summary>
+    private static string? Shorten(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return null;
+
+        var flat = System.Text.RegularExpressions.Regex.Replace(body.Trim(), @"\s+", " ");
+
+        return flat.Length <= 140 ? flat : flat[..137].TrimEnd() + "...";
+    }
+
     protected override void OnInitialized()
     {
         Hub.AssignmentInviteReceived       += OnAssignmentInvite;
@@ -74,6 +126,7 @@
         Hub.RegistrationSubmittedReceived  += OnRegistrationSubmitted;
         Hub.RegistrationDecisionReceived   += OnRegistrationDecision;
         Hub.AssignmentChangedReceived      += OnAssignmentChanged;
+        Hub.PlatformNotificationReceived   += OnPlatformNotification;
     }
 
     private void Push(string title, string? body, ToastType type)
@@ -102,6 +155,7 @@
         Hub.RegistrationSubmittedReceived  -= OnRegistrationSubmitted;
         Hub.RegistrationDecisionReceived   -= OnRegistrationDecision;
         Hub.AssignmentChangedReceived      -= OnAssignmentChanged;
+        Hub.PlatformNotificationReceived   -= OnPlatformNotification;
     }
 
     private static string ToastBg(ToastType t) => t switch

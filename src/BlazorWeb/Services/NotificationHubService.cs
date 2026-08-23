@@ -44,6 +44,22 @@ public sealed class NotificationHubService : IAsyncDisposable
     // re-invited, or an invite revoked. These were all pushed by the server
     // with no client subscription at all, so they were silently dropped.
     public event Action<NotificationPayload>?  AssignmentChangedReceived;     // -> vendor / crew
+
+    /// <summary>
+    /// The notification platform's own feed. Every notification that has an
+    /// active in-app template arrives here, already rendered, whatever business
+    /// event produced it -- so new notification types show up without a client
+    /// change, which is exactly what the twelve hand-written subscriptions above
+    /// could never do.
+    ///
+    /// Runs ALONGSIDE those legacy pushes on purpose. They do double duty: pages
+    /// like MyPayments and VendorPayments use them to refetch their tables, not
+    /// just to toast. Removing them before that refresh behaviour has an
+    /// equivalent here would leave stale data on screen with nothing visibly
+    /// broken to explain it.
+    /// </summary>
+    public event Action<PlatformNotification>? PlatformNotificationReceived;  // -> the recipient
+
     public event Action?                       ConnectionStateChanged;
 
     public HubConnectionState State      => _connection?.State ?? HubConnectionState.Disconnected;
@@ -149,6 +165,13 @@ public sealed class NotificationHubService : IAsyncDisposable
                 payload => AssignmentChangedReceived?.Invoke(payload));
         }
 
+        // --- Notification platform feed -------------------------------------
+        // Emitted by InAppNotificationSender for any notification whose in-app
+        // template is active. One subscription covers every current and future
+        // notification code.
+        _connection.On<PlatformNotification>("NotificationReceived",
+            payload => PlatformNotificationReceived?.Invoke(payload));
+
         _connection.Reconnected += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };
         _connection.Closed      += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };
 
@@ -164,6 +187,28 @@ public sealed class NotificationHubService : IAsyncDisposable
         if (_connection is not null)
             await _connection.DisposeAsync();
     }
+}
+
+/// <summary>
+/// A notification from the platform feed, rendered server-side from its template.
+///
+/// Field names match the anonymous object InAppNotificationSender pushes, since
+/// SignalR matches on name -- renaming one end silently yields nulls rather than
+/// an error, so these must be changed in lockstep.
+/// </summary>
+public sealed record PlatformNotification(
+    Guid     Id,
+    string?  Code,
+    string?  Title,
+    string?  Body,
+    Guid?    EventId,
+    string?  Priority,
+    DateTime SentAt)
+{
+    /// <summary>True for the cases worth interrupting someone over.</summary>
+    public bool IsUrgent =>
+        string.Equals(Priority, "High", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(Priority, "Critical", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>Generic payload for assignment-related push notifications.</summary>
