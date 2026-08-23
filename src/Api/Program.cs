@@ -1,3 +1,4 @@
+using EventWOS.Api;
 using EventWOS.Api.Authorization;
 using Asp.Versioning;
 using EventWOS.Api.Hubs;
@@ -580,6 +581,9 @@ try
         if (!runMigrationsOnStartup)
         {
             var pendingCheck = (await db.Database.GetPendingMigrationsAsync()).ToList();
+            BuildInfo.MigrationGateArmed = false;
+            BuildInfo.MigrationsPending  = pendingCheck.Count;
+            BuildInfo.MigrationsApplied  = (await db.Database.GetAppliedMigrationsAsync()).Count();
             if (pendingCheck.Count > 0)
             {
                 Log.Warning("SKIPPING EF migrations on startup (RUN_MIGRATIONS_ON_STARTUP is not 'true'). " +
@@ -590,7 +594,7 @@ try
             else
             {
                 Log.Information("EF migrations up to date ({Count} applied). Startup auto-migrate is disabled.",
-                    (await db.Database.GetAppliedMigrationsAsync()).Count());
+                    BuildInfo.MigrationsApplied);
             }
         }
         else
@@ -717,6 +721,9 @@ try
             {
                 await db.Database.MigrateAsync();
                 var appliedAfter = (await db.Database.GetAppliedMigrationsAsync()).ToList();
+                BuildInfo.MigrationGateArmed = true;
+                BuildInfo.MigrationsApplied  = appliedAfter.Count;
+                BuildInfo.MigrationsPending  = 0;
                 Log.Information("Migrations complete. Applied now: {Count} | latest: {Latest}",
                     appliedAfter.Count,
                     appliedAfter.Count == 0 ? "(none)" : appliedAfter[^1]);
@@ -1986,6 +1993,11 @@ try
 
             // One summary line either way -- Railway caps logs at 500/sec, so
             // successful sections stay quiet and only the total is reported.
+            BuildInfo.SchemaPatchApplied        = patchApplied;
+            BuildInfo.SchemaPatchTotal          = patchSections.Count;
+            BuildInfo.SchemaPatchFailedSections = patchFailed;
+            BuildInfo.SchemaPatchStatus         = patchFailed.Count == 0 ? "complete" : "partial";
+
             if (patchFailed.Count == 0)
                 Log.Information("Emergency schema patch complete ({Applied}/{Total} sections).",
                     patchApplied, patchSections.Count);
@@ -1996,6 +2008,8 @@ try
         catch (Exception patchEx)
         {
             // Connection-level failure: nothing was applied at all.
+            BuildInfo.SchemaPatchStatus = "skipped";
+            BuildInfo.SchemaPatchTotal  = patchSections.Count;
             var t2 = patchEx.GetType();
             Log.Error("Emergency schema patch SKIPPED entirely (non-fatal, startup continues) -> {ExType}: {Message} | Inner={Inner}",
                 t2.Name,
@@ -2228,6 +2242,32 @@ try
 
     // Simple ping endpoint — no auth, no DB — for Railway health probing
     app.MapGet("/ping", () => Results.Ok(new { status = "alive", time = DateTime.UtcNow }));
+
+    // Build + boot-schema visibility — no auth, no DB, so it can be checked from
+    // anywhere. Answers the two questions that cost us the 2026-08-23 login
+    // outage: which commit is this container actually running, and did the boot
+    // schema patch apply cleanly? A 404 here means the container is older than
+    // this endpoint and is definitely not running current code.
+    app.MapGet("/version", () => Results.Ok(new
+    {
+        sha           = BuildInfo.ShortSha,
+        fullSha       = BuildInfo.CommitSha,
+        bootedAt      = BuildInfo.BootedAtUtc,
+        uptimeSeconds = (long)(DateTime.UtcNow - BuildInfo.BootedAtUtc).TotalSeconds,
+        migrations = new
+        {
+            gateArmed = BuildInfo.MigrationGateArmed,
+            applied   = BuildInfo.MigrationsApplied,
+            pending   = BuildInfo.MigrationsPending
+        },
+        schemaPatch = new
+        {
+            status         = BuildInfo.SchemaPatchStatus,
+            applied        = BuildInfo.SchemaPatchApplied,
+            total          = BuildInfo.SchemaPatchTotal,
+            failedSections = BuildInfo.SchemaPatchFailedSections
+        }
+    }));
 
     Log.Information("All middleware configured. Starting Kestrel on {Url}...",
         Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "default");

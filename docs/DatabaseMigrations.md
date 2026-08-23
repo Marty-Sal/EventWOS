@@ -77,6 +77,16 @@ seeding there too — it already runs on every boot and is non-fatal.
    by a natural key before inserting).
 4. After deploying, verify directly — don't assume:
    ```
+   curl -s https://eventwos-production.up.railway.app/version
+   ```
+   `sha` is the commit the API container is actually running (Railway's
+   `RAILWAY_GIT_COMMIT_SHA`), and `schemaPatch` reports `complete (34/34)` or
+   names the sections that failed. **Check this before debugging anything else**
+   — if `sha` is not the commit you just pushed, the API service did not
+   redeploy and you are looking at old code. A 404 on `/version` means the same
+   thing. This exact confusion turned the 2026-08-23 login outage into a much
+   longer hunt than it needed to be. Then check your own endpoint:
+   ```
    curl -s https://eventwos-production.up.railway.app/api/v1/<your-new-endpoint>
    ```
    A `42P01: relation "..." does not exist` means step 2 was skipped or
