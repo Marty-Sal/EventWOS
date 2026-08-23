@@ -51,4 +51,10 @@ public static class VendorParticipationLoader
         IAppDbContext db, Guid vendorId, CancellationToken ct)
         => VendorEventParticipationRules.CountEventsDone(
                await LoadAsync(db, new[] { vendorId }, ct));
+
+    /// <summary>Live/upcoming/completed breakdown for a single vendor's own events.</summary>
+    public static async Task<VendorEventParticipationRules.EventCountSummary> LoadSummaryAsync(
+        IAppDbContext db, Guid vendorId, CancellationToken ct)
+        => VendorEventParticipationRules.Summarize(
+               await LoadAsync(db, new[] { vendorId }, ct));
 }

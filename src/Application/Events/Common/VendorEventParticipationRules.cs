@@ -88,4 +88,33 @@ public static class VendorEventParticipationRules
         => rows.Where(r => CountsAsDone(r.AssignmentStatus, r.EventStatus))
                .GroupBy(r => r.VendorId)
                .ToDictionary(g => g.Key, g => g.Select(r => r.EventId).Distinct().Count());
+
+    /// <summary>
+    /// Same three buckets the Admin dashboard's "Total Events" tile shows
+    /// (live / upcoming / completed), scoped to a single vendor or crew
+    /// member's own events instead of every event in the system. Cancelled
+    /// events never get a bucket (nothing to show), and Draft never reaches
+    /// here because non-admins are never assigned to a Draft event.
+    /// </summary>
+    public readonly record struct EventCountSummary(int Live, int Upcoming, int Completed);
+
+    /// <summary>
+    /// Buckets a set of DISTINCT (EventId, EventStatus) pairs -- already
+    /// filtered to active participation -- by event lifecycle state. Shared
+    /// by the vendor and crew loaders so "live"/"upcoming"/"completed" mean
+    /// exactly the same thing on both dashboards.
+    /// </summary>
+    public static EventCountSummary SummarizeByStatus(IEnumerable<(Guid EventId, EventStatus Status)> distinctEvents)
+    {
+        var byStatus = distinctEvents.GroupBy(x => x.Status).ToDictionary(g => g.Key, g => g.Count());
+        int C(EventStatus s) => byStatus.TryGetValue(s, out var n) ? n : 0;
+        return new EventCountSummary(C(EventStatus.InProgress), C(EventStatus.Published), C(EventStatus.Completed));
+    }
+
+    /// <summary>Vendor form: filters to active participation and de-dupes multi-row events first.</summary>
+    public static EventCountSummary Summarize(IEnumerable<ParticipationRow> rows)
+        => SummarizeByStatus(
+               rows.Where(r => IsActiveParticipation(r.AssignmentStatus))
+                   .Select(r => (r.EventId, r.EventStatus))
+                   .Distinct());
 }

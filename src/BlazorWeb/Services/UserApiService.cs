@@ -21,7 +21,10 @@ public sealed record UserProfileDto(
     // True when an Admin/Vendor directly added this account (skipped the approval queue).
     // When true AND ProfileCompleted is false, the app forces this user onto /profile
     // before letting them see anything else — see MainLayout's completion gate.
-    bool WasDirectlyAdded = false, bool ProfileCompleted = false);
+    bool WasDirectlyAdded = false, bool ProfileCompleted = false,
+    // Live/upcoming breakdown of the caller's own events, added alongside the
+    // dashboard's "completed" tiles.
+    int? EventsLive = null, int? EventsUpcoming = null);
 
 public sealed record UserListItemDto(
     Guid Id, string Mobile, string FullName, string? Email,

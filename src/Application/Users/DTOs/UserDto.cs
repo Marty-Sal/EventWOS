@@ -69,7 +69,14 @@ public sealed record UserProfileDto(
     string? Website,
     // Direct-add invite tracking — drives the "please complete your profile" banner
     bool WasDirectlyAdded,
-    bool ProfileCompleted
+    bool ProfileCompleted,
+    // Live/upcoming breakdown of the caller's own events (Vendor: events they're
+    // on; Crew: events they're assigned to). Completed already travels above as
+    // EventsCompleted for Vendor -- for Crew it's also populated here now,
+    // distinct from EventsAttended (which is personal check-in count, not
+    // "the event finished").
+    int? EventsLive     = null,
+    int? EventsUpcoming = null
 );
 
 public sealed record UpdateProfileRequest(

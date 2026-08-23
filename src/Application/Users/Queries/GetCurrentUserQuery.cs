@@ -32,12 +32,26 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
 
         var permissions = await _permissionService.GetEffectivePermissionsAsync(user.Id, user.Role, ct);
 
-        // "Total Events Done" is computed from the vendor's own assignment
-        // rows, not read from the User.EventsCompleted column -- nothing has
-        // ever written to that column, so it reported 0 for every vendor.
-        int? eventsCompleted = user.Role == Domain.Enums.UserRole.Vendor
-            ? await VendorParticipationLoader.CountEventsDoneAsync(_db, user.Id, ct)
-            : null;
+        // "Total Events Done" / "Total Events Attended" are computed from the
+        // caller's own assignment rows, not read from stored counter columns --
+        // nothing ever wrote to those, so they reported 0 forever. The same
+        // pass also gets the live/upcoming breakdown the dashboard tile shows
+        // alongside the completed number.
+        int? eventsCompleted = null, eventsLive = null, eventsUpcoming = null;
+        if (user.Role == Domain.Enums.UserRole.Vendor)
+        {
+            var s = await VendorParticipationLoader.LoadSummaryAsync(_db, user.Id, ct);
+            eventsCompleted = s.Completed;
+            eventsLive      = s.Live;
+            eventsUpcoming  = s.Upcoming;
+        }
+        else if (user.Role == Domain.Enums.UserRole.Crew)
+        {
+            var s = await CrewParticipationLoader.LoadSummaryAsync(_db, user.Id, ct);
+            eventsCompleted = s.Completed;
+            eventsLive      = s.Live;
+            eventsUpcoming  = s.Upcoming;
+        }
 
         // Load vendor name for crew members
         string? vendorName = null;
@@ -78,6 +92,8 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
             user.Role == Domain.Enums.UserRole.Vendor ? user.GstNumber : null,
             user.Role == Domain.Enums.UserRole.Vendor ? user.Website : null,
             user.InvitedByUserId.HasValue,
-            user.ProfileCompletedAt.HasValue));
+            user.ProfileCompletedAt.HasValue,
+            eventsLive,
+            eventsUpcoming));
     }
 }
