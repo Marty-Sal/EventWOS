@@ -36,6 +36,9 @@ public sealed class OtpService : IOtpService
     /// <inheritdoc/>
     public bool IsDevelopmentMode => _options.IsDevelopmentMode;
 
+    /// <inheritdoc/>
+    public bool ExposeOtpInApiResponse => _options.ExposeOtpInApiResponse;
+
     public async Task<bool> SendOtpAsync(string mobile, string otp, CancellationToken cancellationToken = default)
     {
         if (_options.IsDevelopmentMode)
@@ -53,7 +56,21 @@ public sealed class OtpService : IOtpService
 public sealed class OtpOptions
 {
     public const string SectionName = "Otp";
-    public bool IsDevelopmentMode { get; init; } = true;
+
+    /// <summary>
+    /// Stub SMS delivery: log the OTP instead of calling the SMS provider. This is a
+    /// DELIVERY switch, not a security one, and is expected to stay true until a real
+    /// SMS or WhatsApp provider is live.
+    /// </summary>
+    public bool IsDevelopmentMode { get; set; } = true;
+
+    /// <summary>
+    /// Return the plaintext OTP in the API response so a developer can complete the flow
+    /// without a delivery channel. Defaults to false and is FORCED false in the
+    /// Production environment by Program.cs, because the OTP alone is enough to mint a
+    /// session for any account -- see IOtpService.ExposeOtpInApiResponse.
+    /// </summary>
+    public bool ExposeOtpInApiResponse { get; set; }
 }
 
 /// <summary>Stub SMS provider for development/testing.
@@ -65,7 +82,11 @@ public sealed class StubSmsProvider : ISmsProvider
 
     public Task<bool> SendAsync(string mobile, string message, CancellationToken ct = default)
     {
-        _logger.LogInformation("📱 [STUB SMS] To: {Mobile} | Message: {Message}", mobile, message);
-        return Task.FromResult(true);
+        // Warning, not Information: this provider delivers nothing. Logging it as routine
+        // is how "OTP sent" ends up in the logs for a message that never left the process.
+        _logger.LogWarning(
+            "[STUB SMS] NOT DELIVERED to {Mobile}. No SMS provider is configured. Message: {Message}",
+            mobile, message);
+        return Task.FromResult(false);
     }
 }

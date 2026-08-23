@@ -72,7 +72,12 @@ public sealed class RequestPasswordResetHandler : IRequestHandler<RequestPasswor
         await _audit.LogAsync(AuditAction.OtpRequested, nameof(User), user.Id.ToString(),
             additionalData: "Reason:PasswordReset", cancellationToken: ct);
 
-        var devOtp = _otpService.IsDevelopmentMode ? plaintext : null;
+        // Never gate this on IsDevelopmentMode: that flag only means "SMS is stubbed", and
+        // it is expected to stay on in a deployed environment until a provider is live.
+        // Handing the OTP back is a separate, far more dangerous decision -- VerifyOtp
+        // mints an access token, so exposing it turns knowing a mobile number into a
+        // signed in session for that account.
+        var devOtp = _otpService.ExposeOtpInApiResponse ? plaintext : null;
         return Result.Success(new RequestPasswordResetResponse(
             otpRequest.Id, Mask(user.Mobile), devOtp));
     }

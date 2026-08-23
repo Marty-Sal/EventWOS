@@ -14,35 +14,61 @@ push have a durable counterpart? It does. But that sweep could not see the oppos
 -- **templates that exist and are seeded but that nothing ever triggers**. There are
 nine, and three of them matter a great deal.
 
-### 1.1 BLOCKER: the OTP is never delivered, and is handed to the caller
+### 1.1 FIXED: the OTP was handed to the caller (account takeover)
 
-`RequestPasswordResetHandler` generates an OTP, stores its hash, and calls
-`IOtpService.SendOtpAsync`. In production that resolves to:
+**Status: closed in code. One flag remains the owner's call -- see the note at the end.**
 
-- `Otp:IsDevelopmentMode = true` in `src/Api/appsettings.json` -- the base file, so it
-  applies in production unless a Railway variable overrides it. Nothing in `Program.cs`
-  overrides it from `IHostEnvironment`.
-- `ISmsProvider` registered as `StubSmsProvider` (`Program.cs:309`), which sends nothing.
+`RequestPasswordResetHandler` and `RequestOtpHandler` both did this:
 
-In development mode the handler also returns the **plaintext OTP** to the caller
-(`DevOtp`), and `ForgotPassword.razor` displays it on screen.
+```csharp
+var devOtp = _otpService.IsDevelopmentMode ? plaintext : null;
+```
 
-Consequence, if production really is in that mode: anyone who can name a username, email
-or mobile can call `POST /api/auth/forgot-password`, read the OTP out of the response,
-and reset that account's password. That includes the admin account. The same `DevOtp`
-pattern exists on the login OTP path (`RequestOtpCommand`).
+`Otp:IsDevelopmentMode` is `true` in `src/Api/appsettings.json` -- the base file, which
+applies in production -- so both endpoints returned the plaintext OTP in the response
+body, and `ForgotPassword.razor` printed it on screen.
 
-I could not confirm the production environment variables directly -- the Railway API
-token in the sandbox now returns 403, so `Otp__IsDevelopmentMode` may or may not be set
-there. **This needs checking before anything else in this document.**
+The reset path was the lesser half. `VerifyOtpHandler` calls
+`_jwtService.GenerateAccessToken`, so the **login** OTP path was a full sign-in bypass:
+`POST /api/auth/request-otp` with any mobile number, read the code out of the response,
+`POST /api/auth/verify-otp`, and you hold that user's access token. No password, no reset,
+no email. Admin included.
 
-Fix, in order:
-1. Set `Otp__IsDevelopmentMode=false` on the Railway API service (immediate mitigation).
-2. Gate `DevOtp` on `IHostEnvironment.IsDevelopment()` in code, not on a config flag, so
-   a misconfigured environment cannot leak it again.
-3. Route the OTP through the notification platform using the already-seeded
-   `PASSWORD_RESET_OTP` template, so it inherits retries, delivery tracking and the
-   provider abstraction instead of needing its own sender.
+The root cause was one flag doing two unrelated jobs. "Do not call the SMS provider" is a
+delivery concern and genuinely should stay on until a provider is live. "Hand the
+plaintext to the caller" is a credential-disclosure decision. They are now separate:
+
+| Flag | Means | Default | Notes |
+|---|---|---|---|
+| `Otp:IsDevelopmentMode` | stub SMS: log the code instead of sending it | `true` | expected to stay `true` until SMS/WhatsApp is live; safe |
+| `Otp:ExposeOtpInApiResponse` | return the plaintext OTP in the API response | `false` | dangerous; `true` only in `appsettings.Development.json` |
+
+`Program.cs` additionally forces `ExposeOtpInApiResponse` to `false` whenever the hosting
+environment is Production, and logs a startup line if configuration tried to enable it.
+Configuration cannot switch this on in production -- not from appsettings, not from a
+Railway variable, not by accident.
+
+`StubSmsProvider` also used to log at Information and return `true`, which put "sent" in
+the logs for a message that never left the process. It now logs a warning that says NOT
+DELIVERED and returns `false`.
+
+Pinned by `tests/Application.UnitTests/Auth/OtpExposureTests.cs`, including a guard that
+reads `src/Api/appsettings.json` and fails if the exposure flag is ever `true` there.
+
+**Still the owner's call:** `Otp__IsDevelopmentMode` on Railway can stay `true` -- it is
+now only a delivery switch. While it is `true`, no SMS goes out, so password reset works
+only for accounts that have an email address (SendGrid is live and the handler already
+emails the code). Mobile-only crew cannot self-serve a reset until an SMS or WhatsApp
+provider is live. To complete an OTP flow against the deployed app, read the code from the
+Railway logs -- the stub logs it -- or from the email copy.
+
+**Correction to an earlier recommendation.** An earlier draft of this document suggested
+routing the OTP through the notification platform so it would inherit retries and delivery
+tracking. That is wrong, and the reason matters: the durable outbox persists the rendered
+token payload, so the platform would write the **plaintext OTP into the database** and
+leave it there after use -- defeating the point of storing only a BCrypt hash in
+`OtpRequests`. OTP delivery should stay synchronous and direct (the email path already is).
+If OTP over WhatsApp is wanted later, it should call the provider inline, not enqueue.
 
 ### 1.2 Silent event changes
 
@@ -128,8 +154,8 @@ nothing, documented in code; **gap** = should send something and does not.
 | Vendor registers | `RegisterVendorHandler` | Admins + Managers | `REGISTRATION_PENDING_APPROVAL` | all | live |
 | Account approved | `ApproveUserHandler` | the user | `ACCOUNT_APPROVED` | in-app (bespoke email already sent) | live |
 | Account rejected | `RejectUserHandler` | the user | `ACCOUNT_REJECTED` | in-app (bespoke email already sent) | live |
-| Password reset requested | `RequestPasswordResetHandler` | the user | `PASSWORD_RESET_OTP` | SMS/WhatsApp + email | **gap - see 1.1** |
-| Login OTP requested | `RequestOtpCommand` | the user | none | -- | **gap - see 1.1** |
+| Password reset requested | `RequestPasswordResetHandler` | the user | none: sent inline, deliberately not via the outbox (1.1) | email now, SMS when a provider is live | live for accounts with email |
+| Login OTP requested | `RequestOtpHandler` | the user | none: sent inline | SMS when a provider is live | blocked on a provider |
 | Admin invites a user directly | no trigger exists | the invitee | `ACCOUNT_INVITED` | all | gap (feature not built) |
 | User completes their profile | no trigger exists | Admins/Managers | `PROFILE_COMPLETED` | in-app | gap (low value - consider deleting the template) |
 | Login from a new device | no trigger exists | the user | none | -- | proposed (see 4) |
@@ -230,7 +256,8 @@ forgotten:
 
 ## 5. Recommended order of work
 
-1. **Confirm and close the OTP hole** (1.1). Everything else waits behind this.
+1. ~~Close the OTP hole~~ -- **done** (1.1). Remaining owner decision: whether to stand up
+   an SMS/WhatsApp provider so mobile-only accounts can reset their own password.
 2. **`EVENT_UPDATED` and `SHIFT_CHANGED`**, plus a shift-cancelled template (1.2). Cheap,
    and it stops people travelling to the wrong place at the wrong time.
 3. **Opt-out and channel preferences** (1.4), before WhatsApp goes live rather than after.

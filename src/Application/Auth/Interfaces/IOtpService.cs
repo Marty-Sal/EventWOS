@@ -12,6 +12,23 @@ public interface IOtpService
     /// <summary>Sends the OTP via configured SMS provider.</summary>
     Task<bool> SendOtpAsync(string mobile, string otp, CancellationToken cancellationToken = default);
 
-    /// <summary>True when running in development/stub mode. Allows returning OTP in response.</summary>
+    /// <summary>
+    /// True when SMS delivery is stubbed: the OTP is written to the application log
+    /// instead of being handed to the SMS provider. Safe to leave on in a deployed
+    /// environment while no SMS provider is live -- it controls delivery only.
+    /// </summary>
     bool IsDevelopmentMode { get; }
+
+    /// <summary>
+    /// True when the plaintext OTP may be returned in the API response body.
+    ///
+    /// DANGEROUS, and deliberately separate from <see cref="IsDevelopmentMode"/>. The OTP
+    /// is the only thing standing between a caller who knows a mobile number and a signed
+    /// in session as that user, because VerifyOtp mints an access token. Anything that
+    /// returns it to the caller turns "knows your mobile number" into "is you".
+    ///
+    /// Forced off in the Production environment regardless of configuration. Get the OTP
+    /// from the application log or the email copy instead.
+    /// </summary>
+    bool ExposeOtpInApiResponse { get; }
 }

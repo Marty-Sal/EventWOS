@@ -101,6 +101,7 @@ public class AccountNotificationWiringTests
         public bool VerifyOtp(string plaintext, string storedHash) => true;
         public Task<bool> SendOtpAsync(string mobile, string otp, CancellationToken ct = default) => Task.FromResult(true);
         public bool IsDevelopmentMode => true;
+        public bool ExposeOtpInApiResponse => false;
     }
 
     private sealed class NoOpAudit : IAuditLogger

@@ -298,6 +298,27 @@ try
     // ─── Application Services ─────────────────────────────────────────────────
     builder.Services.Configure<OtpOptions>(builder.Configuration.GetSection(OtpOptions.SectionName));
 
+    // The OTP is a bearer credential: VerifyOtp mints an access token, so anything that
+    // returns the plaintext to the caller turns "knows your mobile number" into "is
+    // logged in as you". Configuration must not be able to switch that on in Production
+    // -- not via appsettings, not via a Railway variable, not by accident. The hosting
+    // environment is the final authority.
+    //
+    // Note this is deliberately NOT tied to Otp:IsDevelopmentMode, which only stubs SMS
+    // delivery and is expected to stay true in production until a real provider is live.
+    // To complete an OTP flow against a deployed environment, read the code from the
+    // application log (the stub logs it) or from the email copy.
+    builder.Services.PostConfigure<OtpOptions>(o =>
+    {
+        if (!builder.Environment.IsProduction() || !o.ExposeOtpInApiResponse) return;
+
+        o.ExposeOtpInApiResponse = false;
+        Console.WriteLine(
+            "[STARTUP] Otp:ExposeOtpInApiResponse was set true but the environment is " +
+            "Production. Ignoring it: the plaintext OTP will NOT be returned in API " +
+            "responses. Read the code from the log or the email copy instead.");
+    });
+
     // Public frontend URL for approval-flow links (welcome emails, SMS, etc.).
     // Pulls from AppUrls:BaseUrl in appsettings or AppUrls__BaseUrl env var.
     builder.Services.Configure<EventWOS.Application.Common.AppUrlOptions>(

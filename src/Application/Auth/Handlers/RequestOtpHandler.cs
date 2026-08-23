@@ -121,7 +121,12 @@ public sealed class RequestOtpHandler : IRequestHandler<RequestOtpCommand, Resul
 
         // In development mode, include the plaintext OTP in the response
         // so the UI can show it without needing a real SMS provider
-        var devOtp = _otpService.IsDevelopmentMode ? plaintext : null;
+        // Never gate this on IsDevelopmentMode: that flag only means "SMS is stubbed", and
+        // it is expected to stay on in a deployed environment until a provider is live.
+        // Handing the OTP back is a separate, far more dangerous decision -- VerifyOtp
+        // mints an access token, so exposing it turns knowing a mobile number into a
+        // signed in session for that account.
+        var devOtp = _otpService.ExposeOtpInApiResponse ? plaintext : null;
 
         return Result.Success(new RequestOtpResponse(
             otpRequest.Id,
