@@ -1,4 +1,7 @@
+using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
@@ -6,6 +9,7 @@ using EventWOS.Domain.Interfaces;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using EventWOS.Domain.Rules;
 using EventWOS.Application.VendorAllocations.Internal;
 
@@ -28,11 +32,18 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
     private readonly IAppDbContext       _db;
     private readonly IUnitOfWork         _uow;
     private readonly INotificationPusher _push;
-    public VendorAssignCrewHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    private readonly INotificationDispatcher _notifications;
+    private readonly AppUrlOptions _appUrls;
+
+    public VendorAssignCrewHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
+        INotificationDispatcher notifications, IOptions<AppUrlOptions> appUrls)
     {
         _db   = db;
         _uow  = uow;
         _push = push;
+        _notifications = notifications;
+        _appUrls = appUrls.Value;
     }
 
     public async Task<Result<EventAssignmentDto>> Handle(VendorAssignCrewCommand req, CancellationToken ct)
@@ -214,6 +225,32 @@ public sealed class VendorAssignCrewHandler : IRequestHandler<VendorAssignCrewCo
         // from the vendor's My Events when all their staffed crew were
         // rejected. CrewId == null is correctly excluded everywhere it
         // matters (capacity count, attendance, payments, rating).
+
+        // Durable invitation, staged before the save so the row and the message commit
+        // together. Full channel set: this is work being offered with a deadline
+        // attached, to somebody who has no reason to be sitting on the page waiting.
+        var invitedAt = DateTime.UtcNow;
+        _notifications.Enqueue(new NotificationRequest(
+            // CREW_INVITATION rather than CREW_ASSIGNMENT: the vendor is offering, and
+            // the template names them ("{{VendorName}} has invited you"), which is what
+            // makes the message make sense to crew who work for several vendors.
+            NotificationTemplateCodes.CrewInvitation,
+            RecipientUserId: crew.Id,
+            // Timestamped, because a terminal row is re-invited by flipping the SAME row
+            // back to Invited (VendorReInvite above). A static key would make the second
+            // invitation look like a duplicate of the first and it would never arrive.
+            BusinessEventKey: $"assignment:{assignment.Id}:crew-invited:{invitedAt.Ticks}",
+            Data: new Dictionary<string, string?>
+            {
+                [NotificationTokens.RecipientName] = crew.FullName,
+                [NotificationTokens.VendorName]    = vendor?.FullName ?? "Your vendor",
+                [NotificationTokens.EventName]     = ev.Title,
+                [NotificationTokens.EventDate]     = ev.StartAt.ToString("dd MMM yyyy"),
+                [NotificationTokens.EventTime]     = ev.StartAt.ToString("HH:mm"),
+                [NotificationTokens.VenueName]     = ev.Venue,
+                [NotificationTokens.Link]          = _appUrls.BaseUrl.TrimEnd('/') + "/my-assignments"
+            },
+            ActorUserId: req.VendorUserId));
 
         await _uow.SaveChangesAsync(ct);
 

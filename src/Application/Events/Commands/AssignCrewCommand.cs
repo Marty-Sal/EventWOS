@@ -180,6 +180,10 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             assignment.AttachToShift(_shiftId.Value);
             _db.EventAssignments.Add(assignment);
         }
+        // One timestamp shared by both notifications below, so a single Assign action
+        // produces one coherent pair of keys.
+        var invitedAt = DateTime.UtcNow;
+
         // Staged BEFORE the save so the assignment and its notifications commit in
         // one transaction: if this insert rolls back, nobody is told about an
         // assignment that does not exist, and if the provider is down the
@@ -189,9 +193,16 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             _notifications.Enqueue(new NotificationRequest(
                 NotificationTemplateCodes.CrewAssignment,
                 RecipientUserId: crew.Id,
-                // Keyed on the assignment, so a double-clicked Assign button or a
-                // retried request cannot message the same person twice.
-                BusinessEventKey: $"assignment:{assignment.Id}:invited",
+                // Keyed on the assignment AND the moment of invitation. The assignment
+                // id alone is not enough: a terminal row is re-invited by flipping the
+                // SAME row back to Invited (ReInvite above), so a crew member who
+                // declined and is later invited again would share a key with the first
+                // invitation and the platform would drop the second as a duplicate --
+                // leaving them never told they are wanted again.
+                //
+                // Ticks still absorb the case this key was written for: a double-clicked
+                // Assign button or a retried request lands inside one tick and collapses.
+                BusinessEventKey: $"assignment:{assignment.Id}:invited:{invitedAt.Ticks}",
                 Data: new Dictionary<string, string?>
                 {
                     [NotificationTokens.RecipientName] = crew.FullName,
@@ -208,7 +219,7 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             _notifications.Enqueue(new NotificationRequest(
                 NotificationTemplateCodes.VendorEventInvited,
                 RecipientUserId: vendor.Id,
-                BusinessEventKey: $"assignment:{assignment.Id}:vendor-invited",
+                BusinessEventKey: $"assignment:{assignment.Id}:vendor-invited:{invitedAt.Ticks}",
                 Data: new Dictionary<string, string?>
                 {
                     [NotificationTokens.RecipientName] = vendor.FullName,

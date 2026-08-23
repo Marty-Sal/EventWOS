@@ -84,6 +84,7 @@
     private static readonly HashSet<string> LegacyToastedCodes = new(StringComparer.OrdinalIgnoreCase)
     {
         "CREW_ASSIGNMENT",           // OnAssignmentInvite
+        "CREW_INVITATION",           // OnAssignmentInvite (vendor-initiated invites)
         "CREW_ASSIGNMENT_APPROVED",  // OnVendorApproved / OnManagerApproved
         "CREW_ASSIGNMENT_REJECTED",  // OnVendorRejected / OnManagerRejected
         "ACCOUNT_APPROVED",          // OnRegistrationDecision
@@ -98,6 +99,15 @@
         // CHECK_IN_VERIFIED is NOT listed: CheckInVerifiedReceived only refetches and
         // closes the QR modal, so suppressing it would remove the bell entry and put
         // nothing in its place.
+        //
+        // Note on the three AssignmentChanged codes above: their legacy toast is
+        // generic ("Assignment Updated -- Change on Sunburn Arena"), while the platform
+        // message actually says the invitation was withdrawn. Suppressing the better
+        // message is the wrong way round, but the legacy handler is one subscription
+        // shared by four server events -- including VendorEventAssigned, which is not
+        // on the platform yet -- so it cannot tell which fired. Retire the legacy
+        // AssignmentChanged toast and drop all three codes from this list once the
+        // event-creation paths are wired.
     };
 
     private void OnPlatformNotification(PlatformNotification n)

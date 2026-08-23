@@ -1,5 +1,8 @@
 using EventWOS.Application.CrewGroups.DTOs;
+using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
@@ -8,6 +11,7 @@ using EventWOS.Application.VendorAllocations.Internal;
 using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace EventWOS.Application.CrewGroups.Commands;
 
@@ -33,10 +37,15 @@ public sealed class VendorAssignGroupHandler
     private readonly IAppDbContext       _db;
     private readonly IUnitOfWork         _uow;
     private readonly INotificationPusher _push;
+    private readonly INotificationDispatcher _notifications;
+    private readonly AppUrlOptions _appUrls;
 
-    public VendorAssignGroupHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    public VendorAssignGroupHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
+        INotificationDispatcher notifications, IOptions<AppUrlOptions> appUrls)
     {
         _db = db; _uow = uow; _push = push;
+        _notifications = notifications; _appUrls = appUrls.Value;
     }
 
     public async Task<Result<VendorAssignGroupResultDto>> Handle(
@@ -281,6 +290,35 @@ public sealed class VendorAssignGroupHandler
         // committed — every attempted row moves to `failures`.
         if (invited.Count > 0)
         {
+            // One durable invitation per crew member who actually got a row, staged
+            // inside the same try as the save. If SaveChanges throws, these outbox rows
+            // are on the same DbContext and roll back with everything else -- so a batch
+            // that failed to commit cannot leave messages telling people they are booked.
+            //
+            // Only `invited` is notified: the crew skipped as duplicates already hold a
+            // live invitation, and the ones in `failures` never got a row at all.
+            var invitedAt = DateTime.UtcNow;
+            var link = _appUrls.BaseUrl.TrimEnd('/') + "/my-assignments";
+
+            _notifications.Enqueue(invited.Select(x => new NotificationRequest(
+                NotificationTemplateCodes.CrewInvitation,
+                RecipientUserId: x.Crew.Id,
+                // Per-row and timestamped: group invites resurrect terminal rows in place
+                // (VendorReInvite above), so re-inviting a group whose members previously
+                // declined must not have every message swallowed as a duplicate.
+                BusinessEventKey: $"assignment:{x.Row.Id}:crew-invited:{invitedAt.Ticks}",
+                Data: new Dictionary<string, string?>
+                {
+                    [NotificationTokens.RecipientName] = x.Crew.FullName,
+                    [NotificationTokens.VendorName]    = vendor?.FullName ?? "Your vendor",
+                    [NotificationTokens.EventName]     = ev.Title,
+                    [NotificationTokens.EventDate]     = ev.StartAt.ToString("dd MMM yyyy"),
+                    [NotificationTokens.EventTime]     = ev.StartAt.ToString("HH:mm"),
+                    [NotificationTokens.VenueName]     = ev.Venue,
+                    [NotificationTokens.Link]          = link
+                },
+                ActorUserId: req.VendorUserId)));
+
             try
             {
                 await _uow.SaveChangesAsync(ct);
