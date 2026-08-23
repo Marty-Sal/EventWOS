@@ -38,6 +38,14 @@ public static class NotificationTemplateCodes
     public const string CrewInviteRevoked     = "CREW_INVITE_REVOKED";
     public const string CrewAssignmentReminder = "CREW_ASSIGNMENT_REMINDER";
 
+    /// <summary>
+    /// Sent to Managers when a vendor-approved crew member reaches final review.
+    /// Same failure as the registration queue: the only signal was a role-wide
+    /// SignalR push, so work piled up unseen while the crew member waited to hear
+    /// whether they had a shift.
+    /// </summary>
+    public const string AssignmentPendingApproval = "ASSIGNMENT_PENDING_APPROVAL";
+
     // Event operations
     public const string EventAnnouncement     = "EVENT_ANNOUNCEMENT";
     public const string EventUpdated          = "EVENT_UPDATED";

@@ -1,4 +1,6 @@
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Domain.Rules;
 using EventWOS.Shared.Result;
@@ -21,7 +23,11 @@ public sealed class ManagerApproveAssignmentHandler
     private readonly IAppDbContext     _db;
     private readonly IUnitOfWork       _uow;
     private readonly INotificationPusher _push;
-    public ManagerApproveAssignmentHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push) { _db = db; _uow = uow; _push = push; }
+    private readonly INotificationDispatcher _notifications;
+    public ManagerApproveAssignmentHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
+        INotificationDispatcher notifications)
+    { _db = db; _uow = uow; _push = push; _notifications = notifications; }
 
     public async Task<Result> Handle(ManagerApproveAssignmentCommand req, CancellationToken ct)
     {
@@ -55,6 +61,35 @@ public sealed class ManagerApproveAssignmentHandler
         try   { assignment.ManagerApprove(); }
         catch (InvalidOperationException ex)
         { return Result.Failure(new Error("Assignment.InvalidTransition", ex.Message)); }
+
+        // THIS is where a crew member is actually confirmed. ManagerApproved is the
+        // end of the two-stage flow, so CREW_ASSIGNMENT_APPROVED is sent here and
+        // nowhere earlier -- the vendor stage only forwards the row to this queue.
+        //
+        // It is also the notification people plan their week around: if it is lost,
+        // somebody either misses a shift they were confirmed for or turns up to one
+        // they were not. A toast that requires the tab to be open is not good enough
+        // for that, which is the whole reason this platform exists.
+        if (assignment.CrewId.HasValue)
+        {
+            _notifications.Enqueue(new NotificationRequest(
+                NotificationTemplateCodes.CrewAssignmentApproved,
+                RecipientUserId: assignment.CrewId.Value,
+                BusinessEventKey: $"assignment:{assignment.Id}:manager-approved",
+                Data: new Dictionary<string, string?>
+                {
+                    [NotificationTokens.RecipientName] = assignment.Crew?.FullName ?? "there",
+                    [NotificationTokens.EventName]     = assignment.Event?.Title ?? "the event",
+                    [NotificationTokens.EventDate]     = assignment.Event?.StartAt.ToString("dd MMM yyyy") ?? "-",
+                    [NotificationTokens.EventTime]     = assignment.Event?.StartAt.ToString("HH:mm") ?? "-"
+                },
+                ActorUserId: req.ManagerUserId));
+        }
+
+        // The VENDOR keeps only the transient push. They are notified because their
+        // roster view changes, not because they need to act -- they already approved
+        // this person, so an email telling them a manager agreed is noise in a mailbox
+        // that will carry one of these per crew member per event.
 
         await _uow.SaveChangesAsync(ct);
 
@@ -96,7 +131,11 @@ public sealed class ManagerRejectAssignmentHandler
     private readonly IAppDbContext     _db;
     private readonly IUnitOfWork       _uow;
     private readonly INotificationPusher _push;
-    public ManagerRejectAssignmentHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push) { _db = db; _uow = uow; _push = push; }
+    private readonly INotificationDispatcher _notifications;
+    public ManagerRejectAssignmentHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push,
+        INotificationDispatcher notifications)
+    { _db = db; _uow = uow; _push = push; _notifications = notifications; }
 
     public async Task<Result> Handle(ManagerRejectAssignmentCommand req, CancellationToken ct)
     {
@@ -105,6 +144,9 @@ public sealed class ManagerRejectAssignmentHandler
 
         var assignment = await _db.EventAssignments
             .Include(a => a.Crew)
+            // Event comes along for the notification: "your assignment for the event
+            // was not approved" is not a message anyone can act on.
+            .Include(a => a.Event)
             .FirstOrDefaultAsync(a => a.Id == req.AssignmentId, ct);
 
         if (assignment is null)
@@ -113,6 +155,26 @@ public sealed class ManagerRejectAssignmentHandler
         try   { assignment.ManagerReject(req.ManagerUserId, req.Reason); }
         catch (InvalidOperationException ex)
         { return Result.Failure(new Error("Assignment.InvalidTransition", ex.Message)); }
+
+        // Final rejection. The crew member may well have been told by the vendor that
+        // they were through, so this reversal has to reach them: this is the message
+        // that stops someone travelling to an event they are no longer on.
+        if (assignment.CrewId.HasValue)
+        {
+            _notifications.Enqueue(new NotificationRequest(
+                NotificationTemplateCodes.CrewAssignmentRejected,
+                RecipientUserId: assignment.CrewId.Value,
+                // Distinct from the vendor-stage key so the two rejection stages can
+                // never be de-duplicated into each other.
+                BusinessEventKey: $"assignment:{assignment.Id}:manager-rejected",
+                Data: new Dictionary<string, string?>
+                {
+                    [NotificationTokens.RecipientName] = assignment.Crew?.FullName ?? "there",
+                    [NotificationTokens.EventName]     = assignment.Event?.Title ?? "the event",
+                    [NotificationTokens.Reason]        = req.Reason
+                },
+                ActorUserId: req.ManagerUserId));
+        }
 
         await _uow.SaveChangesAsync(ct);
 
