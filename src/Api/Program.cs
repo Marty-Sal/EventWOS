@@ -315,6 +315,29 @@ try
                                EventWOS.Application.Notifications.Services.NotificationDispatcher>();
     builder.Services.AddSingleton<EventWOS.Application.Notifications.Rendering.INotificationTemplateRenderer,
                                   EventWOS.Application.Notifications.Rendering.NotificationTemplateRenderer>();
+
+    // Notification worker: claims work from Postgres and hands it to providers.
+    // Bound from the "Notifications" section so Railway can retune batch sizes
+    // or switch the loop off (Notifications__Enabled=false) without a deploy.
+    builder.Services.Configure<EventWOS.Infrastructure.Notifications.NotificationWorkerOptions>(
+        builder.Configuration.GetSection(EventWOS.Infrastructure.Notifications.NotificationWorkerOptions.SectionName));
+
+    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.INotificationWorkQueue,
+                               EventWOS.Infrastructure.Notifications.NotificationWorkQueue>();
+    builder.Services.AddScoped<EventWOS.Application.Notifications.Services.OutboxProcessor>();
+    builder.Services.AddScoped<EventWOS.Application.Notifications.Services.DeliveryProcessor>();
+    builder.Services.AddScoped<EventWOS.Application.Notifications.Services.NotificationChannelResolver>();
+
+    // Channel senders. Registered as a collection: the resolver and the delivery
+    // processor pick per channel, and config decides which implementation wins
+    // when two exist for the same channel (AiSensy vs Meta, SES vs SendGrid).
+    // In-app needs no credentials, so it is always available -- which is what
+    // makes a missing provider key degrade to in-app rather than lose a message.
+    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
+                               EventWOS.Application.Notifications.Channels.InAppNotificationSender>();
+
+    builder.Services.AddScoped<EventWOS.Persistence.Seed.NotificationTemplateSeeder>();
+    builder.Services.AddHostedService<EventWOS.Api.Workers.NotificationWorker>();
     builder.Services.AddSingleton<EventWOS.Application.Auth.Interfaces.IPasswordHasher, EventWOS.Infrastructure.Auth.BCryptPasswordHasher>();
 
     // Reverse-geocoding for AttendanceRecord.LocationAddress via
@@ -2219,6 +2242,13 @@ try
         {
             var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
             await seeder.SeedAsync();
+
+            // Default notification wording. Insert-only and idempotent, so an
+            // admin's edits survive every deploy.
+            var templateSeeder = scope.ServiceProvider
+                .GetRequiredService<EventWOS.Persistence.Seed.NotificationTemplateSeeder>();
+            await templateSeeder.SeedAsync();
+
             Log.Information("Seeding complete.");
         }
         catch (Exception seedEx)
