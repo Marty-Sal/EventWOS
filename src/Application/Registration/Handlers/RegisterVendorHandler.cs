@@ -29,14 +29,16 @@ public sealed class RegisterVendorHandler : IRequestHandler<RegisterVendorComman
     private readonly IFileUploadStorer _fileStorer;
     private readonly IUnitOfWork _uow;
     private readonly IAuditLogger _audit;
+    private readonly INotificationPusher _push;
     private readonly ILogger<RegisterVendorHandler> _logger;
     private static readonly TimeSpan CoolDown = TimeSpan.FromHours(24);
 
     public RegisterVendorHandler(
         IAppDbContext db, IPasswordHasher hasher, IFileUploadStorer fileStorer, IUnitOfWork uow,
-        IAuditLogger audit, ILogger<RegisterVendorHandler> logger)
+        IAuditLogger audit, INotificationPusher push, ILogger<RegisterVendorHandler> logger)
     {
-        _db = db; _hasher = hasher; _fileStorer = fileStorer; _uow = uow; _audit = audit; _logger = logger;
+        _db = db; _hasher = hasher; _fileStorer = fileStorer; _uow = uow; _audit = audit;
+        _push = push; _logger = logger;
     }
 
     public async Task<Result<RegistrationResponse>> Handle(RegisterVendorCommand req, CancellationToken ct)
@@ -131,6 +133,34 @@ public sealed class RegisterVendorHandler : IRequestHandler<RegisterVendorComman
         await _audit.LogAsync(AuditAction.UserCreated, nameof(User), user.Id.ToString(),
             additionalData: $"SelfRegister:Vendor", cancellationToken: ct);
         _logger.LogInformation("Vendor self-registered: {UserId} ({Username})", user.Id, usernameLower);
+
+        // Tell the approval side that something arrived. Nothing on either
+        // self-registration path used to push anything at all, so a new signup
+        // sat in the queue completely silently until an admin happened to open
+        // the page and refresh -- which is why the 2026-08-23 vendor signup
+        // produced no notification. The queue badge is fetched, never pushed.
+        //
+        // Best-effort by design: the registration is already committed at this
+        // point, so a hub hiccup must not turn a successful signup into an
+        // error for the user.
+        try
+        {
+            var pushPayload = new
+            {
+                UserId       = user.Id,
+                PersonName   = user.FullName,
+                Role         = "Vendor",
+                BusinessName = user.BusinessName,
+                SubmittedAt  = DateTime.UtcNow
+            };
+            await _push.PushToRoleAsync("Admin",   "RegistrationSubmitted", pushPayload, ct);
+            await _push.PushToRoleAsync("Manager", "RegistrationSubmitted", pushPayload, ct);
+        }
+        catch (Exception pushEx)
+        {
+            _logger.LogWarning(pushEx,
+                "Vendor registration {UserId} committed, but the RegistrationSubmitted push failed.", user.Id);
+        }
 
         return Result.Success(new RegistrationResponse(
             user.Id, user.Status.ToString(),

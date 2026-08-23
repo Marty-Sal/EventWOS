@@ -33,14 +33,16 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
     private readonly IFileUploadStorer _fileStorer;
     private readonly IUnitOfWork _uow;
     private readonly IAuditLogger _audit;
+    private readonly INotificationPusher _push;
     private readonly ILogger<RegisterCrewHandler> _logger;
     private static readonly TimeSpan CoolDown = TimeSpan.FromHours(24);
 
     public RegisterCrewHandler(
         IAppDbContext db, IPasswordHasher hasher, IFileUploadStorer fileStorer, IUnitOfWork uow,
-        IAuditLogger audit, ILogger<RegisterCrewHandler> logger)
+        IAuditLogger audit, INotificationPusher push, ILogger<RegisterCrewHandler> logger)
     {
-        _db = db; _hasher = hasher; _fileStorer = fileStorer; _uow = uow; _audit = audit; _logger = logger;
+        _db = db; _hasher = hasher; _fileStorer = fileStorer; _uow = uow; _audit = audit;
+        _push = push; _logger = logger;
     }
 
     public async Task<Result<RegistrationResponse>> Handle(RegisterCrewCommand req, CancellationToken ct)
@@ -156,6 +158,30 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
         await _audit.LogAsync(AuditAction.UserCreated, nameof(User), user.Id.ToString(),
             additionalData: $"SelfRegister:Crew Referral:{refCode ?? "(none)"}", cancellationToken: ct);
         _logger.LogInformation("Crew self-registered: {UserId} ({Username}) vendor={Vendor}", user.Id, usernameLower, resolvedVendorId);
+
+        // Same silent-queue problem as the vendor path (see RegisterVendorHandler),
+        // with one addition: crew self-signup always happens under a vendor's
+        // referral code, and it is that VENDOR who approves the crew member
+        // first. So the referring vendor is notified directly as well -- their
+        // dashboard "Profile Approval" card counts exactly these rows.
+        try
+        {
+            var pushPayload = new
+            {
+                UserId       = user.Id,
+                PersonName   = user.FullName,
+                Role         = "Crew",
+                SubmittedAt  = DateTime.UtcNow
+            };
+            await _push.PushToUserAsync(vendor.Id, "RegistrationSubmitted", pushPayload, ct);
+            await _push.PushToRoleAsync("Admin",   "RegistrationSubmitted", pushPayload, ct);
+            await _push.PushToRoleAsync("Manager", "RegistrationSubmitted", pushPayload, ct);
+        }
+        catch (Exception pushEx)
+        {
+            _logger.LogWarning(pushEx,
+                "Crew registration {UserId} committed, but the RegistrationSubmitted push failed.", user.Id);
+        }
 
         return Result.Success(new RegistrationResponse(
             user.Id, user.Status.ToString(),

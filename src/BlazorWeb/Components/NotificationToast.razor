@@ -24,17 +24,56 @@
 @code {
     private readonly List<ToastItem> _toasts = [];
 
+    // Named handlers, not lambdas. Dispose() used to "unsubscribe" by writing
+    // -= p => Push(...), which allocates a BRAND NEW delegate every time -- it
+    // never matches the one that was added, so nothing was ever removed and
+    // every navigation left another live subscription behind, each one firing
+    // its own duplicate toast.
+    private void OnAssignmentInvite(NotificationPayload p)   => Push("📩 New Event Invite", $"{p.VendorName} invited you to {p.EventTitle}", ToastType.Info);
+    private void OnCrewAccepted(NotificationPayload p)       => Push("✅ Crew Accepted", $"{p.CrewName} accepted the assignment.", ToastType.Success);
+    private void OnCrewDeclined(NotificationPayload p)       => Push("❌ Crew Declined", $"{p.CrewName} declined. {p.Reason}", ToastType.Warning);
+    private void OnVendorApproved(NotificationPayload p)     => Push("✅ Vendor Approved You", "Your assignment was approved by the vendor!", ToastType.Success);
+    private void OnVendorRejected(NotificationPayload p)     => Push("❌ Vendor Rejected", $"Reason: {p.Reason ?? "No reason given."}", ToastType.Error);
+    private void OnPendingManagerApproval(NotificationPayload p) => Push("📋 Approval Needed", $"{p.CrewName} is pending your approval.", ToastType.Info);
+    private void OnManagerApproved(NotificationPayload p)    => Push("🎉 Manager Approved!", "Your assignment is fully approved. Get ready!", ToastType.Success);
+    private void OnManagerRejected(NotificationPayload p)    => Push("❌ Manager Rejected", $"Reason: {p.Reason ?? "No reason given."}", ToastType.Error);
+    private void OnSystem(string m)                          => Push("📢 System", m, ToastType.Info);
+
+    // New self-registration in the approval queue -- the notification that was
+    // missing entirely: the server never pushed it and nothing listened.
+    private void OnRegistrationSubmitted(NotificationPayload p) => Push(
+        "🆕 New Registration",
+        $"{p.PersonName ?? "Someone"} registered as {p.Role ?? "a user"}"
+            + (string.IsNullOrWhiteSpace(p.BusinessName) ? "" : $" ({p.BusinessName})")
+            + " and is pending approval.",
+        ToastType.Info);
+
+    // The admin decision on your own registration.
+    private void OnRegistrationDecision(NotificationPayload p) => Push(
+        string.IsNullOrWhiteSpace(p.Reason) ? "✅ Registration Approved" : "❌ Registration Rejected",
+        string.IsNullOrWhiteSpace(p.Reason) ? "Your account is active -- you can sign in now." : $"Reason: {p.Reason}",
+        string.IsNullOrWhiteSpace(p.Reason) ? ToastType.Success : ToastType.Error);
+
+    // Vendor invited to an event / re-invited / invite revoked.
+    private void OnAssignmentChanged(NotificationPayload p) => Push(
+        "🗓️ Assignment Updated",
+        string.IsNullOrWhiteSpace(p.EventTitle) ? "Your event assignments changed." : $"Change on {p.EventTitle}.",
+        ToastType.Info);
+
     protected override void OnInitialized()
     {
-        Hub.AssignmentInviteReceived      += p => Push("📩 New Event Invite", $"{p.VendorName} invited you to {p.EventTitle}", ToastType.Info);
-        Hub.CrewAcceptedReceived          += p => Push("✅ Crew Accepted",     $"{p.CrewName} accepted the assignment.", ToastType.Success);
-        Hub.CrewDeclinedReceived          += p => Push("❌ Crew Declined",     $"{p.CrewName} declined. {p.Reason}", ToastType.Warning);
-        Hub.VendorApprovedReceived        += p => Push("✅ Vendor Approved You","Your assignment was approved by the vendor!", ToastType.Success);
-        Hub.VendorRejectedReceived        += p => Push("❌ Vendor Rejected",   $"Reason: {p.Reason ?? "No reason given."}", ToastType.Error);
-        Hub.PendingManagerApprovalReceived+= p => Push("📋 Approval Needed",  $"{p.CrewName} is pending your approval.", ToastType.Info);
-        Hub.ManagerApprovedReceived       += p => Push("🎉 Manager Approved!", "Your assignment is fully approved. Get ready!", ToastType.Success);
-        Hub.ManagerRejectedReceived       += p => Push("❌ Manager Rejected",  $"Reason: {p.Reason ?? "No reason given."}", ToastType.Error);
-        Hub.SystemNotificationReceived    += m => Push("📢 System", m, ToastType.Info);
+        Hub.AssignmentInviteReceived       += OnAssignmentInvite;
+        Hub.CrewAcceptedReceived           += OnCrewAccepted;
+        Hub.CrewDeclinedReceived           += OnCrewDeclined;
+        Hub.VendorApprovedReceived         += OnVendorApproved;
+        Hub.VendorRejectedReceived         += OnVendorRejected;
+        Hub.PendingManagerApprovalReceived += OnPendingManagerApproval;
+        Hub.ManagerApprovedReceived        += OnManagerApproved;
+        Hub.ManagerRejectedReceived        += OnManagerRejected;
+        Hub.SystemNotificationReceived     += OnSystem;
+        Hub.RegistrationSubmittedReceived  += OnRegistrationSubmitted;
+        Hub.RegistrationDecisionReceived   += OnRegistrationDecision;
+        Hub.AssignmentChangedReceived      += OnAssignmentChanged;
     }
 
     private void Push(string title, string? body, ToastType type)
@@ -51,15 +90,18 @@
 
     public void Dispose()
     {
-        Hub.AssignmentInviteReceived       -= p => Push("", null, ToastType.Info);
-        Hub.CrewAcceptedReceived           -= p => Push("", null, ToastType.Info);
-        Hub.CrewDeclinedReceived           -= p => Push("", null, ToastType.Info);
-        Hub.VendorApprovedReceived         -= p => Push("", null, ToastType.Info);
-        Hub.VendorRejectedReceived         -= p => Push("", null, ToastType.Info);
-        Hub.PendingManagerApprovalReceived -= p => Push("", null, ToastType.Info);
-        Hub.ManagerApprovedReceived        -= p => Push("", null, ToastType.Info);
-        Hub.ManagerRejectedReceived        -= p => Push("", null, ToastType.Info);
-        Hub.SystemNotificationReceived     -= m => Push("", null, ToastType.Info);
+        Hub.AssignmentInviteReceived       -= OnAssignmentInvite;
+        Hub.CrewAcceptedReceived           -= OnCrewAccepted;
+        Hub.CrewDeclinedReceived           -= OnCrewDeclined;
+        Hub.VendorApprovedReceived         -= OnVendorApproved;
+        Hub.VendorRejectedReceived         -= OnVendorRejected;
+        Hub.PendingManagerApprovalReceived -= OnPendingManagerApproval;
+        Hub.ManagerApprovedReceived        -= OnManagerApproved;
+        Hub.ManagerRejectedReceived        -= OnManagerRejected;
+        Hub.SystemNotificationReceived     -= OnSystem;
+        Hub.RegistrationSubmittedReceived  -= OnRegistrationSubmitted;
+        Hub.RegistrationDecisionReceived   -= OnRegistrationDecision;
+        Hub.AssignmentChangedReceived      -= OnAssignmentChanged;
     }
 
     private static string ToastBg(ToastType t) => t switch

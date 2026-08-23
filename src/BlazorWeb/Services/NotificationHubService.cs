@@ -31,6 +31,19 @@ public sealed class NotificationHubService : IAsyncDisposable
     // Payments
     public event Action<NotificationPayload>?  PaymentChangedReceived;        // payment created / approved / paid / rejected / hold
     public event Action<NotificationPayload>?  PayrollChangedReceived;        // batch submitted / approved / disbursed / rejected
+
+    // A new vendor or crew self-registration landed in the approval queue.
+    // Goes to Admins + Managers, and for crew also to the referring vendor,
+    // since the vendor approves their own referred crew first.
+    public event Action<NotificationPayload>?  RegistrationSubmittedReceived; // -> admins + managers (+ referring vendor)
+
+    // The admin decision on someone's own registration.
+    public event Action<NotificationPayload>?  RegistrationDecisionReceived;  // -> the registrant
+
+    // "Your assignments changed, refetch" -- vendor invited to an event,
+    // re-invited, or an invite revoked. These were all pushed by the server
+    // with no client subscription at all, so they were silently dropped.
+    public event Action<NotificationPayload>?  AssignmentChangedReceived;     // -> vendor / crew
     public event Action?                       ConnectionStateChanged;
 
     public HubConnectionState State      => _connection?.State ?? HubConnectionState.Disconnected;
@@ -112,6 +125,30 @@ public sealed class NotificationHubService : IAsyncDisposable
         _connection.On<NotificationPayload>("PayrollUpdated",
             payload => PayrollChangedReceived?.Invoke(payload));
 
+        // --- Registrations -------------------------------------------------
+        // New self-registration hitting the approval queue.
+        _connection.On<NotificationPayload>("RegistrationSubmitted",
+            payload => RegistrationSubmittedReceived?.Invoke(payload));
+
+        // The approve/reject decision. The server has always pushed these two;
+        // nothing subscribed, so the registrant never saw them.
+        foreach (var name in new[] { "RegistrationApproved", "RegistrationRejected" })
+        {
+            _connection.On<NotificationPayload>(name,
+                payload => RegistrationDecisionReceived?.Invoke(payload));
+        }
+
+        // --- Assignment churn ----------------------------------------------
+        // Also pushed by the server and also unsubscribed until now. That is why
+        // a vendor added to a shift got no live notification: the push was
+        // emitted correctly and then dropped on the floor by the client.
+        foreach (var name in new[] { "VendorEventAssigned", "VendorReinvited",
+                                     "VendorInviteRevoked", "CrewInviteRevoked" })
+        {
+            _connection.On<NotificationPayload>(name,
+                payload => AssignmentChangedReceived?.Invoke(payload));
+        }
+
         _connection.Reconnected += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };
         _connection.Closed      += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };
 
@@ -132,6 +169,10 @@ public sealed class NotificationHubService : IAsyncDisposable
 /// <summary>Generic payload for assignment-related push notifications.</summary>
 public sealed record NotificationPayload(
     Guid?   AssignmentId  = null,
+    Guid?   UserId        = null,
+    string? PersonName    = null,
+    string? Role          = null,
+    string? BusinessName  = null,
     string? EventTitle    = null,
     string? VendorName    = null,
     string? CrewName      = null,
