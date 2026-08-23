@@ -2,6 +2,8 @@ using EventWOS.Application.Approval.Commands;
 using EventWOS.Application.Auth.Interfaces;
 using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
@@ -33,6 +35,7 @@ public sealed class ApproveUserHandler : IRequestHandler<ApproveUserCommand, Res
     private readonly IOtpService _smsService;       // reuse — it owns the ISmsProvider
     private readonly ISmsProvider _sms;
     private readonly INotificationPusher _push;
+    private readonly INotificationDispatcher _notifications;
     private readonly ICurrentUser _me;
     private readonly AppUrlOptions _appUrls;
     private readonly ILogger<ApproveUserHandler> _logger;
@@ -41,13 +44,15 @@ public sealed class ApproveUserHandler : IRequestHandler<ApproveUserCommand, Res
         IAppDbContext db, IUnitOfWork uow, IAuditLogger audit,
         IEmailService email, IOtpService smsService, ISmsProvider sms,
         INotificationPusher push,
+        INotificationDispatcher notifications,
         ICurrentUser me,
         IOptions<AppUrlOptions> appUrls,
         ILogger<ApproveUserHandler> logger)
     {
         _db = db; _uow = uow; _audit = audit;
         _email = email; _smsService = smsService; _sms = sms;
-        _push = push; _me = me; _appUrls = appUrls.Value; _logger = logger;
+        _push = push; _notifications = notifications;
+        _me = me; _appUrls = appUrls.Value; _logger = logger;
     }
 
     public async Task<Result<ApproveUserResponse>> Handle(ApproveUserCommand req, CancellationToken ct)
@@ -91,6 +96,34 @@ public sealed class ApproveUserHandler : IRequestHandler<ApproveUserCommand, Res
 
         var oldStatus = user.Status;
         user.Approve(req.ApprovedByUserId);
+
+        // Staged before the save so the approval and its inbox record commit
+        // together. Note the three side-effects further down are all wrapped in
+        // catch/LogWarning: if SendGrid and the SMS provider are both having a bad
+        // day, the account is approved and NOBODY ever told the user. This row is
+        // the durable record that survives that -- it is waiting in their inbox the
+        // first time they sign in.
+        //
+        // InApp ONLY, deliberately. The email below is a real onboarding email:
+        // branded, with the vendor's referral code and a share link for recruiting
+        // their crew. The platform's ACCOUNT_APPROVED email is a one-line courtesy
+        // note. Letting both go out means the welcome email arrives next to a worse
+        // copy of itself. When the platform can carry that richer body per template,
+        // drop SendApprovalEmailAsync and this channel restriction together.
+        _notifications.Enqueue(new NotificationRequest(
+            NotificationTemplateCodes.AccountApproved,
+            RecipientUserId: user.Id,
+            // One approval per user, so the transition alone is a stable key: a
+            // double-clicked Approve cannot welcome the same person twice.
+            BusinessEventKey: $"user:{user.Id}:approved",
+            Data: new Dictionary<string, string?>
+            {
+                [NotificationTokens.RecipientName] = user.FullName,
+                [NotificationTokens.Role]          = user.Role.ToString()
+            },
+            ActorUserId: req.ApprovedByUserId,
+            Channels: new[] { NotificationChannel.InApp }));
+
         await _uow.SaveChangesAsync(ct);
 
         await _audit.LogAsync(AuditAction.UserStatusChanged, nameof(User), user.Id.ToString(),

@@ -46,6 +46,9 @@ public sealed class NotificationTemplateSeeder
             new("Account not approved", "Hi {{RecipientName}}, your EventWOS registration was not approved. Reason: {{Reason}}"),
         [NotificationTemplateCodes.AccountInvited] =
             new("You have been added to EventWOS", "Hi {{RecipientName}}, {{ActorName}} added you to EventWOS as {{Role}}. Set your password here: {{Link}}"),
+        [NotificationTemplateCodes.RegistrationPendingApproval] =
+            new("New registration awaiting your approval",
+                "{{RecipientName}}, {{ActorName}} has registered as {{Role}} and is waiting for your approval. Review: {{Link}}"),
         [NotificationTemplateCodes.ProfileCompleted] =
             new("Profile completed", "{{RecipientName}}, {{ActorName}} has completed their profile."),
         [NotificationTemplateCodes.PasswordResetOtp] =

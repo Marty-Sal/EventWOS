@@ -1,6 +1,9 @@
+using EventWOS.Application.Common;
 using EventWOS.Application.Auth.Interfaces;
 using EventWOS.Application.Files;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Application.Registration.Commands;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
@@ -9,6 +12,7 @@ using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EventWOS.Application.Registration.Handlers;
 
@@ -34,15 +38,20 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
     private readonly IUnitOfWork _uow;
     private readonly IAuditLogger _audit;
     private readonly INotificationPusher _push;
+    private readonly INotificationDispatcher _notifications;
+    private readonly AppUrlOptions _appUrls;
     private readonly ILogger<RegisterCrewHandler> _logger;
     private static readonly TimeSpan CoolDown = TimeSpan.FromHours(24);
 
     public RegisterCrewHandler(
         IAppDbContext db, IPasswordHasher hasher, IFileUploadStorer fileStorer, IUnitOfWork uow,
-        IAuditLogger audit, INotificationPusher push, ILogger<RegisterCrewHandler> logger)
+        IAuditLogger audit, INotificationPusher push,
+        INotificationDispatcher notifications,
+        IOptions<AppUrlOptions> appUrls,
+        ILogger<RegisterCrewHandler> logger)
     {
         _db = db; _hasher = hasher; _fileStorer = fileStorer; _uow = uow; _audit = audit;
-        _push = push; _logger = logger;
+        _push = push; _notifications = notifications; _appUrls = appUrls.Value; _logger = logger;
     }
 
     public async Task<Result<RegistrationResponse>> Handle(RegisterCrewCommand req, CancellationToken ct)
@@ -101,7 +110,10 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
             .Where(u => u.Role == UserRole.Vendor
                      && u.Status == UserStatus.Active
                      && u.ReferralCode == refCode)
-            .Select(u => new { u.Id })
+            // FullName comes along for the notification greeting: without it the
+            // rendered line starts with an empty token, which reads as a broken
+            // message rather than a missing nicety.
+            .Select(u => new { u.Id, u.FullName })
             .FirstOrDefaultAsync(ct);
         if (vendor is null)
             return Result.Failure<RegistrationResponse>(Error.Custom(
@@ -152,6 +164,34 @@ public sealed class RegisterCrewHandler : IRequestHandler<RegisterCrewCommand, R
 
         if (currentTerms is not null)
             _db.TermsAcceptances.Add(new TermsAcceptance(user.Id, TermsAudience.Crew, currentTerms.Version));
+
+        // Tell the person who has to APPROVE this, through the platform, before the
+        // save. The toast below only ever reached a vendor who happened to be logged
+        // in at that exact second -- which is why crew registrations sat in the queue
+        // for days while the applicant assumed they had been ignored.
+        //
+        // Only the referring VENDOR is notified, not admins: ApproveUserHandler
+        // refuses to let a manager approve a crew account ("Crew registrations are
+        // approved by the referring vendor"), so mailing admins about work they are
+        // not allowed to do is noise. Their toast and queue badge still fire below.
+        _notifications.Enqueue(new NotificationRequest(
+            NotificationTemplateCodes.RegistrationPendingApproval,
+            RecipientUserId: vendor.Id,
+            // Keyed on the applicant: a resubmitted registration for the same user
+            // must not nag the vendor a second time.
+            BusinessEventKey: $"registration:{user.Id}:pending",
+            Data: new Dictionary<string, string?>
+            {
+                [NotificationTokens.RecipientName] = vendor.FullName,
+                [NotificationTokens.ActorName] = user.FullName,
+                [NotificationTokens.Role]      = "Crew",
+                [NotificationTokens.Link]      = _appUrls.BaseUrl.TrimEnd('/') + "/approvals/people"
+            },
+            // The applicant is the actor. Safe to reference even though the row is
+            // inserted in this same SaveChanges: notifications.actor_user_id is a
+            // plain UUID with no FK constraint, so there is no insert-order trap
+            // here -- unlike the terms_acceptances case.
+            ActorUserId: user.Id));
 
         await _uow.SaveChangesAsync(ct);
 

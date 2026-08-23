@@ -2,6 +2,8 @@ using EventWOS.Application.Approval.Commands;
 using EventWOS.Application.Auth.Interfaces;
 using EventWOS.Application.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
@@ -25,6 +27,7 @@ public sealed class RejectUserHandler : IRequestHandler<RejectUserCommand, Resul
     private readonly IEmailService _email;
     private readonly ISmsProvider _sms;
     private readonly INotificationPusher _push;
+    private readonly INotificationDispatcher _notifications;
     private readonly ICurrentUser _me;
     private readonly ILogger<RejectUserHandler> _logger;
     private static readonly TimeSpan CoolDown = TimeSpan.FromHours(24);
@@ -32,11 +35,13 @@ public sealed class RejectUserHandler : IRequestHandler<RejectUserCommand, Resul
     public RejectUserHandler(
         IAppDbContext db, IUnitOfWork uow, IAuditLogger audit,
         IEmailService email, ISmsProvider sms, INotificationPusher push,
+        INotificationDispatcher notifications,
         ICurrentUser me,
         ILogger<RejectUserHandler> logger)
     {
         _db = db; _uow = uow; _audit = audit;
-        _email = email; _sms = sms; _push = push; _me = me; _logger = logger;
+        _email = email; _sms = sms; _push = push;
+        _notifications = notifications; _me = me; _logger = logger;
     }
 
     public async Task<Result> Handle(RejectUserCommand req, CancellationToken ct)
@@ -76,9 +81,36 @@ public sealed class RejectUserHandler : IRequestHandler<RejectUserCommand, Resul
         }
 
         user.Reject(req.RejectedByUserId, req.Reason);
+
+        // Rejection is the message most worth persisting: the applicant is locked
+        // out for 24 hours and, without a durable record, has no way to find out
+        // WHY. A rejection they never received looks identical to a system that
+        // silently ignored them, and they re-apply with the same problem.
+        //
+        // Reject() has already stamped RejectedAt, so the retry time is known here
+        // and can be stated rather than implied. InApp only, for the same reason as
+        // the approval path: the bespoke rejection email says more.
+        var retryAt = (user.RejectedAt ?? DateTime.UtcNow) + CoolDown;
+
+        _notifications.Enqueue(new NotificationRequest(
+            NotificationTemplateCodes.AccountRejected,
+            RecipientUserId: user.Id,
+            BusinessEventKey: $"user:{user.Id}:rejected",
+            Data: new Dictionary<string, string?>
+            {
+                [NotificationTokens.RecipientName] = user.FullName,
+                // A blank reason reaches the recipient as a dangling "Reason:" and
+                // WhatsApp rejects empty template parameters outright.
+                [NotificationTokens.Reason] = string.IsNullOrWhiteSpace(req.Reason)
+                    ? $"No reason given. You can re-apply after {retryAt:dd MMM, HH:mm} UTC."
+                    : $"{req.Reason} You can re-apply after {retryAt:dd MMM, HH:mm} UTC."
+            },
+            ActorUserId: req.RejectedByUserId,
+            Channels: new[] { NotificationChannel.InApp }));
+
         await _uow.SaveChangesAsync(ct);
 
-        var canRetryAt = (user.RejectedAt ?? DateTime.UtcNow) + CoolDown;
+        var canRetryAt = retryAt;
 
         await _audit.LogAsync(AuditAction.UserStatusChanged, nameof(User), user.Id.ToString(),
             newValues: new { Status = user.Status.ToString(), Reason = req.Reason },

@@ -273,7 +273,7 @@ public class CallSiteWiringTests
     {
         var crewId = Guid.NewGuid();
 
-        db.Users.Add(new User("Ravi Kumar", "9876543210", UserRole.Crew) { });
+        db.Users.Add(new User("9876543210", "Ravi Kumar", UserRole.Crew));
         db.SaveChanges();
 
         // The seeded user's real id is what the handler will look up for the name.

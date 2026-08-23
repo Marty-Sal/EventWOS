@@ -17,6 +17,14 @@ public static class NotificationTemplateCodes
     public const string ProfileCompleted      = "PROFILE_COMPLETED";
     public const string PasswordResetOtp      = "PASSWORD_RESET_OTP";
 
+    /// <summary>
+    /// Sent to whoever has to APPROVE a new registration, not to the applicant.
+    /// Its absence is why registrations sat in the queue for days: the only signal
+    /// was a toast, so an approver who was not logged in at that exact second
+    /// learned nothing, and the applicant waited on a decision nobody knew to make.
+    /// </summary>
+    public const string RegistrationPendingApproval = "REGISTRATION_PENDING_APPROVAL";
+
     // Vendor lifecycle on an event
     public const string VendorEventInvited    = "VENDOR_EVENT_INVITED";
     public const string VendorInviteRevoked   = "VENDOR_INVITE_REVOKED";

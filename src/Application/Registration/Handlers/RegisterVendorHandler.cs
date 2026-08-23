@@ -1,6 +1,9 @@
 using EventWOS.Application.Auth.Interfaces;
+using EventWOS.Application.Common;
 using EventWOS.Application.Files;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Application.Registration.Commands;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
@@ -9,6 +12,7 @@ using EventWOS.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EventWOS.Application.Registration.Handlers;
 
@@ -30,15 +34,20 @@ public sealed class RegisterVendorHandler : IRequestHandler<RegisterVendorComman
     private readonly IUnitOfWork _uow;
     private readonly IAuditLogger _audit;
     private readonly INotificationPusher _push;
+    private readonly INotificationDispatcher _notifications;
+    private readonly AppUrlOptions _appUrls;
     private readonly ILogger<RegisterVendorHandler> _logger;
     private static readonly TimeSpan CoolDown = TimeSpan.FromHours(24);
 
     public RegisterVendorHandler(
         IAppDbContext db, IPasswordHasher hasher, IFileUploadStorer fileStorer, IUnitOfWork uow,
-        IAuditLogger audit, INotificationPusher push, ILogger<RegisterVendorHandler> logger)
+        IAuditLogger audit, INotificationPusher push,
+        INotificationDispatcher notifications,
+        IOptions<AppUrlOptions> appUrls,
+        ILogger<RegisterVendorHandler> logger)
     {
         _db = db; _hasher = hasher; _fileStorer = fileStorer; _uow = uow; _audit = audit;
-        _push = push; _logger = logger;
+        _push = push; _notifications = notifications; _appUrls = appUrls.Value; _logger = logger;
     }
 
     public async Task<Result<RegistrationResponse>> Handle(RegisterVendorCommand req, CancellationToken ct)
@@ -127,6 +136,39 @@ public sealed class RegisterVendorHandler : IRequestHandler<RegisterVendorComman
         // both land in the same transaction.
         if (currentTerms is not null)
             _db.TermsAcceptances.Add(new TermsAcceptance(user.Id, TermsAudience.Vendor, currentTerms.Version));
+
+        // A vendor account is approved by an Admin or Manager, so notify exactly
+        // those people -- through the platform, so it survives nobody being logged
+        // in. Loaded as a list rather than a fan-out because NotificationFanOutRequest
+        // is event-scoped and a registration has no event; there are also only ever a
+        // handful of admins, so the chunked list overload is the cheaper honest fit.
+        var approvers = await _db.Users
+            .AsNoTracking()
+            .Where(u => (u.Role == UserRole.Admin || u.Role == UserRole.Manager)
+                     && u.Status == UserStatus.Active
+                     && !u.IsDeleted)
+            .Select(u => new { u.Id, u.FullName })
+            .ToListAsync(ct);
+
+        var reviewLink = _appUrls.BaseUrl.TrimEnd('/') + "/approvals/people";
+
+        _notifications.Enqueue(approvers.Select(a => new NotificationRequest(
+            NotificationTemplateCodes.RegistrationPendingApproval,
+            RecipientUserId: a.Id,
+            // The recipient is part of the key: one row per approver, each
+            // independently idempotent, so a retried signup cannot double-notify
+            // any of them.
+            BusinessEventKey: $"registration:{user.Id}:pending:{a.Id}",
+            Data: new Dictionary<string, string?>
+            {
+                [NotificationTokens.RecipientName] = a.FullName,
+                [NotificationTokens.ActorName]     = string.IsNullOrWhiteSpace(user.BusinessName)
+                    ? user.FullName
+                    : $"{user.FullName} ({user.BusinessName})",
+                [NotificationTokens.Role]          = "Vendor",
+                [NotificationTokens.Link]          = reviewLink
+            },
+            ActorUserId: user.Id)));
 
         await _uow.SaveChangesAsync(ct);
 
