@@ -1,4 +1,6 @@
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
+using EventWOS.Application.Notifications.Contracts;
 using EventWOS.Application.Events.DTOs;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
@@ -23,11 +25,15 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
     private readonly IAppDbContext       _db;
     private readonly IUnitOfWork         _uow;
     private readonly INotificationPusher _push;
-    public AssignCrewHandler(IAppDbContext db, IUnitOfWork uow, INotificationPusher push)
+    private readonly INotificationDispatcher _notifications;
+
+    public AssignCrewHandler(
+        IAppDbContext db, IUnitOfWork uow, INotificationPusher push, INotificationDispatcher notifications)
     {
-        _db   = db;
-        _uow  = uow;
-        _push = push;
+        _db            = db;
+        _uow           = uow;
+        _push          = push;
+        _notifications = notifications;
     }
 
     public async Task<Result<EventAssignmentDto>> Handle(AssignCrewCommand req, CancellationToken ct)
@@ -174,9 +180,55 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             assignment.AttachToShift(_shiftId.Value);
             _db.EventAssignments.Add(assignment);
         }
+        // Staged BEFORE the save so the assignment and its notifications commit in
+        // one transaction: if this insert rolls back, nobody is told about an
+        // assignment that does not exist, and if the provider is down the
+        // assignment still commits with the message waiting in the outbox.
+        if (crew is not null)
+        {
+            _notifications.Enqueue(new NotificationRequest(
+                NotificationTemplateCodes.CrewAssignment,
+                RecipientUserId: crew.Id,
+                // Keyed on the assignment, so a double-clicked Assign button or a
+                // retried request cannot message the same person twice.
+                BusinessEventKey: $"assignment:{assignment.Id}:invited",
+                Data: new Dictionary<string, string?>
+                {
+                    [NotificationTokens.RecipientName] = crew.FullName,
+                    [NotificationTokens.EventName]     = ev.Title,
+                    [NotificationTokens.EventDate]     = ev.StartAt.ToString("dd MMM yyyy"),
+                    [NotificationTokens.EventTime]     = ev.StartAt.ToString("HH:mm"),
+                    [NotificationTokens.VendorName]    = vendor?.FullName ?? "Manager (direct)"
+                },
+                EventId: ev.Id,
+                ActorUserId: req.AssignedByUserId));
+        }
+        else if (vendor is not null)
+        {
+            _notifications.Enqueue(new NotificationRequest(
+                NotificationTemplateCodes.VendorEventInvited,
+                RecipientUserId: vendor.Id,
+                BusinessEventKey: $"assignment:{assignment.Id}:vendor-invited",
+                Data: new Dictionary<string, string?>
+                {
+                    [NotificationTokens.RecipientName] = vendor.FullName,
+                    [NotificationTokens.EventName]     = ev.Title,
+                    [NotificationTokens.EventDate]     = ev.StartAt.ToString("dd MMM yyyy"),
+                    [NotificationTokens.EventTime]     = ev.StartAt.ToString("HH:mm")
+                },
+                EventId: ev.Id,
+                ActorUserId: req.AssignedByUserId));
+        }
+
         await _uow.SaveChangesAsync(ct);
 
-        // Push notifications
+        // The legacy SignalR push stays for now, and deliberately so: the Blazor
+        // client subscribes to these specific event names ("AssignmentInvite",
+        // "VendorEventAssigned") to refresh its lists, while the notification
+        // platform's in-app sender emits "NotificationReceived", which nothing is
+        // listening to yet. Removing this before the client is wired up would
+        // trade a working live UI for a silent one. It goes once the client
+        // consumes the platform feed.
         if (crew is not null)
         {
             // Crew gets invited

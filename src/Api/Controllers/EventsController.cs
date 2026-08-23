@@ -163,7 +163,10 @@ public sealed class EventsController : ControllerBase
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeEventStatusRequest req, CancellationToken ct)
     {
-        var result = await _mediator.Send(new ChangeEventStatusCommand(id, req.Action, req.Reason), ct);
+        // The actor is passed so a cancellation does not notify the very admin who
+        // cancelled it.
+        var result = await _mediator.Send(
+            new ChangeEventStatusCommand(id, req.Action, req.Reason, _currentUser.UserId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok()) : BadRequest(ApiResponse.Fail(result.Error.Message));
     }
 
