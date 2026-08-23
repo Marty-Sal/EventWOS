@@ -1,0 +1,217 @@
+@inject IFilesApiService FilesApi
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@*
+    Shared "look at this document" viewer.
+
+    Reviewers approve people based on what a photo or an ID actually shows, and a
+    48px row thumbnail is not enough to make that call. This opens the file at a
+    readable size instead: images render inline, PDFs render in the browser's own
+    viewer, and anything else falls back to a download prompt rather than an
+    empty frame.
+
+    Bytes arrive through FilesApiService (the API is JWT-authenticated, so an
+    <img src> or <iframe src> pointed straight at the endpoint would 401) and are
+    handed to JS as a blob URL, which is the one form Chrome's PDF viewer accepts
+    inside a frame.
+
+    Layered above the details modals that open it.
+*@
+
+@if (_open)
+{
+    <div class="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6"
+         role="dialog" aria-modal="true" aria-label="File preview">
+
+        <div class="absolute inset-0 bg-black/70" @onclick="CloseAsync"></div>
+
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+
+            <div class="flex items-start gap-3 px-4 sm:px-5 py-3 border-b border-gray-200 flex-shrink-0">
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-semibold text-gray-900 truncate">@_title</div>
+                    <div class="text-[11px] text-gray-500 truncate">
+                        @(_file is null ? "" : $"{_file.OriginalFileName} - {HumanSize(_file.FileSizeBytes)}")
+                    </div>
+                </div>
+
+                @if (_file is not null)
+                {
+                    <button type="button" @onclick="DownloadAsync" disabled="@_downloading"
+                            class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline flex-shrink-0 disabled:opacity-50 mt-0.5">
+                        @(_downloading ? "..." : "Download")
+                    </button>
+                }
+
+                <button type="button" @onclick="CloseAsync" aria-label="Close preview"
+                        class="text-gray-400 hover:text-gray-700 text-xl leading-none flex-shrink-0 -mt-0.5">&times;</button>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-auto bg-gray-100 flex items-center justify-center">
+
+                @if (_loading)
+                {
+                    <div class="py-20 text-center">
+                        <div class="w-8 h-8 mx-auto border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p class="text-xs text-gray-500 mt-3">Loading preview...</p>
+                    </div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="py-16 px-6 text-center max-w-sm">
+                        <p class="text-sm font-medium text-gray-800">Preview unavailable</p>
+                        <p class="text-xs text-red-600 mt-1">@_error</p>
+                    </div>
+                }
+                else if (_blobUrl is not null && _kind == PreviewKind.Image)
+                {
+                    <img src="@_blobUrl" alt="@_file?.OriginalFileName"
+                         class="max-w-full max-h-[78vh] object-contain mx-auto" />
+                }
+                else if (_blobUrl is not null && _kind == PreviewKind.Pdf)
+                {
+                    <iframe src="@_blobUrl" title="@_file?.OriginalFileName"
+                            class="w-full h-[78vh] bg-white border-0"></iframe>
+                }
+                else
+                {
+                    <div class="py-16 px-6 text-center max-w-sm">
+                        <p class="text-sm font-medium text-gray-800">This file type can't be shown here</p>
+                        <p class="text-xs text-gray-500 mt-1">Download it to open in an app that supports it.</p>
+                        <button type="button" @onclick="DownloadAsync" disabled="@_downloading"
+                                class="mt-4 px-4 py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                            @(_downloading ? "Preparing..." : "Download file")
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private enum PreviewKind { Image, Pdf, Unsupported }
+
+    private bool _open;
+    private bool _loading;
+    private bool _downloading;
+    private string? _error;
+    private string? _blobUrl;
+    private string _title = "Preview";
+    private PreviewKind _kind;
+    private FileDocumentDto? _file;
+
+    /// <summary>
+    /// Opens the viewer for a file and streams its bytes. Called from a parent
+    /// via @ref. <paramref name="title"/> is the human label for the document
+    /// slot (e.g. "Profile photo"), since a raw filename rarely tells the
+    /// reviewer what they are looking at.
+    /// </summary>
+    public async Task ShowAsync(FileDocumentDto file, string? title = null)
+    {
+        await ReleaseBlobAsync();
+
+        _file    = file;
+        _title   = string.IsNullOrWhiteSpace(title) ? file.OriginalFileName : title!;
+        _kind    = Classify(file.ContentType);
+        _error   = null;
+        _open    = true;
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var (ok, content, respContentType, error) = await FilesApi.DownloadAsync(file.Id);
+            if (!ok || content is null)
+            {
+                _error = error ?? "The file could not be loaded.";
+                return;
+            }
+
+            // Trust the server's content type when it sends one: it describes
+            // what the bytes actually are, whereas the metadata row can disagree.
+            var mime = respContentType ?? file.ContentType;
+            _kind = Classify(mime);
+
+            if (_kind != PreviewKind.Unsupported)
+            {
+                _blobUrl = await JS.InvokeAsync<string>("createBlobUrlFromBytes", mime,
+                                                        Convert.ToBase64String(content));
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>True for files this viewer can render, so callers only offer Preview when it will work.</summary>
+    public static bool CanPreview(string? contentType) => Classify(contentType) != PreviewKind.Unsupported;
+
+    private static PreviewKind Classify(string? contentType)
+    {
+        var ct = contentType?.ToLowerInvariant() ?? "";
+        if (ct.StartsWith("image/")) return PreviewKind.Image;
+        if (ct == "application/pdf" || ct == "application/x-pdf") return PreviewKind.Pdf;
+        return PreviewKind.Unsupported;
+    }
+
+    private async Task DownloadAsync()
+    {
+        if (_file is null) return;
+        _downloading = true;
+        try
+        {
+            var (ok, content, contentType, error) = await FilesApi.DownloadAsync(_file.Id);
+            if (ok && content is not null)
+            {
+                await JS.InvokeVoidAsync("downloadFileFromBytes", _file.OriginalFileName,
+                    contentType ?? _file.ContentType, Convert.ToBase64String(content));
+            }
+            else
+            {
+                _error = error ?? "Download failed.";
+            }
+        }
+        finally
+        {
+            _downloading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        _open  = false;
+        _file  = null;
+        _error = null;
+        await ReleaseBlobAsync();
+        StateHasChanged();
+    }
+
+    // Blob URLs pin their bytes in memory until revoked, and these are ID scans
+    // and personal photos -- release them when the viewer closes instead of
+    // leaving them reachable for the rest of the session.
+    private async Task ReleaseBlobAsync()
+    {
+        if (_blobUrl is null) return;
+        var url = _blobUrl;
+        _blobUrl = null;
+        try { await JS.InvokeVoidAsync("revokeBlobUrl", url); }
+        catch (JSDisconnectedException) { /* page is going away; nothing to release */ }
+        catch (ObjectDisposedException) { }
+    }
+
+    public async ValueTask DisposeAsync() => await ReleaseBlobAsync();
+
+    private static string HumanSize(long bytes)
+        => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.#} MB"
+         : bytes >= 1024        ? $"{bytes / 1024d:0.#} KB"
+         : $"{bytes} B";
+}

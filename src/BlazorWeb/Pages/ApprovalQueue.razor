@@ -260,28 +260,19 @@
                         @foreach (var f in _detailsRow.Files)
                         {
                             <div class="flex items-center gap-3 bg-gray-50 rounded-xl p-2.5">
-                                @if (_previewDataUrls.TryGetValue(f.Id, out var dataUrl))
-                                {
-                                    <img src="@dataUrl" class="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-gray-200" />
-                                }
-                                else
-                                {
-                                    <div class="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-lg flex-shrink-0">📄</div>
-                                }
+                                <div class="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-lg flex-shrink-0">📄</div>
                                 <div class="flex-1 min-w-0">
                                     <div class="text-xs font-medium text-gray-800">@DocumentTypes.Label(f.DocumentType)</div>
                                     <div class="text-[11px] text-gray-500 truncate">@f.OriginalFileName · @HumanSize(f.FileSizeBytes)</div>
-                                    @if (_previewErrors.TryGetValue(f.Id, out var rowErr))
-                                    {
-                                        <div class="text-[11px] text-red-600 truncate">@rowErr</div>
-                                    }
                                 </div>
-                                @if (f.ContentType.StartsWith("image/") && !_previewDataUrls.ContainsKey(f.Id) && !_previewErrors.ContainsKey(f.Id))
+                                @* Images and PDFs both open in the viewer: an ID proof is
+                                   usually a PDF, and an approver should not have to
+                                   download a file to find out what it shows. *@
+                                @if (FilePreviewModal.CanPreview(f.ContentType))
                                 {
-                                    <button type="button" @onclick="() => LoadPreviewAsync(f.Id, f.ContentType)"
-                                            disabled="@_previewLoadingIds.Contains(f.Id)"
-                                            class="text-xs text-indigo-600 hover:underline flex-shrink-0 disabled:opacity-50">
-                                        @(_previewLoadingIds.Contains(f.Id) ? "Loading…" : "Preview")
+                                    <button type="button" @onclick="() => PreviewFileAsync(f)"
+                                            class="text-xs text-indigo-600 hover:underline flex-shrink-0">
+                                        Preview
                                     </button>
                                 }
                                 <button type="button" @onclick="() => DownloadFileAsync(f)"
@@ -366,6 +357,9 @@
     </div>
 }
 
+@* Mounted last so it layers above the details modal that opens it. *@
+<FilePreviewModal @ref="_filePreview" />
+
 @code {
     private enum Tab { Vendors, Crew }
     private Tab _tab = Tab.Vendors;
@@ -402,8 +396,6 @@
 
     // ── View details modal state ──────────────────────────────────────
     private PendingRegistrationDto? _detailsRow;
-    private readonly Dictionary<Guid, string> _previewDataUrls = new();
-    private readonly HashSet<Guid> _previewLoadingIds = new();
     private readonly HashSet<Guid> _downloadingIds = new();
 
     // ── Notify modal state ────────────────────────────────────────────
@@ -586,45 +578,14 @@
         await LoadAsync();
     }
 
-    private void OpenDetails(PendingRegistrationDto r)
-    {
-        _detailsRow = r;
-        _previewDataUrls.Clear();
-    }
+    private void OpenDetails(PendingRegistrationDto r) => _detailsRow = r;
 
     private void CloseDetails() => _detailsRow = null;
 
-    // Preview failures are shown per row (and toasted) instead of swallowed:
-    // the common cause is the stored bytes being gone, which the approver has
-    // to act on by asking for a re-upload -- not something to hide behind a
-    // button that appears to do nothing.
-    private readonly Dictionary<Guid, string> _previewErrors = new();
+    private FilePreviewModal? _filePreview;
 
-    private async Task LoadPreviewAsync(Guid fileId, string contentType)
-    {
-        _previewLoadingIds.Add(fileId);
-        _previewErrors.Remove(fileId);
-        StateHasChanged();
-        try
-        {
-            var (ok, content, respContentType, error) = await FilesApi.DownloadAsync(fileId);
-            if (ok && content is not null)
-            {
-                var mime = respContentType ?? contentType;
-                _previewDataUrls[fileId] = $"data:{mime};base64,{Convert.ToBase64String(content)}";
-            }
-            else
-            {
-                _previewErrors[fileId] = error ?? "Preview failed.";
-                Toast(error ?? "Preview failed.", isError: true);
-            }
-        }
-        finally
-        {
-            _previewLoadingIds.Remove(fileId);
-            StateHasChanged();
-        }
-    }
+    private Task PreviewFileAsync(FileDocumentDto f)
+        => _filePreview?.ShowAsync(f, DocumentTypes.Label(f.DocumentType)) ?? Task.CompletedTask;
 
     private async Task DownloadFileAsync(EventWOS.BlazorWeb.Services.FileDocumentDto f)
     {

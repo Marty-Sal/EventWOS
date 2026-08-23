@@ -285,6 +285,23 @@
             }
             setTimeout(() => URL.revokeObjectURL(url), 60000);
         };
+
+        // Turns bytes into a blob: URL that a preview modal can point an <img>
+        // or a PDF <iframe> at. A data: URL cannot be used for the PDF case --
+        // Chrome refuses to run its PDF viewer on data: URLs inside a frame, so
+        // the panel comes up blank. Blob URLs work for both, so one helper
+        // serves images and documents alike. Caller must revoke it on close
+        // (see revokeBlobUrl) or the bytes stay pinned in memory.
+        window.createBlobUrlFromBytes = function (mime, b64) {
+            const bytes = atob(b64);
+            const arr   = new Uint8Array(bytes.length);
+            for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+            return URL.createObjectURL(new Blob([arr], { type: mime }));
+        };
+
+        window.revokeBlobUrl = function (url) {
+            if (url) URL.revokeObjectURL(url);
+        };
     </script>
 
     <style>
