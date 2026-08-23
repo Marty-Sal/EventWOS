@@ -431,6 +431,37 @@ try
         Log.Information("WhatsApp notifications: no provider configured (WhatsApp__Provider=None) -- the channel is skipped.");
     }
 
+    // ---- Web Push (VAPID) -------------------------------------------------
+    // The public key is not a secret (the browser needs it to subscribe); the
+    // private key is, and it stays server-side signing the VAPID JWT. Both are
+    // read from configuration, so Railway supplies WebPush__PublicKey /
+    // WebPush__PrivateKey / WebPush__Subject.
+    builder.Services.Configure<EventWOS.Infrastructure.Notifications.Channels.WebPushOptions>(
+        builder.Configuration.GetSection(EventWOS.Infrastructure.Notifications.Channels.WebPushOptions.SectionName));
+
+    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.IPushRegistrationStore,
+                               EventWOS.Persistence.Notifications.PushRegistrationStore>();
+
+    // The provider is registered whether or not keys are present: it reports
+    // IsConfigured=false without them, and the resolver skips the channel rather
+    // than queueing push that can only fail. That keeps a missing key from
+    // changing the shape of the container between environments.
+    builder.Services.AddHttpClient<EventWOS.Application.Notifications.Abstractions.IPushNotificationProvider,
+                                   EventWOS.Infrastructure.Notifications.Channels.VapidWebPushProvider>(client =>
+    {
+        // Push services are normally fast; a bounded timeout turns a slow one
+        // into a retryable transient failure instead of a stuck worker slot.
+        client.Timeout = TimeSpan.FromSeconds(20);
+    });
+
+    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
+                               EventWOS.Application.Notifications.Channels.PushNotificationSender>();
+
+    if (!string.IsNullOrWhiteSpace(builder.Configuration["WebPush:PrivateKey"]))
+        Log.Information("Push notifications: VapidWebPushProvider registered (RFC 8291 aes128gcm).");
+    else
+        Log.Information("Push notifications: WebPush__PrivateKey not set -- the push channel is skipped.");
+
     // Secrets for verifying inbound provider callbacks. The webhook endpoints are
     // anonymous by necessity and mutate delivery state, so the signature is the
     // only authentication they have.
