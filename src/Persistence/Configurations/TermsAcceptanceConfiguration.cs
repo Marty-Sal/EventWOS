@@ -28,6 +28,30 @@ public sealed class TermsAcceptanceConfiguration : IEntityTypeConfiguration<Term
         // Fast "has user X accepted current version of audience Y" lookups.
         builder.HasIndex(t => new { t.UserId, t.Audience, t.Version }).HasDatabaseName("ix_terms_acceptances_user_audience_version");
 
+        // Relationship to users. The database has a real FK
+        // (fk_terms_acceptances_user_id -> users.id, added by migration
+        // 20260821214500_AddTermsAndConditions with ON DELETE CASCADE), but
+        // until this mapping existed the EF model had no dependency edge
+        // between TermsAcceptance and User -- UserId was just a loose Guid.
+        //
+        // That matters because self-registration (RegisterVendorHandler /
+        // RegisterCrewHandler) adds the new User AND its acceptance row in a
+        // single SaveChanges. With no modelled dependency, EF is free to order
+        // the INSERTs however it likes, and it put terms_acceptances first ->
+        // 23503 foreign key violation, so nobody could register. Being inside
+        // one transaction does not help: FK checks here are immediate, not
+        // deferred. The ordering has to be modelled, not assumed.
+        //
+        // No navigation property is exposed -- this entity stays a flat
+        // append-only audit record; the mapping exists purely so EF sorts the
+        // inserts correctly. Same shape as the existing self-reference in
+        // UserConfiguration (users.invited_by_user_id).
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(t => t.UserId)
+            .HasConstraintName("fk_terms_acceptances_user_id")
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasQueryFilter(t => !t.IsDeleted);
     }
 }
