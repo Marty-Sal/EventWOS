@@ -108,9 +108,16 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
         // Phase D step 19: per-shift duplicate check. A crew member is
         // allowed to work multiple shifts of the same event, but cannot
         // hold two active rows on the same shift. Mirrors the index
-        // ix_event_assignments_event_crew_shift_unique. Placeholder
-        // requests (CrewId == null) skip this branch — multiple
-        // placeholders per shift are valid (each anchors a slot).
+        // ix_event_assignments_event_crew_shift_unique.
+        //
+        // Vendor-only requests used to skip this check on the grounds that "multiple
+        // placeholders per shift are valid (each anchors a slot)" -- true only while
+        // every placeholder WAS a seat. Seats now come from the vendor's quota, so a
+        // second anchor buys nothing and the capacity guard no longer refuses it:
+        // pressing Assign again on a vendor already working the shift inserted a
+        // fresh Invited row, and their My Events flipped back to "AWAITING RESPONSE
+        // -- Accept the shift to start adding your crew" on a shift they had already
+        // accepted and staffed. One vendor holds ONE invitation per shift.
         // BUGFIX: the old check only looked for ACTIVE rows and then always
         // INSERTed, so re-assigning a crew member who holds a terminal row
         // (Declined / RejectedByVendor / RejectedByManager / NoShow) on this
@@ -121,6 +128,7 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
         // itself and resurrect terminal ones in place, matching
         // VendorAssignCrewHandler.
         EventAssignment? existingRow = null;
+        EventAssignment? existingAnchor = null;
         if (req.CrewId.HasValue)
         {
             existingRow = await _db.EventAssignments.FirstOrDefaultAsync(
@@ -139,6 +147,32 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
                     return Result.Failure<EventAssignmentDto>(new Error(
                         "Assignment.Duplicate",
                         "Crew is already assigned to this shift."));
+            }
+        }
+        else if (req.VendorId.HasValue)
+        {
+            existingAnchor = await _db.EventAssignments.FirstOrDefaultAsync(
+                a => a.EventId  == req.EventId
+                  && a.CrewId   == null
+                  && a.VendorId == req.VendorId
+                  && a.ShiftId  == _shiftId.Value, ct);
+
+            // RejectedByVendor is the one state worth re-inviting from, and the
+            // domain already has the transition for it (ManagerReinviteVendor).
+            // Anything else -- Invited, accepted, approved, working -- means the
+            // vendor is already on this shift and re-inviting would only reset
+            // their own view of it.
+            if (existingAnchor is not null
+                && existingAnchor.Status != AssignmentStatus.RejectedByVendor)
+            {
+                var stateNote = existingAnchor.Status == AssignmentStatus.Invited
+                    ? "they have already been invited and have not responded yet"
+                    : $"their invitation is already {existingAnchor.Status}";
+
+                return Result.Failure<EventAssignmentDto>(new Error(
+                    "Assignment.VendorAlreadyOnShift",
+                    $"{vendor!.FullName} is already on this shift — {stateNote}. " +
+                    "To give them more seats, raise their quota in Vendor Quotas."));
             }
         }
 
@@ -187,7 +221,25 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
                 "Revoke a placeholder or increase shift capacity first."));
 
         EventAssignment assignment;
-        if (existingRow is not null)
+        if (existingAnchor is not null)
+        {
+            // Vendor previously rejected this shift and the manager is asking again:
+            // resurrect the same anchor (clears the rejection audit) rather than
+            // leaving a rejected row next to a fresh invitation.
+            try
+            {
+                existingAnchor.ManagerReinviteVendor();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Result.Failure<EventAssignmentDto>(new Error("Assignment.CannotReinvite", ex.Message));
+            }
+
+            existingAnchor.UpdatedAt = DateTime.UtcNow;
+            existingAnchor.UpdatedBy = req.AssignedByUserId;
+            assignment = existingAnchor;
+        }
+        else if (existingRow is not null)
         {
             // Terminal row on this shift → flip back to Invited in place
             // (clears the old response/rejection audit fields) instead of
