@@ -72,6 +72,29 @@ public sealed class GetEventShiftsHandler
             })
             .ToListAsync(ct);
 
+        // Rows and quotas per shift, so committed seats come from the shared
+        // rule instead of each caller inventing its own arithmetic.
+        var rowsByShift = await _db.EventAssignments
+            .Where(a => a.ShiftId != null && shiftIds.Contains(a.ShiftId.Value))
+            .Where(a => !a.IsDeleted
+                     && a.Status != AssignmentStatus.Declined
+                     && a.Status != AssignmentStatus.RejectedByVendor
+                     && a.Status != AssignmentStatus.RejectedByManager
+                     && a.Status != AssignmentStatus.NoShow)
+            .Select(a => new { ShiftId = a.ShiftId!.Value, a.VendorId, IsPlaceholder = a.CrewId == null })
+            .ToListAsync(ct);
+
+        var allocsByShift = await _db.VendorShiftAllocations
+            .Where(a => shiftIds.Contains(a.ShiftId) && !a.IsDeleted)
+            .Select(a => new { a.ShiftId, a.VendorId, a.Quota })
+            .ToListAsync(ct);
+
+        var committedByShift = shifts.ToDictionary(
+            s => s.Id,
+            s => AssignmentCapacityRules.CommittedSeatsOnShift(
+                allocsByShift.Where(a => a.ShiftId == s.Id).Select(a => (a.VendorId, a.Quota)),
+                rowsByShift.Where(r => r.ShiftId == s.Id).Select(r => (r.VendorId, r.IsPlaceholder))));
+
         var countsByShift = counts.ToDictionary(
             x => x.ShiftId,
             x => (Assigned: x.Assigned, Reserved: x.Reserved));
@@ -85,6 +108,7 @@ public sealed class GetEventShiftsHandler
                 s.CrewCount,
                 c.Assigned,
                 c.Reserved,
+                committedByShift.GetValueOrDefault(s.Id),
                 s.StartAt, s.EndAt);
         }).ToList();
 

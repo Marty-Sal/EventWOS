@@ -115,6 +115,14 @@ public sealed record EventShiftDto(
     // the server's "17/15" reject. See AssignmentCapacityRules
     // .ReservesSeatOnShift for the exact predicate.
     int      ReservedCrew,
+    /// <summary>
+    /// Seats genuinely committed on this shift -- vendor quotas plus crew that no
+    /// quota covers. THIS is the number to subtract from CrewCount for "N free".
+    /// ReservedCrew above counts placeholder anchors on top of the quota they
+    /// stand for, so it over-reports on any shift with a vendor. See
+    /// AssignmentCapacityRules.CommittedSeatsOnShift.
+    /// </summary>
+    int      CommittedCrew,
     DateTime StartAt,
     DateTime? EndAt
 );

@@ -86,6 +86,134 @@ public sealed class UpdateEventShiftHandler
         if (boundsCheck.IsFailure)
             return Result.Failure<EventShiftDto>(boundsCheck.Error);
 
+        // ── Vendor quotas move with the capacity ────────────────────────────
+        //
+        // Reported: raising a shift from 2 to 3 changed the crew number and nothing
+        // else -- the vendor who owned the shift stayed on a quota of 2, their
+        // Assign Crew modal still said "your allocation is full (2/2)", and the
+        // extra seat existed on the event while being reachable by nobody.
+        //
+        // The rule, both directions, is about crew who are actually placed:
+        //
+        //   * GROWING: the creation paths grant a vendor picked on a shift the WHOLE
+        //     shift (Quota == CrewCount), so where one vendor still owns the whole
+        //     shift their quota follows the capacity up. Shifts split between
+        //     several vendors, or a quota an admin deliberately set below capacity,
+        //     are arithmetic we must not guess at -- the new seats stay unallocated
+        //     for the admin to grant.
+        //
+        //   * SHRINKING: only seats a vendor has NOT filled may be taken away.
+        //     Unused quota is trimmed (largest headroom first) until the shift is no
+        //     longer over-committed; a seat with a crew member in it is never taken.
+        //     If the shrink can only be satisfied by removing a vendor from the
+        //     shift entirely, we refuse and say so -- dropping a vendor is a
+        //     decision for the admin, not a side-effect of editing a number.
+        var allocations = await _db.VendorShiftAllocations
+            .Where(a => a.ShiftId == shift.Id && !a.IsDeleted)
+            .ToListAsync(ct);
+
+        // Crew each vendor has actually placed on this shift -- the floor no
+        // trim may cross.
+        var placedPerVendor = await _db.EventAssignments
+            .Where(AssignmentCapacityRules.OccupiesSeatOnShift(shift.Id))
+            .Where(a => a.VendorId != null)
+            .GroupBy(a => a.VendorId!.Value)
+            .Select(g => new { VendorId = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        int PlacedBy(Guid vendorId) =>
+            placedPerVendor.FirstOrDefault(x => x.VendorId == vendorId)?.Count ?? 0;
+
+        var oldCrewCount = shift.CrewCount;
+
+        if (req.CrewCount > oldCrewCount)
+        {
+            var soleOwner = allocations.Count == 1 && allocations[0].Quota == oldCrewCount
+                ? allocations[0]
+                : null;
+
+            if (soleOwner is not null)
+            {
+                try
+                {
+                    soleOwner.UpdateQuota(req.CrewCount, PlacedBy(soleOwner.VendorId));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Result.Failure<EventShiftDto>(new Error("Shift.WouldOrphanVendorCrew", ex.Message));
+                }
+            }
+        }
+        else if (req.CrewCount < oldCrewCount && allocations.Count > 0)
+        {
+            // Seats held by crew no vendor quota accounts for (direct assignments,
+            // or a vendor with no allocation) come off the top -- vendor quotas can
+            // only share what is left.
+            var allocatedVendorIds = allocations.Select(a => a.VendorId).ToHashSet();
+            var unallocatedSeats = await _db.EventAssignments
+                .Where(AssignmentCapacityRules.OccupiesSeatOnShift(shift.Id))
+                .Where(a => a.VendorId == null || !allocatedVendorIds.Contains(a.VendorId.Value))
+                .CountAsync(ct);
+
+            var budget = req.CrewCount - unallocatedSeats;
+
+            // Work out the trimmed quotas before touching anything, so a refusal
+            // leaves every allocation untouched.
+            var planned = allocations
+                .Select(a => new { Alloc = a, Floor = Math.Max(1, PlacedBy(a.VendorId)), Quota = a.Quota })
+                .Select(x => new { x.Alloc, x.Floor, Quota = x.Quota })
+                .ToList();
+
+            var quotas = planned.ToDictionary(x => x.Alloc.Id, x => x.Quota);
+
+            while (quotas.Values.Sum() > budget)
+            {
+                // Trim the vendor sitting on the most unused seats first: it spreads
+                // an even shrink fairly and takes empty seats before tight ones.
+                var next = planned
+                    .Where(x => quotas[x.Alloc.Id] > x.Floor)
+                    .OrderByDescending(x => quotas[x.Alloc.Id] - x.Floor)
+                    .FirstOrDefault();
+
+                if (next is null)
+                {
+                    // Nothing left to give: either crew occupy the seats, or the only
+                    // way down is to remove a vendor from the shift.
+                    var blocking = planned
+                        .Where(x => PlacedBy(x.Alloc.VendorId) > 0)
+                        .Sum(x => PlacedBy(x.Alloc.VendorId));
+
+                    if (blocking > 0)
+                        return Result.Failure<EventShiftDto>(new Error("Shift.WouldOrphanVendorCrew",
+                            $"Vendors have already assigned {blocking} crew to this shift, so it cannot " +
+                            $"be reduced to {req.CrewCount}. Remove those crew first, or reduce capacity " +
+                            $"to {blocking + unallocatedSeats} at the lowest."));
+
+                    return Result.Failure<EventShiftDto>(new Error("Shift.WouldDropVendor",
+                        $"Reducing this shift to {req.CrewCount} would leave no seats for " +
+                        $"{planned.Count} vendor(s) allocated to it. Remove a vendor's allocation " +
+                        $"from the Vendor Quotas panel first."));
+                }
+
+                quotas[next.Alloc.Id] = quotas[next.Alloc.Id] - 1;
+            }
+
+            foreach (var x in planned)
+            {
+                var target = quotas[x.Alloc.Id];
+                if (target == x.Alloc.Quota) continue;
+
+                try
+                {
+                    x.Alloc.UpdateQuota(target, PlacedBy(x.Alloc.VendorId));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Result.Failure<EventShiftDto>(new Error("Shift.WouldOrphanVendorCrew", ex.Message));
+                }
+            }
+        }
+
         try
         {
             shift.Update(req.CrewCount, req.StartAt, req.EndAt, seatsOnThisShift);
@@ -141,6 +269,18 @@ public sealed class UpdateEventShiftHandler
 
         await _uow.SaveChangesAsync(ct);
 
+        // Committed seats for the returned DTO, so the modal's "N free" agrees
+        // with the Vendor Quotas panel the moment the resize lands (allocations
+        // is already the post-update state).
+        var rowsOnThisShift = await _db.EventAssignments
+            .Where(AssignmentCapacityRules.ReservesSeatOnShift(shift.Id))
+            .Select(a => new { a.VendorId, IsPlaceholder = a.CrewId == null })
+            .ToListAsync(ct);
+
+        var committedOnThisShift = AssignmentCapacityRules.CommittedSeatsOnShift(
+            allocations.Where(a => !a.IsDeleted).Select(a => (a.VendorId, a.Quota)),
+            rowsOnThisShift.Select(r => (r.VendorId, r.IsPlaceholder)));
+
         // Reload scope name if changed (or fetch existing).
         scope ??= await _db.ScopesOfWork.FirstOrDefaultAsync(s => s.Id == shift.ScopeOfWorkId, ct);
 
@@ -149,6 +289,7 @@ public sealed class UpdateEventShiftHandler
             shift.CrewCount,
             AssignedCrew: seatsOnThisShift,
             ReservedCrew: reservedOnThisShift,
+            CommittedCrew: committedOnThisShift,
             shift.StartAt, shift.EndAt));
     }
 }

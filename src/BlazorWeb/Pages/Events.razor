@@ -759,20 +759,13 @@
                                 {
                                     @foreach (var sh in _selectedEventShifts)
                                     {
-                                        // Free seats must match what the server's capacity gate
-                                        // enforces (AssignmentCapacityRules.ReservesSeatOnShift on
-                                        // AssignCrewCommand). That count includes placeholder
-                                        // anchors, so we lean on sh.ReservedCrew directly rather
-                                        // than trying to recompute it from allocations — the DTO
-                                        // is now the single source of truth. We still fold in the
-                                        // active-allocation quota total as a floor: newly-created
-                                        // allocations that don't yet have placeholder rows minted
-                                        // (rare, transient) shouldn't let the modal briefly show
-                                        // extra headroom the server won't honour.
-                                        var totalAlloc = _allocationsByShift.GetValueOrDefault(sh.Id)
-                                            ?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
-                                        var reserved = Math.Max(sh.ReservedCrew, totalAlloc);
-                                        var free  = Math.Max(0, sh.CrewCount - reserved);
+                                        // One source of truth: the server's committed-seat count
+                                        // (vendor quotas + crew no quota covers). ReservedCrew is
+                                        // NOT usable here — it charges a vendor's placeholder anchor
+                                        // on top of the quota that anchor represents, which is how
+                                        // this modal came to say "shift is full" while the Vendor
+                                        // Quotas panel right below it showed a free seat.
+                                        var free  = ShiftFreeSeats(sh);
                                         var row   = _multiShiftRows.GetValueOrDefault(sh.Id) ?? new MultiShiftRow();
                                         _multiShiftRows[sh.Id] = row;  // make sure dict has it
                                         var isVendorMode = _assignMode == "vendor";
@@ -3358,21 +3351,20 @@ else
     /// <summary>
     /// Phase D step 9: per-shift free-seat math used everywhere capacity
     /// matters (multi-shift modal, headroom warnings).
-    /// reserved = max(real crew on shift, sum of active allocation quotas)
-    /// because every allocation row reserves a placeholder seat the vendor
-    /// will fill later. Free = capacity - reserved (floored at 0).
+    /// Free = capacity - CommittedCrew, where committed means vendor quotas plus
+    /// crew no quota covers (AssignmentCapacityRules.CommittedSeatsOnShift on the
+    /// server). Deliberately NOT ReservedCrew: that counts a vendor's placeholder
+    /// anchor as well as the quota it stands for, which reported shifts full while
+    /// the Vendor Quotas panel showed free seats.
     /// </summary>
     private int ShiftFreeSeats(EventShiftDto sh)
     {
-        // Mirrors the modal's per-row math — see the render block for
-        // full rationale. Uses ReservedCrew (real + placeholder) so this
-        // agrees with the server-side capacity gate, and floors on the
-        // allocation-quota total to cover the transient window between
-        // creating an allocation and its placeholder rows landing.
+        // Freshly-created allocations whose quota has not reached this DTO yet act
+        // as a floor, so the modal never shows headroom the server will refuse.
         var totalAlloc = _allocationsByShift.GetValueOrDefault(sh.Id)
             ?.Where(r => !r.IsArchived).Sum(r => r.Quota) ?? 0;
-        var reserved = Math.Max(sh.ReservedCrew, totalAlloc);
-        return Math.Max(0, sh.CrewCount - reserved);
+        var committed = Math.Max(sh.CommittedCrew, totalAlloc);
+        return Math.Max(0, sh.CrewCount - committed);
     }
 
     private string? DuplicateAssignWarning()

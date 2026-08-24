@@ -203,6 +203,9 @@ public sealed class AddEventShiftHandler
             shift.CrewCount,
             AssignedCrew: 0,
             ReservedCrew: 0,
+            // A vendor picked on the new shift owns the whole thing, so the shift is
+            // fully committed the moment it exists; otherwise nothing is committed yet.
+            CommittedCrew: req.VendorId is null ? 0 : req.CrewCount,
             shift.StartAt, shift.EndAt));
     }
 }

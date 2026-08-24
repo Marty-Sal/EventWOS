@@ -146,14 +146,18 @@ public sealed record CreateEventRequest(
 
 /// <summary>
 /// Phase B read-back shape — matches API EventShiftDto exactly.
-/// AssignedCrew = REAL crew occupying seats on this shift (OccupiesSeat).
-/// ReservedCrew = real crew + placeholder anchors (ReservesSeatOnShift).
-/// Use ReservedCrew for capacity-gate math so the modal agrees with the
-/// server; use AssignedCrew for shift-editor "N used" / shrink guard.
+/// AssignedCrew  = REAL crew occupying seats on this shift (OccupiesSeat).
+/// ReservedCrew  = real crew + placeholder anchors — DISPLAY ONLY. It counts a
+///                 vendor's anchor on top of the quota that anchor stands for,
+///                 so it over-reports headroom on any shift with a vendor.
+/// CommittedCrew = vendor quotas + crew no quota covers. Use THIS for every
+///                 "N free" and headroom decision; it is what the server's
+///                 capacity gate now enforces.
+/// Use AssignedCrew for shift-editor "N used" / shrink guard.
 /// </summary>
 public sealed record EventShiftDto(
     Guid Id, Guid EventId, Guid ScopeOfWorkId, string ScopeName,
-    int CrewCount, int AssignedCrew, int ReservedCrew,
+    int CrewCount, int AssignedCrew, int ReservedCrew, int CommittedCrew,
     DateTime StartAt, DateTime? EndAt);
 
 /// <summary>Phase D step 11: mirror of API VendorShiftSummaryDto.</summary>

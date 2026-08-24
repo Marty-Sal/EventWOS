@@ -13,6 +13,13 @@ namespace EventWOS.Application.Events.Commands;
 /// crew still occupies a seat on the shift — the admin must reject /
 /// unassign them first, same rule as VendorShiftAllocation archive.
 ///
+/// A vendor holding seats they have not staffed is NOT a blocker: an invited
+/// vendor with zero crew placed is exactly the shift a manager is allowed to
+/// delete. Their quota and their invite go with it (see the cleanup below),
+/// because leaving them behind left the vendor holding a seat budget and an
+/// invitation for a shift that no longer exists — still listed under their
+/// My Events, with nowhere to assign anyone.
+///
 /// Auto-shrinks the event's MaxCrew by the archived shift's CrewCount
 /// after the archive lands. The last-active-shift case is special: we
 /// refuse the archive instead of leaving the event with zero capacity
@@ -67,6 +74,31 @@ public sealed class ArchiveEventShiftHandler
         catch (InvalidOperationException ex)
         {
             return Result.Failure<Unit>(new Error("Shift.HasActiveCrew", ex.Message));
+        }
+
+        // ── Release what the vendors held on this shift ──────────────────────
+        //
+        // We only get here with zero crew occupying the shift, so no vendor can
+        // have anyone placed and every allocation is pure unused budget: safe to
+        // archive, and wrong to keep. Same for the placeholder invite anchors
+        // (CrewId == null) — soft-deleted the same way RevokeVendorInviteCommand
+        // does it, so the shift stops appearing in the vendor's My Events.
+        var allocations = await _db.VendorShiftAllocations
+            .Where(a => a.ShiftId == shift.Id && !a.IsDeleted)
+            .ToListAsync(ct);
+
+        foreach (var allocation in allocations)
+            allocation.Archive(req.ActorUserId, currentSeatsOccupied: 0);
+
+        var placeholders = await _db.EventAssignments
+            .Where(a => a.ShiftId == shift.Id && a.CrewId == null && !a.IsDeleted)
+            .ToListAsync(ct);
+
+        foreach (var placeholder in placeholders)
+        {
+            placeholder.IsDeleted = true;
+            placeholder.DeletedAt = DateTime.UtcNow;
+            placeholder.DeletedBy = req.ActorUserId;
         }
 
         // Recompute event MaxCrew now that this shift is soft-deleted.

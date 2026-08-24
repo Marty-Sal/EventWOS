@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
@@ -88,6 +90,60 @@ public static class AssignmentCapacityRules
           && a.Status != AssignmentStatus.RejectedByVendor
           && a.Status != AssignmentStatus.RejectedByManager
           && a.Status != AssignmentStatus.NoShow;
+
+    /// <summary>
+    /// How many of a shift's seats are actually committed, for capacity gates
+    /// and every "N free" display.
+    ///
+    /// The subtlety this exists to fix: a vendor-only invite drops ONE placeholder
+    /// anchor row (CrewId == null) on the shift and grants a VendorShiftAllocation
+    /// quota. The anchor is kept forever on purpose -- it is what keeps the event
+    /// visible in the vendor's My Events after their crew are rejected -- so the
+    /// vendor's seats are described TWICE: once by the quota, and again by the
+    /// anchor plus each crew member they place. Charging both means a capacity-3
+    /// shift with one vendor (quota 2, 2 crew placed) reports 3 seats gone and
+    /// claims to be full while the Vendor Quotas panel correctly shows 1 free.
+    ///
+    /// The rule: a vendor's QUOTA is their seat reservation, and the crew they
+    /// place fill it. Anchors are never charged on top.
+    ///
+    ///   * vendor WITH an allocation -> max(quota, crew they have placed).
+    ///     The max covers a shift shrunk below what a vendor already staffed.
+    ///   * vendor WITHOUT an allocation (legacy invites, before quotas existed)
+    ///     -> their rows are counted one-for-one, anchors included, because
+    ///     nothing else describes the seats they hold. This is what still stops
+    ///     placeholders being stacked past capacity on un-quota'd shifts.
+    ///   * crew with no vendor at all (direct assignment) -> one seat each.
+    /// </summary>
+    /// <param name="allocations">Active (non-archived) allocations on the shift.</param>
+    /// <param name="activeRows">
+    /// Assignment rows on the shift that are not soft-deleted and not in a
+    /// seat-freeing status -- i.e. the rows ReservesSeatOnShift would return.
+    /// </param>
+    public static int CommittedSeatsOnShift(
+        IEnumerable<(Guid VendorId, int Quota)> allocations,
+        IEnumerable<(Guid? VendorId, bool IsPlaceholder)> activeRows)
+    {
+        var quotaByVendor = allocations
+            .GroupBy(a => a.VendorId)
+            .ToDictionary(g => g.Key, g => g.Sum(a => a.Quota));
+
+        var rows = activeRows.ToList();
+
+        var committed = 0;
+
+        foreach (var (vendorId, quota) in quotaByVendor)
+        {
+            var placed = rows.Count(r => !r.IsPlaceholder && r.VendorId == vendorId);
+            committed += Math.Max(quota, placed);
+        }
+
+        // Everything not covered by a quota above: direct crew, and rows under a
+        // vendor who has no allocation on this shift.
+        committed += rows.Count(r => r.VendorId is null || !quotaByVendor.ContainsKey(r.VendorId.Value));
+
+        return committed;
+    }
 
     /// <summary>
     /// EF-translatable predicate: does this assignment reserve a seat on

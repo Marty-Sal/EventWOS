@@ -155,12 +155,35 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
             return Result.Failure<EventAssignmentDto>(new Error("Assignment.InvalidShift",
                 "Selected shift no longer exists."));
 
-        var shiftReserved = await _db.EventAssignments
+        // Committed seats, NOT raw reserved rows. A vendor's placeholder anchor and
+        // the quota it stands for are the same seats -- counting both made a
+        // capacity-3 shift with one vendor (quota 2, 2 crew placed) report itself
+        // full while the Vendor Quotas panel showed a free seat, so the admin was
+        // refused a seat that demonstrably existed.
+        var shiftRows = await _db.EventAssignments
             .Where(AssignmentCapacityRules.ReservesSeatOnShift(_shiftId.Value))
-            .CountAsync(ct);
-        if (shiftReserved >= shiftEntity.CrewCount)
+            .Select(a => new { a.VendorId, IsPlaceholder = a.CrewId == null })
+            .ToListAsync(ct);
+
+        var shiftAllocations = await _db.VendorShiftAllocations
+            .Where(a => a.ShiftId == _shiftId.Value && !a.IsDeleted)
+            .Select(a => new { a.VendorId, a.Quota })
+            .ToListAsync(ct);
+
+        var shiftCommitted = AssignmentCapacityRules.CommittedSeatsOnShift(
+            shiftAllocations.Select(a => (a.VendorId, a.Quota)),
+            shiftRows.Select(r => (r.VendorId, r.IsPlaceholder)));
+
+        // Room for the row about to be added? A vendor with quota headroom is
+        // already paid for, so this only bites when the seat is genuinely new.
+        var wouldCommit = AssignmentCapacityRules.CommittedSeatsOnShift(
+            shiftAllocations.Select(a => (a.VendorId, a.Quota)),
+            shiftRows.Select(r => (r.VendorId, r.IsPlaceholder))
+                     .Append((req.VendorId, false)));
+
+        if (wouldCommit > shiftEntity.CrewCount)
             return Result.Failure<EventAssignmentDto>(new Error("Assignment.ShiftFull",
-                $"Shift is fully reserved ({shiftReserved}/{shiftEntity.CrewCount} seats). " +
+                $"Shift is fully reserved ({shiftCommitted}/{shiftEntity.CrewCount} seats). " +
                 "Revoke a placeholder or increase shift capacity first."));
 
         EventAssignment assignment;
