@@ -186,6 +186,37 @@ public sealed class DeviceRegistration : BaseEntity
     }
 
     /// <summary>
+    /// Hands this subscription to a different user.
+    ///
+    /// Needed because a push endpoint identifies a BROWSER, not a person. When
+    /// one crew member logs out of a shared phone and the next logs in, the
+    /// browser hands us the very same endpoint -- so without this, either the row
+    /// keeps pointing at the first user (who would then receive the second user's
+    /// notifications on a device they no longer hold) or we try to insert a
+    /// duplicate endpoint and hit the unique index.
+    ///
+    /// Reassigning is also the privacy-preserving answer: the previous owner
+    /// stops being reachable on that device the moment someone else claims it.
+    /// The delivery history stays with the notifications, not here, so nothing
+    /// auditable is lost -- but the success/failure counters are reset, since they
+    /// described a different person's device usage.
+    /// </summary>
+    public void ReassignTo(Guid newUserId, DateTime nowUtc)
+    {
+        if (newUserId == Guid.Empty)
+            throw new ArgumentException("A device registration needs an owner.", nameof(newUserId));
+
+        UserId              = newUserId;
+        IsActive            = true;
+        DeactivatedAt       = null;
+        DeactivationReason  = null;
+        ConsecutiveFailures = 0;
+        LastSuccessAt       = null;
+        LastSeenAt          = nowUtc;
+        UpdatedAt           = nowUtc;
+    }
+
+    /// <summary>
     /// The browser kept the endpoint but rotated its encryption keys. Rare, but
     /// legal, and sending with stale keys fails permanently -- so accept them.
     /// </summary>
