@@ -36,7 +36,9 @@ public sealed record VenueLocationFields(
 ///
 ///     But a RELOCATION -- a new point more than SamePlaceToleranceMeters away --
 ///     replaces the address block outright, because text describing the previous
-///     point is not a refinement, it is wrong. The original rule could not tell
+///     point is not a refinement, it is wrong. "Replaces" includes CLEARING a
+///     field the provider has no value for: a postcode the new place did not
+///     supply is not evidence the old postcode still applies. The original rule could not tell
 ///     hand-typed text from text an EARLIER geocode wrote, so typing coordinates
 ///     in Vile Parle and then searching a venue in Airoli kept the Vile Parle
 ///     address next to Airoli coordinates and saved that as one venue.
@@ -218,15 +220,27 @@ public static class VenueLocationMapper
     }
 
     /// <summary>
-    /// Fill a text field from the provider. Blanks are always filled; existing
-    /// text is kept when refining and replaced when relocating. A provider that
-    /// offers nothing never blanks a field that already has a value.
+    /// Fill a text field from the provider.
+    ///
+    /// Refining: blanks are filled, existing text is kept, and a provider with
+    /// nothing to offer never wipes a value that is already there.
+    ///
+    /// Relocating: the provider's answer REPLACES the field -- including when the
+    /// provider has no value for it, which CLEARS it. That last part is the whole
+    /// point. Indian addresses from Nominatim routinely come back without a
+    /// postcode, so keeping the previous one left a Vile Parle 400057 sitting
+    /// under a Thane address, looking deliberate and saving without complaint. An
+    /// empty box the admin must fill is honest; a plausible wrong one is not.
+    /// This matches how NextState already treats an unmatchable state.
     /// </summary>
     private static string? Fill(string? currentValue, string? incoming, int maxLength, bool replace)
     {
-        if (string.IsNullOrWhiteSpace(incoming)) return currentValue;
-        if (!replace && !string.IsNullOrWhiteSpace(currentValue)) return currentValue;
-        return Truncate(incoming!, maxLength);
+        if (replace)
+            return string.IsNullOrWhiteSpace(incoming) ? null : Truncate(incoming!, maxLength);
+
+        if (!string.IsNullOrWhiteSpace(currentValue)) return currentValue;
+
+        return string.IsNullOrWhiteSpace(incoming) ? currentValue : Truncate(incoming!, maxLength);
     }
 
     /// <summary>

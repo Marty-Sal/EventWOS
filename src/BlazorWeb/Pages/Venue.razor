@@ -420,6 +420,11 @@
     {
         _form.Apply(VenueLocationMapper.ApplySuggestion(_form.ToLocationFields(), s, await CanonicalStatesAsync()));
 
+        // A pick moves the pin without going through OnPinMoved, so the guard has
+        // to learn the new point here as well.
+        _lastResolvedLat = _form.Latitude;
+        _lastResolvedLng = _form.Longitude;
+
         // Clear any stale "required field" error the pick may have just resolved.
         _formError = null;
         StateHasChanged();
@@ -436,20 +441,28 @@
     /// Longitude for a single edit would otherwise geocode twice, once with a
     /// stale partner value.
     /// </summary>
-    private double? _lastManualLat, _lastManualLng;
-
     private async Task OnManualCoordinateChangedAsync()
     {
         var lat = _form.Latitude;
         var lng = _form.Longitude;
         if (lat is null || lng is null) return;
-        if (lat == _lastManualLat && lng == _lastManualLng) return;
 
-        _lastManualLat = lat;
-        _lastManualLng = lng;
+        // Compared against the point we last RESOLVED an address for -- not the
+        // last point typed. Tracking "last typed" wedged the form: type a point,
+        // search a venue somewhere else (which moves the pin), then re-type the
+        // first point and it looked unchanged, so nothing geocoded and the
+        // address silently stopped updating for good.
+        if (lat == _lastResolvedLat && lng == _lastResolvedLng) return;
 
         await OnPinMoved(((decimal)lat.Value, (decimal)lng.Value));
     }
+
+    /// <summary>
+    /// The point the address fields currently describe. Every path that resolves
+    /// an address updates it -- typing, dragging, and picking a suggestion -- so
+    /// the manual-entry guard above can never be left pointing at a stale point.
+    /// </summary>
+    private double? _lastResolvedLat, _lastResolvedLng;
 
     /// <summary>
     /// The admin dragged the pin. The dragged coordinates are applied immediately
@@ -468,6 +481,11 @@
         // movement, and never replace a stale address block.
         var fromLat = _form.Latitude;
         var fromLng = _form.Longitude;
+
+        // Recorded up front, so a failed or slow geocode still counts as "this is
+        // the point on screen" and cannot make the guard re-fire in a loop.
+        _lastResolvedLat = lat;
+        _lastResolvedLng = lng;
 
         // Coordinates land before the network calls so the form reflects the drag
         // instantly rather than after a round trip.

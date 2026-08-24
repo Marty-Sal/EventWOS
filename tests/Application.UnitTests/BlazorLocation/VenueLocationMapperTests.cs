@@ -49,6 +49,19 @@ public class VenueLocationMapperTests
         PostalCode: "400708",
         Country: "India");
 
+    /// <summary>Far from Racecourse AND missing a postcode — Nominatim does this constantly.</summary>
+    private static LocationSuggestion ThaneNoPostcode => new(
+        PlaceId: "777",
+        Name: "The Universe",
+        ShortAddress: "Shill Phata, Thane",
+        FullAddress: "The Universe, Shill Phata, Shill Gaon, Thane, Thane Subdistrict, Thane, Maharashtra, India",
+        Latitude: 19.1550m,
+        Longitude: 72.9990m,
+        City: "Thane",
+        State: "Maharashtra",
+        PostalCode: null,
+        Country: "India");
+
     // ── Rule 1: coordinates always win ──────────────────────────────────────
 
     [Fact]
@@ -314,5 +327,110 @@ public class VenueLocationMapperTests
 
         result.AddressLine1.Should().Be("Hall 2, service entrance");
         result.City.Should().Be("Mumbai");
+    }
+
+    // ── Rule 2c: relocating CLEARS what the new place did not supply ─────────
+
+    [Fact]
+    public void Relocating_clears_a_postcode_the_new_place_did_not_supply()
+    {
+        // Reported: coordinates in Vile Parle filled 400057, then searching a
+        // Thane venue with no postcode kept 400057 — a Vile Parle postcode under
+        // a Thane address, saved without complaint.
+        var vileParle = Empty with
+        {
+            AddressLine1 = "Nanavati Hospital, Vile Parle",
+            City         = "Mumbai",
+            PostalCode   = "400057",
+            Country      = "India",
+            Latitude     = 19.105374d,
+            Longitude    = 72.839953d,
+        };
+
+        var result = VenueLocationMapper.ApplySuggestion(vileParle, ThaneNoPostcode, States);
+
+        result.PostalCode.Should().BeNull("the new place supplied none, so the old one cannot stand");
+        result.City.Should().Be("Thane");
+        result.AddressLine1.Should().Contain("Shill Phata");
+    }
+
+    [Fact]
+    public void Refining_keeps_a_postcode_the_provider_happens_to_omit()
+    {
+        // The mirror case: a provider omission must NOT wipe a good value when the
+        // pin has barely moved.
+        var current = Empty with
+        {
+            City       = "Mumbai",
+            PostalCode = "400034",
+            Latitude   = 18.9820d,
+            Longitude  = 72.8100d,
+        };
+
+        var nearbyNoPostcode = Racecourse with { PostalCode = null, Latitude = 18.98210m, Longitude = 72.81008m };
+
+        var result = VenueLocationMapper.ApplySuggestion(current, nearbyNoPostcode, States);
+
+        result.PostalCode.Should().Be("400034");
+    }
+
+    [Fact]
+    public void Relocating_by_typed_coordinates_also_clears_a_missing_postcode()
+    {
+        var current = Empty with
+        {
+            AddressLine1 = "Nanavati Hospital, Vile Parle",
+            City         = "Mumbai",
+            PostalCode   = "400057",
+            Latitude     = 19.105374d,
+            Longitude    = 72.839953d,
+        };
+
+        var detail = new LocationDetail(
+            PlaceId: "777",
+            Name: "The Universe",
+            Address: "The Universe, Shill Phata, Thane",
+            City: "Thane",
+            State: "Maharashtra",
+            PostalCode: null,
+            Country: "India",
+            Latitude: 19.1550m,
+            Longitude: 72.9990m);
+
+        var result = VenueLocationMapper.ApplyReverseGeocode(
+            current, detail, 19.1550d, 72.9990d, States);
+
+        result.PostalCode.Should().BeNull();
+        result.City.Should().Be("Thane");
+    }
+
+    [Fact]
+    public void The_full_reported_sequence_ends_with_a_consistent_address()
+    {
+        // coords in Vile Parle -> search a Thane venue -> coords back to Vile
+        // Parle. Every step must leave one place described, never a hybrid.
+        var afterFirstCoords = VenueLocationMapper.ApplyReverseGeocode(
+            Empty,
+            new LocationDetail("1", "Nanavati", "Nanavati Hospital, Vile Parle",
+                "Mumbai", "Maharashtra", "400057", "India", 19.105374m, 72.839953m),
+            19.105374d, 72.839953d, States);
+
+        afterFirstCoords.PostalCode.Should().Be("400057");
+
+        var afterSearch = VenueLocationMapper.ApplySuggestion(afterFirstCoords, ThaneNoPostcode, States);
+
+        afterSearch.City.Should().Be("Thane");
+        afterSearch.PostalCode.Should().BeNull();
+
+        // Back to the original point: a relocation again, so the Thane text goes.
+        var afterSecondCoords = VenueLocationMapper.ApplyReverseGeocode(
+            afterSearch,
+            new LocationDetail("1", "Nanavati", "Nanavati Hospital, Vile Parle",
+                "Mumbai", "Maharashtra", "400057", "India", 19.105374m, 72.839953m),
+            19.105374d, 72.839953d, States);
+
+        afterSecondCoords.AddressLine1.Should().Contain("Nanavati");
+        afterSecondCoords.City.Should().Be("Mumbai");
+        afterSecondCoords.PostalCode.Should().Be("400057");
     }
 }
