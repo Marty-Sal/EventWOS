@@ -27,7 +27,10 @@ public static class VendorParticipationLoader
             .Where(a => a.VendorId != null
                      && vendorIds.Contains(a.VendorId.Value)
                      && !a.IsDeleted
-                     && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status))
+                     && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status)
+                     // Deleted shift -> nothing to staff; keep the dashboard tiles and
+                     // My Events counting the same events.
+                     && (a.ShiftId == null || db.EventShifts.Any(s => s.Id == a.ShiftId)))
             .Join(db.Events.AsNoTracking(),
                   a => a.EventId,
                   e => e.Id,

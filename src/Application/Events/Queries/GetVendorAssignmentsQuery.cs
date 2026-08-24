@@ -31,7 +31,14 @@ public sealed class GetVendorAssignmentsHandler
     public async Task<Result<PagedAssignmentResult>> Handle(
         GetVendorAssignmentsQuery req, CancellationToken ct)
     {
-        var q = _db.EventAssignments.AsQueryable().Where(a => a.VendorId == req.VendorId);
+        var q = _db.EventAssignments.AsQueryable()
+            .Where(a => a.VendorId == req.VendorId)
+            // Rows whose shift has been deleted are not work any more: the vendor's
+            // dashboard action-centre counts read straight off this query, so an
+            // invitation to a shift that no longer exists would keep nagging them
+            // with nowhere to assign anyone. See
+            // VendorEventParticipationRules.LiveShiftRuleReference.
+            .Where(a => a.ShiftId == null || _db.EventShifts.Any(s => s.Id == a.ShiftId));
 
         q = req.Mode switch
         {

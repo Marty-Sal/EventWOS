@@ -23,7 +23,8 @@ public static class CrewParticipationLoader
             .AsNoTracking()
             .Where(a => a.CrewId == crewId
                      && !a.IsDeleted
-                     && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status))
+                     && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status)
+                     && (a.ShiftId == null || db.EventShifts.Any(s => s.Id == a.ShiftId)))
             .Join(db.Events.AsNoTracking(),
                   a => a.EventId,
                   e => e.Id,

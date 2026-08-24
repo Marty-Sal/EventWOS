@@ -17,13 +17,19 @@ public sealed class GetMyAssignmentsHandler : IRequestHandler<GetMyAssignmentsQu
 
     public async Task<Result<PagedAssignmentResult>> Handle(GetMyAssignmentsQuery req, CancellationToken ct)
     {
-        var total = await _db.EventAssignments.CountAsync(a => a.CrewId == req.CrewId, ct);
+        // Count must apply the same live-shift filter as the page below, or the
+        // pager promises rows the list will not show.
+        var total = await _db.EventAssignments.CountAsync(
+            a => a.CrewId == req.CrewId
+              && (a.ShiftId == null || _db.EventShifts.Any(s => s.Id == a.ShiftId)), ct);
 
         var items = await _db.EventAssignments
             .Include(a => a.Event)
             .Include(a => a.Vendor)
             .Include(a => a.Crew)
             .Where(a => a.CrewId == req.CrewId)
+            // Same rule as the vendor side: a deleted shift is not work.
+            .Where(a => a.ShiftId == null || _db.EventShifts.Any(s => s.Id == a.ShiftId))
             .OrderByDescending(a => a.Event.StartAt)
             .Skip((req.Page - 1) * req.PageSize)
             .Take(req.PageSize)

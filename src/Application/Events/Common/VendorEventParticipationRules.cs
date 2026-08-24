@@ -40,6 +40,29 @@ public static class VendorEventParticipationRules
         AssignmentStatus.RejectedByManager
     };
 
+    /// <summary>
+    /// The second half of the participation rule: the assignment's SHIFT must still
+    /// exist. Rows are kept when their shift is archived (the vendor's placeholder
+    /// anchor is soft-deleted with the shift now, but rows archived before that, and
+    /// terminal rows, can still point at a dead shift), and an event whose shifts
+    /// have all gone offers the vendor nothing to staff -- it must not sit on their
+    /// dashboard or in My Events.
+    ///
+    /// EF cannot host this as a static Expression because it needs a DbSet to probe,
+    /// so each read path spells it out. Written the same way everywhere:
+    ///
+    ///     a.ShiftId == null || _db.EventShifts.Any(s => s.Id == a.ShiftId)
+    ///
+    /// EventShifts is filtered on IsDeleted globally, so Any() is false once the
+    /// shift is archived. The null arm keeps pre-shift (Phase A) rows visible --
+    /// those events never had shifts, and dropping them would hide real history.
+    ///
+    /// Applied by: GetMyEventsQuery, GetVendorAssignmentsQuery, GetMyAssignmentsQuery,
+    /// VendorParticipationLoader, CrewParticipationLoader.
+    /// </summary>
+    public const string LiveShiftRuleReference =
+        "a.ShiftId == null || _db.EventShifts.Any(s => s.Id == a.ShiftId)";
+
     /// <summary>In-memory counterpart of the EF filter above.</summary>
     public static bool IsActiveParticipation(AssignmentStatus status)
         => Array.IndexOf(InactiveStatuses, status) < 0;

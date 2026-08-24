@@ -1,4 +1,5 @@
 using EventWOS.Application.Events.Commands;
+using EventWOS.Application.Events.Queries;
 using EventWOS.Domain.Entities;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Interfaces;
@@ -264,6 +265,68 @@ public class ShiftCapacityQuotaTests
         alloc.IsDeleted.Should().BeFalse();
     }
 
+    // ── what the vendor can still see afterwards ────────────────────────────
+
+    [Fact]
+    public async Task Deleting_the_vendors_only_shift_takes_the_event_off_their_dashboard()
+    {
+        using var db = NewContext();
+        var (ev, shift, _) = SeedEventWithShifts(db, firstShiftCrew: 3);
+        var vendor = SeedVendor(db);
+        Allocate(db, shift, vendor, quota: 3);
+        AddAnchor(db, ev, shift, vendor);
+
+        (await VendorEventIds(db, vendor)).Should().Contain(ev.Id, "invited, with a shift to staff");
+
+        var result = await NewArchiveHandler(db).Handle(
+            new ArchiveEventShiftCommand(shift.Id, ev.CreatedByUserId), default);
+        result.IsSuccess.Should().BeTrue();
+
+        (await VendorEventIds(db, vendor)).Should().NotContain(ev.Id,
+            "the shift they were invited to is gone, so the event offers them nothing");
+        (await VendorInvitationCount(db, vendor)).Should().Be(0,
+            "and it must stop nagging from the dashboard action centre");
+    }
+
+    [Fact]
+    public async Task The_event_stays_when_the_vendor_still_holds_another_shift_on_it()
+    {
+        using var db = NewContext();
+        var (ev, shift, scope) = SeedEventWithShifts(db, firstShiftCrew: 3);
+        var second = new EventShift(ev.Id, scope.Id, 2, shift.StartAt, shift.EndAt, ev.CreatedByUserId);
+        db.EventShifts.Add(second);
+        db.SaveChanges();
+
+        var vendor = SeedVendor(db);
+        Allocate(db, shift, vendor, quota: 3);
+        AddAnchor(db, ev, shift, vendor);
+        Allocate(db, second, vendor, quota: 2);
+        AddAnchor(db, ev, second, vendor);
+
+        var result = await NewArchiveHandler(db).Handle(
+            new ArchiveEventShiftCommand(shift.Id, ev.CreatedByUserId), default);
+        result.IsSuccess.Should().BeTrue();
+
+        (await VendorEventIds(db, vendor)).Should().Contain(ev.Id, "they still have work on the other shift");
+        (await VendorInvitationCount(db, vendor)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Rows_from_before_shifts_existed_stay_visible()
+    {
+        // Phase A history: assignments with no ShiftId at all. Hiding these would
+        // erase a vendor's past events.
+        using var db = NewContext();
+        var (ev, _, _) = SeedEventWithShifts(db, firstShiftCrew: 2);
+        var vendor = SeedVendor(db);
+
+        var legacy = new EventAssignment(ev.Id, crewId: null, vendorId: vendor.Id, ev.CreatedByUserId);
+        db.EventAssignments.Add(legacy);
+        db.SaveChanges();
+
+        (await VendorEventIds(db, vendor)).Should().Contain(ev.Id);
+    }
+
     // ── plumbing ────────────────────────────────────────────────────────────
 
     private static AppDbContext NewContext() =>
@@ -350,6 +413,22 @@ public class ShiftCapacityQuotaTests
             db.EventAssignments.Add(row);
         }
         db.SaveChanges();
+    }
+
+    private static async Task<List<Guid>> VendorEventIds(AppDbContext db, User vendor)
+    {
+        var result = await new GetMyEventsHandler(db).Handle(
+            new GetMyEventsQuery(vendor.Id, UserRole.Vendor, 1, 50), default);
+        result.IsSuccess.Should().BeTrue();
+        return result.Value.Items.Select(i => i.Id).ToList();
+    }
+
+    private static async Task<int> VendorInvitationCount(AppDbContext db, User vendor)
+    {
+        var result = await new GetVendorAssignmentsHandler(db).Handle(
+            new GetVendorAssignmentsQuery(vendor.Id, VendorAssignmentMode.Invitations, 1, 50), default);
+        result.IsSuccess.Should().BeTrue();
+        return result.Value.TotalCount;
     }
 
     private sealed class PassThroughUnitOfWork : IUnitOfWork

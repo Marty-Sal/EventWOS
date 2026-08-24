@@ -36,7 +36,13 @@ public sealed class GetMyEventsHandler : IRequestHandler<GetMyEventsQuery, Resul
                 .AsNoTracking()
                 .Where(a => a.VendorId == req.UserId
                          && !a.IsDeleted
-                         && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status))
+                         && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status)
+                         // The shift must still exist: once a manager deletes the shift a
+                         // vendor was invited to, and no other shift on the event is theirs,
+                         // the event has nothing left for them and drops off My Events and
+                         // their dashboard. See
+                         // VendorEventParticipationRules.LiveShiftRuleReference.
+                         && (a.ShiftId == null || _db.EventShifts.Any(s => s.Id == a.ShiftId)))
                 .Select(a => a.EventId)
                 .Distinct()
                 .ToListAsync(ct);
@@ -48,7 +54,8 @@ public sealed class GetMyEventsHandler : IRequestHandler<GetMyEventsQuery, Resul
                 .AsNoTracking()
                 .Where(a => a.CrewId == req.UserId
                          && !a.IsDeleted
-                         && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status))
+                         && !VendorEventParticipationRules.InactiveStatuses.Contains(a.Status)
+                         && (a.ShiftId == null || _db.EventShifts.Any(s => s.Id == a.ShiftId)))
                 .Select(a => a.EventId)
                 .Distinct()
                 .ToListAsync(ct);
