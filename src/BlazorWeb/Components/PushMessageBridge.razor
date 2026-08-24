@@ -34,11 +34,55 @@
             // listen() is idempotent on the JS side. A second listener would
             // navigate twice for one notification click.
             await JS.InvokeAsync<bool>("eventwosPush.listen", _ref);
+
+            await AutoEnableAsync();
         }
         catch
         {
             // No interop (very old browser, or JS blocked). The app works; only
             // notification click-through is lost, which is not worth an error.
+        }
+    }
+
+    /// <summary>
+    /// Keeps notifications ON without the user having to find the toggle again.
+    ///
+    /// Permission itself can never be pre-granted -- that is the OS prompt's
+    /// decision and no site can answer it in advance. But once a person HAS
+    /// granted it, staying subscribed should not be their problem: reinstalling
+    /// the PWA, clearing site data, or a browser rotating the subscription all
+    /// leave permission intact while the subscription disappears, and the user
+    /// is never told. They just stop getting notifications.
+    ///
+    /// So every page load re-asserts it. Silent by design: no prompt, no toast,
+    /// and no error surfaced, because the user did not ask for anything and a
+    /// failure here is not something they can act on. The visible toggle in
+    /// Settings remains the honest read of the real state.
+    /// </summary>
+    private async Task AutoEnableAsync()
+    {
+        try
+        {
+            var config = await PushApi.GetConfigAsync();
+            if (config?.Enabled != true || string.IsNullOrWhiteSpace(config.PublicKey)) return;
+
+            var result = await JS.InvokeAsync<SubscribeResult>("eventwosPush.autoEnable", config.PublicKey);
+
+            // Not granted / unsupported / blocked all land here and are correct
+            // outcomes, not failures.
+            if (!result.Ok || result.Endpoint is null) return;
+
+            // Registered even when the browser already had a live subscription:
+            // subscribe is an upsert server-side, so this is what heals a device
+            // whose row was deactivated by a transient push failure or lost in a
+            // data reset. The browser was still subscribed the whole time; only
+            // our record of it was gone.
+            await PushApi.SubscribeAsync(result.Endpoint, result.P256dh!, result.Auth!, result.Platform);
+        }
+        catch
+        {
+            // Never surfaced. This runs unasked on every page load, so it must be
+            // incapable of interrupting anyone.
         }
     }
 

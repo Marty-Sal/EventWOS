@@ -369,11 +369,27 @@
                         window.location.reload();
                     });
 
-                    // Belt-and-braces: if a worker is already waiting when we
-                    // load (e.g. user backgrounded the tab across a deploy),
-                    // surface the toast on next paint.
+                    // A worker was ALREADY waiting when this page loaded --
+                    // the user backgrounded the app across a deploy, or closed
+                    // it without ever tapping the toast.
+                    //
+                    // Take over immediately instead of asking. This used to show
+                    // the toast and wait for a tap, and on mobile that tap
+                    // basically never came: the old worker kept control for days.
+                    // For caching that only means stale assets, but PUSH
+                    // NOTIFICATIONS ARE HANDLED BY THE WORKER -- an old worker
+                    // with no push listener means the browser shows its own
+                    // generic notification instead of ours, with no app icon and
+                    // no sound. That is a broken feature, not a stale asset.
+                    //
+                    // Doing it HERE is what makes it safe: we are inside the load
+                    // handler, so the reload that follows controllerchange costs
+                    // the user nothing -- they have not typed anything yet. A
+                    // worker that appears mid-session still gets the polite
+                    // toast below, because reloading under someone filling in a
+                    // check-in form is its own kind of bug.
                     if (reg.waiting && navigator.serviceWorker.controller) {
-                        showUpdateToast(reg.waiting);
+                        reg.waiting.postMessage({ type: "SKIP_WAITING" });
                     }
                 } catch (err) {
                     console.warn("[pwa] SW registration failed:", err);

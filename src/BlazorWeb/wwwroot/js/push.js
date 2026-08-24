@@ -223,6 +223,38 @@ window.eventwosPush = (() => {
         return null;
     }
 
+    // ---- auto-enable ------------------------------------------------
+    // "On by default", as far as a browser permits it.
+    //
+    // What CANNOT be done: silently granting notification permission. That
+    // decision belongs to the OS prompt and no site can pre-answer it -- if it
+    // could, every site would. So there is no way to make a brand-new device
+    // start subscribed.
+    //
+    // What CAN be done, and is what this does: once permission exists, never
+    // make the user find the toggle again. Reinstalled the PWA, cleared site
+    // data, got a new subscription after a browser update, switched devices on
+    // the same account -- in all of those the permission survives but the
+    // subscription does not, and the old behaviour left the user sitting there
+    // with notifications quietly off. This re-subscribes silently instead.
+    //
+    // No prompt is ever triggered from here: permission is checked first, so a
+    // user who has not been asked, or who said no, sees nothing.
+    async function autoEnable(publicKey) {
+        if (unsupportedReason()) return { ok: false, reason: 'unsupported' };
+
+        // Checked BEFORE anything else so this can never trigger a prompt. A
+        // user who has not been asked, or who said no, sees nothing at all.
+        if (Notification.permission !== 'granted') return { ok: false, reason: 'not-granted' };
+        if (!publicKey) return { ok: false, reason: 'no-key' };
+
+        // Delegated rather than reimplemented: subscribe() already reuses a live
+        // subscription, replaces one signed with a rotated key, and returns the
+        // shape the caller registers with the API. With permission already
+        // granted it cannot prompt, so there is nothing to be careful about here.
+        return await subscribe(publicKey);
+    }
+
     // ---- service worker messages ------------------------------------
     // The worker cannot navigate a Blazor app -- routing lives in the page. So
     // it postMessages, and this forwards those into .NET.
@@ -255,5 +287,5 @@ window.eventwosPush = (() => {
         return true;
     }
 
-    return { getStatus, subscribe, unsubscribe, setBadge, isStandalone, listen };
+    return { getStatus, subscribe, unsubscribe, setBadge, isStandalone, listen, autoEnable };
 })();

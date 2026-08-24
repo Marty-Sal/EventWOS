@@ -34,7 +34,7 @@
  * (check-in, ratings) still require network by design.
  */
 
-const CACHE_VERSION = 'v5-2026-08-24-push';
+const CACHE_VERSION = 'v6-2026-08-24-push-icon';
 const SHELL_CACHE   = `eventwos-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `eventwos-runtime-${CACHE_VERSION}`;
 
@@ -47,6 +47,7 @@ const SHELL_URLS = [
     '/icons/icon-192.png',
     '/icons/icon-512.png',
     '/icons/apple-touch-icon.png',
+    '/icons/notification-badge.png',
     '/offline.html',
 ];
 
@@ -287,8 +288,15 @@ self.addEventListener('message', (event) => {
 // their next visit, so anything encoded here is frozen for people who
 // do not come back for a week.
 
+// The large icon in the notification body: full colour, shown as-is.
 const NOTIFICATION_ICON = '/icons/icon-192.png';
-const NOTIFICATION_BADGE = '/icons/icon-192.png';
+
+// The status-bar badge is NOT a small version of the icon. Android masks it to a
+// single colour using ALPHA ONLY -- every opaque pixel becomes white whatever its
+// RGB. Pointing this at the full-colour square icon produced a solid white blob
+// in the status bar, which is what "no icon" actually looked like. This asset is
+// a transparent silhouette of the brand glyph, which is what the API wants.
+const NOTIFICATION_BADGE = '/icons/notification-badge.png';
 
 self.addEventListener('push', (event) => {
     event.waitUntil(handlePush(event));
@@ -313,11 +321,20 @@ async function handlePush(event) {
         renotify: true,
         icon:  NOTIFICATION_ICON,
         badge: NOTIFICATION_BADGE,
-        // High-priority news vibrates; routine news does not, so the
-        // urgent things stay recognisable.
+
+        // Explicit, not defaulted. A notification is silent when silent:true OR
+        // when the browser decides it looks like a background update, and being
+        // explicit costs nothing while guessing costs the alert.
+        silent: false,
+
+        // Every notification now vibrates; urgent ones vibrate longer. The old
+        // code passed undefined for routine news, which on Android also
+        // suppresses the alert SOUND, not just the buzz -- so "routine" news
+        // arrived completely unannounced. Distinguishing urgency by pattern
+        // keeps the distinction without silencing anything.
         vibrate: payload.priority === 'Critical' || payload.priority === 'High'
-            ? [200, 100, 200]
-            : undefined,
+            ? [200, 100, 200, 100, 200]
+            : [200],
         // Kept out of requireInteraction on purpose: a notification that
         // will not dismiss itself is the fastest way to get muted.
         data: {
