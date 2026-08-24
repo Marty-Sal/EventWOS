@@ -36,6 +36,19 @@ public class VenueLocationMapperTests
         PostalCode: "400034",
         Country: "India");
 
+    /// <summary>~19 km from Racecourse — unambiguously a different venue.</summary>
+    private static LocationSuggestion Airoli => new(
+        PlaceId: "999",
+        Name: "The Universe",
+        ShortAddress: "Airoli, Navi Mumbai, Maharashtra",
+        FullAddress: "The Universe, Mumbra Bypass Road, Airoli, Navi Mumbai, Maharashtra, 400708, India",
+        Latitude: 19.1550m,
+        Longitude: 72.9990m,
+        City: "Navi Mumbai",
+        State: "Maharashtra",
+        PostalCode: "400708",
+        Country: "India");
+
     // ── Rule 1: coordinates always win ──────────────────────────────────────
 
     [Fact]
@@ -173,5 +186,133 @@ public class VenueLocationMapperTests
 
         result.State.Should().BeNull();
         result.Latitude.Should().Be(18.9820d);   // coordinates unaffected
+    }
+
+    // ── Rule 2b: relocation replaces a stale address block ──────────────────
+
+    [Fact]
+    public void Picking_a_venue_far_away_replaces_the_previous_address_block()
+    {
+        // The reported bug: coordinates were typed in Vile Parle, which
+        // reverse-geocoded Nanavati Hospital into the address block. Searching a
+        // venue in Airoli then moved the pin and set the name, but left the Vile
+        // Parle address sitting next to Airoli coordinates — one venue record
+        // describing two different places, saved without complaint.
+        var vileParle = Empty with
+        {
+            AddressLine1 = "Nanavati Hospital, Swami Vivekanand Road, Vile Parle",
+            City         = "Mumbai",
+            State        = "Maharashtra",
+            PostalCode   = "400057",
+            Country      = "India",
+            Latitude     = 19.105374d,
+            Longitude    = 72.839953d,
+        };
+
+        var result = VenueLocationMapper.ApplySuggestion(vileParle, Airoli, States);
+
+        result.AddressLine1.Should().Contain("Airoli");
+        result.AddressLine1.Should().NotContain("Nanavati");
+        result.City.Should().Be("Navi Mumbai");
+        result.PostalCode.Should().Be("400708");
+        result.Latitude.Should().Be(19.1550d);
+    }
+
+    [Fact]
+    public void Re_picking_the_same_place_still_protects_hand_typed_text()
+    {
+        // The pin barely moves, so this is a refinement and the guard holds.
+        var current = Empty with
+        {
+            AddressLine1 = "Gate 3, opposite the paddock",
+            City         = "Mumbai Suburban",
+            Latitude     = 18.98205d,
+            Longitude    = 72.81004d,
+        };
+
+        var result = VenueLocationMapper.ApplySuggestion(current, Racecourse, States);
+
+        result.AddressLine1.Should().Be("Gate 3, opposite the paddock");
+        result.City.Should().Be("Mumbai Suburban");
+    }
+
+    [Fact]
+    public void The_admins_venue_name_survives_even_a_relocation()
+    {
+        // Name is the label the admin chose, not a description of the point.
+        var current = Empty with
+        {
+            Name      = "Client's rooftop — do not rename",
+            Latitude  = 18.9820d,
+            Longitude = 72.8100d,
+        };
+
+        var result = VenueLocationMapper.ApplySuggestion(current, Airoli, States);
+
+        result.Name.Should().Be("Client's rooftop — do not rename");
+        result.City.Should().Be("Navi Mumbai");
+    }
+
+    [Fact]
+    public void Typing_a_whole_new_coordinate_pair_replaces_the_old_address()
+    {
+        // Same defect reached through the manual latitude/longitude boxes rather
+        // than the search box.
+        var current = Empty with
+        {
+            AddressLine1 = "Nanavati Hospital, Vile Parle",
+            City         = "Mumbai",
+            PostalCode   = "400057",
+            Latitude     = 19.105374d,
+            Longitude    = 72.839953d,
+        };
+
+        var detail = new LocationDetail(
+            PlaceId: "999",
+            Name: "The Universe",
+            Address: "The Universe, Mumbra Bypass Road, Airoli",
+            City: "Navi Mumbai",
+            State: "Maharashtra",
+            PostalCode: "400708",
+            Country: "India",
+            Latitude: 19.1550m,
+            Longitude: 72.9990m);
+
+        var result = VenueLocationMapper.ApplyReverseGeocode(
+            current, detail, 19.1550d, 72.9990d, States);
+
+        result.AddressLine1.Should().Contain("Airoli");
+        result.City.Should().Be("Navi Mumbai");
+        result.PostalCode.Should().Be("400708");
+    }
+
+    [Fact]
+    public void Nudging_the_pin_a_few_metres_leaves_typed_text_alone()
+    {
+        // The "drag it to the exact entrance" flow must stay non-destructive.
+        var current = Empty with
+        {
+            AddressLine1 = "Hall 2, service entrance",
+            City         = "Mumbai",
+            Latitude     = 18.9820d,
+            Longitude    = 72.8100d,
+        };
+
+        var detail = new LocationDetail(
+            PlaceId: "123",
+            Name: "Mahalaxmi Racecourse",
+            Address: "Railway Sports Ground Lane, Mahalakshmi",
+            City: "Mumbai City",
+            State: "Maharashtra",
+            PostalCode: "400034",
+            Country: "India",
+            Latitude: 18.98215m,
+            Longitude: 72.81012m);
+
+        var result = VenueLocationMapper.ApplyReverseGeocode(
+            current, detail, 18.98215d, 72.81012d, States);
+
+        result.AddressLine1.Should().Be("Hall 2, service entrance");
+        result.City.Should().Be("Mumbai");
     }
 }

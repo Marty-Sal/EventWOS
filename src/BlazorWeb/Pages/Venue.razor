@@ -461,6 +461,14 @@
         var lat = (double)pos.Latitude;
         var lng = (double)pos.Longitude;
 
+        // Where the pin was BEFORE this move. The mapper decides "refinement or
+        // relocation" by distance from the current coordinates, and the optimistic
+        // apply below overwrites those immediately -- so without this snapshot the
+        // second call would measure the new point against itself, always see zero
+        // movement, and never replace a stale address block.
+        var fromLat = _form.Latitude;
+        var fromLng = _form.Longitude;
+
         // Coordinates land before the network calls so the form reflects the drag
         // instantly rather than after a round trip.
         _form.Apply(VenueLocationMapper.ApplyReverseGeocode(
@@ -470,8 +478,13 @@
         var detail = await LocationApi.ReverseGeocodeAsync(pos.Latitude, pos.Longitude);
         if (detail is null) return;
 
+        // Current text (the admin may have typed during the round trip) but the
+        // ORIGINAL coordinates, so the relocation test is judged from where the
+        // pin actually came from.
+        var basis = _form.ToLocationFields() with { Latitude = fromLat, Longitude = fromLng };
+
         _form.Apply(VenueLocationMapper.ApplyReverseGeocode(
-            _form.ToLocationFields(), detail, lat, lng, await CanonicalStatesAsync()));
+            basis, detail, lat, lng, await CanonicalStatesAsync()));
         StateHasChanged();
     }
 

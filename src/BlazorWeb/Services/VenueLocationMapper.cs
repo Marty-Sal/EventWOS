@@ -30,8 +30,19 @@ public sealed record VenueLocationFields(
 ///
 ///  1. COORDINATES ALWAYS WIN. They are the point of picking a suggestion and
 ///     they drive the geofence. Never conditional.
-///  2. ADDRESS TEXT FILLS BLANKS ONLY. Geocoders are routinely wrong about unit
-///     numbers and hall names, so hand-typed text is never overwritten.
+///  2. ADDRESS TEXT FOLLOWS THE PIN. Geocoders are routinely wrong about unit
+///     numbers and hall names, so a REFINEMENT (nudging the pin, or re-picking
+///     the same place) still fills blanks only and never overwrites text.
+///
+///     But a RELOCATION -- a new point more than SamePlaceToleranceMeters away --
+///     replaces the address block outright, because text describing the previous
+///     point is not a refinement, it is wrong. The original rule could not tell
+///     hand-typed text from text an EARLIER geocode wrote, so typing coordinates
+///     in Vile Parle and then searching a venue in Airoli kept the Vile Parle
+///     address next to Airoli coordinates and saved that as one venue.
+///
+///     Name is exempt and always fills blanks only: it is the admin's chosen
+///     label for the venue, not a description of the point.
 /// </summary>
 public static class VenueLocationMapper
 {
@@ -41,6 +52,39 @@ public static class VenueLocationMapper
     public const int CityMaxLength         = 200;
     public const int PostalCodeMaxLength   = 20;
     public const int CountryMaxLength      = 100;
+
+    /// <summary>
+    /// How far a new point can be from the current one and still count as the
+    /// same place. Picking the same venue twice, or dragging the pin to the exact
+    /// gate, lands well inside this; a different venue is nearly always far
+    /// outside it. Chosen loose enough that a geocoder returning the car park
+    /// instead of the entrance is not treated as a move.
+    /// </summary>
+    public const double SamePlaceToleranceMeters = 100d;
+
+    /// <summary>
+    /// True when the incoming point is a different place rather than a refinement
+    /// of the current one. No current coordinates means this is the first fill,
+    /// which is never a relocation.
+    /// </summary>
+    private static bool IsRelocation(double? fromLat, double? fromLng, double toLat, double toLng)
+        => fromLat is not null
+        && fromLng is not null
+        && DistanceMeters(fromLat.Value, fromLng.Value, toLat, toLng) > SamePlaceToleranceMeters;
+
+    /// <summary>Haversine great-circle distance in metres.</summary>
+    private static double DistanceMeters(double lat1, double lng1, double lat2, double lng2)
+    {
+        const double earthRadiusMetres = 6_371_000d;
+
+        var dLat = (lat2 - lat1) * Math.PI / 180d;
+        var dLng = (lng2 - lng1) * Math.PI / 180d;
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+              + Math.Cos(lat1 * Math.PI / 180d) * Math.Cos(lat2 * Math.PI / 180d)
+              * Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+
+        return earthRadiusMetres * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+    }
 
     /// <summary>
     /// Apply a chosen search suggestion.
@@ -55,29 +99,38 @@ public static class VenueLocationMapper
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(suggestion);
 
+        var lat = (double)suggestion.Latitude;
+        var lng = (double)suggestion.Longitude;
+
+        // Picking a suggestion far from the current point means the admin has
+        // identified a DIFFERENT venue, so the address block on screen describes
+        // somewhere else and must go.
+        var relocated = IsRelocation(current.Latitude, current.Longitude, lat, lng);
+
         return current with
         {
             // Rule 1 — unconditional.
-            Latitude  = (double)suggestion.Latitude,
-            Longitude = (double)suggestion.Longitude,
+            Latitude  = lat,
+            Longitude = lng,
 
             // ShortAddress is the exception among the text fields: it exists so
             // the admin never has to compose it, so the provider's version always
             // replaces whatever is there.
             ShortAddress = Truncate(suggestion.ShortAddress, ShortAddressMaxLength),
 
-            // Rule 2 — blanks only.
-            Name = FillBlank(current.Name, suggestion.Name, NameMaxLength),
-            AddressLine1 = FillBlank(
+            // Name is the admin's label for the venue, never a description of the
+            // point, so it fills blanks only even when relocating.
+            Name = Fill(current.Name, suggestion.Name, NameMaxLength, replace: false),
+
+            // Rule 2 — blanks only when refining, replaced when relocating.
+            AddressLine1 = Fill(
                 current.AddressLine1,
                 string.IsNullOrWhiteSpace(suggestion.FullAddress) ? suggestion.Name : suggestion.FullAddress,
-                AddressLineMaxLength),
-            City       = FillBlank(current.City,       suggestion.City,       CityMaxLength),
-            PostalCode = FillBlank(current.PostalCode, suggestion.PostalCode, PostalCodeMaxLength),
-            Country    = FillBlank(current.Country,    suggestion.Country,    CountryMaxLength),
-            State      = string.IsNullOrWhiteSpace(current.State)
-                ? MatchCanonicalState(suggestion.State, canonicalStates) ?? current.State
-                : current.State,
+                AddressLineMaxLength, relocated),
+            City       = Fill(current.City,       suggestion.City,       CityMaxLength,       relocated),
+            PostalCode = Fill(current.PostalCode, suggestion.PostalCode, PostalCodeMaxLength, relocated),
+            Country    = Fill(current.Country,    suggestion.Country,    CountryMaxLength,    relocated),
+            State      = NextState(current.State, suggestion.State, canonicalStates, relocated),
         };
     }
 
@@ -96,6 +149,12 @@ public static class VenueLocationMapper
     {
         ArgumentNullException.ThrowIfNull(current);
 
+        // Judged BEFORE the coordinates are overwritten. Nudging the pin to the
+        // exact gate is a refinement and must not touch typed text; clicking
+        // across the city, or typing a whole new coordinate pair, is a relocation
+        // and the old address block is then simply wrong.
+        var relocated = IsRelocation(current.Latitude, current.Longitude, latitude, longitude);
+
         var moved = current with { Latitude = latitude, Longitude = longitude };
 
         // No address at that point (middle of a field, provider down) is a
@@ -104,13 +163,11 @@ public static class VenueLocationMapper
 
         return moved with
         {
-            AddressLine1 = FillBlank(moved.AddressLine1, detail.Address,    AddressLineMaxLength),
-            City         = FillBlank(moved.City,         detail.City,       CityMaxLength),
-            PostalCode   = FillBlank(moved.PostalCode,   detail.PostalCode, PostalCodeMaxLength),
-            Country      = FillBlank(moved.Country,      detail.Country,    CountryMaxLength),
-            State        = string.IsNullOrWhiteSpace(moved.State)
-                ? MatchCanonicalState(detail.State, canonicalStates) ?? moved.State
-                : moved.State,
+            AddressLine1 = Fill(moved.AddressLine1, detail.Address,    AddressLineMaxLength, relocated),
+            City         = Fill(moved.City,         detail.City,       CityMaxLength,        relocated),
+            PostalCode   = Fill(moved.PostalCode,   detail.PostalCode, PostalCodeMaxLength,  relocated),
+            Country      = Fill(moved.Country,      detail.Country,    CountryMaxLength,     relocated),
+            State        = NextState(moved.State, detail.State, canonicalStates, relocated),
         };
     }
 
@@ -160,10 +217,35 @@ public static class VenueLocationMapper
         return contains.Count == 1 ? contains[0] : null;
     }
 
-    private static string? FillBlank(string? currentValue, string? incoming, int maxLength)
-        => !string.IsNullOrWhiteSpace(currentValue) || string.IsNullOrWhiteSpace(incoming)
-            ? currentValue
-            : Truncate(incoming!, maxLength);
+    /// <summary>
+    /// Fill a text field from the provider. Blanks are always filled; existing
+    /// text is kept when refining and replaced when relocating. A provider that
+    /// offers nothing never blanks a field that already has a value.
+    /// </summary>
+    private static string? Fill(string? currentValue, string? incoming, int maxLength, bool replace)
+    {
+        if (string.IsNullOrWhiteSpace(incoming)) return currentValue;
+        if (!replace && !string.IsNullOrWhiteSpace(currentValue)) return currentValue;
+        return Truncate(incoming!, maxLength);
+    }
+
+    /// <summary>
+    /// State needs its own path because it must land on an exact StateSelect
+    /// option. When relocating, an unmatchable provider state BLANKS the field
+    /// rather than leaving the previous state standing next to a new city — an
+    /// empty dropdown the admin must fill is honest, a stale one is not.
+    /// </summary>
+    private static string? NextState(
+        string? currentState,
+        string? incomingState,
+        IReadOnlyList<string> canonicalStates,
+        bool relocated)
+    {
+        var matched = MatchCanonicalState(incomingState, canonicalStates);
+
+        if (relocated) return matched;
+        return string.IsNullOrWhiteSpace(currentState) ? matched ?? currentState : currentState;
+    }
 
     /// <summary>
     /// Provider strings routinely exceed our column widths (display_name is often
