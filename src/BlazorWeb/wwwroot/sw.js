@@ -34,7 +34,7 @@
  * (check-in, ratings) still require network by design.
  */
 
-const CACHE_VERSION = 'v4-2026-08-21-no-forced-skipwaiting';
+const CACHE_VERSION = 'v5-2026-08-24-push';
 const SHELL_CACHE   = `eventwos-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `eventwos-runtime-${CACHE_VERSION}`;
 
@@ -275,3 +275,162 @@ async function networkFirstGeneric(req) {
 self.addEventListener('message', (event) => {
     if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
+
+// ---- push ----------------------------------------------------------
+// Everything below is the notification side of the worker. It is
+// deliberately independent of the caching strategy above: a push can
+// arrive when no tab is open at all, which is the entire point.
+//
+// The server chooses the title, body and target path, so adding a
+// notification type is a backend change -- NOT a service worker
+// change. That matters because a worker update only reaches a user on
+// their next visit, so anything encoded here is frozen for people who
+// do not come back for a week.
+
+const NOTIFICATION_ICON = '/icons/icon-192.png';
+const NOTIFICATION_BADGE = '/icons/icon-192.png';
+
+self.addEventListener('push', (event) => {
+    event.waitUntil(handlePush(event));
+});
+
+async function handlePush(event) {
+    const payload = readPayload(event);
+
+    // A push with no usable data still gets shown. Browsers require a
+    // visible notification for a userVisibleOnly subscription, and
+    // silently swallowing it can cost us the push permission entirely.
+    const title = payload.title || 'EventWOS';
+    const body  = payload.body  || 'You have a new notification.';
+
+    // tag collapses an updated version of the same notification instead
+    // of stacking duplicates on the lock screen; renotify still alerts.
+    const tag = payload.notificationId || payload.notificationType || 'eventwos';
+
+    await self.registration.showNotification(title, {
+        body,
+        tag,
+        renotify: true,
+        icon:  NOTIFICATION_ICON,
+        badge: NOTIFICATION_BADGE,
+        // High-priority news vibrates; routine news does not, so the
+        // urgent things stay recognisable.
+        vibrate: payload.priority === 'Critical' || payload.priority === 'High'
+            ? [200, 100, 200]
+            : undefined,
+        // Kept out of requireInteraction on purpose: a notification that
+        // will not dismiss itself is the fastest way to get muted.
+        data: {
+            deepLink: sanitizePath(payload.deepLink),
+            notificationId: payload.notificationId || null,
+            notificationType: payload.notificationType || null
+        }
+    });
+
+    // The count comes from the server, which is authoritative -- reading
+    // something on a phone should make the laptop badge fall too.
+    if (typeof payload.badgeCount === 'number') await setAppBadge(payload.badgeCount);
+
+    // Any open tab refreshes its bell immediately rather than waiting
+    // for its next poll.
+    await broadcast({ type: 'PUSH_RECEIVED', notificationId: payload.notificationId || null });
+}
+
+function readPayload(event) {
+    if (!event.data) return {};
+    try {
+        return event.data.json() || {};
+    } catch {
+        // Not JSON. Treat the raw text as a body rather than dropping it.
+        try { return { body: event.data.text() }; } catch { return {}; }
+    }
+}
+
+// ---- click ----------------------------------------------------------
+// Focus a tab the user already has open instead of piling up new ones,
+// and only open a window when there is genuinely nothing to focus.
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    event.waitUntil(openTarget(sanitizePath(event.notification.data?.deepLink)));
+});
+
+async function openTarget(path) {
+    const target = new URL(path || '/', self.location.origin);
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    for (const client of clients) {
+        // Same-origin only. A cross-origin client cannot be navigated,
+        // and trying is how a click ends up doing nothing at all.
+        if (new URL(client.url).origin !== self.location.origin) continue;
+
+        await client.focus();
+
+        // Blazor routing lives in the page, so the tab is told where to
+        // go rather than being hard-navigated -- a full navigation would
+        // reload the whole WASM runtime for what is an in-app link.
+        client.postMessage({ type: 'NOTIFICATION_CLICKED', path: target.pathname + target.search });
+        return;
+    }
+
+    await self.clients.openWindow(target.href);
+}
+
+// ---- subscription rotation ------------------------------------------
+// Browsers retire and reissue subscriptions on their own schedule. When
+// that happens the old endpoint starts returning 410 and the user goes
+// quiet with nobody noticing, so the worker immediately re-subscribes.
+//
+// It cannot register the new subscription with the API itself: the auth
+// token lives in the page, not here. So it re-subscribes to keep the
+// browser side live and tells any open tab; the app also re-registers on
+// every visit (subscribe is an upsert), which closes the gap for a user
+// who had no tab open.
+self.addEventListener('pushsubscriptionchange', (event) => {
+    event.waitUntil(resubscribe(event));
+});
+
+async function resubscribe(event) {
+    try {
+        const key = event.oldSubscription?.options?.applicationServerKey;
+        if (!key) return;
+
+        const fresh = await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: key
+        });
+
+        await broadcast({ type: 'PUSH_SUBSCRIPTION_CHANGED', subscription: fresh.toJSON() });
+    } catch {
+        // Nothing useful to do here. The next visit re-registers.
+    }
+}
+
+// ---- helpers ---------------------------------------------------------
+
+// Only ever navigate to a path on our own origin. The deep link arrives
+// inside a push payload, so treating it as a full URL would turn a
+// notification into an open redirect if a payload were ever tampered
+// with. The server sanitises too; this is the second lock.
+function sanitizePath(value) {
+    if (typeof value !== 'string' || value.length === 0) return '/';
+    if (!value.startsWith('/')) return '/';
+    if (value.startsWith('//')) return '/';   // protocol-relative URL
+    if (value.includes('\\')) return '/';
+    return value;
+}
+
+async function setAppBadge(count) {
+    try {
+        if (count > 0 && self.navigator?.setAppBadge) await self.navigator.setAppBadge(count);
+        else if (self.navigator?.clearAppBadge)       await self.navigator.clearAppBadge();
+    } catch {
+        // Badging is unsupported on most desktop browsers. Never fatal.
+    }
+}
+
+async function broadcast(message) {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+        try { client.postMessage(message); } catch { /* a closing tab */ }
+    }
+}

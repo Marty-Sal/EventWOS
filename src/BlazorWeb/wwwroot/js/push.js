@@ -1,0 +1,227 @@
+/*
+ * EventWOS push subscription interop
+ * ----------------------------------
+ * The browser half of Web Push. The service worker (wwwroot/sw.js)
+ * receives and displays notifications; this file is only about getting
+ * permission and handing the resulting subscription to the API.
+ *
+ * Every function is defensive on purpose. Push is genuinely absent or
+ * half-implemented across the devices event crew actually use -- old
+ * Android WebViews, iOS Safari before 16.4, iOS Safari 16.4+ that has
+ * NOT been added to the home screen, and desktop browsers with
+ * notifications blocked at the OS level. Each of those must produce a
+ * clear reason, never an exception, so the UI can explain itself
+ * instead of showing a toggle that does nothing.
+ */
+
+window.eventwosPush = (() => {
+
+    // ---- capability -------------------------------------------------
+
+    function isStandalone() {
+        return window.matchMedia?.('(display-mode: standalone)')?.matches === true
+            || window.navigator.standalone === true;
+    }
+
+    function isIos() {
+        const ua = navigator.userAgent || '';
+        return /iPad|iPhone|iPod/.test(ua)
+            // iPadOS 13+ reports itself as a Mac; the touch points give it away.
+            || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+    }
+
+    /**
+     * Why push is unavailable, or null when it is available.
+     * The strings are shown to users, so they say what to DO.
+     */
+    function unsupportedReason() {
+        if (!('serviceWorker' in navigator))
+            return 'This browser does not support background notifications.';
+
+        if (!('PushManager' in window)) {
+            // The single most common confusion on iPhone: Safari supports
+            // push from 16.4, but ONLY for an installed PWA.
+            return isIos() && !isStandalone()
+                ? 'On iPhone and iPad, tap Share then "Add to Home Screen" first, then open EventWOS from the home screen icon.'
+                : 'This browser does not support push notifications.';
+        }
+
+        if (!('Notification' in window))
+            return 'This browser does not support notifications.';
+
+        if (isIos() && !isStandalone())
+            return 'On iPhone and iPad, tap Share then "Add to Home Screen" first, then open EventWOS from the home screen icon.';
+
+        return null;
+    }
+
+    // ---- state ------------------------------------------------------
+
+    /**
+     * A single snapshot for the UI: is it possible, is it allowed, is it on.
+     * One call rather than four, so the toggle cannot render a mix of
+     * stale answers.
+     */
+    async function getStatus() {
+        const reason = unsupportedReason();
+        if (reason) {
+            return { supported: false, reason, permission: 'unsupported', subscribed: false, endpoint: null };
+        }
+
+        const permission = Notification.permission;
+        let endpoint = null;
+
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            const existing = await reg.pushManager.getSubscription();
+            endpoint = existing?.endpoint ?? null;
+        } catch {
+            // A worker that has not activated yet is not an error state.
+        }
+
+        return {
+            supported: true,
+            reason: null,
+            permission,                       // 'default' | 'granted' | 'denied'
+            subscribed: endpoint !== null,
+            endpoint
+        };
+    }
+
+    // ---- subscribe --------------------------------------------------
+
+    /**
+     * Asks permission if needed and returns the subscription in the exact
+     * shape the API expects. Returns { ok: false, reason } rather than
+     * throwing, so a refusal is an outcome the UI can render.
+     *
+     * MUST be called from a user gesture: browsers ignore -- and Safari
+     * penalises -- a permission prompt that nobody asked for.
+     */
+    async function subscribe(vapidPublicKey) {
+        const reason = unsupportedReason();
+        if (reason) return { ok: false, reason };
+
+        if (!vapidPublicKey) return { ok: false, reason: 'Push is not configured on the server.' };
+
+        if (Notification.permission === 'denied') {
+            // Once denied, only the user can undo it in browser settings;
+            // asking again is a no-op that looks like a broken button.
+            return { ok: false, reason: 'Notifications are blocked for this site. Enable them in your browser settings, then try again.' };
+        }
+
+        if (Notification.permission === 'default') {
+            const granted = await Notification.requestPermission();
+            if (granted !== 'granted') return { ok: false, reason: 'Notification permission was not granted.' };
+        }
+
+        try {
+            const reg = await navigator.serviceWorker.ready;
+
+            // Reuse an existing subscription when the key still matches.
+            // Re-subscribing needlessly changes the endpoint and orphans
+            // the row we already have on the server.
+            let sub = await reg.pushManager.getSubscription();
+
+            if (sub && !keyMatches(sub, vapidPublicKey)) {
+                // The server's VAPID key was rotated. The old subscription
+                // can never be pushed to again, so replace it.
+                await sub.unsubscribe();
+                sub = null;
+            }
+
+            if (!sub) {
+                sub = await reg.pushManager.subscribe({
+                    // Required by Chrome: a subscription that can push
+                    // silently would be a tracking vector, so every push
+                    // must show something.
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+                });
+            }
+
+            const json = sub.toJSON();
+
+            return {
+                ok: true,
+                endpoint: json.endpoint,
+                p256dh: json.keys?.p256dh ?? null,
+                auth: json.keys?.auth ?? null,
+                platform: describePlatform()
+            };
+        } catch (err) {
+            // AbortError here is usually a missing/incorrect VAPID key or a
+            // push service the device cannot reach.
+            return { ok: false, reason: `Could not subscribe to notifications (${err?.name || 'error'}).` };
+        }
+    }
+
+    /**
+     * Drops the browser-side subscription and returns the endpoint that was
+     * removed, so the caller can tell the API which row to retire.
+     */
+    async function unsubscribe() {
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            if (!sub) return { ok: true, endpoint: null };
+
+            const endpoint = sub.endpoint;
+            await sub.unsubscribe();
+            return { ok: true, endpoint };
+        } catch (err) {
+            return { ok: false, reason: `Could not unsubscribe (${err?.name || 'error'}).` };
+        }
+    }
+
+    // ---- badge ------------------------------------------------------
+
+    /** Mirrors the unread count onto the app icon where the OS supports it. */
+    async function setBadge(count) {
+        try {
+            if (count > 0 && navigator.setAppBadge) await navigator.setAppBadge(count);
+            else if (navigator.clearAppBadge)       await navigator.clearAppBadge();
+        } catch { /* unsupported on most desktops; never fatal */ }
+    }
+
+    // ---- helpers ----------------------------------------------------
+
+    /**
+     * The VAPID public key is base64url; subscribe() needs raw bytes.
+     * A mismatch here fails as an opaque AbortError, which is why this is
+     * its own function rather than an inline one-liner.
+     */
+    function urlBase64ToUint8Array(base64Url) {
+        const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
+        const base64  = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const raw     = window.atob(base64);
+        const bytes   = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        return bytes;
+    }
+
+    function keyMatches(subscription, vapidPublicKey) {
+        try {
+            const applied = subscription.options?.applicationServerKey;
+            if (!applied) return true;   // cannot tell; assume fine
+            const a = new Uint8Array(applied);
+            const b = urlBase64ToUint8Array(vapidPublicKey);
+            if (a.length !== b.length) return false;
+            return a.every((v, i) => v === b[i]);
+        } catch {
+            return true;
+        }
+    }
+
+    function describePlatform() {
+        const ua = navigator.userAgent || '';
+        if (/iPhone/i.test(ua)) return 'iPhone';
+        if (/iPad/i.test(ua))   return 'iPad';
+        if (/Android/i.test(ua)) return 'Android';
+        if (/Windows/i.test(ua)) return 'Windows';
+        if (/Mac OS/i.test(ua))  return 'Mac';
+        return null;
+    }
+
+    return { getStatus, subscribe, unsubscribe, setBadge, isStandalone };
+})();
