@@ -142,6 +142,10 @@ window.eventwosPush = (() => {
 
             const json = sub.toJSON();
 
+            // Reaching here means push is wanted on this browser, whether the
+            // caller was the toggle or the automatic path.
+            setOptedOut(false);
+
             return {
                 ok: true,
                 endpoint: json.endpoint,
@@ -164,10 +168,15 @@ window.eventwosPush = (() => {
         try {
             const reg = await navigator.serviceWorker.ready;
             const sub = await reg.pushManager.getSubscription();
-            if (!sub) return { ok: true, endpoint: null };
+            if (!sub) { setOptedOut(true); return { ok: true, endpoint: null }; }
 
             const endpoint = sub.endpoint;
             await sub.unsubscribe();
+
+            // Remembered so the automatic path does not undo this on the next
+            // page load. Only turning the toggle back on clears it.
+            setOptedOut(true);
+
             return { ok: true, endpoint };
         } catch (err) {
             return { ok: false, reason: `Could not unsubscribe (${err?.name || 'error'}).` };
@@ -247,12 +256,103 @@ window.eventwosPush = (() => {
         // user who has not been asked, or who said no, sees nothing at all.
         if (Notification.permission !== 'granted') return { ok: false, reason: 'not-granted' };
         if (!publicKey) return { ok: false, reason: 'no-key' };
+        if (isOptedOut()) return { ok: false, reason: 'opted-out' };
 
         // Delegated rather than reimplemented: subscribe() already reuses a live
         // subscription, replaces one signed with a rotated key, and returns the
         // shape the caller registers with the API. With permission already
         // granted it cannot prompt, so there is nothing to be careful about here.
         return await subscribe(publicKey);
+    }
+
+    // ---- always on ---------------------------------------------------
+    // Notifications are meant to be ON for everyone, so the app asks instead of
+    // waiting to be found in a settings page nobody visits.
+    //
+    // The one thing that cannot be automated is the OS permission itself: no site
+    // can pre-answer that dialog. So this asks for it, which is the closest thing
+    // to "on by default" that exists on the web.
+    //
+    // Asking has a cost, and it is not politeness -- it is mechanical. Chrome
+    // treats repeatedly-dismissed prompts as a block signal and will eventually
+    // refuse to show ours at all, permanently, with no way for us to recover it.
+    // So the asking is rationed: at most MAX_ASKS times, never twice within
+    // ASK_COOLDOWN_MS. A dismissal is not a refusal (people dismiss because they
+    // are mid-task) but three of them are, and after that only the toggle asks.
+    // An explicit OFF has to survive a reload, or the toggle is a liar: revoking
+    // the browser subscription leaves PERMISSION granted, so without this the
+    // next page load would helpfully re-subscribe the person who just opted out.
+    // Deliberately per-browser rather than per-account -- "not on this laptop" is
+    // the actual intent, and it is the browser that will be buzzing.
+    const OPT_OUT_KEY     = 'eventwos.push.optOut';
+    const ASK_LOG_KEY     = 'eventwos.push.asked';
+    const MAX_ASKS        = 3;
+    const ASK_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
+
+
+    function isOptedOut() {
+        try { return localStorage.getItem(OPT_OUT_KEY) === '1'; } catch { return false; }
+    }
+
+    function setOptedOut(value) {
+        try {
+            if (value) localStorage.setItem(OPT_OUT_KEY, '1');
+            else       localStorage.removeItem(OPT_OUT_KEY);
+        } catch { /* private mode: honoured for this session only */ }
+    }
+
+    function askLog() {
+        try { return JSON.parse(localStorage.getItem(ASK_LOG_KEY)) || { count: 0, last: 0 }; }
+        catch { return { count: 0, last: 0 }; }
+    }
+
+    function recordAsk() {
+        try {
+            const log = askLog();
+            localStorage.setItem(ASK_LOG_KEY, JSON.stringify({ count: log.count + 1, last: Date.now() }));
+        } catch { /* private mode: asking once per page load is still better than never */ }
+    }
+
+    function mayAsk() {
+        const log = askLog();
+        return log.count < MAX_ASKS && (Date.now() - log.last) > ASK_COOLDOWN_MS;
+    }
+
+    /**
+     * Gets this device subscribed, asking for permission if that is still open.
+     * Safe to call on every page load.
+     */
+    async function ensureEnabled(publicKey) {
+        if (unsupportedReason()) return { ok: false, reason: 'unsupported' };
+        if (!publicKey)          return { ok: false, reason: 'no-key' };
+        if (isOptedOut())        return { ok: false, reason: 'opted-out' };
+
+        // Already answered. Granted re-subscribes silently (this is what heals a
+        // reinstalled PWA); denied is the user's decision and is left alone --
+        // re-asking is impossible anyway, only browser settings can undo it.
+        if (Notification.permission === 'granted') return await subscribe(publicKey);
+        if (Notification.permission === 'denied')  return { ok: false, reason: 'denied' };
+
+        if (!mayAsk()) return { ok: false, reason: 'cooling-off' };
+
+        try {
+            recordAsk();
+            const granted = await Notification.requestPermission();
+            if (granted !== 'granted') return { ok: false, reason: 'dismissed' };
+            return await subscribe(publicKey);
+        } catch (err) {
+            // Safari, including iOS standalone, REQUIRES a user gesture and throws
+            // NotAllowedError for an unprompted call like this one. That is not a
+            // failure to report: the toggle on the notifications page is a gesture
+            // and works there. The ask is un-recorded so the budget is not spent
+            // on a browser that was never going to show the dialog.
+            try {
+                const log = askLog();
+                localStorage.setItem(ASK_LOG_KEY, JSON.stringify({ count: Math.max(0, log.count - 1), last: 0 }));
+            } catch { /* ignore */ }
+
+            return { ok: false, reason: 'needs-gesture' };
+        }
     }
 
     // ---- service worker messages ------------------------------------
@@ -287,5 +387,5 @@ window.eventwosPush = (() => {
         return true;
     }
 
-    return { getStatus, subscribe, unsubscribe, setBadge, isStandalone, listen, autoEnable };
+    return { getStatus, subscribe, unsubscribe, setBadge, isStandalone, listen, autoEnable, ensureEnabled };
 })();

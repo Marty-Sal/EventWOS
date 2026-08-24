@@ -10,7 +10,8 @@
  *      via the runtime-cache below.
  *
  *   2. Runtime cache-first for immutable static assets:
- *      _framework/*, /js/*, /icons/*, /*.css, /*.woff2.
+ *      _framework/*, /icons/*, /*.css, /*.woff2 (NOT /js/* -- see
+ *      isImmutableAsset).
  *      These have fingerprinted URLs, so cache-first is safe —
  *      a code change produces a new URL, which misses the cache
  *      and hits the network fresh.
@@ -34,7 +35,7 @@
  * (check-in, ratings) still require network by design.
  */
 
-const CACHE_VERSION = 'v6-2026-08-24-push-icon';
+const CACHE_VERSION = 'v7-2026-08-24-push-always-on';
 const SHELL_CACHE   = `eventwos-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `eventwos-runtime-${CACHE_VERSION}`;
 
@@ -178,15 +179,23 @@ function isImmutableAsset(pathname) {
     if (pathname === '/_framework/blazor.webassembly.js') return false;
     if (pathname === '/_framework/dotnet.js')              return false;
 
-    // Our own hand-written scripts are referenced by a plain
-    // <script src="js/...">  with no content hash or cache-busting
-    // query string either — same failure mode, smaller blast radius.
-    if (/^\/js\/(checkin|forms|pwa-install)\.js$/.test(pathname)) return false;
+    // NONE of our own hand-written scripts are fingerprinted -- they are
+    // referenced by a plain <script src="js/..."> with no content hash and no
+    // cache-busting query string -- so cache-first would pin whichever copy
+    // happened to be cached first, forever.
+    //
+    // This used to name the three scripts that existed when it was written, and
+    // push.js was added later and silently inherited cache-first. The result:
+    // every fix to the push client shipped to nobody who had already opened the
+    // app, which is exactly the audience it was for. Enumerating was the bug, so
+    // the whole directory is excluded -- these are a few KB each and still get
+    // ordinary HTTP caching from nginx.
+    if (pathname.startsWith('/js/')) return false;
 
+    // '/js/' is deliberately absent here -- it returned false above.
     return pathname.startsWith('/_framework/')
         || pathname.startsWith('/_content/')
         || pathname.startsWith('/icons/')
-        || pathname.startsWith('/js/')
         || /\.(js|css|wasm|dat|blat|woff2?|ttf|png|svg|ico|jpg|webp)$/i.test(pathname);
 }
 

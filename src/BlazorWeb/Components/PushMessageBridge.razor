@@ -35,7 +35,7 @@
             // navigate twice for one notification click.
             await JS.InvokeAsync<bool>("eventwosPush.listen", _ref);
 
-            await AutoEnableAsync();
+            StartAutoEnable();
         }
         catch
         {
@@ -43,6 +43,25 @@
             // notification click-through is lost, which is not worth an error.
         }
     }
+
+    /// <summary>
+    /// Fires the automatic enable a few seconds after load, without blocking it.
+    ///
+    /// The delay is not decoration. A permission dialog racing the first paint --
+    /// or worse, stacking on top of the "Install EventWOS" banner -- is the exact
+    /// situation people dismiss reflexively, and a reflex dismissal costs us one of
+    /// only three asks the browser will tolerate. Letting the page settle first
+    /// buys a decision instead of a flinch.
+    ///
+    /// Deliberately not awaited: nothing downstream depends on it, and the bell,
+    /// the feeds and the rest of the app must not wait on a dialog.
+    /// </summary>
+    private void StartAutoEnable()
+        => _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(4));
+            await AutoEnableAsync();
+        });
 
     /// <summary>
     /// Keeps notifications ON without the user having to find the toggle again.
@@ -66,7 +85,7 @@
             var config = await PushApi.GetConfigAsync();
             if (config?.Enabled != true || string.IsNullOrWhiteSpace(config.PublicKey)) return;
 
-            var result = await JS.InvokeAsync<SubscribeResult>("eventwosPush.autoEnable", config.PublicKey);
+            var result = await JS.InvokeAsync<SubscribeResult>("eventwosPush.ensureEnabled", config.PublicKey);
 
             // Not granted / unsupported / blocked all land here and are correct
             // outcomes, not failures.
