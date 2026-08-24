@@ -15,52 +15,76 @@ namespace EventWOS.Application.Notifications.Contracts;
 /// </summary>
 public static class NotificationPolicy
 {
+    // Push rides along with in-app on almost everything. It is the cheapest
+    // channel we have, it only ever reaches a device whose owner explicitly
+    // opted in, and a recipient with no registered device is skipped rather
+    // than failed -- so adding it costs nothing where it is not wanted.
     private static readonly NotificationChannel[] InAppOnly       = { NotificationChannel.InApp };
     private static readonly NotificationChannel[] InAppEmail      = { NotificationChannel.InApp, NotificationChannel.Email };
-    private static readonly NotificationChannel[] InAppWhatsApp   = { NotificationChannel.InApp, NotificationChannel.WhatsApp };
-    private static readonly NotificationChannel[] AllChannels     = { NotificationChannel.InApp, NotificationChannel.Email, NotificationChannel.WhatsApp };
+    private static readonly NotificationChannel[] InAppPush       = { NotificationChannel.InApp, NotificationChannel.Push };
+    private static readonly NotificationChannel[] InAppEmailPush  = { NotificationChannel.InApp, NotificationChannel.Email, NotificationChannel.Push };
+    private static readonly NotificationChannel[] InAppWhatsAppPush = { NotificationChannel.InApp, NotificationChannel.WhatsApp, NotificationChannel.Push };
+    private static readonly NotificationChannel[] AllChannelsPush   = { NotificationChannel.InApp, NotificationChannel.Email, NotificationChannel.WhatsApp, NotificationChannel.Push };
 
     private static readonly Dictionary<string, (NotificationPriority Priority, NotificationChannel[] Channels)> Defaults =
         new(StringComparer.OrdinalIgnoreCase)
         {
             // Account lifecycle: reaches people who are not logged in yet, so
             // in-app alone would be useless.
-            [NotificationTemplateCodes.AccountApproved]        = (NotificationPriority.High,     AllChannels),
-            [NotificationTemplateCodes.AccountRejected]        = (NotificationPriority.High,     InAppEmail),
-            [NotificationTemplateCodes.AccountInvited]         = (NotificationPriority.High,     AllChannels),
+            [NotificationTemplateCodes.AccountApproved]        = (NotificationPriority.High,     AllChannelsPush),
+            [NotificationTemplateCodes.AccountRejected]        = (NotificationPriority.High,     InAppEmailPush),
+            [NotificationTemplateCodes.AccountInvited]         = (NotificationPriority.High,     AllChannelsPush),
+            // Low-value housekeeping for whoever manages the person. Deliberately
+            // NOT pushed: interrupting a phone for it is how people learn to
+            // swipe our notifications away without reading them.
             [NotificationTemplateCodes.ProfileCompleted]       = (NotificationPriority.Low,      InAppEmail),
             // OTP is security-critical and time-boxed. Never in-app: the whole
             // point is to reach a channel the person already controls.
             [NotificationTemplateCodes.PasswordResetOtp]       = (NotificationPriority.Critical, new[] { NotificationChannel.Email, NotificationChannel.WhatsApp }),
 
-            [NotificationTemplateCodes.VendorEventInvited]     = (NotificationPriority.Normal,   AllChannels),
-            [NotificationTemplateCodes.VendorInviteRevoked]    = (NotificationPriority.Normal,   InAppEmail),
-            [NotificationTemplateCodes.VendorEventReminder]    = (NotificationPriority.Normal,   InAppWhatsApp),
+            [NotificationTemplateCodes.VendorEventInvited]     = (NotificationPriority.Normal,   AllChannelsPush),
+            [NotificationTemplateCodes.VendorInviteRevoked]    = (NotificationPriority.Normal,   InAppEmailPush),
+            [NotificationTemplateCodes.VendorEventReminder]    = (NotificationPriority.Normal,   InAppWhatsAppPush),
 
             // Crew are field staff: WhatsApp is the channel they actually read,
             // and many have no working email address on file.
-            [NotificationTemplateCodes.CrewInvitation]         = (NotificationPriority.Normal,   InAppWhatsApp),
-            [NotificationTemplateCodes.CrewAssignment]         = (NotificationPriority.Normal,   InAppWhatsApp),
-            [NotificationTemplateCodes.CrewAssignmentApproved] = (NotificationPriority.Normal,   InAppWhatsApp),
-            [NotificationTemplateCodes.CrewAssignmentRejected] = (NotificationPriority.Normal,   InAppWhatsApp),
-            [NotificationTemplateCodes.CrewInviteRevoked]      = (NotificationPriority.Normal,   InAppWhatsApp),
-            [NotificationTemplateCodes.CrewAssignmentReminder] = (NotificationPriority.High,     InAppWhatsApp),
+            [NotificationTemplateCodes.CrewInvitation]         = (NotificationPriority.Normal,   InAppWhatsAppPush),
+            [NotificationTemplateCodes.CrewAssignment]         = (NotificationPriority.Normal,   InAppWhatsAppPush),
+            [NotificationTemplateCodes.CrewAssignmentApproved] = (NotificationPriority.Normal,   InAppWhatsAppPush),
+            [NotificationTemplateCodes.CrewAssignmentRejected] = (NotificationPriority.Normal,   InAppWhatsAppPush),
+            [NotificationTemplateCodes.CrewInviteRevoked]      = (NotificationPriority.Normal,   InAppWhatsAppPush),
+            [NotificationTemplateCodes.CrewAssignmentReminder] = (NotificationPriority.High,     InAppWhatsAppPush),
 
-            [NotificationTemplateCodes.EventAnnouncement]      = (NotificationPriority.Normal,   AllChannels),
-            [NotificationTemplateCodes.EventUpdated]           = (NotificationPriority.High,     InAppWhatsApp),
+            [NotificationTemplateCodes.EventAnnouncement]      = (NotificationPriority.Normal,   AllChannelsPush),
+            [NotificationTemplateCodes.EventUpdated]           = (NotificationPriority.High,     InAppWhatsAppPush),
             // Someone travelling to a cancelled event is the worst failure this
             // system can have, so it outranks ordinary traffic.
-            [NotificationTemplateCodes.EventCancelled]         = (NotificationPriority.Critical, AllChannels),
-            [NotificationTemplateCodes.EventStarting]          = (NotificationPriority.High,     InAppWhatsApp),
-            [NotificationTemplateCodes.ShiftChanged]           = (NotificationPriority.High,     InAppWhatsApp),
+            [NotificationTemplateCodes.EventCancelled]         = (NotificationPriority.Critical, AllChannelsPush),
+            [NotificationTemplateCodes.EventStarting]          = (NotificationPriority.High,     InAppWhatsAppPush),
+            [NotificationTemplateCodes.ShiftChanged]           = (NotificationPriority.High,     InAppWhatsAppPush),
 
-            [NotificationTemplateCodes.AttendanceReminder]     = (NotificationPriority.High,     InAppWhatsApp),
+            [NotificationTemplateCodes.AttendanceReminder]     = (NotificationPriority.High,     InAppWhatsAppPush),
+            // A receipt for something the person just did on that same phone,
+            // seconds earlier. Pushing it back at them adds nothing.
             [NotificationTemplateCodes.CheckInVerified]        = (NotificationPriority.Low,      InAppOnly),
 
+            // These six shipped after this table was written and fell through to
+            // the unknown-code default of in-app only -- so they never pushed,
+            // and never will unless they are listed. In-app + push only on
+            // purpose: adding email or WhatsApp here would start sending
+            // outbound messages that nobody has asked for, which is a separate
+            // decision from switching push on.
+            [NotificationTemplateCodes.RegistrationPendingApproval] = (NotificationPriority.High,   InAppPush),
+            [NotificationTemplateCodes.AssignmentPendingApproval]   = (NotificationPriority.High,   InAppPush),
+            [NotificationTemplateCodes.VendorAcceptedEvent]         = (NotificationPriority.Normal, InAppPush),
+            [NotificationTemplateCodes.VendorRejectedEvent]         = (NotificationPriority.High,   InAppPush),
+            [NotificationTemplateCodes.CrewAcceptedAssignment]      = (NotificationPriority.Normal, InAppPush),
+            [NotificationTemplateCodes.CrewDeclinedAssignment]      = (NotificationPriority.High,   InAppPush),
+
             // Money: people chase these, and a WhatsApp line saves a phone call.
-            [NotificationTemplateCodes.PaymentApproved]        = (NotificationPriority.Normal,   InAppWhatsApp),
-            [NotificationTemplateCodes.PaymentRejected]        = (NotificationPriority.Normal,   InAppWhatsApp),
-            [NotificationTemplateCodes.PayrollReleased]        = (NotificationPriority.Normal,   AllChannels),
+            [NotificationTemplateCodes.PaymentApproved]        = (NotificationPriority.Normal,   InAppWhatsAppPush),
+            [NotificationTemplateCodes.PaymentRejected]        = (NotificationPriority.Normal,   InAppWhatsAppPush),
+            [NotificationTemplateCodes.PayrollReleased]        = (NotificationPriority.Normal,   AllChannelsPush),
         };
 
     /// <summary>
