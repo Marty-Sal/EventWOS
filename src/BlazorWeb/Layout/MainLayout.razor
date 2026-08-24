@@ -278,6 +278,10 @@
 </div>
 
 <NotificationToast />
+
+@* Invisible: forwards service-worker push messages into the app.
+   See Components/PushMessageBridge.razor. *@
+<PushMessageBridge />
 <PwaInstallBanner />
 
 @if (_termsStatus is { RequiresAcceptance: true })
@@ -530,6 +534,11 @@
         // this one subscription replaces the per-event wiring the legacy pushes need.
         Hub.PlatformNotificationReceived += OnPlatformCountChanged;
 
+        // Web Push arriving while a tab is open. Separate from the SignalR
+        // subscription above because the two transports are independent -- a
+        // push can land when SignalR is disconnected, which is much of the point.
+        Hub.PushReceived += OnPushReceived;
+
         Hub.AssignmentInviteReceived     += OnInviteCountChanged; // crew: new invite
         Hub.VendorApprovedReceived       += OnInviteCountChanged; // crew: state moved
         Hub.VendorRejectedReceived       += OnInviteCountChanged;
@@ -547,6 +556,18 @@
     private void OnAnnouncementReceived(NotificationPayload payload)
     {
         _ = InvokeAsync(async () => { await LoadUnreadNotificationsAsync(); StateHasChanged(); });
+    }
+
+    // A Web Push landed while the app was open. Same refetch as the SignalR
+    // path, for the same reason: the two transports can deliver the same
+    // notification, so the count must come from the server.
+    private void OnPushReceived()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _unreadPlatform = await NotificationApi.UnreadCountAsync();
+            StateHasChanged();
+        });
     }
 
     private void OnPlatformCountChanged(PlatformNotification incoming)
@@ -783,6 +804,7 @@
         // service, so one invite refetched the counters once per stale layout and
         // the count could be written by a disposed component.
         Hub.PlatformNotificationReceived   -= OnPlatformCountChanged;
+        Hub.PushReceived                   -= OnPushReceived;
         Hub.AssignmentInviteReceived       -= OnInviteCountChanged;
         Hub.VendorApprovedReceived         -= OnInviteCountChanged;
         Hub.VendorRejectedReceived         -= OnInviteCountChanged;

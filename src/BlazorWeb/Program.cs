@@ -46,6 +46,7 @@ builder.Services.AddScoped<ICrewGroupApiService, CrewGroupApiService>();
 builder.Services.AddScoped<ICheckInApiService, CheckInApiService>();
 // Phase C step 5: per-shift vendor quota allocation API.
 builder.Services.AddScoped<IVendorAllocationApiService, VendorAllocationApiService>();
+builder.Services.AddScoped<IPushApiService, PushApiService>();
 builder.Services.AddScoped<IFilesApiService, FilesApiService>();
 builder.Services.AddScoped<IAnnouncementApiService, AnnouncementApiService>();
 builder.Services.AddScoped<INotificationApiService, NotificationApiService>();

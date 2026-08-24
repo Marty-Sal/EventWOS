@@ -1,0 +1,115 @@
+@using EventWOS.BlazorWeb.Services
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject IPushApiService PushApi
+@inject NotificationHubService Hub
+
+@*
+    Invisible. Connects the service worker to the running app.
+
+    A push arrives outside the page entirely, so the worker cannot navigate
+    Blazor's router or refresh the bell -- it can only postMessage. This listens
+    for those messages and turns them into app actions:
+
+      NOTIFICATION_CLICKED     -> route to the deep link
+      PUSH_RECEIVED            -> refresh the bell badge immediately
+      PUSH_SUBSCRIPTION_CHANGED-> re-register the rotated subscription
+
+    Lives in MainLayout so it is present on every authenticated page: a
+    notification can be clicked while the user is anywhere.
+*@
+
+@code {
+    private DotNetObjectReference<PushMessageBridge>? _ref;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            _ref = DotNetObjectReference.Create(this);
+
+            // listen() is idempotent on the JS side. A second listener would
+            // navigate twice for one notification click.
+            await JS.InvokeAsync<bool>("eventwosPush.listen", _ref);
+        }
+        catch
+        {
+            // No interop (very old browser, or JS blocked). The app works; only
+            // notification click-through is lost, which is not worth an error.
+        }
+    }
+
+    /// <summary>
+    /// The user tapped a notification. The worker already focused this tab and
+    /// sent the path, so this is an in-app route change -- deliberately not a
+    /// full navigation, which would reload the whole WASM runtime.
+    /// </summary>
+    [JSInvokable]
+    public Task OnNotificationClicked(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) path = "/notifications";
+
+        // Second sanitisation pass, after the server and the worker. A path from
+        // a push payload must never be able to send the app off-origin.
+        if (!path.StartsWith('/') || path.StartsWith("//") || path.Contains('\\'))
+            path = "/notifications";
+
+        Nav.NavigateTo(path);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// A push landed while the app was open. The bell should move now rather than
+    /// at its next poll -- the user can see both at once, and a stale badge next
+    /// to a fresh banner reads as a bug.
+    /// </summary>
+    [JSInvokable]
+    public Task OnPushReceived()
+    {
+        try
+        {
+            Hub.RaisePushReceived();
+        }
+        catch
+        {
+            // The badge will catch up on its next poll.
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// The browser reissued its subscription. The worker cannot register it (no
+    /// auth token out there), so it is done here, where there is one.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnSubscriptionChanged()
+    {
+        try
+        {
+            var config = await PushApi.GetConfigAsync();
+            if (config?.Enabled != true || string.IsNullOrWhiteSpace(config.PublicKey)) return;
+
+            var result = await JS.InvokeAsync<SubscribeResult>("eventwosPush.subscribe", config.PublicKey);
+
+            if (result.Ok && result.Endpoint is not null)
+                await PushApi.SubscribeAsync(result.Endpoint, result.P256dh!, result.Auth!, result.Platform);
+        }
+        catch
+        {
+            // Next visit re-registers; subscribe is an upsert for this reason.
+        }
+    }
+
+    private sealed record SubscribeResult(
+        bool Ok, string? Reason, string? Endpoint, string? P256dh, string? Auth, string? Platform);
+
+    public ValueTask DisposeAsync()
+    {
+        _ref?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

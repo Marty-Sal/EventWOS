@@ -60,6 +60,17 @@ public sealed class NotificationHubService : IAsyncDisposable
     /// </summary>
     public event Action<PlatformNotification>? PlatformNotificationReceived;  // -> the recipient
 
+    /// <summary>
+    /// A Web Push arrived while the app was open, forwarded from the service
+    /// worker by PushMessageBridge. Carries no payload on purpose: the badge is
+    /// always refetched from the API, never incremented locally, because the same
+    /// notification can arrive over both SignalR and push.
+    /// </summary>
+    public event Action?                       PushReceived;
+
+    /// <summary>Raised by PushMessageBridge. Not called by the SignalR connection.</summary>
+    public void RaisePushReceived() => PushReceived?.Invoke();
+
     public event Action?                       ConnectionStateChanged;
 
     public HubConnectionState State      => _connection?.State ?? HubConnectionState.Disconnected;

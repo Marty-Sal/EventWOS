@@ -223,5 +223,37 @@ window.eventwosPush = (() => {
         return null;
     }
 
-    return { getStatus, subscribe, unsubscribe, setBadge, isStandalone };
+    // ---- service worker messages ------------------------------------
+    // The worker cannot navigate a Blazor app -- routing lives in the page. So
+    // it postMessages, and this forwards those into .NET.
+    //
+    // Registered once and idempotent: MainLayout can re-render freely, and a
+    // second listener would navigate twice on one notification click.
+    let messageHandlerAttached = false;
+
+    function listen(dotNetRef) {
+        if (messageHandlerAttached || !('serviceWorker' in navigator)) return false;
+        messageHandlerAttached = true;
+
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            const data = event.data || {};
+            try {
+                if (data.type === 'NOTIFICATION_CLICKED' && typeof data.path === 'string') {
+                    dotNetRef.invokeMethodAsync('OnNotificationClicked', data.path);
+                } else if (data.type === 'PUSH_RECEIVED') {
+                    dotNetRef.invokeMethodAsync('OnPushReceived');
+                } else if (data.type === 'PUSH_SUBSCRIPTION_CHANGED') {
+                    // The browser reissued the subscription. Re-register it with
+                    // the API now that we are in a page that has an auth token.
+                    dotNetRef.invokeMethodAsync('OnSubscriptionChanged');
+                }
+            } catch {
+                // A disposed .NET reference after navigation. Nothing to do.
+            }
+        });
+
+        return true;
+    }
+
+    return { getStatus, subscribe, unsubscribe, setBadge, isStandalone, listen };
 })();

@@ -1,0 +1,268 @@
+@using EventWOS.BlazorWeb.Services
+@implements IAsyncDisposable
+@inject IPushApiService PushApi
+@inject IJSRuntime JS
+
+@*
+    Turns device notifications on and off for the signed-in user.
+
+    The whole design goal is honesty. Push is genuinely unavailable on a lot of
+    the devices event crew actually carry -- old Android WebViews, iOS Safari
+    before 16.4, and iOS Safari 16.4+ that has not been added to the home screen.
+    A toggle that flips and then silently does nothing is worse than no toggle,
+    so every unavailable case explains ITSELF and says what to do instead.
+
+    State comes from the browser, not from our database. The browser is the only
+    thing that knows whether a subscription is live right now; our rows can be
+    stale for a device that revoked permission in settings.
+*@
+
+<div class="space-y-3">
+    <div class="flex items-start justify-between gap-4">
+        <div>
+            <h3 class="text-sm font-bold text-gray-800">Device notifications</h3>
+            <p class="text-xs text-gray-500 mt-0.5">
+                Get alerted about shifts, approvals and payments even when EventWOS is closed.
+            </p>
+        </div>
+
+        @if (_status is { Supported: true } && !_busy)
+        {
+            <button type="button"
+                    @onclick="ToggleAsync"
+                    role="switch"
+                    aria-checked="@(_status.Subscribed ? "true" : "false")"
+                    class="@ToggleClass">
+                <span class="@KnobClass"></span>
+            </button>
+        }
+        else if (_busy)
+        {
+            <div class="h-6 w-11 rounded-full bg-gray-100 animate-pulse shrink-0"></div>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <p class="text-xs text-gray-400">Checking this device...</p>
+    }
+    else if (_status is null)
+    {
+        <p class="text-xs text-gray-500">Could not check notification support on this device.</p>
+    }
+    else if (!_status.Supported)
+    {
+        @* The reason is the whole point. "Unsupported" tells an iPhone user
+           nothing; "Add to Home Screen first" tells them what to do. *@
+        <div class="flex gap-2 rounded-xl bg-amber-50 border border-amber-100 p-3">
+            <svg class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+            <p class="text-xs text-amber-800">@_status.Reason</p>
+        </div>
+    }
+    else if (!_serverEnabled)
+    {
+        <p class="text-xs text-gray-500">
+            Push notifications are not switched on for this workspace yet. Email and WhatsApp still work.
+        </p>
+    }
+    else if (_status.Permission == "denied")
+    {
+        <div class="rounded-xl bg-gray-50 border border-gray-100 p-3">
+            <p class="text-xs text-gray-700">
+                Notifications are blocked for this site. Turn them back on in your browser settings
+                (tap the padlock or "aA" in the address bar), then reload this page.
+            </p>
+        </div>
+    }
+    else if (_status.Subscribed)
+    {
+        <p class="text-xs text-emerald-700 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            This device will receive notifications.
+        </p>
+    }
+    else
+    {
+        <p class="text-xs text-gray-500">Off. Turn this on to be notified on this device.</p>
+    }
+
+    @if (_error is not null)
+    {
+        <p class="text-xs text-red-600">@_error</p>
+    }
+
+    @* Other devices, so someone can retire a phone they no longer carry.
+       Deliberately shows only a coarse label -- never the endpoint or keys. *@
+    @if (_devices.Count > 0)
+    {
+        <div class="pt-2 border-t border-gray-100 space-y-1.5">
+            <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Registered devices</p>
+
+            @foreach (var device in _devices)
+            {
+                <div class="flex items-center justify-between gap-3 text-xs">
+                    <span class="text-gray-700">
+                        @device.DeviceLabel
+                        @if (device.LastSeenAt is { } seen)
+                        {
+                            <span class="text-gray-400"> - last seen @seen.ToLocalTime().ToString("dd MMM")</span>
+                        }
+                    </span>
+                    <button type="button" class="text-red-500 hover:underline shrink-0"
+                            @onclick="() => RemoveDeviceAsync(device.Id)">
+                        Remove
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private PushStatus? _status;
+    private List<PushDeviceDto> _devices = new();
+    private PushConfigDto? _config;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _serverEnabled;
+    private string? _error;
+
+    /// <summary>Mirrors the object returned by js/push.js getStatus().</summary>
+    private sealed record PushStatus(
+        bool    Supported,
+        string? Reason,
+        string  Permission,
+        bool    Subscribed,
+        string? Endpoint);
+
+    private string ToggleClass =>
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors "
+        + (_status?.Subscribed == true ? "bg-emerald-500" : "bg-gray-200");
+
+    private string KnobClass =>
+        "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform "
+        + (_status?.Subscribed == true ? "translate-x-6" : "translate-x-1");
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Config first: without a server public key there is nothing to
+        // subscribe to, and asking the browser for permission would be rude.
+        _config        = await PushApi.GetConfigAsync();
+        _serverEnabled = _config?.Enabled == true && !string.IsNullOrWhiteSpace(_config.PublicKey);
+
+        await RefreshAsync();
+        _loading = false;
+    }
+
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            _status = await JS.InvokeAsync<PushStatus>("eventwosPush.getStatus");
+        }
+        catch
+        {
+            // Old browsers without the interop, or JS blocked entirely.
+            _status = null;
+        }
+
+        _devices = _serverEnabled
+            ? (await PushApi.GetDevicesAsync()).ToList()
+            : new List<PushDeviceDto>();
+    }
+
+    private async Task ToggleAsync()
+    {
+        if (_busy || _status is null) return;
+
+        _busy  = true;
+        _error = null;
+
+        try
+        {
+            if (_status.Subscribed) await DisableAsync();
+            else                    await EnableAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await RefreshAsync();
+        }
+    }
+
+    private async Task EnableAsync()
+    {
+        if (!_serverEnabled)
+        {
+            _error = "Push notifications are not configured on the server yet.";
+            return;
+        }
+
+        // This runs inside the click handler on purpose: browsers ignore -- and
+        // Safari penalises -- a permission prompt that was not asked for by a
+        // user gesture.
+        var result = await JS.InvokeAsync<SubscribeResult>("eventwosPush.subscribe", _config!.PublicKey);
+
+        if (!result.Ok)
+        {
+            _error = result.Reason ?? "Could not enable notifications on this device.";
+            return;
+        }
+
+        var saved = await PushApi.SubscribeAsync(result.Endpoint!, result.P256dh!, result.Auth!, result.Platform);
+
+        if (!saved)
+        {
+            // The browser is now subscribed to a push service we have no record
+            // of. Rolling back keeps the two sides honest -- otherwise the user
+            // sees "on" and never receives anything.
+            await JS.InvokeVoidAsync("eventwosPush.unsubscribe");
+            _error = "Could not save this device. Please try again.";
+        }
+    }
+
+    private async Task DisableAsync()
+    {
+        var result = await JS.InvokeAsync<UnsubscribeResult>("eventwosPush.unsubscribe");
+
+        // Tell the server regardless: if the browser-side unsubscribe failed we
+        // still want the row retired, and the endpoint we already knew is enough
+        // to identify it.
+        await PushApi.UnsubscribeAsync(result.Endpoint ?? _status?.Endpoint);
+
+        await JS.InvokeVoidAsync("eventwosPush.setBadge", 0);
+    }
+
+    private async Task RemoveDeviceAsync(Guid registrationId)
+    {
+        _busy = true;
+
+        try
+        {
+            await PushApi.UnsubscribeAsync(null, registrationId);
+
+            // Removing THIS device from the list must also drop the browser's
+            // own subscription, or the next visit would silently re-register it.
+            if (_devices.FirstOrDefault(d => d.Id == registrationId) is not null && _status?.Subscribed == true)
+            {
+                var devices = await PushApi.GetDevicesAsync();
+                if (devices.All(d => d.Id != registrationId))
+                    await JS.InvokeVoidAsync("eventwosPush.unsubscribe");
+            }
+        }
+        finally
+        {
+            _busy = false;
+            await RefreshAsync();
+        }
+    }
+
+    private sealed record SubscribeResult(
+        bool Ok, string? Reason, string? Endpoint, string? P256dh, string? Auth, string? Platform);
+
+    private sealed record UnsubscribeResult(bool Ok, string? Reason, string? Endpoint);
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
