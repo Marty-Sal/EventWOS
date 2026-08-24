@@ -256,12 +256,20 @@
                         <div class="grid grid-cols-2 gap-3 mt-2">
                             <div>
                                 <label class="text-xs text-gray-500 mb-1 block">Latitude</label>
-                                <input @bind="_form.Latitude" type="number" step="any"
+                                @* bind:after -- typing here used to move the pin (LocationMap reacts to
+                                   the parameter change) but never reverse-geocoded, because that call only
+                                   ever lived in OnPinMoved, which JS drag/click reaches and this input
+                                   never did. Firing the same handler on blur/Enter (@bind's default
+                                   "change" event, not every keystroke) closes that gap without adding a
+                                   second, diverging code path. *@
+                                <input @bind="_form.Latitude" @bind:after="OnManualCoordinateChangedAsync"
+                                       type="number" step="any"
                                        class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                             </div>
                             <div>
                                 <label class="text-xs text-gray-500 mb-1 block">Longitude</label>
-                                <input @bind="_form.Longitude" type="number" step="any"
+                                <input @bind="_form.Longitude" @bind:after="OnManualCoordinateChangedAsync"
+                                       type="number" step="any"
                                        class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                             </div>
                         </div>
@@ -415,6 +423,32 @@
         // Clear any stale "required field" error the pick may have just resolved.
         _formError = null;
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// The admin typed/edited a coordinate box directly instead of using the map
+    /// or search. Fires on blur/Enter (bind:after, not every keystroke) once both
+    /// boxes hold a value, and then reuses OnPinMoved so manual entry gets the
+    /// exact same reverse-geocode-and-fill behaviour as dragging the pin -- one
+    /// code path instead of a second one that silently drifts from it.
+    ///
+    /// Guarded against re-firing for the same pair: blurring Latitude then
+    /// Longitude for a single edit would otherwise geocode twice, once with a
+    /// stale partner value.
+    /// </summary>
+    private double? _lastManualLat, _lastManualLng;
+
+    private async Task OnManualCoordinateChangedAsync()
+    {
+        var lat = _form.Latitude;
+        var lng = _form.Longitude;
+        if (lat is null || lng is null) return;
+        if (lat == _lastManualLat && lng == _lastManualLng) return;
+
+        _lastManualLat = lat;
+        _lastManualLng = lng;
+
+        await OnPinMoved(((decimal)lat.Value, (decimal)lng.Value));
     }
 
     /// <summary>
