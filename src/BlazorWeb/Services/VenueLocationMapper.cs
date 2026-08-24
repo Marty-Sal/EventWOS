@@ -68,8 +68,16 @@ public static class VenueLocationMapper
     /// True when the incoming point is a different place rather than a refinement
     /// of the current one. No current coordinates means this is the first fill,
     /// which is never a relocation.
+    ///
+    /// CALLER CONTRACT: "from" must be the point the CURRENT ADDRESS TEXT
+    /// describes, not simply whatever coordinates the form happens to hold. The
+    /// venue form learned this the hard way -- its manual latitude/longitude boxes
+    /// bind the typed value into the form before their change handler runs, so
+    /// passing the form's own coordinates compared the new point against itself,
+    /// scored zero movement, and quietly kept the previous place's address.
+    /// Public so that rule is directly testable.
     /// </summary>
-    private static bool IsRelocation(double? fromLat, double? fromLng, double toLat, double toLng)
+    public static bool IsRelocation(double? fromLat, double? fromLng, double toLat, double toLng)
         => fromLat is not null
         && fromLng is not null
         && DistanceMeters(fromLat.Value, fromLng.Value, toLat, toLng) > SamePlaceToleranceMeters;

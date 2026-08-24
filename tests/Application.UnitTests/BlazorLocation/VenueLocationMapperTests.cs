@@ -433,4 +433,39 @@ public class VenueLocationMapperTests
         afterSecondCoords.City.Should().Be("Mumbai");
         afterSecondCoords.PostalCode.Should().Be("400057");
     }
+
+    // ── The relocation test itself ───────────────────────────────────────────
+
+    [Fact]
+    public void A_first_point_is_never_a_relocation()
+    {
+        VenueLocationMapper.IsRelocation(null, null, 19.1550d, 72.9990d).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Nudging_within_the_tolerance_is_not_a_relocation()
+    {
+        // ~30 m north of the start point.
+        VenueLocationMapper.IsRelocation(18.9820d, 72.8100d, 18.98227d, 72.8100d)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_point_in_another_suburb_is_a_relocation()
+    {
+        // Vile Parle -> Airoli, ~19 km.
+        VenueLocationMapper.IsRelocation(19.105374d, 72.839953d, 19.1550d, 72.9990d)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void Comparing_a_point_against_itself_is_never_a_relocation()
+    {
+        // Pins the trap the venue form fell into twice: pass the ALREADY-MOVED
+        // coordinates as the origin and every relocation reads as a refinement, so
+        // a stale address block survives. The origin must be the point the current
+        // address text describes.
+        VenueLocationMapper.IsRelocation(19.1550d, 72.9990d, 19.1550d, 72.9990d)
+            .Should().BeFalse();
+    }
 }

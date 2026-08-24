@@ -166,7 +166,7 @@
 @if (_modalOpen)
 {
     <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @onclick="CloseModal">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto" @onclick:stopPropagation>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-6 space-y-4 max-h-[90vh] overflow-y-auto" @onclick:stopPropagation>
             <div class="flex items-center justify-between">
                 <h3 class="text-base font-bold text-gray-800">@(_editing is null ? "New Venue" : "Edit Venue")</h3>
                 <button @onclick="CloseModal" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
@@ -377,6 +377,8 @@
     {
         _editing   = null;
         _form      = new VenueForm();
+        _lastResolvedLat = null;
+        _lastResolvedLng = null;
         _formError = null;
         _modalOpen = true;
     }
@@ -391,6 +393,13 @@
             City = v.City, State = v.State, PostalCode = v.PostalCode, Country = v.Country,
             Latitude = v.Latitude, Longitude = v.Longitude, Notes = v.Notes
         };
+
+        // The saved address describes the saved point, so relocation is measured
+        // from there. Without this, the first move inside an existing venue would
+        // be read as a refinement and keep the old address.
+        _lastResolvedLat = v.Latitude;
+        _lastResolvedLng = v.Longitude;
+
         _formError = null;
         _modalOpen = true;
     }
@@ -474,13 +483,17 @@
         var lat = (double)pos.Latitude;
         var lng = (double)pos.Longitude;
 
-        // Where the pin was BEFORE this move. The mapper decides "refinement or
-        // relocation" by distance from the current coordinates, and the optimistic
-        // apply below overwrites those immediately -- so without this snapshot the
-        // second call would measure the new point against itself, always see zero
-        // movement, and never replace a stale address block.
-        var fromLat = _form.Latitude;
-        var fromLng = _form.Longitude;
+        // Judged from the point the ADDRESS FIELDS currently describe -- NOT from
+        // _form.Latitude/Longitude. Reading the form here worked for a drag (JS
+        // reports the new point while the form still holds the old one) but was
+        // always wrong for the manual boxes: @bind writes the typed value into
+        // _form BEFORE @bind:after invokes this method, so the "old" point was
+        // already the new one, distance measured zero, every typed relocation
+        // looked like a refinement, and a stale address block survived. Typing
+        // coordinates a third time moved the pin and kept the second place's
+        // address -- exactly as reported.
+        var fromLat = _lastResolvedLat;
+        var fromLng = _lastResolvedLng;
 
         // Recorded up front, so a failed or slow geocode still counts as "this is
         // the point on screen" and cannot make the guard re-fire in a loop.
