@@ -24,7 +24,11 @@ public sealed record UserProfileDto(
     bool WasDirectlyAdded = false, bool ProfileCompleted = false,
     // Live/upcoming breakdown of the caller's own events, added alongside the
     // dashboard's "completed" tiles.
-    int? EventsLive = null, int? EventsUpcoming = null);
+    int? EventsLive = null, int? EventsUpcoming = null,
+    // The user's uploaded profile photo as a FileDocument id -- these are private
+    // files with no public URL, so the avatar pulls the bytes through the
+    // authenticated download endpoint (see AvatarState).
+    Guid? ProfilePhotoFileId = null);
 
 public sealed record UserListItemDto(
     Guid Id, string Mobile, string FullName, string? Email,

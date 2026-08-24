@@ -76,7 +76,16 @@ public sealed record UserProfileDto(
     // distinct from EventsAttended (which is personal check-in count, not
     // "the event finished").
     int? EventsLive     = null,
-    int? EventsUpcoming = null
+    int? EventsUpcoming = null,
+
+    /// <summary>
+    /// The user's current profile photo, as a FileDocument id — null when they
+    /// never uploaded one. Deliberately an id and not a URL: profile photos are
+    /// private files served through the authenticated /files/{id}/download
+    /// endpoint, so there is no public URL to hand out. The legacy AvatarUrl
+    /// above is for externally hosted images and is unrelated.
+    /// </summary>
+    Guid? ProfilePhotoFileId = null
 );
 
 public sealed record UpdateProfileRequest(

@@ -1,0 +1,189 @@
+@using EventWOS.BlazorWeb.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject AvatarState Avatar
+@inject IFilesApiService Files
+@implements IDisposable
+
+@*
+    The signed-in user's avatar: their uploaded profile photo when there is one,
+    their initial when there is not. With Editable set, hovering reveals a
+    "Change photo" overlay and a click opens the file picker; the new photo
+    replaces the old one everywhere at once, because every instance reads the
+    same AvatarState.
+
+    The file input is a transparent overlay filling the circle rather than a
+    button wired through JS -- a real <input type=file> is what opens a native
+    picker, and keeping it in the markup means keyboard focus works for free
+    (focus-within shows the same overlay as hover).
+*@
+
+<div class="relative @SizeClasses flex-shrink-0">
+    <div class="w-full h-full @Rounded overflow-hidden bg-indigo-600 text-white flex items-center justify-center font-bold uppercase select-none @TextClasses @(Editable ? "group" : "")">
+        @if (Avatar.PhotoUrl is not null)
+        {
+            <img src="@Avatar.PhotoUrl" alt="Profile photo" class="w-full h-full object-cover" />
+        }
+        else
+        {
+            <span>@Initial</span>
+        }
+
+        @if (Editable)
+        {
+            <div class="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/60 text-white
+                        opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity
+                        pointer-events-none text-center leading-tight">
+                @if (_busy)
+                {
+                    <span class="text-[10px] font-semibold">Uploading…</span>
+                }
+                else
+                {
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M3 9a2 2 0 012-2h1.6a2 2 0 001.7-1l.5-.9a2 2 0 011.7-1h3a2 2 0 011.7 1l.5.9a2 2 0 001.7 1H19a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <circle cx="12" cy="13" r="3.2" />
+                    </svg>
+                    <span class="text-[10px] font-semibold">Change<br />photo</span>
+                }
+            </div>
+
+            <InputFile OnChange="OnFileSelectedAsync"
+                       accept="image/png,image/jpeg,image/webp"
+                       disabled="@_busy"
+                       title="Change profile photo"
+                       aria-label="Change profile photo"
+                       class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+        }
+    </div>
+
+    @* Sits OUTSIDE the clipped circle, or overflow-hidden would swallow it. *@
+    @if (Editable && _error is not null)
+    {
+        <p class="absolute top-full left-0 mt-1 z-20 whitespace-nowrap rounded-lg border border-red-200 bg-white
+                  px-2 py-1 text-xs font-medium text-red-600 shadow-sm">
+            @_error
+        </p>
+    }
+</div>
+
+@code {
+    /// <summary>Shown when there is no photo — usually the first letter of the name or username.</summary>
+    [Parameter, EditorRequired] public string Initial { get; set; } = "?";
+
+    /// <summary>Tailwind box size, e.g. "w-16 h-16".</summary>
+    [Parameter] public string SizeClasses { get; set; } = "w-16 h-16";
+
+    /// <summary>Corner style — "rounded-full" in the sidebar, "rounded-2xl" on the profile header.</summary>
+    [Parameter] public string Rounded { get; set; } = "rounded-2xl";
+
+    /// <summary>Type scale for the fallback initial.</summary>
+    [Parameter] public string TextClasses { get; set; } = "text-2xl";
+
+    /// <summary>Enables the hover overlay and the picker. Only ever true for the user's own avatar.</summary>
+    [Parameter] public bool Editable { get; set; }
+
+    /// <summary>
+    /// FilesApiService document type to upload as: VendorProfilePhoto for vendors,
+    /// CrewProfilePhoto for everyone else. Matching what registration used keeps a
+    /// replacement in the same storage prefix and under the same access policy.
+    /// </summary>
+    [Parameter] public int DocumentType { get; set; } = DocumentTypes.CrewProfilePhoto;
+
+    /// <summary>Fired with the new file id after a successful replace.</summary>
+    [Parameter] public EventCallback<Guid> OnChanged { get; set; }
+
+    /// <summary>Matches FileValidationPolicy's 5 MB ceiling for profile photos, so
+    /// an oversized pick is refused here instead of after a wasted upload.</summary>
+    private const long MaxBytes = 5 * 1024 * 1024;
+
+    private bool _busy;
+    private string? _error;
+
+    protected override void OnInitialized() => Avatar.Changed += OnAvatarChanged;
+
+    public void Dispose() => Avatar.Changed -= OnAvatarChanged;
+
+    private void OnAvatarChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+
+        var file = e.File;
+        if (file is null) return;
+
+        if (file.Size > MaxBytes)
+        {
+            _error = "Please pick an image under 5 MB.";
+            return;
+        }
+
+        // Some browsers hand over an empty content type; the server validates both
+        // MIME and extension, so fall back to the extension rather than sending
+        // application/octet-stream and getting a confusing rejection.
+        var contentType = string.IsNullOrWhiteSpace(file.ContentType)
+            ? GuessContentType(file.Name)
+            : file.ContentType;
+
+        if (!contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            _error = "Profile photos must be an image.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var bytes = new byte[file.Size];
+            await using var stream = file.OpenReadStream(MaxBytes);
+
+            // One ReadAsync is not guaranteed to fill the buffer.
+            var read = 0;
+            while (read < bytes.Length)
+            {
+                var n = await stream.ReadAsync(bytes.AsMemory(read));
+                if (n == 0) break;
+                read += n;
+            }
+
+            var (ok, doc, err) = await Files.UploadAsync(bytes, file.Name, contentType, DocumentType);
+            if (!ok || doc is null)
+            {
+                _error = err ?? "Upload failed.";
+                return;
+            }
+
+            var previous = Avatar.FileId;
+
+            // Show the new one first: if retiring the old row fails, the user still
+            // sees their new photo, and the server resolves "newest wins" anyway.
+            await Avatar.SyncAsync(doc.Id, force: true);
+
+            if (previous.HasValue && previous.Value != doc.Id)
+                await Files.DeleteAsync(previous.Value);
+
+            await OnChanged.InvokeAsync(doc.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Upload failed. {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string GuessContentType(string fileName)
+    {
+        var ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".png"          => "image/png",
+            ".webp"         => "image/webp",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            _               => "application/octet-stream"
+        };
+    }
+}

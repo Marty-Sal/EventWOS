@@ -5,6 +5,7 @@
 @inject AppAuthStateProvider AuthState
 @inject IAuthApiService AuthApi
 @inject IUserApiService UserApi
+@inject AvatarState Avatar
 @inject NotificationHubService Hub
 @inject IEventApiService EventApi
 @inject IAnnouncementApiService AnnouncementApi
@@ -207,9 +208,12 @@
                                  @onclick="GoToProfile"
                                  @onkeydown="GoToProfileOnKey"
                                  title="Go to My Profile">
-                                <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold uppercase flex-shrink-0">
-                                    @sbInitialSource[0]
-                                </div>
+                                @* Read-only here: changing the photo lives on My Profile,
+                                   one click away through this very avatar. *@
+                                <ProfileAvatar Initial="@sbInitialSource[0].ToString()"
+                                               SizeClasses="w-9 h-9"
+                                               Rounded="rounded-full"
+                                               TextClasses="text-sm" />
                                 <div class="flex-1 min-w-0">
                                     <p class="text-sm font-medium text-white truncate">
                                         @@@(sbUsername ?? sbMobile)
@@ -638,6 +642,11 @@
         var refresh = await AuthState.GetRefreshTokenAsync();
         await AuthApi.LogoutAsync(refresh ?? string.Empty);
         await Hub.StopAsync();
+
+        // Drop the cached photo, or the next person to sign in on this device
+        // sees the previous user's face until their own profile loads.
+        await Avatar.ClearAsync();
+
         Nav.NavigateTo("/login");
     }
 
@@ -770,6 +779,11 @@
         {
             var me = await UserApi.GetMeAsync();
             _mustCompleteProfile = me is { WasDirectlyAdded: true, ProfileCompleted: false };
+
+            // Piggy-backing on the call this gate already makes: no extra request,
+            // and the sidebar avatar has its photo from the first render. Repeat
+            // calls with the same id are a no-op inside AvatarState.
+            if (me is not null) await Avatar.SyncAsync(me.ProfilePhotoFileId);
         }
         catch
         {

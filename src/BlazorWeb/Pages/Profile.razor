@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using EventWOS.BlazorWeb.Validation
 @inject IUserApiService UserApi
+@inject AvatarState Avatar
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject NavigationManager Nav
@@ -43,9 +44,12 @@
         @* ── Profile header ───────────────────────────────────────────────────── *@
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <div class="flex items-center gap-5">
-                <div class="w-16 h-16 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl font-bold shadow-md">
-                    @(_profile.FullName?.FirstOrDefault().ToString() ?? _profile.Mobile.Last().ToString())
-                </div>
+                <ProfileAvatar Initial="@(_profile.FullName?.FirstOrDefault().ToString() ?? _profile.Mobile.Last().ToString())"
+                               SizeClasses="w-16 h-16"
+                               Rounded="rounded-2xl"
+                               TextClasses="text-2xl"
+                               Editable="true"
+                               DocumentType="@(_profile.Role == "Vendor" ? DocumentTypes.VendorProfilePhoto : DocumentTypes.CrewProfilePhoto)" />
                 <div>
                     <h2 class="text-xl font-bold text-gray-800">@(_profile.FullName ?? "—")</h2>
                     <p class="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
@@ -615,6 +619,11 @@
         try
         {
             _profile = await UserApi.GetMeAsync();
+
+            // This page holds the authoritative photo id, so point the shared
+            // avatar at it -- the sidebar picks the same photo up for free.
+            await Avatar.SyncAsync(_profile?.ProfilePhotoFileId);
+
             if (_profile is not null)
             {
                 _fullName = _profile.FullName;

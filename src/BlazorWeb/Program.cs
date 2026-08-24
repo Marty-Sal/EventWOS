@@ -48,6 +48,9 @@ builder.Services.AddScoped<ICheckInApiService, CheckInApiService>();
 builder.Services.AddScoped<IVendorAllocationApiService, VendorAllocationApiService>();
 builder.Services.AddScoped<IPushApiService, PushApiService>();
 builder.Services.AddScoped<IFilesApiService, FilesApiService>();
+// One shared copy of the signed-in user's profile photo for every avatar on
+// screen -- private file, so it is fetched once and cached as a blob URL.
+builder.Services.AddScoped<AvatarState>();
 builder.Services.AddScoped<IAnnouncementApiService, AnnouncementApiService>();
 builder.Services.AddScoped<INotificationApiService, NotificationApiService>();
 builder.Services.AddScoped<IIndianStatesApiService, IndianStatesApiService>();

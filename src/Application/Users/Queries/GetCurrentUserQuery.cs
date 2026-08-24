@@ -64,6 +64,19 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
             vendorName = vendor?.FullName;
         }
 
+        // The photo the user uploaded at registration (crew and vendor use
+        // different document types), or the newest one if they have since
+        // replaced it. Newest-active wins, so a replacement takes effect even if
+        // retiring the previous row failed.
+        var photoFileId = await _db.FileDocuments.AsNoTracking()
+            .Where(f => f.OwnerId == user.Id
+                     && !f.IsDeleted
+                     && (f.DocumentType == Domain.Enums.DocumentType.CrewProfilePhoto
+                      || f.DocumentType == Domain.Enums.DocumentType.VendorProfilePhoto))
+            .OrderByDescending(f => f.CreatedAt)
+            .Select(f => (Guid?)f.Id)
+            .FirstOrDefaultAsync(ct);
+
         return Result.Success(new UserProfileDto(
             user.Id, user.Username, user.Mobile, user.FullName, user.Email,
             user.AvatarUrl, user.Role, user.Status, permissions, user.LastLoginAt,
@@ -94,6 +107,7 @@ public sealed class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery,
             user.InvitedByUserId.HasValue,
             user.ProfileCompletedAt.HasValue,
             eventsLive,
-            eventsUpcoming));
+            eventsUpcoming,
+            photoFileId));
     }
 }
