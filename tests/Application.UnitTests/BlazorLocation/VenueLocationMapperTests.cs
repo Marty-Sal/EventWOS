@@ -468,4 +468,89 @@ public class VenueLocationMapperTests
         VenueLocationMapper.IsRelocation(19.1550d, 72.9990d, 19.1550d, 72.9990d)
             .Should().BeFalse();
     }
+
+    // ── Name: provider-written follows the pin, hand-typed never does ─────────
+
+    [Fact]
+    public void A_provider_written_name_is_replaced_when_the_venue_relocates()
+    {
+        // Reported: picked "The Universe" (name filled correctly), then searched
+        // Jio Garden. Address, city and postcode all moved, but the name stayed
+        // "The Universe" above a Bandra Kurla address.
+        var afterUniverse = VenueLocationMapper.ApplySuggestion(Empty, ThaneNoPostcode, States);
+        afterUniverse.Name.Should().Be("The Universe");
+
+        var jioGarden = new LocationSuggestion(
+            PlaceId: "555",
+            Name: "Jio Garden",
+            ShortAddress: "Bandra Kurla Complex, Mumbai",
+            FullAddress: "Jio Garden, Street 3, G Block, Bandra Kurla Complex, Mumbai, Maharashtra, 400051, India",
+            Latitude: 19.0620m,
+            Longitude: 72.8690m,
+            City: "Mumbai",
+            State: "Maharashtra",
+            PostalCode: "400051",
+            Country: "India");
+
+        var result = VenueLocationMapper.ApplySuggestion(afterUniverse, jioGarden, States);
+
+        result.Name.Should().Be("Jio Garden");
+        result.City.Should().Be("Mumbai");
+        result.PostalCode.Should().Be("400051");
+    }
+
+    [Fact]
+    public void A_provider_written_name_is_cleared_when_the_new_place_has_none()
+    {
+        // What the admin asked for explicitly: if nothing comes in, the box empties
+        // rather than keeping the previous venue's name.
+        var afterUniverse = VenueLocationMapper.ApplySuggestion(Empty, ThaneNoPostcode, States);
+
+        var unnamed = Racecourse with { Name = null, FullAddress = "Railway Sports Ground Lane, Mahalakshmi" };
+
+        var result = VenueLocationMapper.ApplySuggestion(afterUniverse, unnamed, States);
+
+        result.Name.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_hand_typed_name_still_survives_a_relocation()
+    {
+        // The reason Name was exempt in the first place. NameFromProvider is null
+        // here, so nothing marks this text as ours to overwrite.
+        var current = Empty with
+        {
+            Name      = "Client's rooftop — do not rename",
+            Latitude  = 18.9820d,
+            Longitude = 72.8100d,
+        };
+
+        var result = VenueLocationMapper.ApplySuggestion(current, ThaneNoPostcode, States);
+
+        result.Name.Should().Be("Client's rooftop — do not rename");
+        result.City.Should().Be("Thane", "the address still follows the pin");
+    }
+
+    [Fact]
+    public void A_name_the_admin_edited_after_a_pick_is_no_longer_ours_to_replace()
+    {
+        // Provider filled it, admin then refined it — that makes it theirs.
+        var afterPick = VenueLocationMapper.ApplySuggestion(Empty, ThaneNoPostcode, States);
+        var edited    = afterPick with { Name = "The Universe — north lawn" };
+
+        var result = VenueLocationMapper.ApplySuggestion(edited, Racecourse, States);
+
+        result.Name.Should().Be("The Universe — north lawn");
+    }
+
+    [Fact]
+    public void Refining_the_same_place_leaves_even_a_provider_written_name_alone()
+    {
+        var afterPick = VenueLocationMapper.ApplySuggestion(Empty, Racecourse, States);
+        var nudged    = Racecourse with { Name = "Mahalaxmi Race Course (Gate 1)", Latitude = 18.98207m, Longitude = 72.81003m };
+
+        var result = VenueLocationMapper.ApplySuggestion(afterPick, nudged, States);
+
+        result.Name.Should().Be("Mahalaxmi Racecourse", "a nudge is not a new venue");
+    }
 }

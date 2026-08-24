@@ -14,7 +14,17 @@ public sealed record VenueLocationFields(
     string? PostalCode,
     string? Country,
     double? Latitude,
-    double? Longitude);
+    double? Longitude,
+
+    /// <summary>
+    /// The Name a provider last wrote, or null if Name was typed by hand or is
+    /// still empty. This is the ONE field where provenance has to be tracked:
+    /// every other field can be judged by distance alone, but Name doubles as the
+    /// provider's label for a place AND the admin's own name for the venue, and
+    /// those two deserve opposite treatment when the pin moves. Defaulted so it is
+    /// bookkeeping, not something every caller has to think about.
+    /// </summary>
+    string? NameFromProvider = null);
 
 /// <summary>
 /// Pure mapping from a provider result onto the venue form.
@@ -117,6 +127,8 @@ public static class VenueLocationMapper
         // somewhere else and must go.
         var relocated = IsRelocation(current.Latitude, current.Longitude, lat, lng);
 
+        var nextName = NextName(current.Name, current.NameFromProvider, suggestion.Name, relocated);
+
         return current with
         {
             // Rule 1 — unconditional.
@@ -128,9 +140,10 @@ public static class VenueLocationMapper
             // replaces whatever is there.
             ShortAddress = Truncate(suggestion.ShortAddress, ShortAddressMaxLength),
 
-            // Name is the admin's label for the venue, never a description of the
-            // point, so it fills blanks only even when relocating.
-            Name = Fill(current.Name, suggestion.Name, NameMaxLength, replace: false),
+            // See NextName: a name the PROVIDER wrote follows the pin, a name the
+            // admin typed never does.
+            Name             = nextName.Name,
+            NameFromProvider = nextName.FromProvider,
 
             // Rule 2 — blanks only when refining, replaced when relocating.
             AddressLine1 = Fill(
@@ -171,8 +184,13 @@ public static class VenueLocationMapper
         // survivable outcome: keep the coordinates, skip the labels.
         if (detail is null) return moved;
 
+        var nextName = NextName(moved.Name, moved.NameFromProvider, detail.Name, relocated);
+
         return moved with
         {
+            Name             = nextName.Name,
+            NameFromProvider = nextName.FromProvider,
+
             AddressLine1 = Fill(moved.AddressLine1, detail.Address,    AddressLineMaxLength, relocated),
             City         = Fill(moved.City,         detail.City,       CityMaxLength,        relocated),
             PostalCode   = Fill(moved.PostalCode,   detail.PostalCode, PostalCodeMaxLength,  relocated),
@@ -249,6 +267,43 @@ public static class VenueLocationMapper
         if (!string.IsNullOrWhiteSpace(currentValue)) return currentValue;
 
         return string.IsNullOrWhiteSpace(incoming) ? currentValue : Truncate(incoming!, maxLength);
+    }
+
+    /// <summary>
+    /// Decide the venue Name, which is the only field where "who wrote this?"
+    /// matters more than "how far did the pin move?".
+    ///
+    /// A name the PROVIDER put there describes the old place, so a relocation
+    /// replaces it with the new place's name -- and CLEARS it when the new place
+    /// offers none, rather than leaving "The Universe" sitting above a Jio Garden
+    /// address. A name the ADMIN typed is their label for the venue ("Client's
+    /// rooftop", "Gate 3 lawn"), which no amount of pin movement entitles us to
+    /// overwrite. Blank is always filled, from either source.
+    ///
+    /// Returns the new Name plus the marker to store with it, so the next call can
+    /// still tell the two cases apart.
+    /// </summary>
+    private static (string? Name, string? FromProvider) NextName(
+        string? currentName,
+        string? nameFromProvider,
+        string? incomingName,
+        bool relocated)
+    {
+        var incoming = string.IsNullOrWhiteSpace(incomingName)
+            ? null
+            : Truncate(incomingName!, NameMaxLength);
+
+        // Empty box: fill it from the provider, and remember that we did.
+        if (string.IsNullOrWhiteSpace(currentName)) return (incoming, incoming);
+
+        // Still exactly what the provider last wrote, so nobody has claimed it.
+        var untouched = !string.IsNullOrWhiteSpace(nameFromProvider)
+                     && string.Equals(currentName, nameFromProvider, StringComparison.Ordinal);
+
+        if (relocated && untouched) return (incoming, incoming);
+
+        // Hand-typed, or merely refining the same place: leave it alone.
+        return (currentName, nameFromProvider);
     }
 
     /// <summary>

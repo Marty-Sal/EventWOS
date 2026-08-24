@@ -619,9 +619,18 @@
         public double? Longitude    { get; set; }
         public string? Notes        { get; set; }
 
+        /// <summary>
+        /// The Name a provider last filled in, so the mapper can tell its own
+        /// earlier output from a name the admin typed. Round-tripped through
+        /// ToLocationFields/Apply -- dropping it here would make every name look
+        /// hand-typed and the venue would keep a stale one forever.
+        /// </summary>
+        public string? NameFromProvider { get; set; }
+
         /// <summary>Snapshot the location fields for the pure mapper.</summary>
         public VenueLocationFields ToLocationFields() => new(
-            Name, AddressLine1, ShortAddress, City, State, PostalCode, Country, Latitude, Longitude);
+            Name, AddressLine1, ShortAddress, City, State, PostalCode, Country, Latitude, Longitude,
+            NameFromProvider);
 
         /// <summary>Write a mapper result back. Notes and the id are untouched.</summary>
         public void Apply(VenueLocationFields f)
@@ -635,6 +644,7 @@
             Country      = f.Country;
             Latitude     = f.Latitude;
             Longitude    = f.Longitude;
+            NameFromProvider = f.NameFromProvider;
         }
     }
 
