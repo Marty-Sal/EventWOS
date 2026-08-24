@@ -17,6 +17,16 @@ namespace EventWOS.Persistence.Seed;
 /// is that an admin can reword them -- a deploy that reset their edits would be
 /// worse than no seeding at all.
 ///
+/// Push templates are seeded ACTIVE, unlike WhatsApp: Web Push needs no
+/// provider approval, and a device only receives anything once its owner has
+/// opted in through Settings, so an active template cannot surprise anyone. The
+/// send is skipped outright for a recipient with no registered device.
+///
+/// PASSWORD_RESET_OTP deliberately has NO push template. OTP delivery is
+/// synchronous and direct, never routed through this platform, because the
+/// durable outbox would persist the plaintext code in the database and defeat
+/// the hash-only design in OtpRequests.
+///
 /// WhatsApp templates are seeded INACTIVE on purpose. Meta only permits
 /// pre-approved templates outside a 24-hour service window, so activating one
 /// without setting its approved provider template name would produce confident
@@ -143,6 +153,16 @@ public sealed class NotificationTemplateSeeder
                 inserted++;
             }
 
+            // Push carries the short line, never the email body: a lock-screen
+            // notification is read in a glance, and push services cap the
+            // encrypted payload. Anything more the client fetches once awake.
+            if (SupportsPush(code) && !have.Contains((upper, NotificationChannel.Push)))
+            {
+                _db.NotificationTemplates.Add(
+                    new NotificationTemplate(code, NotificationChannel.Push, defaults.Line, defaults.Title));
+                inserted++;
+            }
+
             if (!have.Contains((upper, NotificationChannel.WhatsApp)))
             {
                 var whatsApp = new NotificationTemplate(code, NotificationChannel.WhatsApp, defaults.Line);
@@ -165,6 +185,21 @@ public sealed class NotificationTemplateSeeder
             "Seeded {Count} notification template(s). WhatsApp templates are inactive until provider template names are configured.",
             inserted);
     }
+
+    /// <summary>
+    /// Whether a code may be delivered by push.
+    ///
+    /// Public and static so a test can pin the exclusions: this is a security
+    /// boundary, not a formatting preference, and "why is there no push template
+    /// for X" deserves an answer in code rather than in a commit message.
+    /// </summary>
+    public static bool SupportsPush(string code)
+        // A one-time code must never sit in the outbox, and a push preview on a
+        // lock screen is readable by whoever is holding the phone.
+        => !string.Equals(code, NotificationTemplateCodes.PasswordResetOtp, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Codes this seeder writes templates for. Exposed for the same reason.</summary>
+    public static IReadOnlyCollection<string> SeededCodes => Catalogue.Keys.ToList();
 
     /// <summary>
     /// Plain, deliberately boring HTML. Values are HTML-encoded by the renderer,
