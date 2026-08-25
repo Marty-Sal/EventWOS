@@ -1,4 +1,5 @@
 @inject INotificationApiService Api
+@inject NavigationManager Nav
 @inject NotificationHubService Hub
 @implements IDisposable
 
@@ -74,7 +75,20 @@
             }
         </ul>
 
-        @if (_page.Items.Count < _page.Total)
+        @if (Compact)
+        {
+            @* On the dashboard this card sits beside Announcements and must not grow
+               without limit -- paging here would push everything below it off the
+               screen. The full trail lives on /notifications. *@
+            @if (_page.Total > _page.Items.Count)
+            {
+                <button class="w-full text-xs font-semibold text-gray-500 hover:text-indigo-600 py-2"
+                        @onclick="@(() => Nav.NavigateTo("/notifications"))">
+                    View all activity (@_page.Total) →
+                </button>
+            }
+        }
+        else if (_page.Items.Count < _page.Total)
         {
             <button class="w-full text-xs font-semibold text-gray-500 hover:text-indigo-600 py-2"
                     disabled="@_busy" @onclick="LoadMore">
@@ -89,7 +103,15 @@
     private bool _loading = true;
     private bool _busy;
 
-    private const int PageSize = 20;
+    /// <summary>
+    /// Dashboard mode: show a short window and link out instead of paging in place.
+    /// </summary>
+    [Parameter] public bool Compact { get; set; }
+
+    /// <summary>How many rows to fetch. Compact callers want a glance, not the log.</summary>
+    [Parameter] public int? MaxItems { get; set; }
+
+    private int PageSize => MaxItems ?? (Compact ? 5 : 20);
 
     /// <summary>Raised whenever the unread count changes, so the sidebar badge can follow.</summary>
     [Parameter] public EventCallback<int> UnreadCountChanged { get; set; }

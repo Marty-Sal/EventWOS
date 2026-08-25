@@ -432,8 +432,21 @@
                assigned. Attachments open as links. Sits above Ratings and
                Permissions per owner request — it's the thing you actually
                need to check daily; ratings/permissions are reference material. *@
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
+            @* Two feeds, side by side and deliberately not merged: Announcements are
+               messages a human wrote and expects read; Activity is the business-event
+               trail (assignments, event changes, payment decisions) that also went out
+               over push and WhatsApp. Interleaving them would hide a cancellation among
+               newsletters. Same split as /notifications, which is where both "view all"
+               links land. Stacks on narrow screens; items-start so the shorter card does
+               not stretch to match the taller one. *@
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
+                </div>
+
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    <PlatformNotificationsPanel Compact="true" />
+                </div>
             </div>
 
             @* Reputation breakdown. The stat tile above gives the single number;
@@ -568,8 +581,21 @@
                assigned. Attachments open as links. Sits above Ratings and
                Permissions per owner request — it's the thing you actually
                need to check daily; ratings/permissions are reference material. *@
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
+            @* Two feeds, side by side and deliberately not merged: Announcements are
+               messages a human wrote and expects read; Activity is the business-event
+               trail (assignments, event changes, payment decisions) that also went out
+               over push and WhatsApp. Interleaving them would hide a cancellation among
+               newsletters. Same split as /notifications, which is where both "view all"
+               links land. Stacks on narrow screens; items-start so the shorter card does
+               not stretch to match the taller one. *@
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    <EventNotificationsPanel InboxMode="true" ShowEventTitle="true" />
+                </div>
+
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    <PlatformNotificationsPanel Compact="true" />
+                </div>
             </div>
 
             @* Same breakdown as the crew view, rated by admins rather than vendors. *@
