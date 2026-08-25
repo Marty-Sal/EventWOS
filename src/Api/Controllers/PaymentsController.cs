@@ -1,15 +1,15 @@
-using EventWOS.Api.Authorization;
+using EventOpsOracle.Api.Authorization;
 using Asp.Versioning;
-using EventWOS.Application.Payments.Commands;
-using EventWOS.Application.Payments.DTOs;
-using EventWOS.Application.Payments.Queries;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Payments.Commands;
+using EventOpsOracle.Application.Payments.DTOs;
+using EventOpsOracle.Application.Payments.Queries;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/payments")]
@@ -42,7 +42,7 @@ public sealed class PaymentsController : ControllerBase
     {
         // Vendor scoping: vendors can only see payments for their own crew.
         // Force vendorId = their own userId regardless of what the client sent.
-        if (_currentUser.Role == EventWOS.Domain.Enums.UserRole.Vendor)
+        if (_currentUser.Role == EventOpsOracle.Domain.Enums.UserRole.Vendor)
             vendorId = _currentUser.UserId;
 
         var result = await _mediator.Send(

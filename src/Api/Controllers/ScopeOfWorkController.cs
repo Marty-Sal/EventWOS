@@ -1,15 +1,15 @@
-using EventWOS.Api.Authorization;
+using EventOpsOracle.Api.Authorization;
 using Asp.Versioning;
-using EventWOS.Application.ScopeOfWork.Commands;
-using EventWOS.Application.ScopeOfWork.DTOs;
-using EventWOS.Application.ScopeOfWork.Queries;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.ScopeOfWork.Commands;
+using EventOpsOracle.Application.ScopeOfWork.DTOs;
+using EventOpsOracle.Application.ScopeOfWork.Queries;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Admin-managed global catalog of scope-of-work categories used to staff

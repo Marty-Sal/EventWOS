@@ -1,16 +1,16 @@
-using EventWOS.Api.Authorization;
+using EventOpsOracle.Api.Authorization;
 using Asp.Versioning;
-using EventWOS.Application.CrewGroups.Commands;
-using EventWOS.Application.CrewGroups.DTOs;
-using EventWOS.Application.CrewGroups.Queries;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.CrewGroups.Commands;
+using EventOpsOracle.Application.CrewGroups.DTOs;
+using EventOpsOracle.Application.CrewGroups.Queries;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Vendor-scoped crew groups. Vendors manage their own groups; Admins/Managers

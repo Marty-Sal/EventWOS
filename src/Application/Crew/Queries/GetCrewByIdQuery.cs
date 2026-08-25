@@ -1,13 +1,13 @@
-using EventWOS.Application.Files.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Vendors.DTOs;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Files.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Vendors.DTOs;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Crew.Queries;
+namespace EventOpsOracle.Application.Crew.Queries;
 
 /// <summary>
 /// Full profile for the Crew page's "View details" modal — mirrors the

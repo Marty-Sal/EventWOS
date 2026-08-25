@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Notifications.Services;
+namespace EventOpsOracle.Application.Notifications.Services;
 
 /// <summary>
 /// Turns whatever is stored on a user into the E.164-style digits WhatsApp

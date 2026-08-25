@@ -1,9 +1,9 @@
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Ratings;
+namespace EventOpsOracle.Application.UnitTests.Ratings;
 
 public sealed class RatingTests
 {

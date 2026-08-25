@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Common;
+namespace EventOpsOracle.Application.Common;
 
 /// <summary>
 /// Storage-backend abstraction. The Application/business layer depends on
@@ -15,7 +15,7 @@ namespace EventWOS.Application.Common;
 public interface IFileStorage
 {
     /// <summary>Which backend this implementation is (recorded per-FileDocument row so a provider migration doesn't break reads of older files).</summary>
-    EventWOS.Domain.Enums.StorageProvider ActiveProvider { get; }
+    EventOpsOracle.Domain.Enums.StorageProvider ActiveProvider { get; }
 
     /// <summary>Uploads content under the given key, overwriting if it already exists. Returns the same key back for convenience/chaining.</summary>
     Task<string> UploadAsync(string storageKey, Stream content, string contentType, CancellationToken ct = default);

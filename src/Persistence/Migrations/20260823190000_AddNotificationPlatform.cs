@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace EventWOS.Persistence.Migrations
+namespace EventOpsOracle.Persistence.Migrations
 {
     /// <summary>
     /// Notification platform, phase 1: durable notification state in Postgres.

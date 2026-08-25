@@ -1,12 +1,12 @@
 using Asp.Versioning;
-using EventWOS.Api.Authorization;
-using EventWOS.Application.Locations;
-using EventWOS.Application.Locations.DTOs;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Api.Authorization;
+using EventOpsOracle.Application.Locations;
+using EventOpsOracle.Application.Locations.DTOs;
+using EventOpsOracle.Shared.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Server-side proxy to the configured location provider. Blazor talks to this

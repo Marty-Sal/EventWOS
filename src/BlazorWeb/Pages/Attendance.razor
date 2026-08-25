@@ -24,7 +24,7 @@
     return;
 }
 
-<PageTitle>Attendance — EventWOS</PageTitle>
+<PageTitle>Attendance — OpsOracle</PageTitle>
 
 <div class="space-y-6">
     <div class="flex items-center justify-between flex-wrap gap-3">
@@ -717,7 +717,7 @@
         try
         {
             var result = await JS.InvokeAsync<ScannerStartResult>(
-                "eventwosCheckin.startScanner", "checkin-scanner-host", _selfRef);
+                "opsOracleCheckin.startScanner", "checkin-scanner-host", _selfRef);
 
             if (!result.Ok)
             {
@@ -790,7 +790,7 @@
     private async Task StopScannerAsync()
     {
         if (!_scannerRunning) return;
-        try { await JS.InvokeVoidAsync("eventwosCheckin.stopScanner"); } catch { }
+        try { await JS.InvokeVoidAsync("opsOracleCheckin.stopScanner"); } catch { }
         _scannerRunning = false;
     }
 
@@ -800,6 +800,6 @@
         _selfRef?.Dispose();
     }
 
-    /// <summary>Shape returned by eventwosCheckin.startScanner.</summary>
+    /// <summary>Shape returned by opsOracleCheckin.startScanner.</summary>
     private sealed record ScannerStartResult(bool Ok, string? Error);
 }

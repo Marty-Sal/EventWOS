@@ -1,4 +1,4 @@
-namespace EventWOS.BlazorWeb.Shared;
+namespace EventOpsOracle.BlazorWeb.Shared;
 
 /// <summary>
 /// Single source of truth for how an EventAssignment row should be rendered

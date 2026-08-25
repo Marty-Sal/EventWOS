@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Application.Payments.DTOs;
-using EventWOS.Shared.Common;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Application.Payments.DTOs;
+using EventOpsOracle.Shared.Common;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Payments.Queries;
+namespace EventOpsOracle.Application.Payments.Queries;
 
 public sealed record GetPaymentsQuery(
     Guid?  EventId,

@@ -1,7 +1,7 @@
 using System.Net;
-using EventWOS.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Abstractions;
 
-namespace EventWOS.Infrastructure.Notifications.Channels;
+namespace EventOpsOracle.Infrastructure.Notifications.Channels;
 
 /// <summary>
 /// Decides whether a WhatsApp failure is worth retrying. Pure and separate from

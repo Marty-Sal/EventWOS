@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Files;
+namespace EventOpsOracle.Application.Files;
 
 /// <summary>
 /// Raw upload bytes + client-declared metadata, before any validation has

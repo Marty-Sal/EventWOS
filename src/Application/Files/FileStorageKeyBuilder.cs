@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Files;
+namespace EventOpsOracle.Application.Files;
 
 /// <summary>
 /// Mints opaque storage keys. Never uses the client-supplied filename —

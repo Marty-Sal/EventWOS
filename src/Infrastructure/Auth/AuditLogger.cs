@@ -1,10 +1,10 @@
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Persistence;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Persistence;
 using System.Text.Json;
 
-namespace EventWOS.Infrastructure.Auth;
+namespace EventOpsOracle.Infrastructure.Auth;
 
 /// <summary>
 /// Writes audit entries directly to DB using a scoped DbContext.

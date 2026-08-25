@@ -1,11 +1,11 @@
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Application.Interfaces;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
 
-namespace EventWOS.Infrastructure.Auth;
+namespace EventOpsOracle.Infrastructure.Auth;
 
 /// <summary>
 /// Resolves effective permissions by combining:

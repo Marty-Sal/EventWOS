@@ -1,14 +1,14 @@
 using System.Net;
 using System.Text.Json;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Domain.Enums;
 using Lib.Net.Http.WebPush;
 using Lib.Net.Http.WebPush.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using AppPushMessage = EventWOS.Application.Notifications.Contracts.PushMessage;
+using AppPushMessage = EventOpsOracle.Application.Notifications.Contracts.PushMessage;
 
-namespace EventWOS.Infrastructure.Notifications.Channels;
+namespace EventOpsOracle.Infrastructure.Notifications.Channels;
 
 /// <summary>
 /// Standard W3C Web Push (RFC 8030) with VAPID, spoken straight to whichever push

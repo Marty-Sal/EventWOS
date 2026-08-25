@@ -1,7 +1,7 @@
 using Blazored.LocalStorage;
-using EventWOS.BlazorWeb;
-using EventWOS.BlazorWeb.Auth;
-using EventWOS.BlazorWeb.Services;
+using EventOpsOracle.BlazorWeb;
+using EventOpsOracle.BlazorWeb.Auth;
+using EventOpsOracle.BlazorWeb.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;

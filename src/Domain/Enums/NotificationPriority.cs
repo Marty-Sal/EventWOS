@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Enums;
+namespace EventOpsOracle.Domain.Enums;
 
 /// <summary>
 /// Drives claim order in the worker's queue query, so a cancelled-event alert

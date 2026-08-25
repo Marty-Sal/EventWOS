@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace EventWOS.Persistence.Migrations
+namespace EventOpsOracle.Persistence.Migrations
 {
     /// <summary>
     /// Event notifications module: Admin/Manager broadcasts a rich-text

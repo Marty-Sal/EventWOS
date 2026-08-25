@@ -1,9 +1,9 @@
-using EventWOS.BlazorWeb.Auth;
+using EventOpsOracle.BlazorWeb.Auth;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 // ─── Request/Response models ──────────────────────────────────────────────────
 public sealed record RequestOtpRequest(string Mobile);

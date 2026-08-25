@@ -1,12 +1,12 @@
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Rendering;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Infrastructure.Notifications.Channels;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Rendering;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Infrastructure.Notifications.Channels;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Positional parameter ordering for provider templates. This is the one part of

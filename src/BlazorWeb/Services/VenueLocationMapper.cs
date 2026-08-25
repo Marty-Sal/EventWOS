@@ -1,4 +1,4 @@
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>
 /// The venue form's location fields, as a value. Deliberately a record rather

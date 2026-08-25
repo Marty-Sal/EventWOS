@@ -1,8 +1,8 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Domain;
+namespace EventOpsOracle.Application.UnitTests.Domain;
 
 /// <summary>
 /// Pins <see cref="Event.RecomputeCapacityFromShifts"/> — the helper that

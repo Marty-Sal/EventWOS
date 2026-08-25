@@ -1,13 +1,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# EventWOS Blazor WASM — Nginx static file server
+# OpsOracle Blazor WASM — Nginx static file server
 # ─────────────────────────────────────────────────────────────────────────────
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
 # Restore dependencies
-COPY EventWOS.BlazorWeb.csproj ./
-RUN dotnet restore EventWOS.BlazorWeb.csproj
+COPY EventOpsOracle.BlazorWeb.csproj ./
+RUN dotnet restore EventOpsOracle.BlazorWeb.csproj
 
 # Copy all project files
 COPY . .
@@ -42,7 +42,7 @@ RUN BUILD_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
     echo "Version stamp: ${SHORT_SHA} @ ${BUILD_TS}"
 
 # Publish Blazor WASM
-RUN dotnet publish EventWOS.BlazorWeb.csproj \
+RUN dotnet publish EventOpsOracle.BlazorWeb.csproj \
     -c Release \
     -o /app/publish
 

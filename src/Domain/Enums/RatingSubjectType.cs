@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Enums;
+namespace EventOpsOracle.Domain.Enums;
 
 /// <summary>
 /// Which side of an event a <see cref="Entities.Rating"/> is about.

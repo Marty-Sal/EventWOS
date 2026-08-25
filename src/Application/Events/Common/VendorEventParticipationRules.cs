@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Events.Common;
+namespace EventOpsOracle.Application.Events.Common;
 
 /// <summary>
 /// Single source of truth for "which events does a vendor count as theirs",

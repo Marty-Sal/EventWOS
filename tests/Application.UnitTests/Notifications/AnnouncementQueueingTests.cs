@@ -1,12 +1,12 @@
-using EventWOS.Application.Announcements.Commands;
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Announcements.Commands;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +15,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Guards the announcement broadcast after it stopped sending WhatsApp inline.

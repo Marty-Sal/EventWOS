@@ -1,10 +1,10 @@
-using EventWOS.Application.CrewGroups.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.CrewGroups.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.CrewGroups.Commands;
+namespace EventOpsOracle.Application.CrewGroups.Commands;
 
 /// <summary>Rename or update description on a grp. Ownership enforced.</summary>
 public sealed record UpdateCrewGroupCommand(

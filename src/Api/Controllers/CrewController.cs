@@ -1,16 +1,16 @@
-using EventWOS.Api.Authorization;
+using EventOpsOracle.Api.Authorization;
 using Asp.Versioning;
-using EventWOS.Application.Crew.Commands;
-using EventWOS.Application.Crew.Queries;
-using EventWOS.Application.Vendors.DTOs;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Crew.Commands;
+using EventOpsOracle.Application.Crew.Queries;
+using EventOpsOracle.Application.Vendors.DTOs;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]
@@ -54,7 +54,7 @@ public sealed class CrewController : ControllerBase
     public async Task<IActionResult> GetCrewById(Guid id, CancellationToken ct)
     {
         if (!_currentUser.HasPermission("crew:read")) return Forbid();
-        var result = await _mediator.Send(new EventWOS.Application.Crew.Queries.GetCrewByIdQuery(id), ct);
+        var result = await _mediator.Send(new EventOpsOracle.Application.Crew.Queries.GetCrewByIdQuery(id), ct);
         return result.IsSuccess
             ? Ok(ApiResponse<CrewDetailDto>.Ok(result.Value))
             : NotFound(ApiResponse<CrewDetailDto>.Fail(result.Error.Message));

@@ -4,7 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 
-namespace EventWOS.BlazorWeb.Auth;
+namespace EventOpsOracle.BlazorWeb.Auth;
 
 /// <summary>
 /// Blazor WASM authentication state provider.

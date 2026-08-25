@@ -1,14 +1,14 @@
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Channels;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Application.Notifications.Rendering;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Channels;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Application.Notifications.Rendering;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// The fan-out rules. Push is the only channel where one delivery row means
@@ -255,7 +255,7 @@ public class PushFanOutTests
 
         await Sender(provider, store).SendAsync(untitled);
 
-        provider.Sent.Single().Title.Should().Be("EventWOS", "a titleless notification reads as broken on every platform");
+        provider.Sent.Single().Title.Should().Be("OpsOracle", "a titleless notification reads as broken on every platform");
     }
 
     [Fact]

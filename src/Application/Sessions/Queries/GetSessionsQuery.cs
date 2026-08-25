@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Rules;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Rules;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Sessions.Queries;
+namespace EventOpsOracle.Application.Sessions.Queries;
 
 public sealed record SessionDto(
     Guid Id,

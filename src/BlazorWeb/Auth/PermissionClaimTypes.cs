@@ -1,4 +1,4 @@
-namespace EventWOS.BlazorWeb.Auth;
+namespace EventOpsOracle.BlazorWeb.Auth;
 
 /// <summary>
 /// Shared constant for the "permission" claim key used in JWT tokens.

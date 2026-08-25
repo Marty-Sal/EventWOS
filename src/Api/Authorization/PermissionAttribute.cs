@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 
-namespace EventWOS.Api.Authorization;
+namespace EventOpsOracle.Api.Authorization;
 
 /// <summary>
 /// Shorthand attribute to require a specific "permission" JWT claim on a controller or action.

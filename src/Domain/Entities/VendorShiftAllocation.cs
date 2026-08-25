@@ -1,6 +1,6 @@
-using EventWOS.Domain.Common;
+using EventOpsOracle.Domain.Common;
 
-namespace EventWOS.Domain.Entities;
+namespace EventOpsOracle.Domain.Entities;
 
 /// <summary>
 /// Per-vendor staffing quota on a specific <see cref="EventShift"/>.

@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Common;
+namespace EventOpsOracle.Domain.Common;
 
 /// <summary>
 /// Base entity with UUID primary key, audit fields, and soft-delete support.

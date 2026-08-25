@@ -1,10 +1,10 @@
 using System.Reflection;
-using EventWOS.Application.Attendance.Commands;
-using EventWOS.Application.Attendance.Geo;
+using EventOpsOracle.Application.Attendance.Commands;
+using EventOpsOracle.Application.Attendance.Geo;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Geofencing;
+namespace EventOpsOracle.Application.UnitTests.Geofencing;
 
 /// <summary>
 /// Scenario 10 — a client-supplied radius must never override

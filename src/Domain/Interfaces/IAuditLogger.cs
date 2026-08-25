@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Domain.Interfaces;
+namespace EventOpsOracle.Domain.Interfaces;
 
 /// <summary>Audit logging abstraction. Implementations write to DB asynchronously.</summary>
 public interface IAuditLogger

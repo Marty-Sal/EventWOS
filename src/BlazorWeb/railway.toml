@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# EventWOS — Railway Config (Blazor WASM service)
+# OpsOracle — Railway Config (Blazor WASM service)
 # Railway dashboard → Blazor service → Root Directory: src/BlazorWeb
 # Dockerfile path is relative to Root Directory
 # ─────────────────────────────────────────────────────────────────────────────

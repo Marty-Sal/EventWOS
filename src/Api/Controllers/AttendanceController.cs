@@ -1,19 +1,19 @@
 using Asp.Versioning;
-using EventWOS.Api.Authorization;
-using EventWOS.Api.Excel;
-using EventWOS.Application.Attendance.Commands;
-using EventWOS.Application.Attendance.DTOs;
-using EventWOS.Application.Attendance.Queries;
-using EventWOS.Application.Events.DTOs;
-using EventWOS.Application.Events.Queries;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Api.Authorization;
+using EventOpsOracle.Api.Excel;
+using EventOpsOracle.Application.Attendance.Commands;
+using EventOpsOracle.Application.Attendance.DTOs;
+using EventOpsOracle.Application.Attendance.Queries;
+using EventOpsOracle.Application.Events.DTOs;
+using EventOpsOracle.Application.Events.Queries;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/attendance")]

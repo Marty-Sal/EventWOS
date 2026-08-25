@@ -1,9 +1,9 @@
-using EventWOS.Application.Files;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Files;
+using EventOpsOracle.Domain.Enums;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Files;
+namespace EventOpsOracle.Application.UnitTests.Files;
 
 /// <summary>
 /// Pins the server-side file validation rules. This is the ONLY authority

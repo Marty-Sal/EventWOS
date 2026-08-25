@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Interfaces;
+namespace EventOpsOracle.Application.Interfaces;
 
 /// <summary>
 /// Abstraction for pushing real-time notifications to connected clients.

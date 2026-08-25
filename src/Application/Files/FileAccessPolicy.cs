@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Files;
+namespace EventOpsOracle.Application.Files;
 
 /// <summary>
 /// Pure authorization decisions for file access, factored out of the

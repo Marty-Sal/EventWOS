@@ -1,16 +1,16 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Application.Events.DTOs;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Application.Events.DTOs;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using EventWOS.Domain.Rules;
+using EventOpsOracle.Domain.Rules;
 
-namespace EventWOS.Application.Events.Commands;
+namespace EventOpsOracle.Application.Events.Commands;
 
 public sealed record AssignCrewCommand(
     Guid EventId,
@@ -95,7 +95,7 @@ public sealed class AssignCrewHandler : IRequestHandler<AssignCrewCommand, Resul
         else
         {
             bool _ambiguous = false;
-            _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
+            _shiftId = await EventOpsOracle.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
                 _db, req.EventId, ct, x => _ambiguous = x);
             if (_ambiguous)
                 return Result.Failure<EventAssignmentDto>(new Error("Assignment.AmbiguousShift",

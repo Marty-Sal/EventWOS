@@ -2,10 +2,10 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using EventWOS.Application.Attendance.Geo;
+using EventOpsOracle.Application.Attendance.Geo;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Infrastructure.Geo;
+namespace EventOpsOracle.Infrastructure.Geo;
 
 /// <summary>
 /// Reverse-geocodes coordinates via OpenStreetMap\'s Nominatim service.
@@ -14,7 +14,7 @@ namespace EventWOS.Infrastructure.Geo;
 /// https://operations.osmfoundation.org/policies/nominatim/):
 ///   • Max 1 request per second per unique IP.
 ///   • A valid identifying User-Agent is REQUIRED — no browsers, no
-///     "curl", no blanks. We send "EventWOS/1.0 (contact via
+///     "curl", no blanks. We send "OpsOracle/1.0 (contact via
 ///     admin@eventwos.local)". Update the contact if we ever ship a
 ///     public support address.
 ///   • No bulk / batch geocoding of large datasets. Our workload is
@@ -74,7 +74,7 @@ public sealed class GeoLocationService : IGeoLocationService, IDisposable
         // Nominatim REQUIRES an identifying User-Agent. Requests without
         // one are blocked with HTTP 403.
         c.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "EventWOS/1.0 (contact: admin@eventwos.local)");
+            "OpsOracle/1.0 (contact: admin@eventwos.local)");
         c.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en");
         return c;
     }

@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Interfaces;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Payments.Commands;
+namespace EventOpsOracle.Application.Payments.Commands;
 
 public sealed record UpdatePayrollStatusCommand(
     Guid   BatchId,

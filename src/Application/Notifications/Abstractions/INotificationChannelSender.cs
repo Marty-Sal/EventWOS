@@ -1,8 +1,8 @@
-using EventWOS.Application.Notifications.Rendering;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Rendering;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Notifications.Abstractions;
+namespace EventOpsOracle.Application.Notifications.Abstractions;
 
 /// <summary>
 /// One channel's transport. Implementations do exactly one thing: hand a

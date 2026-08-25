@@ -1,10 +1,10 @@
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Enums;
-using EventWOS.Persistence.Seed;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Persistence.Seed;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Push has to be listed in NotificationPolicy to happen at all.

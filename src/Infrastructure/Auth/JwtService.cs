@@ -1,12 +1,12 @@
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Domain.Entities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 
-namespace EventWOS.Infrastructure.Auth;
+namespace EventOpsOracle.Infrastructure.Auth;
 
 /// <summary>
 /// RSA256 JWT service. Uses asymmetric keys for signing — public key

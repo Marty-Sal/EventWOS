@@ -1,6 +1,6 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 
-namespace EventWOS.Application.Auth.Interfaces;
+namespace EventOpsOracle.Application.Auth.Interfaces;
 
 /// <summary>JWT token generation and validation abstraction.</summary>
 public interface IJwtService

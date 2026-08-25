@@ -1,12 +1,12 @@
 using System.Text.Json;
-using EventWOS.Application.Notifications.Commands;
-using EventWOS.Infrastructure.Notifications.Webhooks;
+using EventOpsOracle.Application.Notifications.Commands;
+using EventOpsOracle.Infrastructure.Notifications.Webhooks;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Inbound provider callbacks: what actually happened to a message after we
@@ -114,7 +114,14 @@ public sealed class WebhooksController : ControllerBase
     {
         var raw = await ReadRawBodyAsync();
 
-        var provided = Request.Headers["X-EventWOS-Token"].FirstOrDefault() ?? queryToken;
+        // Both header names are accepted. X-OpsOracle-Token is the name going forward;
+        // X-EventWOS-Token is what any webhook already configured in a provider's
+        // dashboard is sending today, and a rename in our code must not silently start
+        // rejecting live callbacks -- the failure would look like WhatsApp receipts
+        // simply stopping.
+        var provided = Request.Headers["X-OpsOracle-Token"].FirstOrDefault()
+                       ?? Request.Headers["X-EventWOS-Token"].FirstOrDefault()
+                       ?? queryToken;
         var expected = _options.AiSensySecret;
 
         var authorized = !string.IsNullOrWhiteSpace(expected) &&

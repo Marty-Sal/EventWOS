@@ -1,15 +1,15 @@
 using Asp.Versioning;
-using EventWOS.Api.Authorization;
-using EventWOS.Application.VendorAllocations.Commands;
-using EventWOS.Application.VendorAllocations.DTOs;
-using EventWOS.Application.VendorAllocations.Queries;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Api.Authorization;
+using EventOpsOracle.Application.VendorAllocations.Commands;
+using EventOpsOracle.Application.VendorAllocations.DTOs;
+using EventOpsOracle.Application.VendorAllocations.Queries;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Per-vendor staffing quotas on event shifts. Phase C of Scope-of-Work.

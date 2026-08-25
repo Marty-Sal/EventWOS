@@ -1,6 +1,6 @@
-using EventWOS.Domain.Common;
+using EventOpsOracle.Domain.Common;
 
-namespace EventWOS.Domain.Entities;
+namespace EventOpsOracle.Domain.Entities;
 
 /// <summary>
 /// Admin-maintained catalog of physical venues, managed from

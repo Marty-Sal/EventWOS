@@ -1,8 +1,8 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace EventWOS.Persistence.Configurations;
+namespace EventOpsOracle.Persistence.Configurations;
 
 /// <summary>Maps <see cref="NotificationDelivery"/> to <c>notification_deliveries</c>.</summary>
 public sealed class NotificationDeliveryConfiguration : IEntityTypeConfiguration<NotificationDelivery>

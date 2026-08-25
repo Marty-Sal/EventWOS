@@ -1,7 +1,7 @@
 using ClosedXML.Excel;
-using EventWOS.Application.Attendance.Queries;
+using EventOpsOracle.Application.Attendance.Queries;
 
-namespace EventWOS.Api.Excel;
+namespace EventOpsOracle.Api.Excel;
 
 /// <summary>
 /// Phase D step 22: Excel exports for the admin <c>/attendance</c> page.

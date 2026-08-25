@@ -1,7 +1,7 @@
-using EventWOS.Shared.Result;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Auth.Commands;
+namespace EventOpsOracle.Application.Auth.Commands;
 
 /// <summary>
 /// Username-or-email + password login. The Portal parameter is the role

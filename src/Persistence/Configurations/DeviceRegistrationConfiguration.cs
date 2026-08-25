@@ -1,8 +1,8 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace EventWOS.Persistence.Configurations;
+namespace EventOpsOracle.Persistence.Configurations;
 
 /// <summary>Maps <see cref="DeviceRegistration"/> to the <c>device_registrations</c> table.</summary>
 public sealed class DeviceRegistrationConfiguration : IEntityTypeConfiguration<DeviceRegistration>

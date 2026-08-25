@@ -1,14 +1,14 @@
-using EventWOS.Application.Announcements.DTOs;
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Announcements.DTOs;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Application.Announcements.Queries;
+namespace EventOpsOracle.Application.Announcements.Queries;
 
 /// <summary>
 /// Streams an announcement attachment to a recipient.

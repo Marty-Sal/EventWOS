@@ -1,6 +1,6 @@
-using EventWOS.Domain.Common;
+using EventOpsOracle.Domain.Common;
 
-namespace EventWOS.Domain.Events;
+namespace EventOpsOracle.Domain.Events;
 
 public sealed record EventCompletedEvent(Guid EventId) : IDomainEvent
 {

@@ -1,7 +1,7 @@
 @page "/manager-approvals"
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject HttpClient Http
-@inject EventWOS.BlazorWeb.Auth.AppAuthStateProvider Auth
+@inject EventOpsOracle.BlazorWeb.Auth.AppAuthStateProvider Auth
 @inject IAuthApiService AuthApi
 @inject NavigationManager Nav
 @inject NotificationHubService Hub
@@ -9,7 +9,7 @@
 @using System.Net.Http
 @using System.Net.Http.Json
 
-<PageTitle>Approvals · Events — EventWOS</PageTitle>
+<PageTitle>Approvals · Events — OpsOracle</PageTitle>
 
 <div class="space-y-6">
     <ApprovalTabsHeader Active="events" EventsCount="@_pendingCount" />

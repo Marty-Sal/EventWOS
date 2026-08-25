@@ -1,4 +1,4 @@
-namespace EventWOS.Infrastructure.Notifications.Channels;
+namespace EventOpsOracle.Infrastructure.Notifications.Channels;
 
 /// <summary>
 /// Email configuration for the notification pipeline. Shares the existing
@@ -11,7 +11,7 @@ public sealed class EmailSenderOptions
 
     public string? ApiKey { get; set; }
     public string? FromEmail { get; set; }
-    public string FromName { get; set; } = "EventWOS";
+    public string FromName { get; set; } = "OpsOracle";
 
     /// <summary>
     /// SendGrid validates and accepts the request but sends nothing. Useful for

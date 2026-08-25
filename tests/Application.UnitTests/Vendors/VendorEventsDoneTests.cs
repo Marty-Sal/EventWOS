@@ -1,11 +1,11 @@
-using EventWOS.Application.Events.Common;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Events.Common;
+using EventOpsOracle.Domain.Enums;
 using FluentAssertions;
 using Xunit;
 
-using Row = EventWOS.Application.Events.Common.VendorEventParticipationRules.ParticipationRow;
+using Row = EventOpsOracle.Application.Events.Common.VendorEventParticipationRules.ParticipationRow;
 
-namespace EventWOS.Application.UnitTests.Vendors;
+namespace EventOpsOracle.Application.UnitTests.Vendors;
 
 /// <summary>
 /// Pins the vendor "Total Events Done" tile. The original bug was that the

@@ -1,13 +1,13 @@
-using EventWOS.Api.Authorization;
+using EventOpsOracle.Api.Authorization;
 using Asp.Versioning;
-using EventWOS.Application.Analytics.Queries;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Analytics.Queries;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/analytics")]

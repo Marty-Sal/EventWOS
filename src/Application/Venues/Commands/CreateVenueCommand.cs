@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Venues.DTOs;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Venues.DTOs;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using DomainVenue = EventWOS.Domain.Entities.Venue;
+using DomainVenue = EventOpsOracle.Domain.Entities.Venue;
 
-namespace EventWOS.Application.Venues.Commands;
+namespace EventOpsOracle.Application.Venues.Commands;
 
 public sealed record CreateVenueCommand(
     string  Name,

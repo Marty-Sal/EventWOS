@@ -1,15 +1,15 @@
 using Asp.Versioning;
-using EventWOS.Api.Authorization;
-using EventWOS.Application.Approval.Commands;
-using EventWOS.Application.Approval.DTOs;
-using EventWOS.Application.Approval.Queries;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Api.Authorization;
+using EventOpsOracle.Application.Approval.Commands;
+using EventOpsOracle.Application.Approval.DTOs;
+using EventOpsOracle.Application.Approval.Queries;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Unified approval queue for self-registered Vendors and Crew.

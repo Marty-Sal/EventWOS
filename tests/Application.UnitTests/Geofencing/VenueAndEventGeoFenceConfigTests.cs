@@ -1,8 +1,8 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Geofencing;
+namespace EventOpsOracle.Application.UnitTests.Geofencing;
 
 /// <summary>
 /// Venue coordinate persistence and Event geofence configuration — the two

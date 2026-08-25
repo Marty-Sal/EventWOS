@@ -1,9 +1,9 @@
-using EventWOS.Application.Attendance.Geo;
-using EventWOS.Domain.Geo;
+using EventOpsOracle.Application.Attendance.Geo;
+using EventOpsOracle.Domain.Geo;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Geofencing;
+namespace EventOpsOracle.Application.UnitTests.Geofencing;
 
 /// <summary>
 /// The attendance authorization rule. These are the highest-stakes tests in the

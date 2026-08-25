@@ -1,18 +1,18 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Application.Payments.Commands;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Application.Payments.Commands;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Creating a payment is bookkeeping, not news. The row lands as Pending, its batch as

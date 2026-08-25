@@ -1,7 +1,7 @@
-using EventWOS.Domain.Common;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Common;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Domain.Entities;
+namespace EventOpsOracle.Domain.Entities;
 
 /// <summary>
 /// One browser or installed PWA that has agreed to receive push notifications

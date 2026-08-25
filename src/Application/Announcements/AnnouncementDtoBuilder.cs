@@ -1,9 +1,9 @@
-using EventWOS.Application.Announcements.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Application.Announcements.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Announcements;
+namespace EventOpsOracle.Application.Announcements;
 
 /// <summary>
 /// Hydrates announcement rows into DTOs: attachment metadata, sender name and

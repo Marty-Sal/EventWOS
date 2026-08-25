@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace EventWOS.Persistence.Migrations;
+namespace EventOpsOracle.Persistence.Migrations;
 
 /// <summary>
 /// Adds device_registrations: one row per browser or installed PWA that has

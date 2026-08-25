@@ -1,5 +1,5 @@
 /*
- * EventWOS push subscription interop
+ * OpsOracle push subscription interop
  * ----------------------------------
  * The browser half of Web Push. The service worker (wwwroot/sw.js)
  * receives and displays notifications; this file is only about getting
@@ -14,7 +14,7 @@
  * instead of showing a toggle that does nothing.
  */
 
-window.eventwosPush = (() => {
+window.opsOraclePush = (() => {
 
     // ---- capability -------------------------------------------------
 
@@ -42,7 +42,7 @@ window.eventwosPush = (() => {
             // The single most common confusion on iPhone: Safari supports
             // push from 16.4, but ONLY for an installed PWA.
             return isIos() && !isStandalone()
-                ? 'On iPhone and iPad, tap Share then "Add to Home Screen" first, then open EventWOS from the home screen icon.'
+                ? 'On iPhone and iPad, tap Share then "Add to Home Screen" first, then open OpsOracle from the home screen icon.'
                 : 'This browser does not support push notifications.';
         }
 
@@ -50,7 +50,7 @@ window.eventwosPush = (() => {
             return 'This browser does not support notifications.';
 
         if (isIos() && !isStandalone())
-            return 'On iPhone and iPad, tap Share then "Add to Home Screen" first, then open EventWOS from the home screen icon.';
+            return 'On iPhone and iPad, tap Share then "Add to Home Screen" first, then open OpsOracle from the home screen icon.';
 
         return null;
     }
@@ -284,6 +284,8 @@ window.eventwosPush = (() => {
     // next page load would helpfully re-subscribe the person who just opted out.
     // Deliberately per-browser rather than per-account -- "not on this laptop" is
     // the actual intent, and it is the browser that will be buzzing.
+    // Deliberately still 'eventwos.*' after the OpsOracle rename: these keys carry a
+    // user's own choice. Renaming them silently re-prompts everyone who opted out.
     const OPT_OUT_KEY     = 'eventwos.push.optOut';
     const ASK_LOG_KEY     = 'eventwos.push.asked';
     const MAX_ASKS        = 3;

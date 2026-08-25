@@ -1,4 +1,4 @@
-@using EventWOS.BlazorWeb.Services
+@using EventOpsOracle.BlazorWeb.Services
 @implements IAsyncDisposable
 @inject IPushApiService PushApi
 @inject IJSRuntime JS
@@ -22,7 +22,7 @@
         <div>
             <h3 class="text-sm font-bold text-gray-800">Device notifications</h3>
             <p class="text-xs text-gray-500 mt-0.5">
-                Get alerted about shifts, approvals and payments even when EventWOS is closed.
+                Get alerted about shifts, approvals and payments even when OpsOracle is closed.
                 We switch this on for you on every device you sign in from -- you only
                 have to allow it once per browser.
             </p>
@@ -167,7 +167,7 @@
     {
         try
         {
-            _status = await JS.InvokeAsync<PushStatus>("eventwosPush.getStatus");
+            _status = await JS.InvokeAsync<PushStatus>("opsOraclePush.getStatus");
         }
         catch
         {
@@ -210,7 +210,7 @@
         // This runs inside the click handler on purpose: browsers ignore -- and
         // Safari penalises -- a permission prompt that was not asked for by a
         // user gesture.
-        var result = await JS.InvokeAsync<SubscribeResult>("eventwosPush.subscribe", _config!.PublicKey);
+        var result = await JS.InvokeAsync<SubscribeResult>("opsOraclePush.subscribe", _config!.PublicKey);
 
         if (!result.Ok)
         {
@@ -225,21 +225,21 @@
             // The browser is now subscribed to a push service we have no record
             // of. Rolling back keeps the two sides honest -- otherwise the user
             // sees "on" and never receives anything.
-            await JS.InvokeVoidAsync("eventwosPush.unsubscribe");
+            await JS.InvokeVoidAsync("opsOraclePush.unsubscribe");
             _error = "Could not save this device. Please try again.";
         }
     }
 
     private async Task DisableAsync()
     {
-        var result = await JS.InvokeAsync<UnsubscribeResult>("eventwosPush.unsubscribe");
+        var result = await JS.InvokeAsync<UnsubscribeResult>("opsOraclePush.unsubscribe");
 
         // Tell the server regardless: if the browser-side unsubscribe failed we
         // still want the row retired, and the endpoint we already knew is enough
         // to identify it.
         await PushApi.UnsubscribeAsync(result.Endpoint ?? _status?.Endpoint);
 
-        await JS.InvokeVoidAsync("eventwosPush.setBadge", 0);
+        await JS.InvokeVoidAsync("opsOraclePush.setBadge", 0);
     }
 
     private async Task RemoveDeviceAsync(Guid registrationId)
@@ -256,7 +256,7 @@
             {
                 var devices = await PushApi.GetDevicesAsync();
                 if (devices.All(d => d.Id != registrationId))
-                    await JS.InvokeVoidAsync("eventwosPush.unsubscribe");
+                    await JS.InvokeVoidAsync("opsOraclePush.unsubscribe");
             }
         }
         finally

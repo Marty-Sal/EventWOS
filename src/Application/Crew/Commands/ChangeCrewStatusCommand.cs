@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using MediatR;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Shared.Result;
 
-namespace EventWOS.Application.Crew.Commands;
+namespace EventOpsOracle.Application.Crew.Commands;
 
 /// <summary>
 /// Suspend / reactivate a crew member. Mirrors ChangeVendorStatusCommand

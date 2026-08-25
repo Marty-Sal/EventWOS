@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace EventWOS.Persistence.Migrations
+namespace EventOpsOracle.Persistence.Migrations
 {
     /// <summary>
     /// Reference-data table: the 28 Indian states + 8 union territories.

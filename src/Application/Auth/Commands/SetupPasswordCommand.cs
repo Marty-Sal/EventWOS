@@ -1,7 +1,7 @@
-using EventWOS.Shared.Result;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Auth.Commands;
+namespace EventOpsOracle.Application.Auth.Commands;
 
 /// <summary>
 /// First-login password setup for grandfathered users (RequirePasswordReset = true).

@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Notifications.Contracts;
+namespace EventOpsOracle.Application.Notifications.Contracts;
 
 /// <summary>
 /// Default priority and channel set per notification type -- the business

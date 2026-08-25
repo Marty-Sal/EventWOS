@@ -1,6 +1,6 @@
-using EventWOS.Domain.Common;
+using EventOpsOracle.Domain.Common;
 
-namespace EventWOS.Domain.Entities;
+namespace EventOpsOracle.Domain.Entities;
 
 /// <summary>
 /// A vendor-scoped, named bucket of crew members so a vendor can

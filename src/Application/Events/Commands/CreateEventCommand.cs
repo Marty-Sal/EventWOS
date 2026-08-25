@@ -1,18 +1,18 @@
-using EventWOS.Application.Events.DTOs;
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Application.Events.Shifts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Events.DTOs;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Application.Events.Shifts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Application.Events.Commands;
+namespace EventOpsOracle.Application.Events.Commands;
 
 /// <summary>
 /// Create an event.

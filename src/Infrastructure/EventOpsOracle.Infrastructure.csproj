@@ -3,7 +3,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>EventWOS.Infrastructure</RootNamespace>
+    <RootNamespace>EventOpsOracle.Infrastructure</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Lib.Net.Http.WebPush" Version="3.3.1" />
@@ -25,8 +25,8 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Application\EventWOS.Application.csproj" />
-    <ProjectReference Include="..\Persistence\EventWOS.Persistence.csproj" />
+    <ProjectReference Include="..\Application\EventOpsOracle.Application.csproj" />
+    <ProjectReference Include="..\Persistence\EventOpsOracle.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -36,7 +36,7 @@
       cover the decision table without widening the surface other code can call.
     -->
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>EventWOS.Application.UnitTests</_Parameter1>
+      <_Parameter1>EventOpsOracle.Application.UnitTests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

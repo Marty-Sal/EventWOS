@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Locations.DTOs;
+namespace EventOpsOracle.Application.Locations.DTOs;
 
 /// <summary>
 /// Structured address for a single point, returned by

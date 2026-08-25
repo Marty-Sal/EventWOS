@@ -1,17 +1,17 @@
-using EventWOS.Application.Announcements.DTOs;
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Announcements.DTOs;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Application.Announcements.Commands;
+namespace EventOpsOracle.Application.Announcements.Commands;
 
 /// <summary>
 /// Admin/Manager broadcasts a rich-text notification to an event's vendors

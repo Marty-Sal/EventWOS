@@ -1,10 +1,10 @@
-using EventWOS.Application.CrewGroups.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.CrewGroups.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.CrewGroups.Queries;
+namespace EventOpsOracle.Application.CrewGroups.Queries;
 
 /// <summary>Group detail + member list. Caller passes ActingVendorId to enforce ownership.</summary>
 public sealed record GetCrewGroupByIdQuery(

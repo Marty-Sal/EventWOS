@@ -1,12 +1,12 @@
-using EventWOS.Application.CrewGroups.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.CrewGroups.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.CrewGroups.Commands;
+namespace EventOpsOracle.Application.CrewGroups.Commands;
 
 /// <summary>
 /// Replace the group's member list with the provided crew ids.

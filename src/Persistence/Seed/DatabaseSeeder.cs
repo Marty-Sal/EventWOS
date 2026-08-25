@@ -1,10 +1,10 @@
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Persistence.Seed;
+namespace EventOpsOracle.Persistence.Seed;
 
 /// <summary>
 /// Idempotent database seeder. Safe to run on every startup.
@@ -123,7 +123,7 @@ public sealed class DatabaseSeeder
             return;
         }
 
-        _db.ScopesOfWork.Add(new EventWOS.Domain.Entities.ScopeOfWork(
+        _db.ScopesOfWork.Add(new EventOpsOracle.Domain.Entities.ScopeOfWork(
             "General",
             "Default scope of work backfilled from pre-shift events. " +
             "Edit the shift to assign a more specific category.",

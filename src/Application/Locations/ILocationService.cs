@@ -1,6 +1,6 @@
-using EventWOS.Application.Locations.DTOs;
+using EventOpsOracle.Application.Locations.DTOs;
 
-namespace EventWOS.Application.Locations;
+namespace EventOpsOracle.Application.Locations;
 
 /// <summary>
 /// The ONLY location-provider contract the application layer is allowed to
@@ -23,7 +23,7 @@ namespace EventWOS.Application.Locations;
 ///    thread; the timeout is configuration, not a magic number.
 ///
 /// Note this is intentionally separate from
-/// <see cref="EventWOS.Application.Attendance.Geo.IGeoLocationService"/>,
+/// <see cref="EventOpsOracle.Application.Attendance.Geo.IGeoLocationService"/>,
 /// which is a narrow best-effort "turn a crew GPS fix into a display label"
 /// helper used when writing AttendanceRecord rows. This interface is the
 /// admin-facing search/geocode capability. Keeping them apart stops the

@@ -1,8 +1,8 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Rules;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Rules;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.VendorAllocations.Internal;
+namespace EventOpsOracle.Application.VendorAllocations.Internal;
 
 /// <summary>
 /// Async helper shared by <c>VendorAssignCrewHandler</c> and

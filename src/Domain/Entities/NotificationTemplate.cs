@@ -1,7 +1,7 @@
-using EventWOS.Domain.Common;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Common;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Domain.Entities;
+namespace EventOpsOracle.Domain.Entities;
 
 /// <summary>
 /// The wording of a notification, per channel, kept out of business code. A

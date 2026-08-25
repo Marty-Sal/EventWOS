@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Rules;
+namespace EventOpsOracle.Domain.Rules;
 
 /// <summary>
 /// The one definition of "what a rating is worth" and "what an average means".

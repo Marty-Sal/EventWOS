@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Terms.DTOs;
+namespace EventOpsOracle.Application.Terms.DTOs;
 
 /// <summary>One version of a Terms & Conditions document.</summary>
 public sealed record TermsDto(

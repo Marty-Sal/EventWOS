@@ -2,7 +2,7 @@
 #   COVER
 # ============================================================
 story.append(Spacer(1, 4.5*cm))
-story.append(Paragraph('EventWOS', S['cover_title']))
+story.append(Paragraph('OpsOracle', S['cover_title']))
 story.append(Spacer(1, 6))
 story.append(Paragraph('Operations Handbook', S['cover_title']))
 story.append(Spacer(1, 24))
@@ -10,7 +10,7 @@ story.append(Paragraph('2026 . Volume 1', S['cover_sub']))
 story.append(Spacer(1, 90))
 story.append(Paragraph('THE PLAYBOOK FOR EVENT MANAGERS,<br/>VENDORS AND CREW', S['cover_tag']))
 story.append(Spacer(1, 40))
-story.append(Paragraph('Prepared by the EventWOS team . Confidential', S['cover_ver']))
+story.append(Paragraph('Prepared by the OpsOracle team . Confidential', S['cover_ver']))
 story.append(PageBreak())
 
 # ============================================================
@@ -22,7 +22,7 @@ hr(color=EMERALD, thickness=1.5)
 gap(10)
 
 toc = [
-    ('01', 'About EventWOS',           'What the platform is . who uses it . the four portals',                            '05'),
+    ('01', 'About OpsOracle',           'What the platform is . who uses it . the four portals',                            '05'),
     ('02', "Who\'s Who — The Roles",   'Admin . Manager . Vendor . Crew — what each one owns',                             '07'),
     ('03', 'How Work Flows',           'From event creation to payment, in one diagram',                                    '09'),
     ('04', 'Phases of an Event',       'Before . Day-Of . During . After',                                                  '11'),
@@ -61,19 +61,19 @@ story.append(PageBreak())
 # ============================================================
 #   CHAPTER 01 — About
 # ============================================================
-set_chapter(1, 'About EventWOS')
+set_chapter(1, 'About OpsOracle')
 story.append(Spacer(1, 5*cm))
 story.append(Paragraph('01', S['chapter_num']))
 story.append(Spacer(1, 4))
-story.append(Paragraph('About EventWOS', S['chapter_title']))
+story.append(Paragraph('About OpsOracle', S['chapter_title']))
 story.append(Spacer(1, 8))
 story.append(Paragraph('What the platform is, who it serves, and why it exists.', S['chapter_tag']))
 story.append(PageBreak())
 
-p('About EventWOS', 'h1')
+p('About OpsOracle', 'h1')
 hr(color=EMERALD, thickness=1.5)
 gap(6)
-p("EventWOS is an end-to-end platform for running large live events — concerts, festivals, sports, "
+p("OpsOracle is an end-to-end platform for running large live events — concerts, festivals, sports, "
   "conferences, private functions. It replaces the WhatsApp-groups-and-spreadsheets way of "
   "coordinating an event with a single system that everyone on the ground shares. Managers plan "
   "the event and the shifts; vendors supply crew against those shifts; crew members show up, "
@@ -81,7 +81,7 @@ p("EventWOS is an end-to-end platform for running large live events — concerts
   "real time.")
 
 p('One workflow, four portals', 'h2')
-p("Every organization that runs an event has the same four archetypes on the ground. EventWOS "
+p("Every organization that runs an event has the same four archetypes on the ground. OpsOracle "
   "gives each of them a portal tuned to what they need — and only what they need — so no one is "
   "buried under screens meant for someone else.")
 
@@ -94,7 +94,7 @@ story.append(RolePersona([
 ]))
 gap(10)
 
-p('What EventWOS replaces', 'h2')
+p('What OpsOracle replaces', 'h2')
 bullets([
     "<b>Spreadsheets</b> for crew rosters — replaced by a live database with roles, sessions, and audit trail.",
     "<b>WhatsApp groups</b> for shift coordination — replaced by real-time SignalR notifications.",
@@ -106,7 +106,7 @@ bullets([
 gap(6)
 story.append(Callout(
     'A note on trust',
-    'EventWOS is built for events where money changes hands and access matters. Every action '
+    'OpsOracle is built for events where money changes hands and access matters. Every action '
     'that touches identity, access, or payment is logged, approved, and reversible only through '
     'the platform. That is what makes it different from a group chat and a shared spreadsheet.',
     color=EMERALD, tint=EMERALD_SFT
@@ -127,7 +127,7 @@ story.append(PageBreak())
 p("Who\'s Who — The Roles", 'h1')
 hr(color=EMERALD, thickness=1.5)
 gap(8)
-p("Every role in EventWOS has a portal, a permission set, and a clear scope of responsibility. "
+p("Every role in OpsOracle has a portal, a permission set, and a clear scope of responsibility. "
   "This chapter is the reference for who does what. When something goes wrong or a decision needs "
   "to be made, come back here to figure out whose desk it lands on.")
 
@@ -185,7 +185,7 @@ story.append(PageBreak())
 p('How Work Flows', 'h1')
 hr(color=EMERALD, thickness=1.5)
 gap(6)
-p("Every event that runs through EventWOS follows the same eight-step arc. The names of the "
+p("Every event that runs through OpsOracle follows the same eight-step arc. The names of the "
   "steps map exactly to the tabs and buttons in the app — if you can find yourself on this "
   "diagram, you can find yourself in the software.")
 
@@ -371,7 +371,7 @@ story.append(PageBreak())
 p('Vendor Quick Guide', 'h1')
 hr(color=EMERALD, thickness=1.5)
 gap(6)
-p("You are a manpower vendor. A manager has onboarded you into EventWOS, given you a login, and "
+p("You are a manpower vendor. A manager has onboarded you into OpsOracle, given you a login, and "
   "will start sending you crew allocations for their events. Here is exactly what happens on your "
   "side, and what you need to do to be a vendor managers actually want to work with.")
 
@@ -445,7 +445,7 @@ p("Open the app. The first screen shows every shift you\'re assigned to — venu
 
 p('3 . On the day — check in', 'h3')
 p("When you arrive at the venue, find the supervisor. They show you a QR code from their phone. "
-  "You scan it with EventWOS. If your location matches the venue (the geofence check), you\'re "
+  "You scan it with EventOpsOracle. If your location matches the venue (the geofence check), you\'re "
   "checked in. Green tick, done. You can also do it the other way around — you show a QR, they scan it.")
 
 p('4 . At the end of the shift — check out', 'h3')
@@ -598,7 +598,7 @@ story.append(KeyValueTable([
 story.append(PageBreak())
 
 p('The rules the system enforces', 'h2')
-p("EventWOS won\'t let you do certain things — not out of pedantry, but because they corrupt the "
+p("OpsOracle won\'t let you do certain things — not out of pedantry, but because they corrupt the "
   "audit trail or the payment math. Knowing these ahead of time saves you five minutes of "
   "arguing with the &quot;action not allowed&quot; error.")
 
@@ -693,7 +693,7 @@ story.append(PageBreak())
 p('Payments &amp; Payroll', 'h1')
 hr(color=EMERALD, thickness=1.5)
 gap(6)
-p("EventWOS doesn\'t move money — banks do. But it is the ledger. Every peso, dollar or rupee "
+p("OpsOracle doesn\'t move money — banks do. But it is the ledger. Every peso, dollar or rupee "
   "owed after an event lives here, and this chapter is how you make sure it lives here correctly.")
 
 p('The payroll batch', 'h2')
@@ -874,7 +874,7 @@ story.append(ChecklistBox('Within one week after the event', [
 gap(14)
 story.append(Callout(
     'The last word',
-    "Nothing in EventWOS matters more than the trust of the people who use it. Every check-in "
+    "Nothing in OpsOracle matters more than the trust of the people who use it. Every check-in "
     "is someone\'s day of work. Every payroll line is somebody\'s livelihood. Treat the app "
     "accordingly, and it will treat you accordingly.",
     color=EMERALD, tint=EMERALD_SFT
@@ -885,7 +885,7 @@ story.append(PageBreak())
 #   BACK COVER
 # ============================================================
 story.append(Spacer(1, 6*cm))
-story.append(Paragraph('EventWOS', S['cover_title']))
+story.append(Paragraph('OpsOracle', S['cover_title']))
 story.append(Spacer(1, 30))
 story.append(Paragraph('Thank you.', S['cover_sub']))
 story.append(Spacer(1, 60))

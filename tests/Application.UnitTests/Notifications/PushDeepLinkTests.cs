@@ -1,13 +1,13 @@
-using EventWOS.Application.Notifications.Contracts;
+using EventOpsOracle.Application.Notifications.Contracts;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Deep links decide where a tapped notification lands, and they arrive at the
 /// browser inside a payload. So the interesting tests are the hostile ones: a
-/// path that escapes EventWOS turns a notification into an open redirect.
+/// path that escapes OpsOracle turns a notification into an open redirect.
 /// </summary>
 public class PushDeepLinkTests
 {

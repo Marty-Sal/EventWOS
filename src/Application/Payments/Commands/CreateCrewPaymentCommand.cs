@@ -1,13 +1,13 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Payments.Commands;
+namespace EventOpsOracle.Application.Payments.Commands;
 
 public sealed record CreateCrewPaymentCommand(
     Guid    EventId,

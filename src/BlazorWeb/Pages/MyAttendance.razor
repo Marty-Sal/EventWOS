@@ -3,7 +3,7 @@
 @inject HttpClient Http
 @inject IJSRuntime JS
 
-<PageTitle>My Attendance - EventWOS</PageTitle>
+<PageTitle>My Attendance - OpsOracle</PageTitle>
 
 <div class="space-y-6">
     <div>
@@ -271,7 +271,7 @@
         try
         {
             var res = await JS.InvokeAsync<LocationGateResult>(
-                "eventwosCheckin.requireLocation");
+                "opsOracleCheckin.requireLocation");
             if (res is { Ok: true } && !string.IsNullOrWhiteSpace(res.Coords))
                 return new LocationGateOutcome(res.Coords, res.Accuracy);
             reason = res?.Reason ?? "unavailable";
@@ -318,7 +318,7 @@
         public int? Accuracy { get; set; }
     }
 
-    private async Task OnQrVerified(EventWOS.BlazorWeb.Services.CheckInVerifyResultDto result)
+    private async Task OnQrVerified(EventOpsOracle.BlazorWeb.Services.CheckInVerifyResultDto result)
     {
         // Vendor scanned successfully — the assignment is now Attended.
         // Refresh the list so the button state flips to Check Out.

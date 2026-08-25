@@ -1,11 +1,11 @@
-using EventWOS.Domain.Common;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Application.Interfaces;
+using EventOpsOracle.Domain.Common;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Application.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Persistence;
+namespace EventOpsOracle.Persistence;
 
 /// <summary>
 /// Main EF Core DbContext. Handles:
@@ -39,7 +39,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<VendorCrewMapping> VendorCrewMappings => Set<VendorCrewMapping>();
     public DbSet<CrewGroup>        CrewGroups        => Set<CrewGroup>();
     public DbSet<CrewGroupMember>  CrewGroupMembers  => Set<CrewGroupMember>();
-    public DbSet<EventWOS.Domain.Entities.ScopeOfWork>      ScopesOfWork      => Set<ScopeOfWork>();
+    public DbSet<EventOpsOracle.Domain.Entities.ScopeOfWork>      ScopesOfWork      => Set<ScopeOfWork>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     // Phase 2 — Events Module

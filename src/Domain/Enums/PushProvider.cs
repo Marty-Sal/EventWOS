@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Enums;
+namespace EventOpsOracle.Domain.Enums;
 
 /// <summary>
 /// Which push transport a <see cref="Entities.DeviceRegistration"/> speaks.

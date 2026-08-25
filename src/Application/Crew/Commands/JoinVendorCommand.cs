@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Crew.Commands;
+namespace EventOpsOracle.Application.Crew.Commands;
 
 public sealed record JoinVendorCommand(Guid CrewId, string ReferralCode) : IRequest<Result>;
 

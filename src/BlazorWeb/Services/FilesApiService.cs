@@ -1,9 +1,9 @@
 using System.Net.Http.Json;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>
-/// DocumentType values mirror EventWOS.Domain.Enums.DocumentType on the API —
+/// DocumentType values mirror EventOpsOracle.Domain.Enums.DocumentType on the API —
 /// kept as plain ints here (for outgoing upload requests only, where
 /// ASP.NET Core's [FromForm] enum binder happily accepts a numeric
 /// string) so the Blazor client doesn't need a Domain reference.

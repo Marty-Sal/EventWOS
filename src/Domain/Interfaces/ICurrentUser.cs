@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Domain.Interfaces;
+namespace EventOpsOracle.Domain.Interfaces;
 
 /// <summary>Abstraction over the currently authenticated user from HttpContext claims.</summary>
 public interface ICurrentUser

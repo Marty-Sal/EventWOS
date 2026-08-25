@@ -1,9 +1,9 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Application.Notifications.Channels;
+namespace EventOpsOracle.Application.Notifications.Channels;
 
 /// <summary>
 /// In-app channel. The notification row itself IS the delivery -- it is already

@@ -1,8 +1,8 @@
-using EventWOS.Application.Registration.Commands;
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Application.Registration.Commands;
+using EventOpsOracle.Domain.Entities;
 using FluentValidation;
 
-namespace EventWOS.Application.Registration.Validators;
+namespace EventOpsOracle.Application.Registration.Validators;
 
 public sealed class RegisterCrewValidator : AbstractValidator<RegisterCrewCommand>
 {

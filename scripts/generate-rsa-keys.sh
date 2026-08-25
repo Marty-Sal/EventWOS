@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# EventWOS — RSA Key Generator
+# OpsOracle — RSA Key Generator
 # Generates a 2048-bit RSA key pair and outputs Base64 values ready to paste
 # into appsettings.json or docker-compose environment variables.
 # ─────────────────────────────────────────────────────────────────────────────

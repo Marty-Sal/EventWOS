@@ -2,7 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 public sealed record UserProfileDto(
     Guid Id, string Username, string Mobile, string FullName, string? Email,

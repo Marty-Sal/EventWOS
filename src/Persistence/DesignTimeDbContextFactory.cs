@@ -2,10 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 using MediatR;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Persistence;
+namespace EventOpsOracle.Persistence;
 
 /// <summary>
 /// Used ONLY by EF Core tools (dotnet ef migrations add / update-database).
@@ -34,7 +34,7 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
         optionsBuilder.UseNpgsql(connectionString, o =>
-            o.MigrationsAssembly("EventWOS.Persistence"));
+            o.MigrationsAssembly("EventOpsOracle.Persistence"));
 
         return new AppDbContext(
             optionsBuilder.Options,

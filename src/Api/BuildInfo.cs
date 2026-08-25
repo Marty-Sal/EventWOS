@@ -1,4 +1,4 @@
-namespace EventWOS.Api;
+namespace EventOpsOracle.Api;
 
 /// <summary>
 /// Boot-time facts about the container that is actually running, surfaced by

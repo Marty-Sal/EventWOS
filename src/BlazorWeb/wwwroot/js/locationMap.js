@@ -9,7 +9,7 @@
  * coordinates it reports go to our API, and the geofence is enforced server-side
  * against the Venue row.
  */
-window.eventwosMap = (function () {
+window.opsOracleMap = (function () {
     'use strict';
 
     // elementId -> { map, marker, circle, dotNetRef }

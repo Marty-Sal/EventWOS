@@ -1,7 +1,7 @@
-using EventWOS.Shared.Result;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Auth.Commands;
+namespace EventOpsOracle.Application.Auth.Commands;
 
 /// <summary>Rotates refresh token and issues new access token. Old token is revoked.</summary>
 public sealed record RefreshTokenCommand(

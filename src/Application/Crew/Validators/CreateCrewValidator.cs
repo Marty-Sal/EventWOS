@@ -1,7 +1,7 @@
-using EventWOS.Application.Crew.Commands;
+using EventOpsOracle.Application.Crew.Commands;
 using FluentValidation;
 
-namespace EventWOS.Application.Crew.Validators;
+namespace EventOpsOracle.Application.Crew.Validators;
 
 /// <summary>
 /// Server-side authority for the "Add Crew Member" flow (Crew.razor /

@@ -1,8 +1,8 @@
 using Blazored.LocalStorage;
-using EventWOS.BlazorWeb.Auth;
+using EventOpsOracle.BlazorWeb.Auth;
 using Microsoft.AspNetCore.Components;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>
 /// Global 401 catcher. If ANY API request comes back with 401 Unauthorized,

@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Common;
+namespace EventOpsOracle.Application.Common;
 
 /// <summary>
 /// Sends transactional email. Implementation chosen in Infrastructure —

@@ -1,4 +1,4 @@
-namespace EventWOS.Infrastructure.Notifications.Channels;
+namespace EventOpsOracle.Infrastructure.Notifications.Channels;
 
 /// <summary>
 /// VAPID configuration for Web Push. Bound from the "WebPush" section, which on
@@ -7,7 +7,7 @@ namespace EventWOS.Infrastructure.Notifications.Channels;
 /// The public key is deliberately NOT a secret -- the browser needs it to
 /// subscribe, and it is served to the client. The private key is, and it never
 /// leaves the server: it signs the VAPID JWT that proves to a push service that
-/// this really is EventWOS.
+/// this really is EventOpsOracle.
 /// </summary>
 public sealed class WebPushOptions
 {

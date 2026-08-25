@@ -1,16 +1,16 @@
-using EventWOS.Application.Common;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Application.Users.Commands;
+namespace EventOpsOracle.Application.Users.Commands;
 
 public sealed record UpdateProfileCommand(
     Guid UserId,

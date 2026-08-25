@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Enums;
+namespace EventOpsOracle.Domain.Enums;
 
 /// <summary>
 /// Which self-registration flow a Terms &amp; Conditions document applies to.

@@ -1,12 +1,12 @@
-using EventWOS.Application.Auth.Commands;
-using EventWOS.Application.Auth.Handlers;
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Auth.Commands;
+using EventOpsOracle.Application.Auth.Handlers;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Auth;
+namespace EventOpsOracle.Application.UnitTests.Auth;
 
 /// <summary>
 /// The OTP is a bearer credential: VerifyOtpHandler mints an access token from it. So
@@ -183,7 +183,7 @@ public class OtpExposureTests
     private static string FindRepositoryRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "EventWOS.sln")))
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "EventOpsOracle.sln")))
             dir = dir.Parent;
 
         dir.Should().NotBeNull("the test must be able to locate the repository root");

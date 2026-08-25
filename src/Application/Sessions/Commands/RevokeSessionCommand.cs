@@ -1,11 +1,11 @@
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Sessions.Commands;
+namespace EventOpsOracle.Application.Sessions.Commands;
 
 public sealed record RevokeSessionCommand(
     Guid SessionRecordId,

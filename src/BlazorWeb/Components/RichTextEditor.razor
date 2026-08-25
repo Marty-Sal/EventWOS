@@ -32,7 +32,7 @@
         if (firstRender)
         {
             _selfRef = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("eventwosRichText.init", _editorId, Value, _selfRef);
+            await JS.InvokeVoidAsync("opsOracleRichText.init", _editorId, Value, _selfRef);
             _initialized = true;
         }
     }
@@ -50,14 +50,14 @@
     {
         Value = html;
         if (_initialized)
-            await JS.InvokeVoidAsync("eventwosRichText.setHtml", _editorId, html ?? "");
+            await JS.InvokeVoidAsync("opsOracleRichText.setHtml", _editorId, html ?? "");
     }
 
     public async ValueTask DisposeAsync()
     {
         if (_initialized)
         {
-            try { await JS.InvokeVoidAsync("eventwosRichText.destroy", _editorId); }
+            try { await JS.InvokeVoidAsync("opsOracleRichText.destroy", _editorId); }
             catch { /* JS runtime may already be torn down on navigation */ }
         }
         _selfRef?.Dispose();

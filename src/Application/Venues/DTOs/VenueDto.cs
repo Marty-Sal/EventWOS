@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Venues.DTOs;
+namespace EventOpsOracle.Application.Venues.DTOs;
 
 /// <summary>Read-side shape for the Venue catalog.</summary>
 public sealed record VenueDto(

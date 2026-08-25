@@ -1,10 +1,10 @@
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
-namespace EventWOS.Infrastructure.Http;
+namespace EventOpsOracle.Infrastructure.Http;
 
 /// <summary>
 /// Resolves current user context from HttpContext.User claims.

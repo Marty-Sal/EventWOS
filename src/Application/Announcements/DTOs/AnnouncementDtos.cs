@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Announcements.DTOs;
+namespace EventOpsOracle.Application.Announcements.DTOs;
 
 /// <summary>
 /// One attachment on an announcement. Deliberately carries only metadata —

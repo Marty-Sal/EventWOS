@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace EventWOS.Application.Registration.Validators;
+namespace EventOpsOracle.Application.Registration.Validators;
 
 /// <summary>
 /// Single source of truth for password rules. Used by registration,

@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace EventWOS.Persistence.Migrations
+namespace EventOpsOracle.Persistence.Migrations
 {
     /// <summary>
     /// Emergency fix: adds all missing columns to the users table.

@@ -1,11 +1,11 @@
-using EventWOS.Application.CrewGroups.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.CrewGroups.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.CrewGroups.Commands;
+namespace EventOpsOracle.Application.CrewGroups.Commands;
 
 public sealed record CreateCrewGroupCommand(
     Guid    VendorId,

@@ -1,6 +1,6 @@
-using EventWOS.Application.Files.DTOs;
+using EventOpsOracle.Application.Files.DTOs;
 
-namespace EventWOS.Application.Approval.DTOs;
+namespace EventOpsOracle.Application.Approval.DTOs;
 
 /// <summary>One row per pending registration.</summary>
 public sealed record PendingRegistrationDto(

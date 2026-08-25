@@ -1,8 +1,8 @@
-using EventWOS.Domain.Common;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Events;
+using EventOpsOracle.Domain.Common;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Events;
 
-namespace EventWOS.Domain.Entities;
+namespace EventOpsOracle.Domain.Entities;
 
 /// <summary>
 /// Core Event aggregate. Created by Admin/Manager, staffed by Vendors/Crew.

@@ -1,15 +1,15 @@
-using EventWOS.Api.Authorization;
+using EventOpsOracle.Api.Authorization;
 using Asp.Versioning;
-using EventWOS.Application.Venues.Commands;
-using EventWOS.Application.Venues.DTOs;
-using EventWOS.Application.Venues.Queries;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Venues.Commands;
+using EventOpsOracle.Application.Venues.DTOs;
+using EventOpsOracle.Application.Venues.Queries;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Admin-managed venue catalog, used from Settings → Venue. Same auth

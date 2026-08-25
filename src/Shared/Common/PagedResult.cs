@@ -1,4 +1,4 @@
-namespace EventWOS.Shared.Common;
+namespace EventOpsOracle.Shared.Common;
 
 /// <summary>Standard paginated response wrapper used across all list endpoints.</summary>
 public sealed class PagedResult<T>

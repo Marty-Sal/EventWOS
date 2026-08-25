@@ -1,8 +1,8 @@
-# EventWOS Notification Catalogue
+# OpsOracle Notification Catalogue
 
 Audit date: 2026-08-24, at commit `9f9a1ac`.
 
-This is the single reference for what EventWOS sends, who receives it, what triggers it,
+This is the single reference for what OpsOracle sends, who receives it, what triggers it,
 and what is still missing. It replaces "grep the handlers and hope".
 
 ---

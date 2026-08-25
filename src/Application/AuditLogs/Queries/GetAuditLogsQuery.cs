@@ -1,11 +1,11 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Common;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Common;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.AuditLogs.Queries;
+namespace EventOpsOracle.Application.AuditLogs.Queries;
 
 public sealed record AuditLogDto(
     Guid      Id,

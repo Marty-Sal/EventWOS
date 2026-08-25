@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Enums;
+namespace EventOpsOracle.Domain.Enums;
 
 /// <summary>State of a transactional-outbox message.</summary>
 public enum OutboxStatus

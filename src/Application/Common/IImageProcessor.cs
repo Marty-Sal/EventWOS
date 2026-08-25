@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Common;
+namespace EventOpsOracle.Application.Common;
 
 /// <summary>Result of optimizing an uploaded image for storage.</summary>
 public sealed record ProcessedImage(

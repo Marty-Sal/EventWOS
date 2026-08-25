@@ -1,16 +1,16 @@
-using EventWOS.Application.Auth.Commands;
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Registration.Validators;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Auth.Commands;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Registration.Validators;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Application.Auth.Handlers;
+namespace EventOpsOracle.Application.Auth.Handlers;
 
 /// <summary>
 /// Step 2 of forgot-password. Verifies the OTP, then SetPassword on

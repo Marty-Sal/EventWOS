@@ -1,11 +1,11 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Rules;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Rules;
+using EventOpsOracle.Shared.Result;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Ratings;
+namespace EventOpsOracle.Application.Ratings;
 
 /// <summary>
 /// Shared write path for both rating flows (Admin rates Vendor, Vendor rates

@@ -1,7 +1,7 @@
-using EventWOS.Shared.Result;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Auth.Commands;
+namespace EventOpsOracle.Application.Auth.Commands;
 
 /// <summary>
 /// Step 1 of forgot-password. Caller provides any of username/email/mobile.

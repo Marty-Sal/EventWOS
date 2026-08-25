@@ -1,7 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 public sealed record SessionDto(
     Guid Id, Guid SessionId, Guid UserId, string UserFullName, string UserRole,

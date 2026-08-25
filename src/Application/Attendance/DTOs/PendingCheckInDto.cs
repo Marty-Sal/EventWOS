@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Attendance.DTOs;
+namespace EventOpsOracle.Application.Attendance.DTOs;
 
 /// <summary>
 /// What the crew's phone gets back when they click "Check In".

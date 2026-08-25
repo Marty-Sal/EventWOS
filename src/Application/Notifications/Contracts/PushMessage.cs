@@ -1,9 +1,9 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Notifications.Contracts;
+namespace EventOpsOracle.Application.Notifications.Contracts;
 
 /// <summary>
-/// What EventWOS wants shown on a device, in EventWOS's own terms. Deliberately
+/// What OpsOracle wants shown on a device, in OpsOracle's own terms. Deliberately
 /// free of transport detail: no VAPID, no FCM, no JSON shape. Providers translate
 /// this into whatever their protocol wants, which is what keeps the Application
 /// layer from growing a dependency on a push vendor.

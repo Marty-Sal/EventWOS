@@ -1,16 +1,16 @@
 using Asp.Versioning;
-using EventWOS.Api.Authorization;
-using EventWOS.Application.Announcements.Commands;
-using EventWOS.Application.Announcements.DTOs;
-using EventWOS.Application.Announcements.Queries;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Api.Authorization;
+using EventOpsOracle.Application.Announcements.Commands;
+using EventOpsOracle.Application.Announcements.DTOs;
+using EventOpsOracle.Application.Announcements.Queries;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Event notifications ("announcements"): Admin/Manager broadcasts a rich-text

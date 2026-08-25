@@ -1,19 +1,19 @@
-using EventWOS.Application.CrewGroups.DTOs;
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Domain.Rules;
-using EventWOS.Application.VendorAllocations.Internal;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.CrewGroups.DTOs;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Domain.Rules;
+using EventOpsOracle.Application.VendorAllocations.Internal;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Application.CrewGroups.Commands;
+namespace EventOpsOracle.Application.CrewGroups.Commands;
 
 /// <summary>
 /// Vendor self-service: invite every crew in a group to an event the vendor
@@ -141,7 +141,7 @@ public sealed class VendorAssignGroupHandler
         else
         {
             bool _ambiguousShift = false;
-            _shiftId = await EventWOS.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
+            _shiftId = await EventOpsOracle.Application.Events.Shifts.DefaultShiftResolver.ResolveAsync(
                 _db, req.EventId, ct, x => _ambiguousShift = x);
             if (_ambiguousShift)
                 return Result.Failure<VendorAssignGroupResultDto>(new Error("Assignment.AmbiguousShift",

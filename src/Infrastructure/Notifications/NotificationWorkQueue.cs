@@ -1,11 +1,11 @@
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Infrastructure.Notifications;
+namespace EventOpsOracle.Infrastructure.Notifications;
 
 /// <summary>
 /// Postgres-backed work queue. The claim is raw SQL because

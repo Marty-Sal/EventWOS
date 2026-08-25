@@ -1,8 +1,8 @@
-using EventWOS.Application.Registration.Validators;
+using EventOpsOracle.Application.Registration.Validators;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Validators;
+namespace EventOpsOracle.Application.UnitTests.Validators;
 
 /// <summary>
 /// PasswordRules is reused by registration, reset, and setup-password flows

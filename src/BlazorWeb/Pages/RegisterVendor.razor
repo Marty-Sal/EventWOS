@@ -1,12 +1,12 @@
 @page "/register/vendor"
-@layout EventWOS.BlazorWeb.Layout.EmptyLayout
+@layout EventOpsOracle.BlazorWeb.Layout.EmptyLayout
 @using Microsoft.AspNetCore.Components.Forms
-@using EventWOS.BlazorWeb.Validation
+@using EventOpsOracle.BlazorWeb.Validation
 @inject IAuthApiService AuthApi
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<PageTitle>Vendor sign-up — EventWOS</PageTitle>
+<PageTitle>Vendor sign-up — OpsOracle</PageTitle>
 
 <div class="min-h-screen bg-gradient-to-br from-gray-900 via-emerald-950 to-gray-900 py-10 px-4">
     <div class="max-w-2xl mx-auto">
@@ -195,7 +195,7 @@
     private async Task OnMobileInput(ChangeEventArgs e)
     {
         _mobile = ClientValidation.FilterDigits(e.Value?.ToString(), 10);
-        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _mobileInputRef, _mobile);
+        await JS.InvokeVoidAsync("opsOracleForms.setInputValue", _mobileInputRef, _mobile);
     }
 
     private async Task OnPhotoSelected(InputFileChangeEventArgs e)

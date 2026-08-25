@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Common;
+namespace EventOpsOracle.Application.Common;
 
 /// <summary>
 /// SMS dispatch abstraction. Lives in Application so handlers can depend

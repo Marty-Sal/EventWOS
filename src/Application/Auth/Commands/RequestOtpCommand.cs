@@ -1,7 +1,7 @@
-using EventWOS.Shared.Result;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Auth.Commands;
+namespace EventOpsOracle.Application.Auth.Commands;
 
 /// <summary>Initiates OTP login flow. Returns the OTP request ID for client tracking.</summary>
 public sealed record RequestOtpCommand(

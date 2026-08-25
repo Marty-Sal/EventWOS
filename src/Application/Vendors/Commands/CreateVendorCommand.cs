@@ -1,15 +1,15 @@
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Vendors.DTOs;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Vendors.DTOs;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Application.Vendors.Commands;
+namespace EventOpsOracle.Application.Vendors.Commands;
 
 public sealed record CreateVendorCommand(
     string Mobile, string FullName, string? BusinessName, string? Email, Guid RequestingUserId
@@ -83,7 +83,7 @@ public sealed class CreateVendorHandler : IRequestHandler<CreateVendorCommand, R
 
         try
         {
-            var msg = $"Hi {vendor.FullName}, {invitedByName} added you to EventWOS as a Vendor. Set up your password: {setupLink}";
+            var msg = $"Hi {vendor.FullName}, {invitedByName} added you to OpsOracle as a Vendor. Set up your password: {setupLink}";
             await _whatsApp.SendAsync(vendor.Mobile, msg, ct);
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Vendor invite WhatsApp failed for {UserId}.", vendor.Id); }
@@ -91,13 +91,13 @@ public sealed class CreateVendorHandler : IRequestHandler<CreateVendorCommand, R
 
     internal static VendorDto MapToDto(
         User v, int crewCount,
-        IReadOnlyList<EventWOS.Application.Files.DTOs.FileDocumentDto>? files = null,
+        IReadOnlyList<EventOpsOracle.Application.Files.DTOs.FileDocumentDto>? files = null,
         // Computed by the caller (see VendorParticipationLoader). Defaults to 0
         // for a vendor that was just created and cannot have delivered anything.
         int eventsCompleted = 0) => new(
         v.Id, v.Mobile, v.FullName, v.BusinessName, v.Email, v.AvatarUrl,
         v.Status.ToString(), v.ReferralCode, v.Rating, v.RatingCount, eventsCompleted, crewCount, v.CreatedAt,
         v.ContactPersonName, v.GstNumber, v.Address, v.City, v.State, v.Website, v.Bio, v.DateOfBirth,
-        files ?? Array.Empty<EventWOS.Application.Files.DTOs.FileDocumentDto>(),
+        files ?? Array.Empty<EventOpsOracle.Application.Files.DTOs.FileDocumentDto>(),
         v.InvitedByUserId.HasValue, v.ProfileCompletedAt.HasValue);
 }

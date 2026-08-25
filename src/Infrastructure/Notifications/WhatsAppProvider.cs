@@ -1,10 +1,10 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using EventWOS.Application.Common;
+using EventOpsOracle.Application.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Infrastructure.Notifications;
+namespace EventOpsOracle.Infrastructure.Notifications;
 
 /// <summary>
 /// Dev-mode WhatsApp "sender" — logs the message instead of dispatching.

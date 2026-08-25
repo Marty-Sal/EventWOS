@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.ScopeOfWork.DTOs;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.ScopeOfWork.DTOs;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using DomainScopeOfWork = EventWOS.Domain.Entities.ScopeOfWork;
+using DomainScopeOfWork = EventOpsOracle.Domain.Entities.ScopeOfWork;
 
-namespace EventWOS.Application.ScopeOfWork.Commands;
+namespace EventOpsOracle.Application.ScopeOfWork.Commands;
 
 public sealed record CreateScopeOfWorkCommand(
     string  Name,

@@ -1,4 +1,4 @@
-namespace EventWOS.Application.CrewGroups.DTOs;
+namespace EventOpsOracle.Application.CrewGroups.DTOs;
 
 public sealed record CrewGroupDto(
     Guid     Id,

@@ -1,6 +1,6 @@
 using Microsoft.JSInterop;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>
 /// The signed-in user's profile photo, held once for the whole session and shared

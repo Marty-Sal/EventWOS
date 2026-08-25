@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace EventWOS.Application.UnitTests.Locations;
+namespace EventOpsOracle.Application.UnitTests.Locations;
 
 /// <summary>
 /// Test double for the location provider's HTTP transport.

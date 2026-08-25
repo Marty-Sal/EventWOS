@@ -1,13 +1,13 @@
 @page "/profile"
 @attribute [Authorize]
-@using EventWOS.BlazorWeb.Validation
+@using EventOpsOracle.BlazorWeb.Validation
 @inject IUserApiService UserApi
 @inject AvatarState Avatar
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<PageTitle>My Profile — EventWOS</PageTitle>
+<PageTitle>My Profile — OpsOracle</PageTitle>
 
 <div class="max-w-2xl mx-auto space-y-6">
 
@@ -17,7 +17,7 @@
             <p class="font-semibold text-amber-800 flex items-center gap-2">🔒 Complete your profile to continue</p>
             <p class="text-sm text-amber-700 mt-1">
                 An admin/vendor added your account directly. Fill in the required details below and save —
-                you won't be able to use the rest of EventWOS until this is done.
+                you won't be able to use the rest of OpsOracle until this is done.
             </p>
         </div>
     }
@@ -124,7 +124,7 @@
                     <div class="rounded-xl border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500">
                         <textarea @ref="_templateRef" value="@_inviteMessageTemplate" @oninput="OnTemplateInput"
                                   rows="4" maxlength="500"
-                                  placeholder="Hey! Join my crew on EventWOS — sign up here: {link}"
+                                  placeholder="Hey! Join my crew on OpsOracle — sign up here: {link}"
                                   class="w-full px-4 py-3 text-sm focus:outline-none resize-none block"></textarea>
 
                         @* Bottom toolbar — mirrors an email compose bar: primary
@@ -502,11 +502,11 @@
         var value = e.Value?.ToString() ?? "";
         // Native maxlength stops typed input, but a paste can still blow past
         // it — clamp defensively and force the trimmed value back onto the
-        // DOM node (same pattern as eventwosForms.setInputValue elsewhere).
+        // DOM node (same pattern as opsOracleForms.setInputValue elsewhere).
         if (value.Length > 500)
         {
             value = value[..500];
-            await JS.InvokeVoidAsync("eventwosForms.setInputValue", _templateRef, value);
+            await JS.InvokeVoidAsync("opsOracleForms.setInputValue", _templateRef, value);
         }
         _inviteMessageTemplate = value;
     }
@@ -516,7 +516,7 @@
     /// right after the inserted text.</summary>
     private async Task InsertAtCursorAsync(string text)
     {
-        var range = await JS.InvokeAsync<int[]>("eventwosForms.getSelectionRange", _templateRef);
+        var range = await JS.InvokeAsync<int[]>("opsOracleForms.getSelectionRange", _templateRef);
         var current = _inviteMessageTemplate ?? "";
         var start = Math.Clamp(range.ElementAtOrDefault(0), 0, current.Length);
         var end = Math.Clamp(range.ElementAtOrDefault(1), start, current.Length);
@@ -525,9 +525,9 @@
         _inviteMessageTemplate = updated;
         StateHasChanged();
 
-        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _templateRef, updated);
+        await JS.InvokeVoidAsync("opsOracleForms.setInputValue", _templateRef, updated);
         var caret = start + text.Length;
-        await JS.InvokeVoidAsync("eventwosForms.setSelectionRange", _templateRef, caret, caret);
+        await JS.InvokeVoidAsync("opsOracleForms.setSelectionRange", _templateRef, caret, caret);
     }
 
     /// <summary>Inserts the vendor's actual, already-resolved invite URL
@@ -547,7 +547,7 @@
     /// a real toggle, not just an "add" button.</summary>
     private async Task WrapSelection(string marker)
     {
-        var range = await JS.InvokeAsync<int[]>("eventwosForms.getSelectionRange", _templateRef);
+        var range = await JS.InvokeAsync<int[]>("opsOracleForms.getSelectionRange", _templateRef);
         var current = _inviteMessageTemplate ?? "";
         var start = Math.Clamp(range.ElementAtOrDefault(0), 0, current.Length);
         var end = Math.Clamp(range.ElementAtOrDefault(1), start, current.Length);
@@ -577,8 +577,8 @@
         _inviteMessageTemplate = updated;
         StateHasChanged();
 
-        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _templateRef, updated);
-        await JS.InvokeVoidAsync("eventwosForms.setSelectionRange", _templateRef, newStart, newEnd);
+        await JS.InvokeVoidAsync("opsOracleForms.setInputValue", _templateRef, updated);
+        await JS.InvokeVoidAsync("opsOracleForms.setSelectionRange", _templateRef, newStart, newEnd);
         _showFormatMenu = false;
     }
 
@@ -746,7 +746,7 @@
     /// method, not a const, since it needs the live per-vendor
     /// <see cref="InviteLink"/>).</summary>
     private string BuildDefaultInviteMessage() =>
-        $"Hey! 👋\nJoin my crew on EventWOS — sign up here: {InviteLink}";
+        $"Hey! 👋\nJoin my crew on OpsOracle — sign up here: {InviteLink}";
 
     /// <summary>
     /// Builds the share text from whatever's currently in the composer
@@ -780,7 +780,7 @@
         var shared = false;
         try
         {
-            shared = await JS.InvokeAsync<bool>("eventwosForms.share", "Join my crew on EventWOS", text, url);
+            shared = await JS.InvokeAsync<bool>("opsOracleForms.share", "Join my crew on OpsOracle", text, url);
         }
         catch { }
         if (!shared)

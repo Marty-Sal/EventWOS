@@ -1,15 +1,15 @@
 using Asp.Versioning;
-using EventWOS.Application.Users.Commands;
-using EventWOS.Application.Users.DTOs;
-using EventWOS.Application.Users.Queries;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Users.Commands;
+using EventOpsOracle.Application.Users.DTOs;
+using EventOpsOracle.Application.Users.Queries;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]

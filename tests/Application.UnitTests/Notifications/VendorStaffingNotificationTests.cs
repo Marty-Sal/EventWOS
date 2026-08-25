@@ -1,13 +1,13 @@
-using EventWOS.Application.Common;
-using EventWOS.Application.CrewGroups.Commands;
-using EventWOS.Application.Events.Commands;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.CrewGroups.Commands;
+using EventOpsOracle.Application.Events.Commands;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +15,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// The vendor's own staffing paths: inviting one of their crew, inviting a whole
@@ -124,7 +124,7 @@ public class VendorStaffingNotificationTests
         }
         db.Users.AddRange(crew);
 
-        var scope = new EventWOS.Domain.Entities.ScopeOfWork("Stage Rigging", null, manager);
+        var scope = new EventOpsOracle.Domain.Entities.ScopeOfWork("Stage Rigging", null, manager);
         db.ScopesOfWork.Add(scope);
 
         var ev = new Event("Sunburn Arena", null, "Vagator Grounds", null,

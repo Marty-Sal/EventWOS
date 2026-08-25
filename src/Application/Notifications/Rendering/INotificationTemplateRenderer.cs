@@ -1,6 +1,6 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 
-namespace EventWOS.Application.Notifications.Rendering;
+namespace EventOpsOracle.Application.Notifications.Rendering;
 
 /// <summary>Renders a stored template against a notification's placeholder data.</summary>
 public interface INotificationTemplateRenderer

@@ -1,4 +1,4 @@
-// ── EventWOS form-input JS interop ────────────────────────────────────────
+// ── OpsOracle form-input JS interop ────────────────────────────────────────
 //
 // Blazor's "controlled input" pattern (value="@_field" + @oninput handler
 // that filters/rewrites the C# backing field) has a well-known desync bug:
@@ -15,9 +15,9 @@
 // onto the DOM element via direct property assignment, bypassing
 // Blazor's diff entirely. Called from an ElementReference right after
 // the oninput handler runs.
-window.eventwosForms = window.eventwosForms || {};
+window.opsOracleForms = window.opsOracleForms || {};
 
-window.eventwosForms.setInputValue = function (element, value) {
+window.opsOracleForms.setInputValue = function (element, value) {
     if (!element) return;
     if (element.value !== value) {
         element.value = value;
@@ -33,12 +33,12 @@ window.eventwosForms.setInputValue = function (element, value) {
 // renders *bold*, _italic_ and ~strikethrough~ markers itself, so wrapping
 // selections in those characters IS the real formatting, not a fake
 // preview that would be lost the moment it left the browser.
-window.eventwosForms.getSelectionRange = function (el) {
+window.opsOracleForms.getSelectionRange = function (el) {
     if (!el) return [0, 0];
     return [el.selectionStart || 0, el.selectionEnd || 0];
 };
 
-window.eventwosForms.setSelectionRange = function (el, start, end) {
+window.opsOracleForms.setSelectionRange = function (el, start, end) {
     if (!el) return;
     el.focus();
     try { el.setSelectionRange(start, end); } catch { }
@@ -51,7 +51,7 @@ window.eventwosForms.setSelectionRange = function (el, start, end) {
 // Returns true if navigator.share ran (user may still cancel the sheet —
 // that's still "handled", not a fallback case), false if the API is
 // unavailable so the caller can fall back to clipboard copy.
-window.eventwosForms.share = async function (title, text, url) {
+window.opsOracleForms.share = async function (title, text, url) {
     if (!navigator.share) return false;
     try {
         await navigator.share({ title, text, url });

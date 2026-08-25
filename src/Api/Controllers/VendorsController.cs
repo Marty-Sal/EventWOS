@@ -1,18 +1,18 @@
-using EventWOS.Api.Authorization;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Api.Authorization;
+using EventOpsOracle.Domain.Enums;
 using Asp.Versioning;
-using EventWOS.Application.Vendors.Commands;
-using EventWOS.Application.Analytics.Queries;
-using EventWOS.Application.Ratings.Queries;
-using EventWOS.Application.Vendors.DTOs;
-using EventWOS.Application.Vendors.Queries;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Vendors.Commands;
+using EventOpsOracle.Application.Analytics.Queries;
+using EventOpsOracle.Application.Ratings.Queries;
+using EventOpsOracle.Application.Vendors.DTOs;
+using EventOpsOracle.Application.Vendors.Queries;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]
@@ -43,7 +43,7 @@ public sealed class VendorsController : ControllerBase
         CancellationToken ct = default)
     {
         // Vendors can only see themselves — return their own record as single-item page
-        if (_currentUser.Role == EventWOS.Domain.Enums.UserRole.Vendor)
+        if (_currentUser.Role == EventOpsOracle.Domain.Enums.UserRole.Vendor)
         {
             var selfResult = await _mediator.Send(new GetVendorByIdQuery(_currentUser.UserId!.Value), ct);
             if (selfResult.IsFailure) return Forbid();

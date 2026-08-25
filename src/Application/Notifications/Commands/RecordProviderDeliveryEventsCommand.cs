@@ -1,10 +1,10 @@
-using EventWOS.Shared.Result;
-using EventWOS.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Application.Notifications.Commands;
+namespace EventOpsOracle.Application.Notifications.Commands;
 
 /// <summary>What a provider is telling us happened to a message.</summary>
 public enum ProviderDeliveryEventType

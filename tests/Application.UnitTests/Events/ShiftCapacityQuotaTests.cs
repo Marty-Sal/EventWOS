@@ -1,17 +1,17 @@
-using EventWOS.Application.Events.Commands;
-using EventWOS.Application.Events.Queries;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Domain.Rules;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Events.Commands;
+using EventOpsOracle.Application.Events.Queries;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Domain.Rules;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Events;
+namespace EventOpsOracle.Application.UnitTests.Events;
 
 /// <summary>
 /// Editing a shift's capacity, and what that does to the vendors on it.
@@ -347,18 +347,18 @@ public class ShiftCapacityQuotaTests
     /// These tests are about seat math, not messages -- EventAndShiftChangeWiringTests
     /// covers what the shift edit and archive paths now tell people.
     /// </summary>
-    private sealed class SilentDispatcher : EventWOS.Application.Notifications.Abstractions.INotificationDispatcher
+    private sealed class SilentDispatcher : EventOpsOracle.Application.Notifications.Abstractions.INotificationDispatcher
     {
-        public void Enqueue(EventWOS.Application.Notifications.Contracts.NotificationRequest request) { }
-        public void Enqueue(IEnumerable<EventWOS.Application.Notifications.Contracts.NotificationRequest> requests) { }
-        public void EnqueueFanOut(EventWOS.Application.Notifications.Contracts.NotificationFanOutRequest request) { }
+        public void Enqueue(EventOpsOracle.Application.Notifications.Contracts.NotificationRequest request) { }
+        public void Enqueue(IEnumerable<EventOpsOracle.Application.Notifications.Contracts.NotificationRequest> requests) { }
+        public void EnqueueFanOut(EventOpsOracle.Application.Notifications.Contracts.NotificationFanOutRequest request) { }
     }
 
     /// <summary>
     /// An event with TWO shifts — the second one exists only so the archive tests
     /// aren't stopped by the "an event must keep one shift" guard.
     /// </summary>
-    private static (Event ev, EventShift shift, EventWOS.Domain.Entities.ScopeOfWork scope) SeedEventWithShifts(
+    private static (Event ev, EventShift shift, EventOpsOracle.Domain.Entities.ScopeOfWork scope) SeedEventWithShifts(
         AppDbContext db, int firstShiftCrew)
     {
         var admin = Guid.NewGuid();
@@ -368,7 +368,7 @@ public class ShiftCapacityQuotaTests
             maxCrew: firstShiftCrew + 1);
         db.Events.Add(ev);
 
-        var scope = new EventWOS.Domain.Entities.ScopeOfWork("Box Office", null, admin);
+        var scope = new EventOpsOracle.Domain.Entities.ScopeOfWork("Box Office", null, admin);
         db.ScopesOfWork.Add(scope);
 
         var shift = new EventShift(ev.Id, scope.Id, firstShiftCrew, start, start.AddHours(3), admin);

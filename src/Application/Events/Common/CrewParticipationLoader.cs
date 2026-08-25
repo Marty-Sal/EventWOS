@@ -1,7 +1,7 @@
-using EventWOS.Application.Interfaces;
+using EventOpsOracle.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Events.Common;
+namespace EventOpsOracle.Application.Events.Common;
 
 /// <summary>
 /// Crew-side counterpart of <see cref="VendorParticipationLoader"/>: same

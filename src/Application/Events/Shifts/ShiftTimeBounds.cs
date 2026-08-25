@@ -1,8 +1,8 @@
-using EventWOS.Domain.Entities;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Events.Shifts;
+namespace EventOpsOracle.Application.Events.Shifts;
 
 /// <summary>
 /// Phase D step 2: shared bounds-check for shift start/end relative to the

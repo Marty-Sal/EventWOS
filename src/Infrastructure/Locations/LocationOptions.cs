@@ -1,4 +1,4 @@
-namespace EventWOS.Infrastructure.Locations;
+namespace EventOpsOracle.Infrastructure.Locations;
 
 /// <summary>
 /// Bound from the "LocationProvider" configuration section (appsettings or
@@ -28,7 +28,7 @@ public sealed class LocationOptions
     /// contact info; requests with a generic or absent UA get blocked. Google
     /// and Mappls ignore this field.
     /// </summary>
-    public string UserAgent { get; set; } = "EventWOS/1.0 (support@eventwos.app)";
+    public string UserAgent { get; set; } = "OpsOracle/1.0 (support@eventwos.app)";
 
     public int TimeoutSeconds { get; set; } = 5;
 

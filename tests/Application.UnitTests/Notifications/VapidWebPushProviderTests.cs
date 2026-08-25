@@ -1,15 +1,15 @@
 using System.Net;
 using System.Text.Json;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Enums;
-using EventWOS.Infrastructure.Notifications.Channels;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Infrastructure.Notifications.Channels;
 using FluentAssertions;
 using Lib.Net.Http.WebPush;
-using AppPushMessage = EventWOS.Application.Notifications.Contracts.PushMessage;
+using AppPushMessage = EventOpsOracle.Application.Notifications.Contracts.PushMessage;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// How a push service's answer is read, and what actually goes on the wire.

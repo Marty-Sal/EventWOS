@@ -1,9 +1,9 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Registration.Queries;
+namespace EventOpsOracle.Application.Registration.Queries;
 
 /// <summary>
 /// Public, anonymous "is this vendor referral code valid" check — lets the

@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace EventWOS.Infrastructure.Notifications.Webhooks;
+namespace EventOpsOracle.Infrastructure.Notifications.Webhooks;
 
 /// <summary>
 /// Signature verification for inbound provider webhooks.

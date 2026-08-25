@@ -1,10 +1,10 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using EventWOS.Application.Common;
+using EventOpsOracle.Application.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Infrastructure.Email;
+namespace EventOpsOracle.Infrastructure.Email;
 
 /// <summary>
 /// SendGrid v3 transactional email sender. Activated automatically when
@@ -31,7 +31,7 @@ public sealed class SendGridEmailService : IEmailService
         _logger    = logger;
         _apiKey    = cfg["SendGrid:ApiKey"]    ?? cfg["SENDGRID_API_KEY"]    ?? throw new InvalidOperationException("SendGrid:ApiKey missing.");
         _fromEmail = cfg["SendGrid:FromEmail"] ?? cfg["SENDGRID_FROM_EMAIL"] ?? throw new InvalidOperationException("SendGrid:FromEmail missing.");
-        _fromName  = cfg["SendGrid:FromName"]  ?? "EventWOS";
+        _fromName  = cfg["SendGrid:FromName"]  ?? "OpsOracle";
 
         _http.BaseAddress = new Uri("https://api.sendgrid.com/");
         _http.DefaultRequestHeaders.Authorization =
@@ -80,7 +80,7 @@ public sealed class SendGridEmailService : IEmailService
     public Task<bool> SendApprovalEmailAsync(string toEmail, string fullName, string role,
         string? referralCode, string loginUrl, CancellationToken ct = default)
     {
-        var subject = $"Your EventWOS {role} account is approved 🎉";
+        var subject = $"Your OpsOracle {role} account is approved 🎉";
         var referralBlock = string.IsNullOrEmpty(referralCode) ? "" :
             $"<p style='margin:16px 0;padding:12px;background:#f5f3ff;border-radius:8px'>" +
             $"Your <strong>referral code</strong> is <code style='font-size:16px'>{referralCode}</code>. " +
@@ -90,77 +90,77 @@ public sealed class SendGridEmailService : IEmailService
         var html = $@"
 <div style='font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto;color:#1f2937'>
   <h2 style='color:#4f46e5'>Welcome aboard, {fullName}!</h2>
-  <p>Your EventWOS {role} account has been approved. You can now sign in and start using the platform.</p>
+  <p>Your OpsOracle {role} account has been approved. You can now sign in and start using the platform.</p>
   {referralBlock}
   <p style='margin-top:24px'>
     <a href='{loginUrl}' style='background:#4f46e5;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block'>Sign in</a>
   </p>
   <p style='color:#6b7280;font-size:12px;margin-top:32px'>If you didn't expect this email, please ignore it.</p>
 </div>";
-        var plain = $"Welcome, {fullName}! Your EventWOS {role} account is approved. Sign in: {loginUrl}";
+        var plain = $"Welcome, {fullName}! Your OpsOracle {role} account is approved. Sign in: {loginUrl}";
         return SendAsync(toEmail, subject, html, plain, ct);
     }
 
     public Task<bool> SendRejectionEmailAsync(string toEmail, string fullName, string reason,
         DateTime canRetryAt, CancellationToken ct = default)
     {
-        var subject = "Your EventWOS registration was not approved";
+        var subject = "Your OpsOracle registration was not approved";
         var html = $@"
 <div style='font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto;color:#1f2937'>
   <h2 style='color:#dc2626'>Hi {fullName},</h2>
-  <p>Unfortunately, your EventWOS registration was not approved at this time.</p>
+  <p>Unfortunately, your OpsOracle registration was not approved at this time.</p>
   <p style='padding:12px;background:#fef2f2;border-left:3px solid #dc2626;border-radius:4px'>
     <strong>Reason:</strong> {reason}
   </p>
   <p>You're welcome to try registering again after <strong>{canRetryAt:dd MMM yyyy, HH:mm} UTC</strong>.</p>
   <p style='color:#6b7280;font-size:12px;margin-top:32px'>Questions? Reply to this email.</p>
 </div>";
-        var plain = $"Hi {fullName}, your EventWOS registration was not approved. Reason: {reason}. You can retry after {canRetryAt:u}.";
+        var plain = $"Hi {fullName}, your OpsOracle registration was not approved. Reason: {reason}. You can retry after {canRetryAt:u}.";
         return SendAsync(toEmail, subject, html, plain, ct);
     }
 
     public Task<bool> SendPasswordResetOtpEmailAsync(string toEmail, string fullName, string otp, CancellationToken ct = default)
     {
-        var subject = "Your EventWOS password reset code";
+        var subject = "Your OpsOracle password reset code";
         var html = $@"
 <div style='font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto;color:#1f2937'>
   <h2 style='color:#4f46e5'>Hi {fullName},</h2>
-  <p>Use the code below to reset your EventWOS password. It expires in 10 minutes.</p>
+  <p>Use the code below to reset your OpsOracle password. It expires in 10 minutes.</p>
   <p style='font-size:32px;font-weight:bold;letter-spacing:6px;padding:16px;background:#f3f4f6;border-radius:8px;text-align:center'>{otp}</p>
   <p style='color:#6b7280;font-size:12px;margin-top:32px'>If you didn't request this, you can safely ignore the email.</p>
 </div>";
-        var plain = $"Your EventWOS password reset code: {otp} (valid for 10 minutes).";
+        var plain = $"Your OpsOracle password reset code: {otp} (valid for 10 minutes).";
         return SendAsync(toEmail, subject, html, plain, ct);
     }
 
     public Task<bool> SendAccountInviteEmailAsync(string toEmail, string fullName, string role,
         string invitedByName, string setupLink, CancellationToken ct = default)
     {
-        var subject = $"You've been added to EventWOS as a {role}";
+        var subject = $"You've been added to OpsOracle as a {role}";
         var html = $@"
 <div style='font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto;color:#1f2937'>
   <h2 style='color:#4f46e5'>Hi {fullName},</h2>
-  <p>{invitedByName} has added you to EventWOS as a <strong>{role}</strong>. Your account is already active — no approval needed.</p>
+  <p>{invitedByName} has added you to OpsOracle as a <strong>{role}</strong>. Your account is already active — no approval needed.</p>
   <p>Set up your password to get started, then fill in your profile:</p>
   <p style='margin-top:20px'>
     <a href='{setupLink}' style='background:#4f46e5;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block'>Set up my account</a>
   </p>
   <p style='color:#6b7280;font-size:12px;margin-top:32px'>If you weren't expecting this, you can ignore this email.</p>
 </div>";
-        var plain = $"Hi {fullName}, {invitedByName} has added you to EventWOS as a {role}. Your account is already active. Set up your password: {setupLink}";
+        var plain = $"Hi {fullName}, {invitedByName} has added you to OpsOracle as a {role}. Your account is already active. Set up your password: {setupLink}";
         return SendAsync(toEmail, subject, html, plain, ct);
     }
 
     public Task<bool> SendProfileCompletedEmailAsync(string toEmail, string inviterName, string fullName,
         string role, CancellationToken ct = default)
     {
-        var subject = $"{fullName} completed their EventWOS profile";
+        var subject = $"{fullName} completed their OpsOracle profile";
         var html = $@"
 <div style='font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto;color:#1f2937'>
   <h2 style='color:#4f46e5'>Hi {inviterName},</h2>
-  <p><strong>{fullName}</strong> ({role}) has finished filling in their profile details on EventWOS.</p>
+  <p><strong>{fullName}</strong> ({role}) has finished filling in their profile details on EventOpsOracle.</p>
 </div>";
-        var plain = $"Hi {inviterName}, {fullName} ({role}) has finished filling in their profile details on EventWOS.";
+        var plain = $"Hi {inviterName}, {fullName} ({role}) has finished filling in their profile details on EventOpsOracle.";
         return SendAsync(toEmail, subject, html, plain, ct);
     }
 }

@@ -1,9 +1,9 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Venues.Queries;
+namespace EventOpsOracle.Application.Venues.Queries;
 
 /// <summary>
 /// Distinct, non-empty states among active (non-archived) venues — feeds

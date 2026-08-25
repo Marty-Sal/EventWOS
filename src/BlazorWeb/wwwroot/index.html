@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>EventWOS</title>
+    <title>OpsOracle</title>
 
     <!-- ─── PWA / installability ─────────────────────────────────────────── -->
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -14,11 +14,11 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="EventWOS" />
+    <meta name="apple-mobile-web-app-title" content="OpsOracle" />
 
     <!-- Android/Chrome app-shell hints -->
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="application-name" content="EventWOS" />
+    <meta name="application-name" content="OpsOracle" />
     <base href="/" />
     <!-- Tailwind CDN (swap for compiled build in production) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -103,7 +103,7 @@
         <div class="loader" style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#0f172a;">
             <div style="font-size:48px;">⚡</div>
             <p style="color:#a5b4fc;font-size:14px;font-family:system-ui,sans-serif;font-weight:600;letter-spacing:0.05em;">
-                LOADING EVENTWOS…
+                LOADING OPSORACLE…
             </p>
             <div style="width:200px;height:3px;background:#1e293b;border-radius:99px;overflow:hidden;">
                 <div style="width:60%;height:100%;background:linear-gradient(90deg,#6366f1,#a855f7);border-radius:99px;animation:load 1.5s ease-in-out infinite;">
@@ -141,7 +141,7 @@
     -->
     <script>
         (function () {
-            const KEY = "eventwos-sri-recover";
+            const KEY = "opsoracle-sri-recover";
             const MAX_ATTEMPTS = 2; // one-shot was leaving some users stuck if the
                                      // first unregister+reload lost a race with a
                                      // freshly-re-registered service worker.
@@ -233,7 +233,7 @@
          Their heavy deps are lazy-loaded from a CDN inside the module. -->
     <script src="js/checkin.js"></script>
     <script src="js/forms.js"></script>
-    <!-- PWA install-banner helpers. Exposes window.eventwosPwaInstall
+    <!-- PWA install-banner helpers. Exposes window.opsOraclePwaInstall
          so <PwaInstallBanner /> can query state + fire Chrome's install
          prompt. Registers a listener for the "appinstalled" event too,
          to hide the banner instantly on successful install. -->
@@ -414,12 +414,12 @@
     <script>
         window.addEventListener("beforeinstallprompt", (e) => {
             e.preventDefault();
-            window.__eventwosInstallPrompt = e;
+            window.__opsOracleInstallPrompt = e;
             // Broadcast to any interested UI (Dashboard install banner, etc.)
             window.dispatchEvent(new CustomEvent("pwa-installable"));
         });
         window.addEventListener("appinstalled", () => {
-            window.__eventwosInstallPrompt = null;
+            window.__opsOracleInstallPrompt = null;
             console.log("[pwa] app installed");
         });
     </script>

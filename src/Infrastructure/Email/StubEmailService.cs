@@ -1,7 +1,7 @@
-using EventWOS.Application.Common;
+using EventOpsOracle.Application.Common;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Infrastructure.Email;
+namespace EventOpsOracle.Infrastructure.Email;
 
 /// <summary>
 /// Dev-mode email "sender" — logs the message instead of dispatching.

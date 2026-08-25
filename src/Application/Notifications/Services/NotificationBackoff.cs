@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Notifications.Services;
+namespace EventOpsOracle.Application.Notifications.Services;
 
 /// <summary>
 /// Retry schedule for failed sends: exponential backoff with jitter, and a hard

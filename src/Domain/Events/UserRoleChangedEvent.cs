@@ -1,7 +1,7 @@
-using EventWOS.Domain.Common;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Common;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Domain.Events;
+namespace EventOpsOracle.Domain.Events;
 
 public sealed record UserRoleChangedEvent(Guid UserId, UserRole OldRole, UserRole NewRole) : IDomainEvent
 {

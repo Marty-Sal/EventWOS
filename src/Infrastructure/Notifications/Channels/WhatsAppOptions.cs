@@ -1,4 +1,4 @@
-namespace EventWOS.Infrastructure.Notifications.Channels;
+namespace EventOpsOracle.Infrastructure.Notifications.Channels;
 
 /// <summary>
 /// WhatsApp configuration, bound from the "WhatsApp" section. Which provider is

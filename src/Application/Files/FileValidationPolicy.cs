@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Files;
+namespace EventOpsOracle.Application.Files;
 
 /// <summary>
 /// Server-side file validation rules, keyed by DocumentType. This is the

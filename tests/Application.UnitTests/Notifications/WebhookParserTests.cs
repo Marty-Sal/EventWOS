@@ -1,10 +1,10 @@
-using EventWOS.Application.Notifications.Commands;
-using EventWOS.Infrastructure.Notifications.Webhooks;
+using EventOpsOracle.Application.Notifications.Commands;
+using EventOpsOracle.Infrastructure.Notifications.Webhooks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Webhook parsing, using payload shapes as the providers actually send them.
@@ -175,7 +175,7 @@ public class WebhookParserTests
         var deliveryId = Guid.NewGuid();
         // Plain concatenation: brace-heavy JSON plus a raw interpolated literal is
         // more trouble than it is worth here.
-        var json = "{\"status\":\"read\",\"tags\":[\"source:EventWOS\",\"delivery:" + deliveryId + "\"]}";
+        var json = "{\"status\":\"read\",\"tags\":[\"source:OpsOracle\",\"delivery:" + deliveryId + "\"]}";
 
         var evt = AiSensyWebhookParser.Parse(json, Logger).Single();
 

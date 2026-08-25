@@ -1,12 +1,12 @@
 using Asp.Versioning;
-using EventWOS.Api.Authorization;
-using EventWOS.Application.AuditLogs.Queries;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Api.Authorization;
+using EventOpsOracle.Application.AuditLogs.Queries;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/audit-logs")]

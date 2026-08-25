@@ -1,11 +1,11 @@
-using EventWOS.Application.Events.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Events.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Events.Queries;
+namespace EventOpsOracle.Application.Events.Queries;
 
 public sealed record GetEventAssignmentsQuery(
     Guid EventId,

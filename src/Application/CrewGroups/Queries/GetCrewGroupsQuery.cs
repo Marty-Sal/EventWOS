@@ -1,11 +1,11 @@
-using EventWOS.Application.CrewGroups.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Common;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.CrewGroups.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Common;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.CrewGroups.Queries;
+namespace EventOpsOracle.Application.CrewGroups.Queries;
 
 /// <summary>List crew groups owned by a given vendor.</summary>
 public sealed record GetCrewGroupsQuery(

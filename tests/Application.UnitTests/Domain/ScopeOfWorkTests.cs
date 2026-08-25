@@ -2,18 +2,18 @@ using FluentAssertions;
 using Xunit;
 
 // NOTE on the unqualified-name landmine:
-// This file lives in EventWOS.Application.UnitTests.Domain. When the compiler
+// This file lives in EventOpsOracle.Application.UnitTests.Domain. When the compiler
 // resolves a bare `ScopeOfWork`, it walks the namespace tree upward and finds
-// EventWOS.Application.ScopeOfWork (the catalog feature folder) BEFORE it
+// EventOpsOracle.Application.ScopeOfWork (the catalog feature folder) BEFORE it
 // reaches any using-directive alias. A `using ScopeOfWork = ...` alias loses
 // the tie-break. So we type-alias via a `using static`-free pattern: every
 // reference is to the typedef below.
 
-namespace EventWOS.Application.UnitTests.Domain;
+namespace EventOpsOracle.Application.UnitTests.Domain;
 
 // Alias placed INSIDE the namespace — wins over the inherited
-// EventWOS.Application.ScopeOfWork namespace lookup.
-using ScopeOfWork = EventWOS.Domain.Entities.ScopeOfWork;
+// EventOpsOracle.Application.ScopeOfWork namespace lookup.
+using ScopeOfWork = EventOpsOracle.Domain.Entities.ScopeOfWork;
 
 /// <summary>
 /// Pins the invariants on <see cref="ScopeOfWork"/>. The catalog is small but

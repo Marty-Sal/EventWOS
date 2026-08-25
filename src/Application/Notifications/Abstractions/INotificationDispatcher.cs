@@ -1,6 +1,6 @@
-using EventWOS.Application.Notifications.Contracts;
+using EventOpsOracle.Application.Notifications.Contracts;
 
-namespace EventWOS.Application.Notifications.Abstractions;
+namespace EventOpsOracle.Application.Notifications.Abstractions;
 
 /// <summary>
 /// What business handlers call to notify people. The entire external surface of

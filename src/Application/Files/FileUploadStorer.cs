@@ -1,12 +1,12 @@
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 
-namespace EventWOS.Application.Files;
+namespace EventOpsOracle.Application.Files;
 
 /// <summary>
 /// Shared "validate → optimize (images only) → upload bytes → build

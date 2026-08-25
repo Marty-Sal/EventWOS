@@ -1,15 +1,15 @@
-using EventWOS.Api;
-using EventWOS.Api.Authorization;
+using EventOpsOracle.Api;
+using EventOpsOracle.Api.Authorization;
 using Asp.Versioning;
-using EventWOS.Api.Hubs;
-using EventWOS.Api.Middleware;
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Infrastructure.Auth;
-using EventWOS.Infrastructure.Http;
-using EventWOS.Persistence;
-using EventWOS.Application.Interfaces;
-using EventWOS.Persistence.Seed;
+using EventOpsOracle.Api.Hubs;
+using EventOpsOracle.Api.Middleware;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Infrastructure.Auth;
+using EventOpsOracle.Infrastructure.Http;
+using EventOpsOracle.Persistence;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Persistence.Seed;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -27,7 +27,7 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
     .CreateBootstrapLogger();
 
-Log.Information("EventWOS API bootstrap starting...");
+Log.Information("OpsOracle API bootstrap starting...");
 
 try
 {
@@ -60,14 +60,14 @@ try
         {
             // NOTE: deliberately NOT calling npgsql.MigrationsAssembly(...) here.
             // AppDbContext and all 21 Migration classes live in the SAME assembly
-            // (EventWOS.Persistence), so the correct behavior is EF Core's default:
+            // (EventOpsOracle.Persistence), so the correct behavior is EF Core's default:
             // use context.GetType().Assembly directly (the already-loaded Type
             // reference, no re-load).
             // The removed call passed typeof(AppDbContext).Assembly.FullName as a
             // STRING, which makes EF call Assembly.Load(new AssemblyName(...))
             // internally to re-resolve the assembly by name at runtime. On this
             // deployment that produced a second, distinct load of
-            // EventWOS.Persistence with its own Type identities - so EF's internal
+            // EventOpsOracle.Persistence with its own Type identities - so EF's internal
             // filter (`t.IsSubclassOf(typeof(Migration))`, comparing Types loaded
             // from two different Assembly instances) matched none of the 21
             // migration classes, even though plain reflection over
@@ -82,7 +82,7 @@ try
     // Shared write path for both rating flows plus the reputation cache
     // recompute. Scoped: it works through the request's IAppDbContext so the
     // rating and the recomputed average land in one unit of work.
-    builder.Services.AddScoped<EventWOS.Application.Ratings.RatingWriter>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Ratings.RatingWriter>();
     builder.Services.AddScoped<DatabaseSeeder>();
 
     // ─── Redis (with fallback to in-memory if Redis unavailable) ─────────────
@@ -106,7 +106,7 @@ try
 
     // ─── MediatR ─────────────────────────────────────────────────────────────
     {
-        var appAssembly = typeof(EventWOS.Application.Auth.Commands.RequestOtpCommand).Assembly;
+        var appAssembly = typeof(EventOpsOracle.Application.Auth.Commands.RequestOtpCommand).Assembly;
         Log.Information("MediatR scanning assembly: {Assembly}", appAssembly.FullName);
         try
         {
@@ -134,7 +134,7 @@ try
 
     // ─── FluentValidation ────────────────────────────────────────────────────
     builder.Services.AddValidatorsFromAssembly(
-        typeof(EventWOS.Application.Auth.Validators.RequestOtpValidator).Assembly);
+        typeof(EventOpsOracle.Application.Auth.Validators.RequestOtpValidator).Assembly);
 
     // ─── JWT Authentication (RSA256) ─────────────────────────────────────────
     builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
@@ -240,7 +240,7 @@ try
                         return; // legacy / non-session tokens — allow
 
                     var db = ctx.HttpContext.RequestServices
-                        .GetRequiredService<EventWOS.Application.Interfaces.IAppDbContext>();
+                        .GetRequiredService<EventOpsOracle.Application.Interfaces.IAppDbContext>();
 
                     // Session must still be active
                     var sessionActive = await db.UserSessions
@@ -265,7 +265,7 @@ try
                             .AsNoTracking()
                             .AnyAsync(u => u.Id == userId
                                         && !u.IsDeleted
-                                        && u.Status == EventWOS.Domain.Enums.UserStatus.Active,
+                                        && u.Status == EventOpsOracle.Domain.Enums.UserStatus.Active,
                                       ctx.HttpContext.RequestAborted);
 
                         if (!userOk)
@@ -321,57 +321,57 @@ try
 
     // Public frontend URL for approval-flow links (welcome emails, SMS, etc.).
     // Pulls from AppUrls:BaseUrl in appsettings or AppUrls__BaseUrl env var.
-    builder.Services.Configure<EventWOS.Application.Common.AppUrlOptions>(
-        builder.Configuration.GetSection(EventWOS.Application.Common.AppUrlOptions.SectionName));
+    builder.Services.Configure<EventOpsOracle.Application.Common.AppUrlOptions>(
+        builder.Configuration.GetSection(EventOpsOracle.Application.Common.AppUrlOptions.SectionName));
 
     builder.Services.AddScoped<IOtpService, OtpService>();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddScoped<IAuditLogger, AuditLogger>();
-    builder.Services.AddScoped<EventWOS.Application.Common.ISmsProvider, EventWOS.Infrastructure.Auth.StubSmsProvider>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Common.ISmsProvider, EventOpsOracle.Infrastructure.Auth.StubSmsProvider>();
 
     // Notification platform. The dispatcher only stages transactional-outbox
     // rows on the request's DbContext, so it is scoped alongside it; the
     // renderer is stateless.
-    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.INotificationDispatcher,
-                               EventWOS.Application.Notifications.Services.NotificationDispatcher>();
-    builder.Services.AddSingleton<EventWOS.Application.Notifications.Rendering.INotificationTemplateRenderer,
-                                  EventWOS.Application.Notifications.Rendering.NotificationTemplateRenderer>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Notifications.Abstractions.INotificationDispatcher,
+                               EventOpsOracle.Application.Notifications.Services.NotificationDispatcher>();
+    builder.Services.AddSingleton<EventOpsOracle.Application.Notifications.Rendering.INotificationTemplateRenderer,
+                                  EventOpsOracle.Application.Notifications.Rendering.NotificationTemplateRenderer>();
 
     // Notification worker: claims work from Postgres and hands it to providers.
     // Bound from the "Notifications" section so Railway can retune batch sizes
     // or switch the loop off (Notifications__Enabled=false) without a deploy.
-    builder.Services.Configure<EventWOS.Infrastructure.Notifications.NotificationWorkerOptions>(
-        builder.Configuration.GetSection(EventWOS.Infrastructure.Notifications.NotificationWorkerOptions.SectionName));
+    builder.Services.Configure<EventOpsOracle.Infrastructure.Notifications.NotificationWorkerOptions>(
+        builder.Configuration.GetSection(EventOpsOracle.Infrastructure.Notifications.NotificationWorkerOptions.SectionName));
 
-    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.INotificationWorkQueue,
-                               EventWOS.Infrastructure.Notifications.NotificationWorkQueue>();
-    builder.Services.AddScoped<EventWOS.Application.Notifications.Services.OutboxProcessor>();
-    builder.Services.AddScoped<EventWOS.Application.Notifications.Services.DeliveryProcessor>();
-    builder.Services.AddScoped<EventWOS.Application.Notifications.Services.NotificationChannelResolver>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Notifications.Abstractions.INotificationWorkQueue,
+                               EventOpsOracle.Infrastructure.Notifications.NotificationWorkQueue>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Notifications.Services.OutboxProcessor>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Notifications.Services.DeliveryProcessor>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Notifications.Services.NotificationChannelResolver>();
 
     // Channel senders. Registered as a collection: the resolver and the delivery
     // processor pick per channel, and config decides which implementation wins
     // when two exist for the same channel (AiSensy vs Meta, SES vs SendGrid).
     // In-app needs no credentials, so it is always available -- which is what
     // makes a missing provider key degrade to in-app rather than lose a message.
-    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
-                               EventWOS.Application.Notifications.Channels.InAppNotificationSender>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Notifications.Abstractions.INotificationChannelSender,
+                               EventOpsOracle.Application.Notifications.Channels.InAppNotificationSender>();
 
     // WhatsApp: AiSensy or Meta, chosen by WhatsApp__Provider. Both implement the
     // same channel, and exactly one is registered, so the resolver never has to
     // guess. Provider=None (the default) leaves the channel unregistered, which
     // makes the resolver skip WhatsApp instead of queueing sends that cannot work.
-    builder.Services.Configure<EventWOS.Infrastructure.Notifications.Channels.WhatsAppOptions>(
-        builder.Configuration.GetSection(EventWOS.Infrastructure.Notifications.Channels.WhatsAppOptions.SectionName));
+    builder.Services.Configure<EventOpsOracle.Infrastructure.Notifications.Channels.WhatsAppOptions>(
+        builder.Configuration.GetSection(EventOpsOracle.Infrastructure.Notifications.Channels.WhatsAppOptions.SectionName));
 
     // Email for notifications: same SendGrid credentials as the existing
     // transactional mail, so there is one key to rotate. Accepts either the
     // sectioned form (SendGrid:ApiKey) or the flat env names Railway already has
     // set (SENDGRID_API_KEY), which do not bind to a section on their own.
-    builder.Services.Configure<EventWOS.Infrastructure.Notifications.Channels.EmailSenderOptions>(options =>
+    builder.Services.Configure<EventOpsOracle.Infrastructure.Notifications.Channels.EmailSenderOptions>(options =>
     {
         builder.Configuration
-            .GetSection(EventWOS.Infrastructure.Notifications.Channels.EmailSenderOptions.SectionName)
+            .GetSection(EventOpsOracle.Infrastructure.Notifications.Channels.EmailSenderOptions.SectionName)
             .Bind(options);
 
         options.ApiKey    ??= builder.Configuration["SENDGRID_API_KEY"];
@@ -382,8 +382,8 @@ try
 
     if (!string.IsNullOrWhiteSpace(notificationSendGridKey))
     {
-        builder.Services.AddHttpClient<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
-                                       EventWOS.Infrastructure.Notifications.Channels.EmailNotificationSender>(client =>
+        builder.Services.AddHttpClient<EventOpsOracle.Application.Notifications.Abstractions.INotificationChannelSender,
+                                       EventOpsOracle.Infrastructure.Notifications.Channels.EmailNotificationSender>(client =>
         {
             client.BaseAddress = new Uri("https://api.sendgrid.com/");
             client.DefaultRequestHeaders.Authorization =
@@ -401,8 +401,8 @@ try
 
     if (whatsAppProvider.Equals("AiSensy", StringComparison.OrdinalIgnoreCase))
     {
-        builder.Services.AddHttpClient<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
-                                       EventWOS.Infrastructure.Notifications.Channels.AiSensyWhatsAppSender>(client =>
+        builder.Services.AddHttpClient<EventOpsOracle.Application.Notifications.Abstractions.INotificationChannelSender,
+                                       EventOpsOracle.Infrastructure.Notifications.Channels.AiSensyWhatsAppSender>(client =>
         {
             var baseUrl = builder.Configuration["WhatsApp:AiSensy:BaseUrl"] ?? "https://backend.aisensy.com";
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
@@ -414,8 +414,8 @@ try
     }
     else if (whatsAppProvider.Equals("Meta", StringComparison.OrdinalIgnoreCase))
     {
-        builder.Services.AddHttpClient<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
-                                       EventWOS.Infrastructure.Notifications.Channels.MetaWhatsAppSender>(client =>
+        builder.Services.AddHttpClient<EventOpsOracle.Application.Notifications.Abstractions.INotificationChannelSender,
+                                       EventOpsOracle.Infrastructure.Notifications.Channels.MetaWhatsAppSender>(client =>
         {
             client.BaseAddress = new Uri("https://graph.facebook.com/");
             client.DefaultRequestHeaders.Authorization =
@@ -436,26 +436,26 @@ try
     // private key is, and it stays server-side signing the VAPID JWT. Both are
     // read from configuration, so Railway supplies WebPush__PublicKey /
     // WebPush__PrivateKey / WebPush__Subject.
-    builder.Services.Configure<EventWOS.Infrastructure.Notifications.Channels.WebPushOptions>(
-        builder.Configuration.GetSection(EventWOS.Infrastructure.Notifications.Channels.WebPushOptions.SectionName));
+    builder.Services.Configure<EventOpsOracle.Infrastructure.Notifications.Channels.WebPushOptions>(
+        builder.Configuration.GetSection(EventOpsOracle.Infrastructure.Notifications.Channels.WebPushOptions.SectionName));
 
-    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.IPushRegistrationStore,
-                               EventWOS.Persistence.Notifications.PushRegistrationStore>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Notifications.Abstractions.IPushRegistrationStore,
+                               EventOpsOracle.Persistence.Notifications.PushRegistrationStore>();
 
     // The provider is registered whether or not keys are present: it reports
     // IsConfigured=false without them, and the resolver skips the channel rather
     // than queueing push that can only fail. That keeps a missing key from
     // changing the shape of the container between environments.
-    builder.Services.AddHttpClient<EventWOS.Application.Notifications.Abstractions.IPushNotificationProvider,
-                                   EventWOS.Infrastructure.Notifications.Channels.VapidWebPushProvider>(client =>
+    builder.Services.AddHttpClient<EventOpsOracle.Application.Notifications.Abstractions.IPushNotificationProvider,
+                                   EventOpsOracle.Infrastructure.Notifications.Channels.VapidWebPushProvider>(client =>
     {
         // Push services are normally fast; a bounded timeout turns a slow one
         // into a retryable transient failure instead of a stuck worker slot.
         client.Timeout = TimeSpan.FromSeconds(20);
     });
 
-    builder.Services.AddScoped<EventWOS.Application.Notifications.Abstractions.INotificationChannelSender,
-                               EventWOS.Application.Notifications.Channels.PushNotificationSender>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Notifications.Abstractions.INotificationChannelSender,
+                               EventOpsOracle.Application.Notifications.Channels.PushNotificationSender>();
 
     if (!string.IsNullOrWhiteSpace(builder.Configuration["WebPush:PrivateKey"]))
         Log.Information("Push notifications: VapidWebPushProvider registered (RFC 8291 aes128gcm).");
@@ -465,12 +465,12 @@ try
     // Secrets for verifying inbound provider callbacks. The webhook endpoints are
     // anonymous by necessity and mutate delivery state, so the signature is the
     // only authentication they have.
-    builder.Services.Configure<EventWOS.Infrastructure.Notifications.Webhooks.WebhookOptions>(
-        builder.Configuration.GetSection(EventWOS.Infrastructure.Notifications.Webhooks.WebhookOptions.SectionName));
+    builder.Services.Configure<EventOpsOracle.Infrastructure.Notifications.Webhooks.WebhookOptions>(
+        builder.Configuration.GetSection(EventOpsOracle.Infrastructure.Notifications.Webhooks.WebhookOptions.SectionName));
 
-    builder.Services.AddScoped<EventWOS.Persistence.Seed.NotificationTemplateSeeder>();
-    builder.Services.AddHostedService<EventWOS.Api.Workers.NotificationWorker>();
-    builder.Services.AddSingleton<EventWOS.Application.Auth.Interfaces.IPasswordHasher, EventWOS.Infrastructure.Auth.BCryptPasswordHasher>();
+    builder.Services.AddScoped<EventOpsOracle.Persistence.Seed.NotificationTemplateSeeder>();
+    builder.Services.AddHostedService<EventOpsOracle.Api.Workers.NotificationWorker>();
+    builder.Services.AddSingleton<EventOpsOracle.Application.Auth.Interfaces.IPasswordHasher, EventOpsOracle.Infrastructure.Auth.BCryptPasswordHasher>();
 
     // Reverse-geocoding for AttendanceRecord.LocationAddress via
     // OpenStreetMap Nominatim (see GeoLocationService.cs for the
@@ -478,8 +478,8 @@ try
     // process rate limiter + 24 h cache). Singleton is essential —
     // the singleton holds the static rate-limit state and cache.
     builder.Services.AddSingleton<
-        EventWOS.Application.Attendance.Geo.IGeoLocationService,
-        EventWOS.Infrastructure.Geo.GeoLocationService>();
+        EventOpsOracle.Application.Attendance.Geo.IGeoLocationService,
+        EventOpsOracle.Infrastructure.Geo.GeoLocationService>();
 
     // ── Location & Geofencing: provider-agnostic place search / geocoding ───
     //    The application layer depends only on ILocationService; the concrete
@@ -494,18 +494,18 @@ try
     //    Credentials stay server-side: Blazor calls /api/v1/locations/*, never
     //    the provider directly.
     builder.Services.AddMemoryCache();
-    builder.Services.Configure<EventWOS.Infrastructure.Locations.LocationOptions>(
+    builder.Services.Configure<EventOpsOracle.Infrastructure.Locations.LocationOptions>(
         builder.Configuration.GetSection(
-            EventWOS.Infrastructure.Locations.LocationOptions.SectionName));
+            EventOpsOracle.Infrastructure.Locations.LocationOptions.SectionName));
 
     var locationProvider = builder.Configuration[
-        $"{EventWOS.Infrastructure.Locations.LocationOptions.SectionName}:Provider"] ?? "Nominatim";
+        $"{EventOpsOracle.Infrastructure.Locations.LocationOptions.SectionName}:Provider"] ?? "Nominatim";
 
     switch (locationProvider.Trim().ToLowerInvariant())
     {
         case "nominatim":
-            builder.Services.AddHttpClient<EventWOS.Application.Locations.ILocationService,
-                                           EventWOS.Infrastructure.Locations.NominatimLocationService>();
+            builder.Services.AddHttpClient<EventOpsOracle.Application.Locations.ILocationService,
+                                           EventOpsOracle.Infrastructure.Locations.NominatimLocationService>();
             Log.Information("Location provider: Nominatim (OpenStreetMap).");
             break;
 
@@ -525,14 +525,14 @@ try
                    ?? builder.Configuration["SENDGRID_API_KEY"];
     if (!string.IsNullOrWhiteSpace(sendGridKey))
     {
-        builder.Services.AddHttpClient<EventWOS.Application.Common.IEmailService,
-                                       EventWOS.Infrastructure.Email.SendGridEmailService>();
+        builder.Services.AddHttpClient<EventOpsOracle.Application.Common.IEmailService,
+                                       EventOpsOracle.Infrastructure.Email.SendGridEmailService>();
         Log.Information("Email: SendGridEmailService registered.");
     }
     else
     {
-        builder.Services.AddSingleton<EventWOS.Application.Common.IEmailService,
-                                      EventWOS.Infrastructure.Email.StubEmailService>();
+        builder.Services.AddSingleton<EventOpsOracle.Application.Common.IEmailService,
+                                      EventOpsOracle.Infrastructure.Email.StubEmailService>();
         Log.Information("Email: SENDGRID_API_KEY not set — using StubEmailService (logs only).");
     }
     builder.Services.AddScoped<ICurrentUser, CurrentUser>();
@@ -545,14 +545,14 @@ try
                         ?? builder.Configuration["WHATSAPP_PHONE_NUMBER_ID"];
     if (!string.IsNullOrWhiteSpace(whatsAppToken) && !string.IsNullOrWhiteSpace(whatsAppPhoneId))
     {
-        builder.Services.AddHttpClient<EventWOS.Application.Common.IWhatsAppProvider,
-                                       EventWOS.Infrastructure.Notifications.WhatsAppCloudApiProvider>();
+        builder.Services.AddHttpClient<EventOpsOracle.Application.Common.IWhatsAppProvider,
+                                       EventOpsOracle.Infrastructure.Notifications.WhatsAppCloudApiProvider>();
         Log.Information("WhatsApp: WhatsAppCloudApiProvider registered.");
     }
     else
     {
-        builder.Services.AddSingleton<EventWOS.Application.Common.IWhatsAppProvider,
-                                      EventWOS.Infrastructure.Notifications.StubWhatsAppProvider>();
+        builder.Services.AddSingleton<EventOpsOracle.Application.Common.IWhatsAppProvider,
+                                      EventOpsOracle.Infrastructure.Notifications.StubWhatsAppProvider>();
         Log.Information("WhatsApp: WHATSAPP_ACCESS_TOKEN/WHATSAPP_PHONE_NUMBER_ID not set — using StubWhatsAppProvider (logs only).");
     }
 
@@ -565,26 +565,26 @@ try
     switch (storageProvider)
     {
         case "S3":
-            builder.Services.AddSingleton<EventWOS.Application.Common.IFileStorage,
-                                          EventWOS.Infrastructure.Storage.S3CompatibleFileStorage>();
+            builder.Services.AddSingleton<EventOpsOracle.Application.Common.IFileStorage,
+                                          EventOpsOracle.Infrastructure.Storage.S3CompatibleFileStorage>();
             Log.Information("Storage: S3CompatibleFileStorage registered (AWS S3 / R2 / MinIO).");
             break;
         case "AzureBlob":
-            builder.Services.AddSingleton<EventWOS.Application.Common.IFileStorage,
-                                          EventWOS.Infrastructure.Storage.AzureBlobFileStorage>();
+            builder.Services.AddSingleton<EventOpsOracle.Application.Common.IFileStorage,
+                                          EventOpsOracle.Infrastructure.Storage.AzureBlobFileStorage>();
             Log.Information("Storage: AzureBlobFileStorage registered.");
             break;
         default:
-            builder.Services.AddSingleton<EventWOS.Application.Common.IFileStorage,
-                                          EventWOS.Infrastructure.Storage.LocalFileStorage>();
+            builder.Services.AddSingleton<EventOpsOracle.Application.Common.IFileStorage,
+                                          EventOpsOracle.Infrastructure.Storage.LocalFileStorage>();
             Log.Warning("Storage: LocalFileStorage registered (dev/MVP only — NOT durable in production containers).");
             break;
     }
-    builder.Services.AddSingleton<EventWOS.Application.Common.IImageProcessor,
-                                  EventWOS.Infrastructure.Storage.ImageSharpProcessor>();
+    builder.Services.AddSingleton<EventOpsOracle.Application.Common.IImageProcessor,
+                                  EventOpsOracle.Infrastructure.Storage.ImageSharpProcessor>();
     // Scoped (not Singleton) - it depends on IAppDbContext, which is scoped per-request.
-    builder.Services.AddScoped<EventWOS.Application.Files.IFileUploadStorer,
-                                EventWOS.Application.Files.FileUploadStorer>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Files.IFileUploadStorer,
+                                EventOpsOracle.Application.Files.FileUploadStorer>();
     builder.Services.AddHttpContextAccessor();
 
     // ─── API Versioning ───────────────────────────────────────────────────────
@@ -616,7 +616,7 @@ try
     {
         opts.SwaggerDoc("v1", new OpenApiInfo
         {
-            Title   = "EventWOS API",
+            Title   = "OpsOracle API",
             Version = "v1",
             Description = "Event Workforce Operating System — Production API"
         });
@@ -672,8 +672,8 @@ try
     });
 
     // ─── SignalR ──────────────────────────────────────────────────────────────
-    builder.Services.AddScoped<EventWOS.Application.Interfaces.INotificationPusher, 
-        EventWOS.Api.Hubs.SignalRNotificationPusher>();
+    builder.Services.AddScoped<EventOpsOracle.Application.Interfaces.INotificationPusher, 
+        EventOpsOracle.Api.Hubs.SignalRNotificationPusher>();
 
     builder.Services.AddSignalR(opts =>
     {
@@ -2425,7 +2425,7 @@ try
             // Default notification wording. Insert-only and idempotent, so an
             // admin's edits survive every deploy.
             var templateSeeder = scope.ServiceProvider
-                .GetRequiredService<EventWOS.Persistence.Seed.NotificationTemplateSeeder>();
+                .GetRequiredService<EventOpsOracle.Persistence.Seed.NotificationTemplateSeeder>();
             await templateSeeder.SeedAsync();
 
             Log.Information("Seeding complete.");
@@ -2456,9 +2456,9 @@ try
         {
             var activeEventStatuses = new[]
             {
-                EventWOS.Domain.Enums.EventStatus.Draft,
-                EventWOS.Domain.Enums.EventStatus.Published,
-                EventWOS.Domain.Enums.EventStatus.InProgress
+                EventOpsOracle.Domain.Enums.EventStatus.Draft,
+                EventOpsOracle.Domain.Enums.EventStatus.Published,
+                EventOpsOracle.Domain.Enums.EventStatus.InProgress
             };
 
             // (eventId, vendorId) pairs that have EVER had a vendor attribution
@@ -2492,7 +2492,7 @@ try
             {
                 foreach (var p in toRestore)
                 {
-                    db.EventAssignments.Add(new EventWOS.Domain.Entities.EventAssignment(
+                    db.EventAssignments.Add(new EventOpsOracle.Domain.Entities.EventAssignment(
                         eventId:          p.EventId,
                         crewId:           null,
                         vendorId:         p.VendorId,
@@ -2535,7 +2535,7 @@ try
             var orphans = await db.CrewPayments
                 .Where(p => p.VendorId != null
                          && p.PayrollBatchId == null
-                         && p.Status != EventWOS.Domain.Enums.PaymentStatus.Rejected)
+                         && p.Status != EventOpsOracle.Domain.Enums.PaymentStatus.Rejected)
                 .ToListAsync();
 
             if (orphans.Count == 0)
@@ -2550,7 +2550,7 @@ try
 
                 // Cache draft batches per (vendor, event) so multiple orphans
                 // on the same pair fold into one batch.
-                var draftCache = new Dictionary<(Guid VendorId, Guid EventId), EventWOS.Domain.Entities.PayrollBatch>();
+                var draftCache = new Dictionary<(Guid VendorId, Guid EventId), EventOpsOracle.Domain.Entities.PayrollBatch>();
 
                 foreach (var pmt in orphans)
                 {
@@ -2572,14 +2572,14 @@ try
                         batch = await db.PayrollBatches
                             .Where(b => b.VendorId == vid
                                      && b.EventId  == pmt.EventId
-                                     && b.Status   == EventWOS.Domain.Enums.PayrollStatus.Draft)
+                                     && b.Status   == EventOpsOracle.Domain.Enums.PayrollStatus.Draft)
                             .OrderByDescending(b => b.CreatedAt)
                             .FirstOrDefaultAsync();
 
                         if (batch is null)
                         {
                             var batchRef = $"PAY-{pmt.EventId.ToString()[..8].ToUpper()}-{DateTime.UtcNow:yyyyMMddHHmm}-R";
-                            batch = new EventWOS.Domain.Entities.PayrollBatch(
+                            batch = new EventOpsOracle.Domain.Entities.PayrollBatch(
                                 vid, pmt.EventId, batchRef, "Auto-recovered from orphan payment");
                             await db.PayrollBatches.AddAsync(batch);
                             await db.SaveChangesAsync(); // need batch.Id
@@ -2606,7 +2606,7 @@ try
                 {
                     var total = await db.CrewPayments
                         .Where(p => p.PayrollBatchId == batch.Id
-                                 && p.Status != EventWOS.Domain.Enums.PaymentStatus.Rejected)
+                                 && p.Status != EventOpsOracle.Domain.Enums.PaymentStatus.Rejected)
                         .SumAsync(p => p.AgreedAmount);
                     batch.SetTotal(total);
                 }
@@ -2630,7 +2630,7 @@ try
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "EventWOS v1");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "OpsOracle v1");
         c.RoutePrefix = "swagger";
     });
 
@@ -2681,7 +2681,7 @@ try
 }
 catch (Exception ex)
 {
-    Log.Fatal(ex, "EventWOS API failed to start.");
+    Log.Fatal(ex, "OpsOracle API failed to start.");
     Console.Error.WriteLine($"[FATAL STARTUP ERROR] {ex.GetType().Name}: {ex.Message}");
     Console.Error.WriteLine(ex.ToString());
     throw; // re-throw so Railway marks the deploy as failed

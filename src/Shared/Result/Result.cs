@@ -1,4 +1,4 @@
-namespace EventWOS.Shared.Result;
+namespace EventOpsOracle.Shared.Result;
 
 /// <summary>
 /// Functional result pattern. Eliminates exceptions for expected business failures.

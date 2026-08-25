@@ -1,10 +1,10 @@
-using EventWOS.Application.Common;
+using EventOpsOracle.Application.Common;
 using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Processing;
 
-namespace EventWOS.Infrastructure.Storage;
+namespace EventOpsOracle.Infrastructure.Storage;
 
 /// <summary>
 /// Re-encodes uploaded images down to a sane max dimension + JPEG quality

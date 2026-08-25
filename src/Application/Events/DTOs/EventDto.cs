@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Events.DTOs;
+namespace EventOpsOracle.Application.Events.DTOs;
 
 public sealed record EventDto(
     Guid   Id,

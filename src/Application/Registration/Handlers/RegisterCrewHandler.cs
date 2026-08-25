@@ -1,20 +1,20 @@
-using EventWOS.Application.Common;
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Application.Files;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Application.Registration.Commands;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Application.Files;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Application.Registration.Commands;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Application.Registration.Handlers;
+namespace EventOpsOracle.Application.Registration.Handlers;
 
 /// <summary>
 /// Crew self-registration. Mirror of RegisterVendorHandler but resolves

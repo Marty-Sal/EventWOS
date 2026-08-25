@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Enums;
+namespace EventOpsOracle.Domain.Enums;
 
 /// <summary>
 /// Which physical backend holds a FileDocument's bytes. Recorded per-row

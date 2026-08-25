@@ -2,12 +2,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using System.Web;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Infrastructure.Notifications.Channels;
+namespace EventOpsOracle.Infrastructure.Notifications.Channels;
 
 /// <summary>
 /// SendGrid sender for the notification pipeline.
@@ -57,7 +57,7 @@ public sealed class EmailNotificationSender : INotificationChannelSender
             // Every mail needs a subject line, and a blank one both looks broken
             // and hurts deliverability. The template code is a poor headline, so
             // fall back to something a human would recognise.
-            ? "EventWOS notification"
+            ? "OpsOracle notification"
             : context.Message.Subject!;
 
         var html = context.Message.Body;

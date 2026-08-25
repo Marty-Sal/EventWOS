@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Files.DTOs;
+namespace EventOpsOracle.Application.Files.DTOs;
 
 /// <summary>
 /// Client-facing shape for a FileDocument. Deliberately omits StorageKey —

@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Payments.Queries;
+namespace EventOpsOracle.Application.Payments.Queries;
 
 /// <summary>
 /// Returns every payable line for an event: every vendor that had attended crew on

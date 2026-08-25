@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Venues.Commands;
+namespace EventOpsOracle.Application.Venues.Commands;
 
 public sealed record ArchiveVenueCommand(Guid Id, Guid ActingUserId) : IRequest<Result>;
 

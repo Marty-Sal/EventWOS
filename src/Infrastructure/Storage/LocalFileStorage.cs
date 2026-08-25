@@ -1,9 +1,9 @@
-using EventWOS.Application.Common;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Infrastructure.Storage;
+namespace EventOpsOracle.Infrastructure.Storage;
 
 /// <summary>
 /// Dev/MVP-only IFileStorage backed by local disk. NOT for production —

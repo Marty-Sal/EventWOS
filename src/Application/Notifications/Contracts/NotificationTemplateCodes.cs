@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Notifications.Contracts;
+namespace EventOpsOracle.Application.Notifications.Contracts;
 
 /// <summary>
 /// The catalogue of notification types. Handlers reference these constants

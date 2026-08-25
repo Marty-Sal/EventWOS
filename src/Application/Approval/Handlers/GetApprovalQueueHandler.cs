@@ -1,14 +1,14 @@
-using EventWOS.Application.Approval.DTOs;
-using EventWOS.Application.Approval.Queries;
-using EventWOS.Application.Files.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Approval.DTOs;
+using EventOpsOracle.Application.Approval.Queries;
+using EventOpsOracle.Application.Files.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Approval.Handlers;
+namespace EventOpsOracle.Application.Approval.Handlers;
 
 /// <summary>
 /// Returns Pending self-registrations the caller is allowed to act on.

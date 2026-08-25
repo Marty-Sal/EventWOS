@@ -1,7 +1,7 @@
-using EventWOS.Shared.Result;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Approval.Commands;
+namespace EventOpsOracle.Application.Approval.Commands;
 
 /// <summary>
 /// Admin/Manager (for a pending Vendor) or Vendor (for a pending Crew

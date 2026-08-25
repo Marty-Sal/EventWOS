@@ -1,18 +1,18 @@
-using EventWOS.Application.Events.Commands;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Events.Commands;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Events;
+namespace EventOpsOracle.Application.UnitTests.Events;
 
 /// <summary>
 /// Pressing "Assign to Event" in Vendor-only mode on a vendor who is ALREADY working
@@ -122,7 +122,7 @@ public class VendorReassignGuardTests
         var ev = new Event("The MIX", null, "Jio Garden", null, start, start.AddHours(5), admin, maxCrew: 3);
         db.Events.Add(ev);
 
-        var scope = new EventWOS.Domain.Entities.ScopeOfWork("Box Office", null, admin);
+        var scope = new EventOpsOracle.Domain.Entities.ScopeOfWork("Box Office", null, admin);
         db.ScopesOfWork.Add(scope);
 
         var shift = new EventShift(ev.Id, scope.Id, 3, start, start.AddHours(3), admin);

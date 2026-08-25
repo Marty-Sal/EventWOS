@@ -1,9 +1,9 @@
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Lifecycle rules for a push subscription. These matter more than they look:

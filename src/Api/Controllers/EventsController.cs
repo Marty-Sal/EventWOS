@@ -1,21 +1,21 @@
-using EventWOS.Api.Authorization;
+using EventOpsOracle.Api.Authorization;
 using Asp.Versioning;
-using EventWOS.Application.Ratings.Queries;
-using EventWOS.Application.Attendance.Commands;
-using EventWOS.Application.Events.Commands;
-using EventWOS.Application.CrewGroups.Commands;
-using EventWOS.Application.CrewGroups.DTOs;
-using EventWOS.Domain.Enums;
-using EventWOS.Application.Events.DTOs;
-using EventWOS.Application.Events.Queries;
-using EventWOS.Application.Attendance.DTOs;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Ratings.Queries;
+using EventOpsOracle.Application.Attendance.Commands;
+using EventOpsOracle.Application.Events.Commands;
+using EventOpsOracle.Application.CrewGroups.Commands;
+using EventOpsOracle.Application.CrewGroups.DTOs;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Application.Events.DTOs;
+using EventOpsOracle.Application.Events.Queries;
+using EventOpsOracle.Application.Attendance.DTOs;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]
@@ -129,7 +129,7 @@ public sealed class EventsController : ControllerBase
     public async Task<IActionResult> CreateEvent([FromBody] CreateEventRequest req, CancellationToken ct)
     {
         var shifts = req.Shifts?
-            .Select(x => new EventWOS.Application.Events.Commands.CreateEventShiftDto(
+            .Select(x => new EventOpsOracle.Application.Events.Commands.CreateEventShiftDto(
                 x.ScopeOfWorkId, x.CrewCount, x.StartAt, x.EndAt, x.VendorId))
             .ToList();
 
@@ -222,7 +222,7 @@ public sealed class EventsController : ControllerBase
     public async Task<IActionResult> GetMyEvents(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        var result = await _mediator.Send(new GetMyEventsQuery(_currentUser.UserId!.Value, _currentUser.Role ?? EventWOS.Domain.Enums.UserRole.Crew, page, pageSize), ct);
+        var result = await _mediator.Send(new GetMyEventsQuery(_currentUser.UserId!.Value, _currentUser.Role ?? EventOpsOracle.Domain.Enums.UserRole.Crew, page, pageSize), ct);
         return Ok(ApiResponse<PagedEventResult>.Ok(result.Value));
     }
 

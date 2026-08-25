@@ -1,11 +1,11 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Domain.Rules;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Domain.Rules;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Sessions.Commands;
+namespace EventOpsOracle.Application.Sessions.Commands;
 
 /// <summary>
 /// Stamps LastActivityAt on the caller's session -- the write behind the

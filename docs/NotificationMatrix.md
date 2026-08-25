@@ -1,4 +1,4 @@
-# EventWOS Notification Matrix
+# OpsOracle Notification Matrix
 
 Every notification the system can send: what happens, what triggers it, who hears
 about it, on which channels, and where tapping it lands.

@@ -1,7 +1,7 @@
-using EventWOS.BlazorWeb.Auth;
+using EventOpsOracle.BlazorWeb.Auth;
 using Microsoft.AspNetCore.Components;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>
 /// Two responsibilities, both timer-driven:

@@ -1,6 +1,6 @@
-using EventWOS.Application.Files.DTOs;
+using EventOpsOracle.Application.Files.DTOs;
 
-namespace EventWOS.Application.Vendors.DTOs;
+namespace EventOpsOracle.Application.Vendors.DTOs;
 
 public sealed record VendorDto(
     Guid   Id,

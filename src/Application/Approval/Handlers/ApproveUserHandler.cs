@@ -1,19 +1,19 @@
-using EventWOS.Application.Approval.Commands;
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Approval.Commands;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Application.Approval.Handlers;
+namespace EventOpsOracle.Application.Approval.Handlers;
 
 /// <summary>
 /// Approves a Pending self-registration. Three side-effects all fired
@@ -160,7 +160,7 @@ public sealed class ApproveUserHandler : IRequestHandler<ApproveUserCommand, Res
 
         try
         {
-            var sms = $"Welcome to EventWOS, {user.FullName}! Your {user.Role} account is approved. Sign in: {loginUrl}";
+            var sms = $"Welcome to OpsOracle, {user.FullName}! Your {user.Role} account is approved. Sign in: {loginUrl}";
             await _sms.SendAsync(user.Mobile, sms, ct);
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Approval SMS failed for {UserId}.", user.Id); }

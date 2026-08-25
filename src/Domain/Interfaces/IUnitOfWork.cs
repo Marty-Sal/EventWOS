@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Interfaces;
+namespace EventOpsOracle.Domain.Interfaces;
 
 /// <summary>
 /// Unit of Work — wraps a single transaction. All writes go through here.

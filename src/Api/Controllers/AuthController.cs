@@ -1,12 +1,12 @@
 using Asp.Versioning;
-using EventWOS.Application.Auth.Commands;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Auth.Commands;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>Authentication endpoints — OTP flow, token refresh, logout.</summary>
 [ApiController]

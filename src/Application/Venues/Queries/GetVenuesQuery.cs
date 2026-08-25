@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Venues.Commands;
-using EventWOS.Application.Venues.DTOs;
-using EventWOS.Shared.Common;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Venues.Commands;
+using EventOpsOracle.Application.Venues.DTOs;
+using EventOpsOracle.Shared.Common;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Venues.Queries;
+namespace EventOpsOracle.Application.Venues.Queries;
 
 public sealed record GetVenuesQuery(
     string? Search,

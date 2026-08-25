@@ -1,9 +1,9 @@
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Application.Common;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Application.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Infrastructure.Auth;
+namespace EventOpsOracle.Infrastructure.Auth;
 
 /// <summary>
 /// OTP generation with BCrypt hashing.
@@ -48,7 +48,7 @@ public sealed class OtpService : IOtpService
             return true;
         }
 
-        var message = $"Your EventWOS verification code is: {otp}. Valid for 10 minutes. Do not share.";
+        var message = $"Your OpsOracle verification code is: {otp}. Valid for 10 minutes. Do not share.";
         return await _smsProvider.SendAsync(mobile, message, cancellationToken);
     }
 }
@@ -74,7 +74,7 @@ public sealed class OtpOptions
 }
 
 /// <summary>Stub SMS provider for development/testing.
-/// Implements <see cref="EventWOS.Application.Common.ISmsProvider"/>.</summary>
+/// Implements <see cref="EventOpsOracle.Application.Common.ISmsProvider"/>.</summary>
 public sealed class StubSmsProvider : ISmsProvider
 {
     private readonly ILogger<StubSmsProvider> _logger;

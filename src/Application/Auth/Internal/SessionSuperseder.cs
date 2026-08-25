@@ -1,7 +1,7 @@
-using EventWOS.Application.Interfaces;
+using EventOpsOracle.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Auth.Internal;
+namespace EventOpsOracle.Application.Auth.Internal;
 
 /// <summary>
 /// Closes out the PREVIOUS login for a given (user, device) pair so a fresh

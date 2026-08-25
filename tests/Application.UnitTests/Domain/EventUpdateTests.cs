@@ -1,8 +1,8 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Domain;
+namespace EventOpsOracle.Application.UnitTests.Domain;
 
 /// <summary>
 /// Pins the invariants on <see cref="Event.Update"/>. These rules are

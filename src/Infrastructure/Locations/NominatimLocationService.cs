@@ -2,19 +2,19 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using EventWOS.Application.Locations;
-using EventWOS.Application.Locations.DTOs;
+using EventOpsOracle.Application.Locations;
+using EventOpsOracle.Application.Locations.DTOs;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Infrastructure.Locations;
+namespace EventOpsOracle.Infrastructure.Locations;
 
 /// <summary>
 /// <see cref="ILocationService"/> over OpenStreetMap's Nominatim.
 ///
 /// Chosen as the first provider because it needs no API key, no billing
-/// account and no contract — EventWOS can ship venue search on day one. The
+/// account and no contract — OpsOracle can ship venue search on day one. The
 /// trade-off is the public instance's ~1 request/second policy, which is why
 /// this class leans hard on caching and a minimum query length.
 ///

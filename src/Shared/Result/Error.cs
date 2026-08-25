@@ -1,4 +1,4 @@
-namespace EventWOS.Shared.Result;
+namespace EventOpsOracle.Shared.Result;
 
 /// <summary>Structured error with code and human-readable message.</summary>
 public sealed record Error(string Code, string Message)

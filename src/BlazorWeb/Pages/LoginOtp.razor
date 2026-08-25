@@ -1,13 +1,13 @@
 @page "/login/otp"
-@layout EventWOS.BlazorWeb.Layout.EmptyLayout
-@using EventWOS.BlazorWeb.Validation
+@layout EventOpsOracle.BlazorWeb.Layout.EmptyLayout
+@using EventOpsOracle.BlazorWeb.Validation
 @inject IAuthApiService AuthApi
 @inject NavigationManager Nav
 @inject TokenRefreshService RefreshSvc
 @inject DeviceIdService DeviceIds
 @inject IJSRuntime JS
 
-<PageTitle>OTP sign-in — EventWOS</PageTitle>
+<PageTitle>OTP sign-in — OpsOracle</PageTitle>
 
 @*
     Fallback OTP-based sign-in. Password+username is now the default —
@@ -104,7 +104,7 @@
     private async Task OnMobileInput(ChangeEventArgs e)
     {
         _mobile = ClientValidation.FilterDigits(e.Value?.ToString(), 10);
-        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _mobileInputRef, _mobile);
+        await JS.InvokeVoidAsync("opsOracleForms.setInputValue", _mobileInputRef, _mobile);
     }
 
     private async Task OnMobileKey(KeyboardEventArgs e) { if (e.Key == "Enter") await RequestOtpAsync(); }

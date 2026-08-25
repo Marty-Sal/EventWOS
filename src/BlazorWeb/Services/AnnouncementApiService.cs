@@ -1,8 +1,8 @@
 using System.Net.Http.Json;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
-/// <summary>Audience values mirror EventWOS.Domain.Enums.AnnouncementAudience on the API.</summary>
+/// <summary>Audience values mirror EventOpsOracle.Domain.Enums.AnnouncementAudience on the API.</summary>
 public static class AnnouncementAudiences
 {
     public const int Vendors = 1;

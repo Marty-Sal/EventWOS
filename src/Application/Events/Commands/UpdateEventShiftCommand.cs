@@ -1,16 +1,16 @@
-using EventWOS.Application.Events.DTOs;
-using EventWOS.Application.Events.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Events.Shifts;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Rules;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Events.DTOs;
+using EventOpsOracle.Application.Events.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Events.Shifts;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Rules;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Events.Commands;
+namespace EventOpsOracle.Application.Events.Commands;
 
 /// <summary>
 /// Phase D step 1: edit an existing shift's crew count, scope, and/or end-time.

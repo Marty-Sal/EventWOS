@@ -1,6 +1,6 @@
-using EventWOS.Domain.Geo;
+using EventOpsOracle.Domain.Geo;
 
-namespace EventWOS.Application.Attendance.Geo;
+namespace EventOpsOracle.Application.Attendance.Geo;
 
 /// <summary>
 /// The single place where "is this crew member allowed to check in from here?"

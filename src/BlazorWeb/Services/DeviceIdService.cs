@@ -1,6 +1,6 @@
 using Blazored.LocalStorage;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>
 /// Supplies a STABLE per-browser device identifier for the login calls.

@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Lookups.DTOs;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Lookups.DTOs;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Lookups.Queries;
+namespace EventOpsOracle.Application.Lookups.Queries;
 
 /// <summary>
 /// The canonical India states + union territories list, for every "State"

@@ -1,10 +1,10 @@
-using EventWOS.Application.Notifications.Commands;
-using EventWOS.Application.Notifications.Queries;
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Application.Notifications.Commands;
+using EventOpsOracle.Application.Notifications.Queries;
+using EventOpsOracle.Domain.Entities;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Subscription validation, the shared-device case, and the device label.

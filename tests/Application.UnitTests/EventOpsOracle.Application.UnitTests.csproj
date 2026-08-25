@@ -17,7 +17,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <RootNamespace>EventWOS.Application.UnitTests</RootNamespace>
+    <RootNamespace>EventOpsOracle.Application.UnitTests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -37,7 +37,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Application\EventWOS.Application.csproj" />
+    <ProjectReference Include="..\..\src\Application\EventOpsOracle.Application.csproj" />
   </ItemGroup>
 
   <!--
@@ -50,13 +50,13 @@
   <ItemGroup>
     <Compile Include="..\..\src\BlazorWeb\Services\LocationDtos.cs" />
     <Compile Include="..\..\src\BlazorWeb\Services\VenueLocationMapper.cs" />
-    <ProjectReference Include="..\..\src\Domain\EventWOS.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Domain\EventOpsOracle.Domain.csproj" />
     <!--
       Added for the Location & Geofencing suite: NominatimLocationService is an
       Infrastructure concern, and it is tested through a stubbed
       HttpMessageHandler so no test ever reaches the real OpenStreetMap servers.
     -->
-    <ProjectReference Include="..\..\src\Infrastructure\EventWOS.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\Persistence\EventWOS.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\EventOpsOracle.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Persistence\EventOpsOracle.Persistence.csproj" />
   </ItemGroup>
 </Project>

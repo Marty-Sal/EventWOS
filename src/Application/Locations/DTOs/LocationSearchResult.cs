@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Locations.DTOs;
+namespace EventOpsOracle.Application.Locations.DTOs;
 
 /// <summary>
 /// One autocomplete suggestion returned by <see cref="ILocationService.SearchAsync"/>.

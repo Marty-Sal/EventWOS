@@ -1,6 +1,6 @@
-using EventWOS.Domain.Common;
+using EventOpsOracle.Domain.Common;
 
-namespace EventWOS.Domain.Entities;
+namespace EventOpsOracle.Domain.Entities;
 
 /// <summary>Join entity: Role ↔ Permission with grant/deny override.</summary>
 public sealed class RolePermission : BaseEntity

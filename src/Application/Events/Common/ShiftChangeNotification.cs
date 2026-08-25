@@ -1,8 +1,8 @@
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Events.Common;
+namespace EventOpsOracle.Application.Events.Common;
 
 /// <summary>
 /// Builds the SHIFT_CHANGED notifications for one shift.

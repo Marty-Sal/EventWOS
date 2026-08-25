@@ -1,13 +1,13 @@
 using Asp.Versioning;
-using EventWOS.Application.Files;
-using EventWOS.Application.Registration.Commands;
-using EventWOS.Application.Registration.Queries;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Files;
+using EventOpsOracle.Application.Registration.Commands;
+using EventOpsOracle.Application.Registration.Queries;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Public self-registration endpoints for Vendors and Crew. Both endpoints

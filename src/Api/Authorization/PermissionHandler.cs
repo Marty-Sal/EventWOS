@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 
-namespace EventWOS.Api.Authorization;
+namespace EventOpsOracle.Api.Authorization;
 
 /// <summary>
 /// Handles <see cref="PermissionRequirement"/> by checking JWT "permission" claims.

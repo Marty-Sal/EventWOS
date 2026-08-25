@@ -1,10 +1,10 @@
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Persistence.Seed;
+namespace EventOpsOracle.Persistence.Seed;
 
 /// <summary>
 /// Seeds default wording for every notification code. Without a template a
@@ -51,18 +51,18 @@ public sealed class NotificationTemplateSeeder
     private static readonly Dictionary<string, Defaults> Catalogue = new(StringComparer.OrdinalIgnoreCase)
     {
         [NotificationTemplateCodes.AccountApproved] =
-            new("Account approved", "Hi {{RecipientName}}, your EventWOS account has been approved. You can sign in now."),
+            new("Account approved", "Hi {{RecipientName}}, your OpsOracle account has been approved. You can sign in now."),
         [NotificationTemplateCodes.AccountRejected] =
-            new("Account not approved", "Hi {{RecipientName}}, your EventWOS registration was not approved. Reason: {{Reason}}"),
+            new("Account not approved", "Hi {{RecipientName}}, your OpsOracle registration was not approved. Reason: {{Reason}}"),
         [NotificationTemplateCodes.AccountInvited] =
-            new("You have been added to EventWOS", "Hi {{RecipientName}}, {{ActorName}} added you to EventWOS as {{Role}}. Set your password here: {{Link}}"),
+            new("You have been added to OpsOracle", "Hi {{RecipientName}}, {{ActorName}} added you to OpsOracle as {{Role}}. Set your password here: {{Link}}"),
         [NotificationTemplateCodes.RegistrationPendingApproval] =
             new("New registration awaiting your approval",
                 "{{RecipientName}}, {{ActorName}} has registered as {{Role}} and is waiting for your approval. Review: {{Link}}"),
         [NotificationTemplateCodes.ProfileCompleted] =
             new("Profile completed", "{{RecipientName}}, {{ActorName}} has completed their profile."),
         [NotificationTemplateCodes.PasswordResetOtp] =
-            new("Your password reset code", "Your EventWOS password reset code is {{Otp}}. It expires shortly. Do not share it with anyone."),
+            new("Your password reset code", "Your OpsOracle password reset code is {{Otp}}. It expires shortly. Do not share it with anyone."),
 
         [NotificationTemplateCodes.VendorEventInvited] =
             new("New event invitation", "Hi {{RecipientName}}, you have been invited to {{EventName}} on {{EventDate}} at {{VenueName}}."),
@@ -210,7 +210,7 @@ public sealed class NotificationTemplateSeeder
         <div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.6">
           <p style="margin:0 0 16px 0;font-size:18px;font-weight:600">{defaults.Title}</p>
           <p style="margin:0 0 16px 0">{defaults.Line}</p>
-          <p style="margin:24px 0 0 0;font-size:13px;color:#6b7280">This is an automated message from EventWOS.</p>
+          <p style="margin:24px 0 0 0;font-size:13px;color:#6b7280">This is an automated message from EventOpsOracle.</p>
         </div>
         """;
 }

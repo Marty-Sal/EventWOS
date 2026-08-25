@@ -1,6 +1,6 @@
-using EventWOS.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Abstractions;
 
-namespace EventWOS.Infrastructure.Notifications.Channels;
+namespace EventOpsOracle.Infrastructure.Notifications.Channels;
 
 /// <summary>
 /// Works out the positional parameters a provider template expects ({{1}}, {{2}} ...).

@@ -1,9 +1,9 @@
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Notifications.Services;
+namespace EventOpsOracle.Application.Notifications.Services;
 
 /// <summary>A recipient's contact details, snapshotted when deliveries are created.</summary>
 public sealed record NotificationRecipient(Guid UserId, string FullName, string? Email, string? Mobile);

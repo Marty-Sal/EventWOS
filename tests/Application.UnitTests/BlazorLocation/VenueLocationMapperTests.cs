@@ -1,8 +1,8 @@
-using EventWOS.BlazorWeb.Services;
+using EventOpsOracle.BlazorWeb.Services;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.BlazorLocation;
+namespace EventOpsOracle.Application.UnitTests.BlazorLocation;
 
 /// <summary>
 /// Covers the venue form's location mapping rules.

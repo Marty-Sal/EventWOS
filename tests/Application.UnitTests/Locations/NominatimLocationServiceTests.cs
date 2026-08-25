@@ -1,12 +1,12 @@
 using System.Net;
-using EventWOS.Infrastructure.Locations;
+using EventOpsOracle.Infrastructure.Locations;
 using FluentAssertions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Locations;
+namespace EventOpsOracle.Application.UnitTests.Locations;
 
 /// <summary>
 /// Covers the location-provider contract: search success, empty results,

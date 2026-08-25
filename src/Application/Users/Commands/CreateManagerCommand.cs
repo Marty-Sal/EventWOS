@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Users.DTOs;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Users.DTOs;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Users.Commands;
+namespace EventOpsOracle.Application.Users.Commands;
 
 public sealed record CreateManagerCommand(
     string  Mobile,

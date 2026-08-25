@@ -1,8 +1,8 @@
 using System.Text.Json;
-using EventWOS.Application.Notifications.Commands;
+using EventOpsOracle.Application.Notifications.Commands;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Infrastructure.Notifications.Webhooks;
+namespace EventOpsOracle.Infrastructure.Notifications.Webhooks;
 
 /// <summary>
 /// SendGrid event webhook payloads: a JSON array of event objects.

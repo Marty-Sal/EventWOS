@@ -1,12 +1,12 @@
-using EventWOS.Application.Auth.Commands;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Auth.Commands;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Auth.Handlers;
+namespace EventOpsOracle.Application.Auth.Handlers;
 
 public sealed class LogoutHandler : IRequestHandler<LogoutCommand, Result>
 {

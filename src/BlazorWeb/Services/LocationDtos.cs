@@ -1,4 +1,4 @@
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>Provider-neutral suggestion shape — mirrors the API's LocationSearchResult.</summary>
 public sealed record LocationSuggestion(

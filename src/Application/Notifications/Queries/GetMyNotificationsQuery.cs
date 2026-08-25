@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Rendering;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Rendering;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
-namespace EventWOS.Application.Notifications.Queries;
+namespace EventOpsOracle.Application.Notifications.Queries;
 
 /// <summary>One row in the recipient's notification inbox.</summary>
 public sealed record MyNotificationDto(

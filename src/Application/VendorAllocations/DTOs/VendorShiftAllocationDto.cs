@@ -1,4 +1,4 @@
-namespace EventWOS.Application.VendorAllocations.DTOs;
+namespace EventOpsOracle.Application.VendorAllocations.DTOs;
 
 /// <summary>
 /// Read-side shape for a per-vendor quota on a specific shift.

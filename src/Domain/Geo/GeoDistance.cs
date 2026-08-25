@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Geo;
+namespace EventOpsOracle.Domain.Geo;
 
 /// <summary>
 /// Great-circle distance between two WGS-84 points, in metres.

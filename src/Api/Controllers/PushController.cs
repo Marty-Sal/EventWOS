@@ -1,15 +1,15 @@
 using Asp.Versioning;
-using EventWOS.Application.Notifications.Commands;
-using EventWOS.Application.Notifications.Queries;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Infrastructure.Notifications.Channels;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Notifications.Commands;
+using EventOpsOracle.Application.Notifications.Queries;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Infrastructure.Notifications.Channels;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Web Push subscription management for the calling user's own devices.

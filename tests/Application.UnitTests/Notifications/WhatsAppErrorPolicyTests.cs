@@ -1,9 +1,9 @@
 using System.Net;
-using EventWOS.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Abstractions;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Retry classification for both WhatsApp providers. Getting this wrong is
@@ -17,10 +17,10 @@ namespace EventWOS.Application.UnitTests.Notifications;
 public class WhatsAppErrorPolicyTests
 {
     private static ChannelSendOutcome Meta(HttpStatusCode status, int? code)
-        => EventWOS.Infrastructure.Notifications.Channels.MetaWhatsAppErrorPolicy.Classify(status, code);
+        => EventOpsOracle.Infrastructure.Notifications.Channels.MetaWhatsAppErrorPolicy.Classify(status, code);
 
     private static ChannelSendOutcome AiSensy(HttpStatusCode status, string body)
-        => EventWOS.Infrastructure.Notifications.Channels.AiSensyWhatsAppSender.Classify(status, body);
+        => EventOpsOracle.Infrastructure.Notifications.Channels.AiSensyWhatsAppSender.Classify(status, body);
 
     [Theory]
     [InlineData(131_026)] // not a WhatsApp user

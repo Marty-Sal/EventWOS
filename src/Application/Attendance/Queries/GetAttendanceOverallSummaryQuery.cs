@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Rules;
-using EventWOS.Shared.Common;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Rules;
+using EventOpsOracle.Shared.Common;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Attendance.Queries;
+namespace EventOpsOracle.Application.Attendance.Queries;
 
 /// <summary>
 /// Phase D step 22: one-row-per-event attendance rollup. Powers the

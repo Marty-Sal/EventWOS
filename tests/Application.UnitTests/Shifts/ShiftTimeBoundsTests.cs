@@ -1,8 +1,8 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Shifts;
+namespace EventOpsOracle.Application.UnitTests.Shifts;
 
 /// <summary>
 /// Pins the per-shift time bounds rule. Updated 2026-06-09 after user
@@ -27,7 +27,7 @@ public sealed class ShiftTimeBoundsTests
     public void Shift_inside_event_window_is_ok()
     {
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev,
             startAt: new DateTime(2026, 12, 01, 19, 00, 00, DateTimeKind.Utc),
             endAt:   new DateTime(2026, 12, 01, 22, 00, 00, DateTimeKind.Utc));
@@ -38,7 +38,7 @@ public sealed class ShiftTimeBoundsTests
     public void Shift_starts_exactly_at_event_start_is_ok()
     {
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev, startAt: ev.StartAt, endAt: null);
         r.IsSuccess.Should().BeTrue();
     }
@@ -48,7 +48,7 @@ public sealed class ShiftTimeBoundsTests
     {
         // Realistic load-in: setup crew at 14:00 for an 18:00 doors-open.
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev,
             startAt: ev.StartAt.AddHours(-4),
             endAt:   ev.StartAt.AddHours(-1));
@@ -60,9 +60,9 @@ public sealed class ShiftTimeBoundsTests
     {
         // Boundary: the lower edge of the pre-event pad.
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev,
-            startAt: ev.StartAt - EventWOS.Application.Events.Shifts.ShiftTimeBounds.PreEventPad,
+            startAt: ev.StartAt - EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.PreEventPad,
             endAt:   ev.StartAt);
         r.IsSuccess.Should().BeTrue();
     }
@@ -72,9 +72,9 @@ public sealed class ShiftTimeBoundsTests
     {
         // Almost certainly a typo (e.g. picked Nov 30 instead of Dec 1).
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev,
-            startAt: ev.StartAt - EventWOS.Application.Events.Shifts.ShiftTimeBounds.PreEventPad - TimeSpan.FromMinutes(1),
+            startAt: ev.StartAt - EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.PreEventPad - TimeSpan.FromMinutes(1),
             endAt:   ev.StartAt);
         r.IsFailure.Should().BeTrue();
         r.Error.Code.Should().Be("Shift.StartTooEarly");
@@ -86,7 +86,7 @@ public sealed class ShiftTimeBoundsTests
         // Strict less-than: a shift starting at the moment the event ends
         // has zero useful staffing window.
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev, startAt: ev.EndAt, endAt: null);
         r.IsFailure.Should().BeTrue();
         r.Error.Code.Should().Be("Shift.StartAfterEvent");
@@ -97,7 +97,7 @@ public sealed class ShiftTimeBoundsTests
     {
         // Realistic teardown: stage breakdown until 02:00 for a 23:00 doors-close.
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev,
             startAt: ev.EndAt.AddHours(-1),
             endAt:   ev.EndAt.AddHours(3));
@@ -108,10 +108,10 @@ public sealed class ShiftTimeBoundsTests
     public void Shift_ends_exactly_pad_after_event_is_ok()
     {
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev,
             startAt: ev.StartAt,
-            endAt:   ev.EndAt + EventWOS.Application.Events.Shifts.ShiftTimeBounds.PostEventPad);
+            endAt:   ev.EndAt + EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.PostEventPad);
         r.IsSuccess.Should().BeTrue();
     }
 
@@ -119,10 +119,10 @@ public sealed class ShiftTimeBoundsTests
     public void Shift_ends_more_than_pad_after_event_fails()
     {
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev,
             startAt: ev.StartAt,
-            endAt:   ev.EndAt + EventWOS.Application.Events.Shifts.ShiftTimeBounds.PostEventPad + TimeSpan.FromMinutes(1));
+            endAt:   ev.EndAt + EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.PostEventPad + TimeSpan.FromMinutes(1));
         r.IsFailure.Should().BeTrue();
         r.Error.Code.Should().Be("Shift.EndTooLate");
     }
@@ -131,7 +131,7 @@ public sealed class ShiftTimeBoundsTests
     public void Null_end_is_ok()
     {
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev, startAt: ev.StartAt.AddMinutes(30), endAt: null);
         r.IsSuccess.Should().BeTrue();
     }
@@ -142,7 +142,7 @@ public sealed class ShiftTimeBoundsTests
         // Box office shift: opens for load-in, closes once doors open and
         // all guests are inside. End time is BEFORE event.StartAt. Allowed.
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev,
             startAt: ev.StartAt.AddHours(-6),
             endAt:   ev.StartAt.AddHours(-1));
@@ -157,7 +157,7 @@ public sealed class ShiftTimeBoundsTests
         // than letting the entity throw an ArgumentException with the raw
         // (Parameter 'endAt') tail.
         var ev = MakeEvent();
-        var r = EventWOS.Application.Events.Shifts.ShiftTimeBounds.Validate(
+        var r = EventOpsOracle.Application.Events.Shifts.ShiftTimeBounds.Validate(
             ev,
             startAt: ev.StartAt,
             endAt:   ev.StartAt);

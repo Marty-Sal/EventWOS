@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Rules;
+namespace EventOpsOracle.Domain.Rules;
 
 /// <summary>
 /// Centralises what "active session" means for the Sessions page.

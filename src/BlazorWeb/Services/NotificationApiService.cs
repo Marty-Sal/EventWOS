@@ -1,6 +1,6 @@
 using System.Net.Http.Json;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>One notification in the caller's inbox. Mirrors MyNotificationDto.</summary>
 public sealed record InboxNotificationDto(

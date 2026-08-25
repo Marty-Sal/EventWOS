@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.ScopeOfWork.Commands;
+namespace EventOpsOracle.Application.ScopeOfWork.Commands;
 
 /// <summary>
 /// Restore (un-archive) a scope-of-work row.

@@ -3,7 +3,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>EventWOS.Api</RootNamespace>
+    <RootNamespace>EventOpsOracle.Api</RootNamespace>
     <UserSecretsId>eventwos-api-secrets</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
@@ -28,9 +28,9 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.1" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Application\EventWOS.Application.csproj" />
-    <ProjectReference Include="..\Infrastructure\EventWOS.Infrastructure.csproj" />
-    <ProjectReference Include="..\Persistence\EventWOS.Persistence.csproj" />
-    <ProjectReference Include="..\Shared\EventWOS.Shared.csproj" />
+    <ProjectReference Include="..\Application\EventOpsOracle.Application.csproj" />
+    <ProjectReference Include="..\Infrastructure\EventOpsOracle.Infrastructure.csproj" />
+    <ProjectReference Include="..\Persistence\EventOpsOracle.Persistence.csproj" />
+    <ProjectReference Include="..\Shared\EventOpsOracle.Shared.csproj" />
   </ItemGroup>
 </Project>

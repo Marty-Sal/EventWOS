@@ -1,7 +1,7 @@
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Notifications.Abstractions;
+namespace EventOpsOracle.Application.Notifications.Abstractions;
 
 /// <summary>
 /// One push transport, addressing one endpoint at a time.

@@ -60,7 +60,7 @@
 
 @code {
     /// <summary>Unique per instance — two maps on one page must not share a container id.</summary>
-    private readonly string _elementId = $"eventwos-map-{Guid.NewGuid():N}";
+    private readonly string _elementId = $"opsoracle-map-{Guid.NewGuid():N}";
 
     [Parameter] public decimal? Latitude  { get; set; }
     [Parameter] public decimal? Longitude { get; set; }
@@ -98,7 +98,7 @@
 
             try
             {
-                await JS.InvokeAsync<bool>("eventwosMap.init",
+                await JS.InvokeAsync<bool>("opsOracleMap.init",
                     _elementId,
                     ToJsNumber(Latitude), ToJsNumber(Longitude),
                     Draggable,
@@ -122,7 +122,7 @@
         if (Latitude != _lastLat || Longitude != _lastLng)
         {
             _lastLat = Latitude; _lastLng = Longitude;
-            await SafeInvokeAsync("eventwosMap.setMarker",
+            await SafeInvokeAsync("opsOracleMap.setMarker",
                 _elementId, ToJsNumber(Latitude), ToJsNumber(Longitude), Draggable, true);
             await SyncCircleAsync();
         }
@@ -135,7 +135,7 @@
     private async Task SyncCircleAsync()
     {
         _lastRadius = RadiusMeters;
-        await SafeInvokeAsync("eventwosMap.setCircle",
+        await SafeInvokeAsync("opsOracleMap.setCircle",
             _elementId, ToJsNumber(Latitude), ToJsNumber(Longitude), RadiusMeters);
     }
 
@@ -159,7 +159,7 @@
     }
 
     /// <summary>Recompute size after the container becomes visible (modal/tab open).</summary>
-    public Task RefreshAsync() => SafeInvokeAsync("eventwosMap.refresh", _elementId);
+    public Task RefreshAsync() => SafeInvokeAsync("opsOracleMap.refresh", _elementId);
 
     private async Task SafeInvokeAsync(string identifier, params object?[] args)
     {
@@ -186,7 +186,7 @@
         // on every modal open in a long-lived WASM session.
         if (_initialised)
         {
-            try { await JS.InvokeAsync<bool>("eventwosMap.destroy", _elementId); }
+            try { await JS.InvokeAsync<bool>("opsOracleMap.destroy", _elementId); }
             catch (JSException) { }
             catch (JSDisconnectedException) { }
         }

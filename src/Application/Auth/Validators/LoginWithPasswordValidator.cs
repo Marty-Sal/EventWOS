@@ -1,7 +1,7 @@
-using EventWOS.Application.Auth.Commands;
+using EventOpsOracle.Application.Auth.Commands;
 using FluentValidation;
 
-namespace EventWOS.Application.Auth.Validators;
+namespace EventOpsOracle.Application.Auth.Validators;
 
 public sealed class LoginWithPasswordValidator : AbstractValidator<LoginWithPasswordCommand>
 {

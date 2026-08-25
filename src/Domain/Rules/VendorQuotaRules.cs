@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Rules;
+namespace EventOpsOracle.Domain.Rules;
 
 /// <summary>
 /// Outcome of a quota check for "can this vendor invite one more crew

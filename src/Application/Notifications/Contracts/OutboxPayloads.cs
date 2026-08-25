@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Notifications.Contracts;
+namespace EventOpsOracle.Application.Notifications.Contracts;
 
 /// <summary>
 /// Message-type discriminators written to outbox_messages.message_type. The

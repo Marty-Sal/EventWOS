@@ -1,8 +1,8 @@
-using EventWOS.Domain.Rules;
+using EventOpsOracle.Domain.Rules;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Ratings;
+namespace EventOpsOracle.Application.UnitTests.Ratings;
 
 /// <summary>
 /// Averaging is the part of ratings that is easy to get quietly and permanently

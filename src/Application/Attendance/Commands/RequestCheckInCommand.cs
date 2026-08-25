@@ -1,15 +1,15 @@
-using EventWOS.Application.Attendance.DTOs;
-using EventWOS.Application.Attendance.Geo;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Attendance.DTOs;
+using EventOpsOracle.Application.Attendance.Geo;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 
-namespace EventWOS.Application.Attendance.Commands;
+namespace EventOpsOracle.Application.Attendance.Commands;
 
 /// <summary>
 /// Crew clicks "Check In" → mint a PendingCheckIn row and hand back the

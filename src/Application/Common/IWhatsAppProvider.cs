@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Common;
+namespace EventOpsOracle.Application.Common;
 
 /// <summary>
 /// WhatsApp dispatch abstraction — mirrors ISmsProvider. Lives in

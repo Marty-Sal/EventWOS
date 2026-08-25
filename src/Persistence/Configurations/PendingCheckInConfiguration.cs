@@ -1,8 +1,8 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace EventWOS.Persistence.Configurations;
+namespace EventOpsOracle.Persistence.Configurations;
 
 /// <summary>
 /// EF configuration for PendingCheckIn — the QR check-in handshake table.

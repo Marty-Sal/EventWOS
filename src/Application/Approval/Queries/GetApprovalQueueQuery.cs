@@ -1,8 +1,8 @@
-using EventWOS.Application.Approval.DTOs;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Approval.DTOs;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Approval.Queries;
+namespace EventOpsOracle.Application.Approval.Queries;
 
 /// <summary>
 /// Returns Pending self-registrations grouped by role. Admin/Manager UI

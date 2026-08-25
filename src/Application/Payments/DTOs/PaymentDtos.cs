@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Payments.DTOs;
+namespace EventOpsOracle.Application.Payments.DTOs;
 
 public sealed record CrewPaymentDto(
     Guid     Id,

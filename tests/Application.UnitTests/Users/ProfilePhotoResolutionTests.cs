@@ -1,15 +1,15 @@
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Application.Users.Queries;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Application.Users.Queries;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Users;
+namespace EventOpsOracle.Application.UnitTests.Users;
 
 /// <summary>
 /// The profile photo shown on My Profile and in the sidebar.
@@ -180,7 +180,7 @@ public class ProfilePhotoResolutionTests
         public Task Publish<TNotification>(TNotification notification, CancellationToken ct = default) where TNotification : INotification => Task.CompletedTask;
     }
 
-    private sealed class AnonymousDbUser : EventWOS.Domain.Interfaces.ICurrentUser
+    private sealed class AnonymousDbUser : EventOpsOracle.Domain.Interfaces.ICurrentUser
     {
         public Guid? UserId => null;
         public string? Mobile => null;

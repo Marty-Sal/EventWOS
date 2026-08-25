@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Attendance.Geo;
+namespace EventOpsOracle.Application.Attendance.Geo;
 
 /// <summary>
 /// Reverse-geocodes a client-supplied "lat,lng" string into a
@@ -6,7 +6,7 @@ namespace EventWOS.Application.Attendance.Geo;
 /// AttendanceRecord.LocationCoords / LocationAddress.
 ///
 /// Backed by OpenStreetMap\'s Nominatim service (free, no API key
-/// required). See <see cref="EventWOS.Infrastructure.Geo.GeoLocationService"/>
+/// required). See <see cref="EventOpsOracle.Infrastructure.Geo.GeoLocationService"/>
 /// for the concrete impl, rate-limiting, and User-Agent policy notes.
 /// </summary>
 public interface IGeoLocationService

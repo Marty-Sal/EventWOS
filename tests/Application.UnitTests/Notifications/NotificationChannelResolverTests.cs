@@ -1,13 +1,13 @@
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Application.Notifications.Rendering;
-using EventWOS.Application.Notifications.Services;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Application.Notifications.Rendering;
+using EventOpsOracle.Application.Notifications.Services;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Covers the four gates that decide where a notification goes. These rules are

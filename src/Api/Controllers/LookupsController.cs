@@ -1,11 +1,11 @@
 using Asp.Versioning;
-using EventWOS.Application.Lookups.Queries;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Lookups.Queries;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Small, static reference-data lookups shared across the app (currently

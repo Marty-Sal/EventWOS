@@ -1,12 +1,12 @@
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
-using EventWOS.Application.Common;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Infrastructure.Storage;
+namespace EventOpsOracle.Infrastructure.Storage;
 
 /// <summary>
 /// Object-storage IFileStorage for any S3-API-compatible backend — AWS S3,

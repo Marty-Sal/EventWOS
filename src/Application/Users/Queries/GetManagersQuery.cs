@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Users.DTOs;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Common;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Users.DTOs;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Common;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Users.Queries;
+namespace EventOpsOracle.Application.Users.Queries;
 
 public sealed record GetManagersQuery(
     int        PageNumber = 1,

@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Auth.Interfaces;
+namespace EventOpsOracle.Application.Auth.Interfaces;
 
 /// <summary>OTP generation, hashing, and SMS dispatch abstraction.</summary>
 public interface IOtpService

@@ -1,8 +1,8 @@
-using EventWOS.Application.Notifications.Services;
+using EventOpsOracle.Application.Notifications.Services;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Number normalisation. The refusal cases matter most: a wrongly prefixed

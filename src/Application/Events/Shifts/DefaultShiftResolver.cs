@@ -1,7 +1,7 @@
-using EventWOS.Application.Interfaces;
+using EventOpsOracle.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Events.Shifts;
+namespace EventOpsOracle.Application.Events.Shifts;
 
 /// <summary>
 /// Phase B scaffolding: until the assignment UI gains a shift picker

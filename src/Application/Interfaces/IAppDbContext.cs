@@ -1,7 +1,7 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Interfaces;
+namespace EventOpsOracle.Application.Interfaces;
 
 public interface IAppDbContext
 {
@@ -17,7 +17,7 @@ public interface IAppDbContext
     DbSet<VendorCrewMapping> VendorCrewMappings { get; }
     DbSet<CrewGroup>        CrewGroups        { get; }
     DbSet<CrewGroupMember>  CrewGroupMembers  { get; }
-    DbSet<EventWOS.Domain.Entities.ScopeOfWork>      ScopesOfWork      { get; }
+    DbSet<EventOpsOracle.Domain.Entities.ScopeOfWork>      ScopesOfWork      { get; }
     DbSet<AuditLog>         AuditLogs         { get; }
 
     // Phase 2 — Events Module

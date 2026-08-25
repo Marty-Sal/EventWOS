@@ -1,10 +1,10 @@
-using EventWOS.Application.Files;
-using EventWOS.Application.Registration.Commands;
-using EventWOS.Application.Registration.Validators;
+using EventOpsOracle.Application.Files;
+using EventOpsOracle.Application.Registration.Commands;
+using EventOpsOracle.Application.Registration.Validators;
 using FluentValidation.TestHelper;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Validators;
+namespace EventOpsOracle.Application.UnitTests.Validators;
 
 /// <summary>
 /// Locks in the registration contract for Crew self-signup.

@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace EventWOS.Application.Notifications.Contracts;
+namespace EventOpsOracle.Application.Notifications.Contracts;
 
 /// <summary>
 /// Builds the idempotency key stored on notifications.idempotency_key and

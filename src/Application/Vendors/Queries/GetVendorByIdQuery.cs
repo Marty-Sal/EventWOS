@@ -1,14 +1,14 @@
-using EventWOS.Application.Files.DTOs;
-using EventWOS.Application.Events.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Vendors.Commands;
-using EventWOS.Application.Vendors.DTOs;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Files.DTOs;
+using EventOpsOracle.Application.Events.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Vendors.Commands;
+using EventOpsOracle.Application.Vendors.DTOs;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Vendors.Queries;
+namespace EventOpsOracle.Application.Vendors.Queries;
 
 public sealed record GetVendorByIdQuery(Guid VendorId) : IRequest<Result<VendorDto>>;
 

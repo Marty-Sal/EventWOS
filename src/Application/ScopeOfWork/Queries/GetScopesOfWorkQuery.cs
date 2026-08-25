@@ -1,11 +1,11 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.ScopeOfWork.DTOs;
-using EventWOS.Shared.Common;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.ScopeOfWork.DTOs;
+using EventOpsOracle.Shared.Common;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.ScopeOfWork.Queries;
+namespace EventOpsOracle.Application.ScopeOfWork.Queries;
 
 /// <summary>
 /// List the scope-of-work catalog.

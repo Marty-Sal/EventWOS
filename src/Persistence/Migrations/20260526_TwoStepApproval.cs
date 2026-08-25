@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore.Migrations;
 
-namespace EventWOS.Persistence.Migrations;
+namespace EventOpsOracle.Persistence.Migrations;
 
 /// <summary>
 /// Migration: Adds 2-step approval columns to event_assignments table.

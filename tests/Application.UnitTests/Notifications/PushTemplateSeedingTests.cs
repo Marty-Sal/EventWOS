@@ -1,9 +1,9 @@
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Persistence.Seed;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Persistence.Seed;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Which codes may be delivered by push.

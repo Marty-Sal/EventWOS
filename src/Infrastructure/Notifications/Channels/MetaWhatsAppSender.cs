@@ -1,12 +1,12 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Services;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Services;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Infrastructure.Notifications.Channels;
+namespace EventOpsOracle.Infrastructure.Notifications.Channels;
 
 /// <summary>
 /// Meta WhatsApp Cloud API sender.

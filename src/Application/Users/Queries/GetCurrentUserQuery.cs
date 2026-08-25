@@ -1,12 +1,12 @@
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Application.Users.DTOs;
-using EventWOS.Application.Events.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Application.Users.DTOs;
+using EventOpsOracle.Application.Events.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Users.Queries;
+namespace EventOpsOracle.Application.Users.Queries;
 
 public sealed record GetCurrentUserQuery(Guid UserId) : IRequest<Result<UserProfileDto>>;
 

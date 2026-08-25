@@ -1,7 +1,7 @@
-namespace EventWOS.Application.Notifications.Contracts;
+namespace EventOpsOracle.Application.Notifications.Contracts;
 
 /// <summary>
-/// Turns a notification into the EventWOS screen it should open.
+/// Turns a notification into the OpsOracle screen it should open.
 ///
 /// Two rules drive the design:
 ///
@@ -13,7 +13,7 @@ namespace EventWOS.Application.Notifications.Contracts;
 ///     here is validated to be a single-slash, scheme-less, host-less path
 ///     before it is allowed anywhere near a click handler.
 ///
-/// The routes below are the real EventWOS pages -- the app has flat list routes
+/// The routes below are the real OpsOracle pages -- the app has flat list routes
 /// (/my-assignments, /my-payments) rather than nested detail routes, so a code
 /// maps to a screen and the row is found there.
 /// </summary>
@@ -94,7 +94,7 @@ public static class PushDeepLinks
     }
 
     /// <summary>
-    /// True only for a path that is unambiguously inside EventWOS. Rejects
+    /// True only for a path that is unambiguously inside EventOpsOracle. Rejects
     /// absolute URLs, protocol-relative "//host" (which browsers treat as
     /// external), backslashes, control characters and anything overlong.
     /// </summary>

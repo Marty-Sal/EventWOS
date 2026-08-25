@@ -1,7 +1,7 @@
-using EventWOS.Application.Vendors.Commands;
+using EventOpsOracle.Application.Vendors.Commands;
 using FluentValidation;
 
-namespace EventWOS.Application.Vendors.Validators;
+namespace EventOpsOracle.Application.Vendors.Validators;
 
 /// <summary>
 /// Server-side authority for the "Add Vendor" admin flow (Vendors.razor /

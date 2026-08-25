@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Api.Authorization;
+namespace EventOpsOracle.Api.Authorization;
 
 /// <summary>
 /// Manufactures <c>perm:&lt;permission&gt;</c> authorization policies on demand.

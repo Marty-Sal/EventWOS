@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace EventWOS.BlazorWeb.Validation;
+namespace EventOpsOracle.BlazorWeb.Validation;
 
 /// <summary>
 /// Client-side mirror of the server-side validation rules (FluentValidation

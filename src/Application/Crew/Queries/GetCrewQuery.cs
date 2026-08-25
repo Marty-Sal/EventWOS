@@ -1,12 +1,12 @@
-using EventWOS.Application.Crew.Commands;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Vendors.DTOs;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Crew.Commands;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Vendors.DTOs;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Crew.Queries;
+namespace EventOpsOracle.Application.Crew.Queries;
 
 public sealed record GetCrewQuery(
     int Page = 1, int PageSize = 20,

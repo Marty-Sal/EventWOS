@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Enums;
+namespace EventOpsOracle.Domain.Enums;
 
 /// <summary>
 /// Explicit delivery lifecycle, deliberately NOT a boolean "IsSent" -- the

@@ -1,8 +1,8 @@
-using EventWOS.Application.Notifications.Services;
+using EventOpsOracle.Application.Notifications.Services;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Covers the retry schedule. The jitter test is the important one: without it,

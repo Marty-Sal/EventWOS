@@ -1,6 +1,6 @@
-using EventWOS.Application.Auth.Interfaces;
+using EventOpsOracle.Application.Auth.Interfaces;
 
-namespace EventWOS.Infrastructure.Auth;
+namespace EventOpsOracle.Infrastructure.Auth;
 
 /// <summary>
 /// BCrypt-based password hashing. Work factor 11 is the project default —

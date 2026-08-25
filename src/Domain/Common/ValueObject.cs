@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Common;
+namespace EventOpsOracle.Domain.Common;
 
 /// <summary>Base class for DDD value objects. Structural equality by components.</summary>
 public abstract class ValueObject

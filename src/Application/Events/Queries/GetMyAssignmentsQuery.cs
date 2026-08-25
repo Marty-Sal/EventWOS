@@ -1,10 +1,10 @@
-using EventWOS.Application.Events.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Events.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Events.Queries;
+namespace EventOpsOracle.Application.Events.Queries;
 
 /// <summary>Returns all assignments for the authenticated crew member.</summary>
 public sealed record GetMyAssignmentsQuery(Guid CrewId, int Page = 1, int PageSize = 20)

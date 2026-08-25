@@ -1,7 +1,7 @@
-using EventWOS.Domain.Common;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Common;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Domain.Entities;
+namespace EventOpsOracle.Domain.Entities;
 
 /// <summary>
 /// Metadata-only record for a file stored in object storage (or local disk

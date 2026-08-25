@@ -1,4 +1,4 @@
-namespace EventWOS.Infrastructure.Notifications;
+namespace EventOpsOracle.Infrastructure.Notifications;
 
 /// <summary>
 /// Worker tuning, bound from the "Notifications" configuration section (so

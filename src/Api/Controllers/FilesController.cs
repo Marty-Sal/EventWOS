@@ -1,16 +1,16 @@
 using Asp.Versioning;
-using EventWOS.Api.Authorization;
-using EventWOS.Application.Files.Commands;
-using EventWOS.Application.Files.DTOs;
-using EventWOS.Application.Files.Queries;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Api.Authorization;
+using EventOpsOracle.Application.Files.Commands;
+using EventOpsOracle.Application.Files.DTOs;
+using EventOpsOracle.Application.Files.Queries;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// Generic File & Image Storage endpoints. Upload flow: validate → generate

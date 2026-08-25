@@ -1,12 +1,12 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.VendorAllocations.DTOs;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Domain.Rules;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.VendorAllocations.DTOs;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Domain.Rules;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.VendorAllocations.Commands;
+namespace EventOpsOracle.Application.VendorAllocations.Commands;
 
 /// <summary>
 /// Change the quota on an existing allocation.

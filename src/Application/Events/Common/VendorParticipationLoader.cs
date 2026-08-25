@@ -1,7 +1,7 @@
-using EventWOS.Application.Interfaces;
+using EventOpsOracle.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Events.Common;
+namespace EventOpsOracle.Application.Events.Common;
 
 /// <summary>
 /// Loads the raw (vendor, event, assignment status, event status) rows that

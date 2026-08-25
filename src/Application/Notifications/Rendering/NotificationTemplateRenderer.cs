@@ -1,9 +1,9 @@
 using System.Net;
 using System.Text.RegularExpressions;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Notifications.Rendering;
+namespace EventOpsOracle.Application.Notifications.Rendering;
 
 /// <summary>
 /// Substitution-only template rendering: {{Token}} is replaced by a value from

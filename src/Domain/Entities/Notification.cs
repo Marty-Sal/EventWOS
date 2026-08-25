@@ -1,7 +1,7 @@
-using EventWOS.Domain.Common;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Common;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Domain.Entities;
+namespace EventOpsOracle.Domain.Entities;
 
 /// <summary>
 /// One logical business notification for one recipient -- "crew member X was
@@ -18,7 +18,7 @@ namespace EventWOS.Domain.Entities;
 /// as it was when the business event happened, not as it is when a retry
 /// finally goes out an hour later.
 ///
-/// There is no TenantId: EventWOS is single-tenant with role-based access, so
+/// There is no TenantId: OpsOracle is single-tenant with role-based access, so
 /// the ownership boundary is <see cref="RecipientUserId"/> plus the optional
 /// <see cref="EventId"/>. Queries must always scope by recipient.
 /// </summary>

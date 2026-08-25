@@ -1,11 +1,11 @@
-using EventWOS.Application.Announcements.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Announcements.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Announcements.Queries;
+namespace EventOpsOracle.Application.Announcements.Queries;
 
 /// <summary>
 /// Full notification history for one event, newest first — rendered both on

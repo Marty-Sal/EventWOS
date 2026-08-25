@@ -1,8 +1,8 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Announcements;
+namespace EventOpsOracle.Application.Announcements;
 
 /// <summary>
 /// Shared audience/visibility rules for event announcements, kept in one

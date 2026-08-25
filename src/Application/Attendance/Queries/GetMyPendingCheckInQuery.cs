@@ -1,11 +1,11 @@
-using EventWOS.Application.Attendance.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Attendance.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Attendance.Queries;
+namespace EventOpsOracle.Application.Attendance.Queries;
 
 /// <summary>
 /// Returns the crew's currently-live PendingCheckIn for a given assignment

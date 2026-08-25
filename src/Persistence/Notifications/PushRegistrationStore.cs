@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Persistence.Notifications;
+namespace EventOpsOracle.Persistence.Notifications;
 
 /// <summary>
 /// The push sender's window onto the database: live endpoints in, outcomes out.

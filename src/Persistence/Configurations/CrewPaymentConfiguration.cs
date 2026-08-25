@@ -1,8 +1,8 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace EventWOS.Persistence.Configurations;
+namespace EventOpsOracle.Persistence.Configurations;
 
 public sealed class CrewPaymentConfiguration : IEntityTypeConfiguration<CrewPayment>
 {
@@ -37,7 +37,7 @@ public sealed class CrewPaymentConfiguration : IEntityTypeConfiguration<CrewPaym
 
         // Crew acknowledgement (Payment & Settlement Lifecycle step 5)
         b.Property(p => p.CrewAcknowledgment).HasColumnName("crew_acknowledgment")
-            .HasConversion<string>().HasDefaultValue(EventWOS.Domain.Enums.PaymentAcknowledgment.None).IsRequired();
+            .HasConversion<string>().HasDefaultValue(EventOpsOracle.Domain.Enums.PaymentAcknowledgment.None).IsRequired();
         b.Property(p => p.AcknowledgedAt)    .HasColumnName("acknowledged_at");
         b.Property(p => p.AcknowledgmentNote).HasColumnName("acknowledgment_note").HasMaxLength(500);
 

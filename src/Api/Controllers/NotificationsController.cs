@@ -1,13 +1,13 @@
 using Asp.Versioning;
-using EventWOS.Application.Notifications.Commands;
-using EventWOS.Application.Notifications.Queries;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Common;
+using EventOpsOracle.Application.Notifications.Commands;
+using EventOpsOracle.Application.Notifications.Queries;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventWOS.Api.Controllers;
+namespace EventOpsOracle.Api.Controllers;
 
 /// <summary>
 /// The recipient's own notification inbox, fed by the notification platform.

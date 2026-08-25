@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Auth.Interfaces;
+namespace EventOpsOracle.Application.Auth.Interfaces;
 
 /// <summary>
 /// Hashes and verifies user passwords. Implementation chooses the algorithm

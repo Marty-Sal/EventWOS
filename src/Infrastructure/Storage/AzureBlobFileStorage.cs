@@ -1,12 +1,12 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
-using EventWOS.Application.Common;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Infrastructure.Storage;
+namespace EventOpsOracle.Infrastructure.Storage;
 
 /// <summary>
 /// Object-storage IFileStorage backed by Azure Blob Storage. Selected via

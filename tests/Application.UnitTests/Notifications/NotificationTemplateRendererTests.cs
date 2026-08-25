@@ -1,10 +1,10 @@
-using EventWOS.Application.Notifications.Rendering;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Rendering;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Covers template rendering, which sits between admin-editable text and

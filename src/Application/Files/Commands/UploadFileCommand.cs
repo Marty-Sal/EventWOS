@@ -1,14 +1,14 @@
-using EventWOS.Application.Common;
-using EventWOS.Application.Files.DTOs;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Files.DTOs;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Application.Files.Commands;
+namespace EventOpsOracle.Application.Files.Commands;
 
 /// <summary>
 /// Uploads a file for an already-authenticated caller. The actual

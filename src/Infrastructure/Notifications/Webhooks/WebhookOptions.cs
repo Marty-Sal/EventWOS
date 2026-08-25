@@ -1,4 +1,4 @@
-namespace EventWOS.Infrastructure.Notifications.Webhooks;
+namespace EventOpsOracle.Infrastructure.Notifications.Webhooks;
 
 /// <summary>
 /// Secrets for verifying inbound provider callbacks, bound from "Webhooks".

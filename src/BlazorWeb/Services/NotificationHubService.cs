@@ -1,7 +1,7 @@
-using EventWOS.BlazorWeb.Auth;
+using EventOpsOracle.BlazorWeb.Auth;
 using Microsoft.AspNetCore.SignalR.Client;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>
 /// Manages the SignalR connection lifecycle. Auto-reconnects on drop.

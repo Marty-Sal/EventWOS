@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Attendance.DTOs;
+namespace EventOpsOracle.Application.Attendance.DTOs;
 
 public sealed record AttendanceSummaryDto(
     Guid   EventId,

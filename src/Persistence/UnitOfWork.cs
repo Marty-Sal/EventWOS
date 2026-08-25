@@ -1,7 +1,7 @@
-using EventWOS.Domain.Interfaces;
+using EventOpsOracle.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace EventWOS.Persistence;
+namespace EventOpsOracle.Persistence;
 
 public sealed class UnitOfWork : IUnitOfWork
 {

@@ -1,9 +1,9 @@
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace EventWOS.Persistence.Configurations;
+namespace EventOpsOracle.Persistence.Configurations;
 
 public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
 {
@@ -54,7 +54,7 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         // Optional catalog venue this event's location was picked from.
         // SetNull on delete: archiving/removing a venue must never cascade
         // into deleting the events that once used it.
-        builder.HasOne<EventWOS.Domain.Entities.Venue>()
+        builder.HasOne<EventOpsOracle.Domain.Entities.Venue>()
                .WithMany()
                .HasForeignKey(e => e.VenueId)
                .OnDelete(DeleteBehavior.SetNull);

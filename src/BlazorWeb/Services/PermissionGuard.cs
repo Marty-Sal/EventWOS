@@ -1,8 +1,8 @@
 using System.Security.Claims;
-using EventWOS.BlazorWeb.Auth;
+using EventOpsOracle.BlazorWeb.Auth;
 using Microsoft.AspNetCore.Components.Authorization;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>
 /// Provides permission-based access checks in Blazor WASM pages.

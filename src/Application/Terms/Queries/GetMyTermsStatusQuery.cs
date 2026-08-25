@@ -1,11 +1,11 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Terms.DTOs;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Terms.DTOs;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Terms.Queries;
+namespace EventOpsOracle.Application.Terms.Queries;
 
 /// <summary>
 /// Post-login gate check for the CURRENT user: "does your role need to

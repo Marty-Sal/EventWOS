@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Common;
+namespace EventOpsOracle.Application.Common;
 
 /// <summary>
 /// Public-facing URL of the Blazor frontend. Used by approval emails / SMS

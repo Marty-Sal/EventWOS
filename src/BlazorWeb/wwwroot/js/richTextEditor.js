@@ -4,7 +4,7 @@
 // div (an empty <div id="...">), Quill owns everything inside it — Blazor
 // never re-renders into that div's children, so there's no DOM-diffing
 // conflict between the two.
-window.eventwosRichText = (function () {
+window.opsOracleRichText = (function () {
     const editors = {};
 
     const toolbarOptions = [

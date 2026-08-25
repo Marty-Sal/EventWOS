@@ -1,6 +1,6 @@
 {
-  "name": "EventWOS",
-  "short_name": "EventWOS",
+  "name": "OpsOracle",
+  "short_name": "OpsOracle",
   "description": "Event workforce operations — assignments, attendance, and payments.",
   "start_url": "/dashboard",
   "scope": "/",

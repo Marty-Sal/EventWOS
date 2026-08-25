@@ -3,8 +3,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>EventWOS.BlazorWeb</RootNamespace>
-    <AssemblyName>EventWOS.BlazorWeb</AssemblyName>
+    <RootNamespace>EventOpsOracle.BlazorWeb</RootNamespace>
+    <AssemblyName>EventOpsOracle.BlazorWeb</AssemblyName>
     <BlazorWebAssemblyLoadAllGlobalizationData>false</BlazorWebAssemblyLoadAllGlobalizationData>
   </PropertyGroup>
 

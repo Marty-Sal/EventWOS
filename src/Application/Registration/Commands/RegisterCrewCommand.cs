@@ -1,8 +1,8 @@
-using EventWOS.Application.Files;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Files;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 
-namespace EventWOS.Application.Registration.Commands;
+namespace EventOpsOracle.Application.Registration.Commands;
 
 /// <summary>
 /// Public self-registration for Crew. Optional ReferralCode binds them

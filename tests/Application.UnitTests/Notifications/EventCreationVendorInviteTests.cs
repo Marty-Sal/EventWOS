@@ -1,12 +1,12 @@
-using EventWOS.Application.Common;
-using EventWOS.Application.Events.Commands;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Events.Commands;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Picking a vendor on a shift while creating the event, or while adding a shift
@@ -110,8 +110,8 @@ public class EventCreationVendorInviteTests
         vendor.Approve(admin);
         db.Users.Add(vendor);
 
-        var rigging = new EventWOS.Domain.Entities.ScopeOfWork("Stage Rigging", null, admin);
-        var bar     = new EventWOS.Domain.Entities.ScopeOfWork("Bar Service", null, admin);
+        var rigging = new EventOpsOracle.Domain.Entities.ScopeOfWork("Stage Rigging", null, admin);
+        var bar     = new EventOpsOracle.Domain.Entities.ScopeOfWork("Bar Service", null, admin);
         db.ScopesOfWork.AddRange(rigging, bar);
         await db.SaveChangesAsync();
 
@@ -162,8 +162,8 @@ public class EventCreationVendorInviteTests
         one.Approve(admin); two.Approve(admin);
         db.Users.AddRange(one, two);
 
-        var rigging = new EventWOS.Domain.Entities.ScopeOfWork("Stage Rigging", null, admin);
-        var bar     = new EventWOS.Domain.Entities.ScopeOfWork("Bar Service", null, admin);
+        var rigging = new EventOpsOracle.Domain.Entities.ScopeOfWork("Stage Rigging", null, admin);
+        var bar     = new EventOpsOracle.Domain.Entities.ScopeOfWork("Bar Service", null, admin);
         db.ScopesOfWork.AddRange(rigging, bar);
         await db.SaveChangesAsync();
 
@@ -191,7 +191,7 @@ public class EventCreationVendorInviteTests
     {
         using var db = NewContext();
         var admin = Guid.NewGuid();
-        var rigging = new EventWOS.Domain.Entities.ScopeOfWork("Stage Rigging", null, admin);
+        var rigging = new EventOpsOracle.Domain.Entities.ScopeOfWork("Stage Rigging", null, admin);
         db.ScopesOfWork.Add(rigging);
         await db.SaveChangesAsync();
 
@@ -217,7 +217,7 @@ public class EventCreationVendorInviteTests
         vendor.Approve(admin);
         db.Users.Add(vendor);
 
-        var rigging = new EventWOS.Domain.Entities.ScopeOfWork("Stage Rigging", null, admin);
+        var rigging = new EventOpsOracle.Domain.Entities.ScopeOfWork("Stage Rigging", null, admin);
         db.ScopesOfWork.Add(rigging);
 
         var ev = new Event("Sunburn Arena", null, "Vagator Grounds", null, Start, End, admin);

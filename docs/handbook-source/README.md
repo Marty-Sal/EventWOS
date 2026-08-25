@@ -1,4 +1,4 @@
-# EventWOS Operations Handbook — Source
+# OpsOracle Operations Handbook — Source
 
 The handbook PDF at `../EventWOS_Handbook_2026.pdf` is generated from two Python
 files that use ReportLab as the layout engine:

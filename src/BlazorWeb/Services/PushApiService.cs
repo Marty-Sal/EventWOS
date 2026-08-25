@@ -1,6 +1,6 @@
 using System.Net.Http.Json;
 
-namespace EventWOS.BlazorWeb.Services;
+namespace EventOpsOracle.BlazorWeb.Services;
 
 /// <summary>What the server will allow. Mirrors PushConfigDto.</summary>
 public sealed record PushConfigDto(bool Enabled, string? PublicKey, bool RequiresHomeScreenOnIos);

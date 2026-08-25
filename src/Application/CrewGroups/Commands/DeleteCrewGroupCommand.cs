@@ -1,9 +1,9 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.CrewGroups.Commands;
+namespace EventOpsOracle.Application.CrewGroups.Commands;
 
 /// <summary>Soft-deletes a group + its member rows. Crew roster is untouched.</summary>
 public sealed record DeleteCrewGroupCommand(

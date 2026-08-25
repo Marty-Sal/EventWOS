@@ -5,7 +5,7 @@
 @inject IJSRuntime JS
 @using Microsoft.AspNetCore.Components.Authorization
 
-<PageTitle>Approvals · @TypeLabel — EventWOS</PageTitle>
+<PageTitle>Approvals · @TypeLabel — OpsOracle</PageTitle>
 
 @*
     Admin/Manager review page for self-registered Vendors, and Vendor
@@ -587,7 +587,7 @@
     private Task PreviewFileAsync(FileDocumentDto f)
         => _filePreview?.ShowAsync(f, DocumentTypes.Label(f.DocumentType)) ?? Task.CompletedTask;
 
-    private async Task DownloadFileAsync(EventWOS.BlazorWeb.Services.FileDocumentDto f)
+    private async Task DownloadFileAsync(EventOpsOracle.BlazorWeb.Services.FileDocumentDto f)
     {
         _downloadingIds.Add(f.Id);
         try

@@ -1,6 +1,6 @@
-using EventWOS.Domain.Entities;
+using EventOpsOracle.Domain.Entities;
 
-namespace EventWOS.Application.Notifications.Abstractions;
+namespace EventOpsOracle.Application.Notifications.Abstractions;
 
 /// <summary>
 /// Claims work from the notification tables. Implemented in Infrastructure

@@ -1,9 +1,9 @@
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Contracts;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Contracts;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Application.Notifications.Channels;
+namespace EventOpsOracle.Application.Notifications.Channels;
 
 /// <summary>
 /// The Push channel. One delivery row in, up to N device pushes out.
@@ -171,7 +171,7 @@ public sealed class PushNotificationSender : INotificationChannelSender
         // Subject is the headline where a template has one; otherwise the body
         // doubles as the title, since a notification with no title reads as
         // broken on every platform.
-        var title = string.IsNullOrWhiteSpace(rendered.Subject) ? "EventWOS" : rendered.Subject!.Trim();
+        var title = string.IsNullOrWhiteSpace(rendered.Subject) ? "OpsOracle" : rendered.Subject!.Trim();
 
         return new PushMessage(
             Title:            title,

@@ -1,7 +1,7 @@
-using EventWOS.Application.Registration.Commands;
+using EventOpsOracle.Application.Registration.Commands;
 using FluentValidation;
 
-namespace EventWOS.Application.Registration.Validators;
+namespace EventOpsOracle.Application.Registration.Validators;
 
 public sealed class RegisterVendorValidator : AbstractValidator<RegisterVendorCommand>
 {

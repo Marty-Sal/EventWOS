@@ -1,13 +1,13 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Terms.DTOs;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Terms.DTOs;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Terms.Commands;
+namespace EventOpsOracle.Application.Terms.Commands;
 
 /// <summary>
 /// Admin publishes a new Terms & Conditions version for an audience.

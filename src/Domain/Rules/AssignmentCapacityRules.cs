@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Domain.Rules;
+namespace EventOpsOracle.Domain.Rules;
 
 /// <summary>
 /// Centralised rules for counting how many real "seats" of an event are

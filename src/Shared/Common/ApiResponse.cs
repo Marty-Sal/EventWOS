@@ -1,4 +1,4 @@
-namespace EventWOS.Shared.Common;
+namespace EventOpsOracle.Shared.Common;
 
 /// <summary>Standardised API envelope. All responses use this shape.</summary>
 public sealed class ApiResponse<T>

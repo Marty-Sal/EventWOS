@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore.Migrations;
 
-namespace EventWOS.Persistence.Migrations;
+namespace EventOpsOracle.Persistence.Migrations;
 
 /// <summary>
 /// Adds CrewRating + CrewRatingCount to Users table.

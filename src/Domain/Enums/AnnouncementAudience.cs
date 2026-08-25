@@ -1,4 +1,4 @@
-namespace EventWOS.Domain.Enums;
+namespace EventOpsOracle.Domain.Enums;
 
 /// <summary>
 /// Who an <see cref="Entities.EventAnnouncement"/> goes out to. The audience

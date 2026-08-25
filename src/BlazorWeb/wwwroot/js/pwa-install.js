@@ -1,10 +1,10 @@
 /*
- * EventWOS — PWA install banner helpers
+ * OpsOracle — PWA install banner helpers
  * -------------------------------------
  * Thin, well-behaved JS glue between Blazor and the browser's install
  * primitives. Blazor doesn't have first-class access to
  * beforeinstallprompt or the display-mode media query, so we expose
- * a tiny API on window.eventwosPwaInstall that MainLayout.razor
+ * a tiny API on window.opsOraclePwaInstall that MainLayout.razor
  * (via IJSRuntime) can call.
  *
  * Design principles:
@@ -22,6 +22,8 @@
  */
 
 (function () {
+    // Kept on the old 'eventwos.*' names through the OpsOracle rename: these record
+    // that a user dismissed or installed the banner, and renaming them shows it again.
     const LS_DISMISSED_AT = 'eventwos.pwa.installBannerDismissedAt';
     const LS_INSTALLED_AT = 'eventwos.pwa.installedAt';
     const RESHOW_AFTER_MS = 7 * 24 * 60 * 60 * 1000; // one week
@@ -78,7 +80,7 @@
     function getState() {
         if (isStandalone())                 return 'installed';
         if (wasDismissedRecently())         return 'dismissed';
-        if (window.__eventwosInstallPrompt) return 'installable';
+        if (window.__opsOracleInstallPrompt) return 'installable';
         if (isIosSafari())                  return 'ios-hint';
         return 'not-eligible';
     }
@@ -88,12 +90,12 @@
     // available. Also clears the cached prompt object either way
     // (Chrome only lets you call .prompt() once per event instance).
     async function promptInstall() {
-        const p = window.__eventwosInstallPrompt;
+        const p = window.__opsOracleInstallPrompt;
         if (!p) return null;
         try {
             await p.prompt();
             const choice = await p.userChoice;
-            window.__eventwosInstallPrompt = null;
+            window.__opsOracleInstallPrompt = null;
             // If the user accepted, we won't see the "appinstalled"
             // event fire until Chrome actually completes install —
             // record the timestamp now so we don't flash the banner
@@ -138,18 +140,18 @@
     // 'pwa-installed-now' (the user just accepted install; hide the
     // banner without waiting for a navigation).
     //
-    // Guarded by __eventwosPwaBannerBound so re-mounts of the Razor
+    // Guarded by __opsOraclePwaBannerBound so re-mounts of the Razor
     // component (which can happen on route change) don't stack up
     // duplicate event listeners.
     function bindDotnet(dotnet) {
-        if (window.__eventwosPwaBannerBound) return;
-        window.__eventwosPwaBannerBound = true;
+        if (window.__opsOraclePwaBannerBound) return;
+        window.__opsOraclePwaBannerBound = true;
         const notify = () => dotnet.invokeMethodAsync('OnPwaEvent');
         window.addEventListener('pwa-installable',   notify);
         window.addEventListener('pwa-installed-now', notify);
     }
 
-    window.eventwosPwaInstall = {
+    window.opsOraclePwaInstall = {
         getState,
         promptInstall,
         dismiss,

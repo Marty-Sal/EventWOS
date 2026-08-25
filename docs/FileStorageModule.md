@@ -1,6 +1,6 @@
 # File & Image Storage Module
 
-Production-ready file/image storage for EventWOS. PostgreSQL holds only
+Production-ready file/image storage for EventOpsOracle. PostgreSQL holds only
 metadata; the actual bytes live in pluggable object storage (or local disk
 in dev). Business/handler code depends on one interface — swapping the
 backend is a config change, not a code change.

@@ -1,9 +1,9 @@
-using EventWOS.Application.Files;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Files;
+using EventOpsOracle.Domain.Enums;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Files;
+namespace EventOpsOracle.Application.UnitTests.Files;
 
 /// <summary>
 /// "Files must not be publicly accessible by default" — every case here

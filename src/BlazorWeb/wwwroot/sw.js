@@ -1,5 +1,5 @@
 /*
- * EventWOS Service Worker
+ * OpsOracle Service Worker
  * ------------------------
  * Strategy summary — kept minimal and safe for a Blazor WASM app:
  *
@@ -35,9 +35,9 @@
  * (check-in, ratings) still require network by design.
  */
 
-const CACHE_VERSION = 'v7-2026-08-24-push-always-on';
-const SHELL_CACHE   = `eventwos-shell-${CACHE_VERSION}`;
-const RUNTIME_CACHE = `eventwos-runtime-${CACHE_VERSION}`;
+const CACHE_VERSION = 'v8-2026-08-25-opsoracle-rename';
+const SHELL_CACHE   = `opsoracle-shell-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `opsoracle-runtime-${CACHE_VERSION}`;
 
 // The bare-minimum shell — small enough to precache without pain.
 const SHELL_URLS = [
@@ -93,7 +93,12 @@ self.addEventListener('activate', (event) => {
         const keys = await caches.keys();
         await Promise.all(
             keys
-                .filter((k) => k.startsWith('eventwos-') && !k.endsWith(CACHE_VERSION))
+                // Both prefixes: the app was renamed from EventWOS to OpsOracle, and a browser
+                // that installed the old service worker still holds eventwos-* caches. Drop
+                // the old prefix here or those bundles are pinned in every existing install
+                // for good.
+                .filter((k) => (k.startsWith('opsoracle-') || k.startsWith('eventwos-'))
+                               && !k.endsWith(CACHE_VERSION))
                 .map((k) => caches.delete(k))
         );
 
@@ -317,12 +322,12 @@ async function handlePush(event) {
     // A push with no usable data still gets shown. Browsers require a
     // visible notification for a userVisibleOnly subscription, and
     // silently swallowing it can cost us the push permission entirely.
-    const title = payload.title || 'EventWOS';
+    const title = payload.title || 'OpsOracle';
     const body  = payload.body  || 'You have a new notification.';
 
     // tag collapses an updated version of the same notification instead
     // of stacking duplicates on the lock screen; renotify still alerts.
-    const tag = payload.notificationId || payload.notificationType || 'eventwos';
+    const tag = payload.notificationId || payload.notificationType || 'opsoracle';
 
     await self.registration.showNotification(title, {
         body,

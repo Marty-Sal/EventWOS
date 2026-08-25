@@ -1,10 +1,10 @@
 using System.Net;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Infrastructure.Notifications.Channels;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Infrastructure.Notifications.Channels;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Email retry classification and the plain-text alternative. The text part is

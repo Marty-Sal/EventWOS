@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Auth.Interfaces;
+namespace EventOpsOracle.Application.Auth.Interfaces;
 
 /// <summary>Resolves effective permissions for a user, considering role + overrides.</summary>
 public interface IPermissionService

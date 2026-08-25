@@ -3,7 +3,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>EventWOS.Persistence</RootNamespace>
+    <RootNamespace>EventOpsOracle.Persistence</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.1" />
@@ -17,7 +17,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.1" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Domain\EventWOS.Domain.csproj" />
-    <ProjectReference Include="..\Application\EventWOS.Application.csproj" />
+    <ProjectReference Include="..\Domain\EventOpsOracle.Domain.csproj" />
+    <ProjectReference Include="..\Application\EventOpsOracle.Application.csproj" />
   </ItemGroup>
 </Project>

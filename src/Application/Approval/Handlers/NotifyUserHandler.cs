@@ -1,15 +1,15 @@
-using EventWOS.Application.Approval.Commands;
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Approval.Commands;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Application.Approval.Handlers;
+namespace EventOpsOracle.Application.Approval.Handlers;
 
 /// <summary>
 /// Sends the applicant a "we need more information" email while they're
@@ -72,15 +72,15 @@ public sealed class NotifyUserHandler : IRequestHandler<NotifyUserCommand, Resul
             return Result.Failure(Error.Custom("Approval.NoEmail",
                 "This applicant did not provide an email address, so they can't be notified this way."));
 
-        var subject = "EventWOS — we need a bit more information";
+        var subject = "OpsOracle — we need a bit more information";
         var safeMessage = System.Net.WebUtility.HtmlEncode(req.Message).Replace("\n", "<br/>");
         var html = $@"
             <p>Hi {System.Net.WebUtility.HtmlEncode(user.FullName)},</p>
-            <p>Thanks for registering with EventWOS. Before we can finish reviewing your application, we need a bit more information:</p>
+            <p>Thanks for registering with EventOpsOracle. Before we can finish reviewing your application, we need a bit more information:</p>
             <blockquote style=""margin:12px 0;padding:8px 12px;border-left:3px solid #6366f1;color:#374151;"">{safeMessage}</blockquote>
             <p>Please reply to this email or update your details, and we'll continue the review as soon as we hear back.</p>
-            <p>— The EventWOS Team</p>";
-        var plainText = $"Hi {user.FullName},\n\nThanks for registering with EventWOS. Before we can finish reviewing your application, we need a bit more information:\n\n{req.Message}\n\nPlease reply to this email or update your details, and we'll continue the review as soon as we hear back.\n\n— The EventWOS Team";
+            <p>— The OpsOracle Team</p>";
+        var plainText = $"Hi {user.FullName},\n\nThanks for registering with EventOpsOracle. Before we can finish reviewing your application, we need a bit more information:\n\n{req.Message}\n\nPlease reply to this email or update your details, and we'll continue the review as soon as we hear back.\n\n— The OpsOracle Team";
 
         var sent = await _email.SendAsync(user.Email, subject, html, plainText, ct);
         if (!sent)

@@ -1,4 +1,4 @@
-namespace EventWOS.Application.Users.DTOs;
+namespace EventOpsOracle.Application.Users.DTOs;
 
 public sealed record ManagerDto(
     Guid     Id,

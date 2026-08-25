@@ -1,8 +1,8 @@
-using EventWOS.Shared.Common;
+using EventOpsOracle.Shared.Common;
 using FluentValidation;
 using System.Text.Json;
 
-namespace EventWOS.Api.Middleware;
+namespace EventOpsOracle.Api.Middleware;
 
 /// <summary>
 /// Global unhandled exception handler. Catches all exceptions and returns

@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 
-namespace EventWOS.Api.Hubs;
+namespace EventOpsOracle.Api.Hubs;
 
 /// <summary>
 /// Real-time notification hub. Authenticated users join their own user group
@@ -56,7 +56,7 @@ public sealed class NotificationHub : Hub
     }
 }
 
-public sealed class SignalRNotificationPusher : EventWOS.Application.Interfaces.INotificationPusher
+public sealed class SignalRNotificationPusher : EventOpsOracle.Application.Interfaces.INotificationPusher
 {
     private readonly IHubContext<NotificationHub> _hub;
 

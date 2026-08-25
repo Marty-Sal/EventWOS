@@ -1,10 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
-using EventWOS.Infrastructure.Notifications.Webhooks;
+using EventOpsOracle.Infrastructure.Notifications.Webhooks;
 using FluentAssertions;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// Signature verification for the webhook endpoints.

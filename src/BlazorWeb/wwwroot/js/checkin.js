@@ -1,4 +1,4 @@
-// ── EventWOS check-in JS interop ──────────────────────────────────────────────
+// ── OpsOracle check-in JS interop ──────────────────────────────────────────────
 //
 // Two responsibilities, both intentionally kept dead-simple so a page can call
 // one function and forget:
@@ -33,9 +33,9 @@ function loadScript(url) {
 }
 
 // ── QR render ─────────────────────────────────────────────────────────────
-window.eventwosCheckin = window.eventwosCheckin || {};
+window.opsOracleCheckin = window.opsOracleCheckin || {};
 
-window.eventwosCheckin.renderQr = async function (elementId, text) {
+window.opsOracleCheckin.renderQr = async function (elementId, text) {
     await loadScript(CDN_QRCODE);
     const host = document.getElementById(elementId);
     if (!host) return;
@@ -66,12 +66,12 @@ window.eventwosCheckin.renderQr = async function (elementId, text) {
 // ── Camera scanner ────────────────────────────────────────────────────────
 let _scanner = null;
 
-window.eventwosCheckin.startScanner = async function (elementId, dotnetRef) {
+window.opsOracleCheckin.startScanner = async function (elementId, dotnetRef) {
     await loadScript(CDN_SCANNER);
 
     // Stop any prior scanner first — starting twice on the same element
     // deadlocks the html5-qrcode internal state machine.
-    await window.eventwosCheckin.stopScanner();
+    await window.opsOracleCheckin.stopScanner();
 
     // eslint-disable-next-line no-undef
     _scanner = new Html5Qrcode(elementId);
@@ -103,7 +103,7 @@ window.eventwosCheckin.startScanner = async function (elementId, dotnetRef) {
     }
 };
 
-window.eventwosCheckin.stopScanner = async function () {
+window.opsOracleCheckin.stopScanner = async function () {
     if (_scanner) {
         try {
             if (_scanner.isScanning) await _scanner.stop();
@@ -150,7 +150,7 @@ window.eventwosCheckin.stopScanner = async function () {
 // settings (very different UX from "we couldn't get a fix — step
 // outside"). We surface the reason so the Razor component can show
 // the right guidance instead of a generic error.
-window.eventwosCheckin.requireLocation = async function () {
+window.opsOracleCheckin.requireLocation = async function () {
     if (!("geolocation" in navigator)) {
         return { ok: false, reason: "no-api" };
     }
@@ -287,7 +287,7 @@ window.eventwosCheckin.requireLocation = async function () {
 // The `permissions` object controls which prompts to fire:
 //   { location: true, camera: true }
 // Both default to false, so callers must opt in per role.
-window.eventwosCheckin.primePermissions = async function (permissions) {
+window.opsOracleCheckin.primePermissions = async function (permissions) {
     const results = { location: null, camera: null };
     permissions = permissions || {};
 

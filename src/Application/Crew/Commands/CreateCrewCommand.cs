@@ -1,15 +1,15 @@
-using EventWOS.Application.Common;
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Vendors.DTOs;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Common;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Vendors.DTOs;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Application.Crew.Commands;
+namespace EventOpsOracle.Application.Crew.Commands;
 
 public sealed record CreateCrewCommand(
     string Mobile, string FullName, string? Email, string? ReferralCode, Guid RequestingUserId
@@ -98,7 +98,7 @@ public sealed class CreateCrewHandler : IRequestHandler<CreateCrewCommand, Resul
 
         try
         {
-            var msg = $"Hi {crew.FullName}, {invitedByName} added you to EventWOS as Crew. Set up your password: {setupLink}";
+            var msg = $"Hi {crew.FullName}, {invitedByName} added you to OpsOracle as Crew. Set up your password: {setupLink}";
             await _whatsApp.SendAsync(crew.Mobile, msg, ct);
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Crew invite WhatsApp failed for {UserId}.", crew.Id); }

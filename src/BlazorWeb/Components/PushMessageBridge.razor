@@ -1,4 +1,4 @@
-@using EventWOS.BlazorWeb.Services
+@using EventOpsOracle.BlazorWeb.Services
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject NavigationManager Nav
@@ -33,7 +33,7 @@
 
             // listen() is idempotent on the JS side. A second listener would
             // navigate twice for one notification click.
-            await JS.InvokeAsync<bool>("eventwosPush.listen", _ref);
+            await JS.InvokeAsync<bool>("opsOraclePush.listen", _ref);
 
             StartAutoEnable();
         }
@@ -48,7 +48,7 @@
     /// Fires the automatic enable a few seconds after load, without blocking it.
     ///
     /// The delay is not decoration. A permission dialog racing the first paint --
-    /// or worse, stacking on top of the "Install EventWOS" banner -- is the exact
+    /// or worse, stacking on top of the "Install OpsOracle" banner -- is the exact
     /// situation people dismiss reflexively, and a reflex dismissal costs us one of
     /// only three asks the browser will tolerate. Letting the page settle first
     /// buys a decision instead of a flinch.
@@ -85,7 +85,7 @@
             var config = await PushApi.GetConfigAsync();
             if (config?.Enabled != true || string.IsNullOrWhiteSpace(config.PublicKey)) return;
 
-            var result = await JS.InvokeAsync<SubscribeResult>("eventwosPush.ensureEnabled", config.PublicKey);
+            var result = await JS.InvokeAsync<SubscribeResult>("opsOraclePush.ensureEnabled", config.PublicKey);
 
             // Not granted / unsupported / blocked all land here and are correct
             // outcomes, not failures.
@@ -156,7 +156,7 @@
             var config = await PushApi.GetConfigAsync();
             if (config?.Enabled != true || string.IsNullOrWhiteSpace(config.PublicKey)) return;
 
-            var result = await JS.InvokeAsync<SubscribeResult>("eventwosPush.subscribe", config.PublicKey);
+            var result = await JS.InvokeAsync<SubscribeResult>("opsOraclePush.subscribe", config.PublicKey);
 
             if (result.Ok && result.Endpoint is not null)
                 await PushApi.SubscribeAsync(result.Endpoint, result.P256dh!, result.Auth!, result.Platform);

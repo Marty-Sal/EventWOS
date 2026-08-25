@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Ratings.Queries;
+namespace EventOpsOracle.Application.Ratings.Queries;
 
 /// <summary>One vendor on an event, and whether they have been rated for it yet.</summary>
 public sealed record EventVendorToRateDto(

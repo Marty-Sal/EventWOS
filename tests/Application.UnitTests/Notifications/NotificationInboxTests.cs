@@ -1,17 +1,17 @@
-using EventWOS.Application.Notifications.Commands;
-using EventWOS.Application.Notifications.Queries;
-using EventWOS.Application.Notifications.Rendering;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Persistence;
+using EventOpsOracle.Application.Notifications.Commands;
+using EventOpsOracle.Application.Notifications.Queries;
+using EventOpsOracle.Application.Notifications.Rendering;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Notifications;
+namespace EventOpsOracle.Application.UnitTests.Notifications;
 
 /// <summary>
 /// The inbox is the first place a recipient's own data is served back to them, so

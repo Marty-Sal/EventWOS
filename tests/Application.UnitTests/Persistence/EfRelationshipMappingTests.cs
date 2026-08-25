@@ -1,14 +1,14 @@
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Persistence;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Xunit;
 
-namespace EventWOS.Application.UnitTests.Persistence;
+namespace EventOpsOracle.Application.UnitTests.Persistence;
 
 /// <summary>
 /// Guards against one specific, repeat-offender bug: a foreign key that exists

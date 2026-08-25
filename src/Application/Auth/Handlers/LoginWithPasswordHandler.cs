@@ -1,15 +1,15 @@
-using EventWOS.Application.Auth.Commands;
-using EventWOS.Application.Auth.Interfaces;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Auth.Commands;
+using EventOpsOracle.Application.Auth.Interfaces;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace EventWOS.Application.Auth.Handlers;
+namespace EventOpsOracle.Application.Auth.Handlers;
 
 /// <summary>
 /// Password-based login. Resolves the user by username OR email
@@ -117,7 +117,7 @@ public sealed class LoginWithPasswordHandler : IRequestHandler<LoginWithPassword
 
         // Replace this device's previous login rather than stacking a second
         // live session (and a second usable 30-day refresh token) next to it.
-        await EventWOS.Application.Auth.Internal.SessionSuperseder.SupersedeAsync(
+        await EventOpsOracle.Application.Auth.Internal.SessionSuperseder.SupersedeAsync(
             _db, user.Id, req.DeviceId ?? "unknown", ct);
 
         _db.RefreshTokens.Add(new RefreshToken(

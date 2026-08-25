@@ -1,11 +1,11 @@
-using EventWOS.Application.Attendance.DTOs;
-using EventWOS.Application.Interfaces;
-using EventWOS.Domain.Enums;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Attendance.DTOs;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Events.Queries;
+namespace EventOpsOracle.Application.Events.Queries;
 
 public sealed record GetAttendanceSummaryQuery(Guid EventId) : IRequest<Result<AttendanceSummaryDto>>;
 

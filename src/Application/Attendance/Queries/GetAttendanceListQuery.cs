@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Shared.Common;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Shared.Common;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Attendance.Queries;
+namespace EventOpsOracle.Application.Attendance.Queries;
 
 public sealed record AttendanceListItemDto(
     Guid     RecordId,

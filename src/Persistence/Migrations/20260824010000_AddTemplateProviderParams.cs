@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace EventWOS.Persistence.Migrations;
+namespace EventOpsOracle.Persistence.Migrations;
 
 /// <summary>
 /// Adds notification_templates.provider_params: the ordered token names fed into

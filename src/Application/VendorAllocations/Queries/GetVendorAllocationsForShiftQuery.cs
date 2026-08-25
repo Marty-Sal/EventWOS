@@ -1,11 +1,11 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.VendorAllocations.DTOs;
-using EventWOS.Domain.Rules;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.VendorAllocations.DTOs;
+using EventOpsOracle.Domain.Rules;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.VendorAllocations.Queries;
+namespace EventOpsOracle.Application.VendorAllocations.Queries;
 
 /// <summary>
 /// List allocations on a specific shift. Used by:

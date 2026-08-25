@@ -1,16 +1,16 @@
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Services;
-using EventWOS.Infrastructure.Notifications;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Services;
+using EventOpsOracle.Infrastructure.Notifications;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Api.Workers;
+namespace EventOpsOracle.Api.Workers;
 
 /// <summary>
 /// The loop that makes notifications actually happen: claim due outbox rows,
 /// expand them, claim due deliveries, send them, and periodically recover work
 /// stranded by a worker that died.
 ///
-/// Polling rather than a broker. At EventWOS's volume the queue depth is small
+/// Polling rather than a broker. At OpsOracle's volume the queue depth is small
 /// and the tables are indexed for exactly this query, so a five-second poll on
 /// Postgres is cheaper to run, deploy and reason about than adding a message
 /// broker to the estate -- and it inherits Postgres' durability for free.

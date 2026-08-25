@@ -1,6 +1,6 @@
-using EventWOS.Application.Notifications.Contracts;
+using EventOpsOracle.Application.Notifications.Contracts;
 
-namespace EventWOS.Application.Notifications.Abstractions;
+namespace EventOpsOracle.Application.Notifications.Abstractions;
 
 /// <summary>
 /// The persistence the push sender needs, expressed as intent rather than as a

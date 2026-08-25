@@ -1,6 +1,6 @@
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Domain.Enums;
 
-namespace EventWOS.Application.Users.DTOs;
+namespace EventOpsOracle.Application.Users.DTOs;
 
 public sealed record UserDto(
     Guid Id,

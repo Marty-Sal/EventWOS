@@ -1,10 +1,10 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.Users.DTOs;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.Users.DTOs;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.Users.Queries;
+namespace EventOpsOracle.Application.Users.Queries;
 
 public sealed record GetAllPermissionsQuery : IRequest<Result<IReadOnlyList<PermissionDto>>>;
 

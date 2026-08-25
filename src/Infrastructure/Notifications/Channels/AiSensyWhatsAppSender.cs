@@ -1,13 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using EventWOS.Application.Notifications.Abstractions;
-using EventWOS.Application.Notifications.Services;
-using EventWOS.Domain.Enums;
+using EventOpsOracle.Application.Notifications.Abstractions;
+using EventOpsOracle.Application.Notifications.Services;
+using EventOpsOracle.Domain.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EventWOS.Infrastructure.Notifications.Channels;
+namespace EventOpsOracle.Infrastructure.Notifications.Channels;
 
 /// <summary>
 /// AiSensy sender. AiSensy wraps Meta and sends by CAMPAIGN name rather than
@@ -72,7 +72,7 @@ public sealed class AiSensyWhatsAppSender : INotificationChannelSender
             userName     = context.Notification.RecipientUserId.ToString(),
             // AiSensy echoes tags/attributes on its webhooks. This is the only
             // correlation handle available, since the send response has no id.
-            source       = "EventWOS",
+            source       = "OpsOracle",
             tags         = new[] { $"delivery:{context.Delivery.Id}" },
             attributes   = new Dictionary<string, string>
             {

@@ -2,7 +2,7 @@
   ────────────────────────────────────────────────────────────────────
   <PwaInstallBanner /> — installable prompt / iOS hint / silent
   ────────────────────────────────────────────────────────────────────
-  Renders one of three UIs depending on window.eventwosPwaInstall.getState():
+  Renders one of three UIs depending on window.opsOraclePwaInstall.getState():
 
     • installable → dark pill at the bottom of the viewport with a
       primary "Install" button + × dismiss. On click we call
@@ -10,7 +10,7 @@
 
     • ios-hint    → a slightly taller pill (needs the extra height
       for the two-line instruction) that says
-      "Install EventWOS — Tap [share icon] then Add to Home Screen"
+      "Install OpsOracle — Tap [share icon] then Add to Home Screen"
       with a real inline share glyph so users immediately recognise
       the button we're pointing to.
 
@@ -30,7 +30,7 @@
 @if (_state == "installable")
 {
     <div class="fixed bottom-0 left-0 right-0 z-40 px-4 pb-[env(safe-area-inset-bottom,0px)] pointer-events-none"
-         role="dialog" aria-label="Install EventWOS">
+         role="dialog" aria-label="Install OpsOracle">
         <div class="mx-auto max-w-md mb-4 pointer-events-auto
                     rounded-2xl shadow-2xl border border-indigo-500/30
                     bg-gradient-to-r from-indigo-700 to-purple-700 text-white
@@ -39,7 +39,7 @@
                 ⚡
             </div>
             <div class="flex-1 min-w-0">
-                <p class="text-sm font-semibold leading-tight">Install EventWOS</p>
+                <p class="text-sm font-semibold leading-tight">Install OpsOracle</p>
                 <p class="text-xs text-indigo-100 leading-tight mt-0.5">
                     Faster access, works offline, one-tap launch.
                 </p>
@@ -66,7 +66,7 @@
 else if (_state == "ios-hint")
 {
     <div class="fixed bottom-0 left-0 right-0 z-40 px-4 pb-[env(safe-area-inset-bottom,0px)] pointer-events-none"
-         role="dialog" aria-label="Install EventWOS on iPhone">
+         role="dialog" aria-label="Install OpsOracle on iPhone">
         <div class="mx-auto max-w-md mb-4 pointer-events-auto
                     rounded-2xl shadow-2xl border border-indigo-500/30
                     bg-gradient-to-r from-indigo-700 to-purple-700 text-white
@@ -75,7 +75,7 @@ else if (_state == "ios-hint")
                 ⚡
             </div>
             <div class="flex-1 min-w-0">
-                <p class="text-sm font-semibold leading-tight">Install EventWOS</p>
+                <p class="text-sm font-semibold leading-tight">Install OpsOracle</p>
                 <p class="text-xs text-indigo-100 leading-snug mt-1">
                     Tap
                     <span class="inline-flex items-center align-middle mx-0.5 px-1 py-0.5 rounded bg-white/15">
@@ -143,7 +143,7 @@ else if (_state == "ios-hint")
             // the two window-level events we care about. Guarded on
             // the JS side against duplicate binding across component
             // re-mounts.
-            await JS.InvokeVoidAsync("eventwosPwaInstall.bindDotnet", _selfRef);
+            await JS.InvokeVoidAsync("opsOraclePwaInstall.bindDotnet", _selfRef);
         }
         catch
         {
@@ -163,7 +163,7 @@ else if (_state == "ios-hint")
     {
         try
         {
-            var s = await JS.InvokeAsync<string>("eventwosPwaInstall.getState");
+            var s = await JS.InvokeAsync<string>("opsOraclePwaInstall.getState");
             if (s != _state)
             {
                 _state = s ?? "";
@@ -182,7 +182,7 @@ else if (_state == "ios-hint")
         _installing = true;
         try
         {
-            await JS.InvokeAsync<string?>("eventwosPwaInstall.promptInstall");
+            await JS.InvokeAsync<string?>("opsOraclePwaInstall.promptInstall");
         }
         finally
         {
@@ -193,7 +193,7 @@ else if (_state == "ios-hint")
 
     private async Task OnDismissAsync()
     {
-        try { await JS.InvokeVoidAsync("eventwosPwaInstall.dismiss"); }
+        try { await JS.InvokeVoidAsync("opsOraclePwaInstall.dismiss"); }
         catch { /* ignore — worst case banner reappears next load */ }
         _state = "dismissed";
         StateHasChanged();

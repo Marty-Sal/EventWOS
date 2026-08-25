@@ -2,7 +2,7 @@
 @attribute [Authorize(Roles = "Admin,Manager")]
 @inject IVendorApiService VendorApi
 @inject IJSRuntime JS
-@using EventWOS.BlazorWeb.Validation
+@using EventOpsOracle.BlazorWeb.Validation
 
 
     @if (_accessDenied)
@@ -15,7 +15,7 @@
         return;
     }
 
-<PageTitle>Vendors — EventWOS</PageTitle>
+<PageTitle>Vendors — OpsOracle</PageTitle>
 
 <AuthorizeView Roles="Admin,Manager">
     <UserTabsHeader Active="vendor" />
@@ -506,7 +506,7 @@
     private async Task OnMobileInput(ChangeEventArgs e)
     {
         _newMobile = ClientValidation.FilterDigits(e.Value?.ToString(), 10);
-        await JS.InvokeVoidAsync("eventwosForms.setInputValue", _mobileInputRef, _newMobile);
+        await JS.InvokeVoidAsync("opsOracleForms.setInputValue", _mobileInputRef, _newMobile);
     }
 
     private void ResetCreateForm()

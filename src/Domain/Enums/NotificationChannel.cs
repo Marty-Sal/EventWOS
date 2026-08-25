@@ -1,8 +1,8 @@
-namespace EventWOS.Domain.Enums;
+namespace EventOpsOracle.Domain.Enums;
 
 /// <summary>
 /// Delivery channels a notification can fan out to. Each channel gets its own
-/// <see cref="EventWOS.Domain.Entities.NotificationDelivery"/> row with
+/// <see cref="EventOpsOracle.Domain.Entities.NotificationDelivery"/> row with
 /// independent state, because a failed email must not affect a delivered
 /// WhatsApp message.
 /// </summary>

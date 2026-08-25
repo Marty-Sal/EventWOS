@@ -1,7 +1,7 @@
 using FluentValidation;
 using MediatR;
 
-namespace EventWOS.Api.Middleware;
+namespace EventOpsOracle.Api.Middleware;
 
 /// <summary>
 /// MediatR pipeline behavior that runs FluentValidation before every handler.

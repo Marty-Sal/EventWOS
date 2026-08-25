@@ -1,13 +1,13 @@
-using EventWOS.Application.Interfaces;
-using EventWOS.Application.VendorAllocations.DTOs;
-using EventWOS.Domain.Entities;
-using EventWOS.Domain.Enums;
-using EventWOS.Domain.Interfaces;
-using EventWOS.Shared.Result;
+using EventOpsOracle.Application.Interfaces;
+using EventOpsOracle.Application.VendorAllocations.DTOs;
+using EventOpsOracle.Domain.Entities;
+using EventOpsOracle.Domain.Enums;
+using EventOpsOracle.Domain.Interfaces;
+using EventOpsOracle.Shared.Result;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventWOS.Application.VendorAllocations.Commands;
+namespace EventOpsOracle.Application.VendorAllocations.Commands;
 
 /// <summary>
 /// Admin/Manager grants <paramref name="VendorId"/> a quota of

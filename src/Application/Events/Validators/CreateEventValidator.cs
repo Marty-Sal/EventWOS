@@ -1,7 +1,7 @@
-using EventWOS.Application.Events.Commands;
+using EventOpsOracle.Application.Events.Commands;
 using FluentValidation;
 
-namespace EventWOS.Application.Events.Validators;
+namespace EventOpsOracle.Application.Events.Validators;
 
 public sealed class CreateEventValidator : AbstractValidator<CreateEventCommand>
 {
