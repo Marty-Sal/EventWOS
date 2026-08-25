@@ -246,7 +246,11 @@ public sealed class OutboxProcessor
         NotificationAudience audience, Guid eventId, CancellationToken ct)
     {
         // Only assignments that still mean something: someone whose invite was
-        // revoked or who was rejected should not get event chatter.
+        // revoked or who was rejected should not get event chatter. Same idea for the
+        // shift: a row whose shift has been archived is not work any more, so its
+        // holder is not part of this event's audience -- the rule spelled out in
+        // VendorEventParticipationRules.LiveShiftRuleReference, applied here so the
+        // read paths and the notification audience agree on who is "on" an event.
         var liveStatuses = new[]
         {
             AssignmentStatus.Invited, AssignmentStatus.Confirmed, AssignmentStatus.VendorApproved,
@@ -258,11 +262,13 @@ public sealed class OutboxProcessor
             case NotificationAudience.EventCrew:
                 return await _db.EventAssignments
                     .Where(a => a.EventId == eventId && a.CrewId != null && liveStatuses.Contains(a.Status))
+                    .Where(a => a.ShiftId == null || _db.EventShifts.Any(s => s.Id == a.ShiftId))
                     .Select(a => a.CrewId!.Value).Distinct().ToListAsync(ct);
 
             case NotificationAudience.EventVendors:
                 return await _db.EventAssignments
                     .Where(a => a.EventId == eventId && a.VendorId != null && liveStatuses.Contains(a.Status))
+                    .Where(a => a.ShiftId == null || _db.EventShifts.Any(s => s.Id == a.ShiftId))
                     .Select(a => a.VendorId!.Value).Distinct().ToListAsync(ct);
 
             case NotificationAudience.EventCrewAndVendors:

@@ -1,4 +1,6 @@
+using EventWOS.Application.Events.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Domain.Enums;
 using EventWOS.Domain.Rules;
@@ -33,12 +35,16 @@ public sealed record ArchiveEventShiftCommand(
 public sealed class ArchiveEventShiftHandler
     : IRequestHandler<ArchiveEventShiftCommand, Result<Unit>>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
+    private readonly IAppDbContext           _db;
+    private readonly IUnitOfWork             _uow;
+    private readonly INotificationDispatcher _notifications;
 
-    public ArchiveEventShiftHandler(IAppDbContext db, IUnitOfWork uow)
+    public ArchiveEventShiftHandler(IAppDbContext db, IUnitOfWork uow,
+                                    INotificationDispatcher notifications)
     {
-        _db = db; _uow = uow;
+        _db            = db;
+        _uow           = uow;
+        _notifications = notifications;
     }
 
     public async Task<Result<Unit>> Handle(ArchiveEventShiftCommand req, CancellationToken ct)
@@ -99,6 +105,41 @@ public sealed class ArchiveEventShiftHandler
             placeholder.IsDeleted = true;
             placeholder.DeletedAt = DateTime.UtcNow;
             placeholder.DeletedBy = req.ActorUserId;
+        }
+
+        // ── Tell them it is gone ─────────────────────────────────────────────
+        //
+        // The vendors here hold budget on a shift that is about to vanish from
+        // their My Events (fc8a0a2 made it disappear -- correctly, but silently).
+        // A vendor watching for a shift to staff, finding it simply absent, has no
+        // way to tell a deletion from a bug, so the deletion says so out loud.
+        //
+        // SHIFT_CHANGED carries it rather than a new template: the seeded body is
+        // fixed in production and the seeder never rewrites existing rows, so the
+        // label says "(removed)" instead of inventing a token that would render
+        // empty for real users.
+        var scopeName = (await _db.ScopesOfWork
+                .FirstOrDefaultAsync(s => s.Id == shift.ScopeOfWorkId, ct))?.Name ?? "(unknown)";
+
+        var notifyVendorIds = allocations.Select(a => a.VendorId)
+            .Concat(placeholders.Where(a => a.VendorId != null).Select(a => a.VendorId!.Value))
+            .Distinct()
+            .ToList();
+
+        if (notifyVendorIds.Count > 0)
+        {
+            var requests = ShiftChangeNotification.Build(
+                ev, shift.Id,
+                ShiftChangeNotification.Label(scopeName, shift.StartAt, shift.EndAt, removed: true),
+                // A shift is archived once, so the plain row id is a stable key --
+                // no timestamp needed and a retried request cannot say it twice.
+                changeKey: "removed",
+                crewIds:   Array.Empty<Guid>(),
+                vendorIds: notifyVendorIds,
+                actorUserId: req.ActorUserId);
+
+            if (requests.Count > 0)
+                _notifications.Enqueue(requests);
         }
 
         // Recompute event MaxCrew now that this shift is soft-deleted.

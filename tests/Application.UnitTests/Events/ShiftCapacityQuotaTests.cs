@@ -338,10 +338,21 @@ public class ShiftCapacityQuotaTests
             new AnonymousDbUser());
 
     private static UpdateEventShiftHandler NewUpdateHandler(AppDbContext db) =>
-        new(db, new PassThroughUnitOfWork(db));
+        new(db, new PassThroughUnitOfWork(db), new SilentDispatcher());
 
     private static ArchiveEventShiftHandler NewArchiveHandler(AppDbContext db) =>
-        new(db, new PassThroughUnitOfWork(db));
+        new(db, new PassThroughUnitOfWork(db), new SilentDispatcher());
+
+    /// <summary>
+    /// These tests are about seat math, not messages -- EventAndShiftChangeWiringTests
+    /// covers what the shift edit and archive paths now tell people.
+    /// </summary>
+    private sealed class SilentDispatcher : EventWOS.Application.Notifications.Abstractions.INotificationDispatcher
+    {
+        public void Enqueue(EventWOS.Application.Notifications.Contracts.NotificationRequest request) { }
+        public void Enqueue(IEnumerable<EventWOS.Application.Notifications.Contracts.NotificationRequest> requests) { }
+        public void EnqueueFanOut(EventWOS.Application.Notifications.Contracts.NotificationFanOutRequest request) { }
+    }
 
     /// <summary>
     /// An event with TWO shifts — the second one exists only so the archive tests

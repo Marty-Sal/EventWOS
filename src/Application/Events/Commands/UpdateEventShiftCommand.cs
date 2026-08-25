@@ -1,5 +1,7 @@
 using EventWOS.Application.Events.DTOs;
+using EventWOS.Application.Events.Common;
 using EventWOS.Application.Interfaces;
+using EventWOS.Application.Notifications.Abstractions;
 using EventWOS.Application.Events.Shifts;
 using EventWOS.Domain.Interfaces;
 using EventWOS.Domain.Enums;
@@ -31,12 +33,16 @@ public sealed record UpdateEventShiftCommand(
 public sealed class UpdateEventShiftHandler
     : IRequestHandler<UpdateEventShiftCommand, Result<EventShiftDto>>
 {
-    private readonly IAppDbContext _db;
-    private readonly IUnitOfWork   _uow;
+    private readonly IAppDbContext           _db;
+    private readonly IUnitOfWork             _uow;
+    private readonly INotificationDispatcher _notifications;
 
-    public UpdateEventShiftHandler(IAppDbContext db, IUnitOfWork uow)
+    public UpdateEventShiftHandler(IAppDbContext db, IUnitOfWork uow,
+                                   INotificationDispatcher notifications)
     {
-        _db = db; _uow = uow;
+        _db            = db;
+        _uow           = uow;
+        _notifications = notifications;
     }
 
     public async Task<Result<EventShiftDto>> Handle(UpdateEventShiftCommand req, CancellationToken ct)
@@ -125,6 +131,12 @@ public sealed class UpdateEventShiftHandler
             placedPerVendor.FirstOrDefault(x => x.VendorId == vendorId)?.Count ?? 0;
 
         var oldCrewCount = shift.CrewCount;
+        // Snapshot for the SHIFT_CHANGED trigger below: what the people standing on
+        // this shift were last told.
+        var oldStartAt   = shift.StartAt;
+        var oldEndAt     = shift.EndAt;
+        var oldScopeId   = shift.ScopeOfWorkId;
+        var oldQuotas    = allocations.ToDictionary(a => a.VendorId, a => a.Quota);
 
         if (req.CrewCount > oldCrewCount)
         {
@@ -265,6 +277,75 @@ public sealed class UpdateEventShiftHandler
         {
             // Belt-and-braces — per-shift guard above should have caught it.
             return Result.Failure<EventShiftDto>(new Error("Event.CapacityFloor", ex.Message));
+        }
+
+        // ── SHIFT_CHANGED: tell the people standing on this shift ───────────────
+        //
+        // Another dormant scenario: the template, policy entry and /my-assignments
+        // deep link all existed and nothing raised it, so a shift moving to another
+        // hour or another scope of work reached nobody at all.
+        //
+        // Two audiences, because the two changes are not the same news (see
+        // ShiftChangeNotification for the reasoning):
+        //   * time or scope moved -> every live crew member and vendor on the shift;
+        //   * capacity alone      -> only vendors whose quota actually moved.
+        var timeOrScopeMoved = shift.StartAt != oldStartAt
+                            || shift.EndAt   != oldEndAt
+                            || shift.ScopeOfWorkId != oldScopeId;
+
+        var quotaMovedVendorIds = allocations
+            .Where(a => !a.IsDeleted)
+            .Where(a => !oldQuotas.TryGetValue(a.VendorId, out var was) || was != a.Quota)
+            .Select(a => a.VendorId)
+            .ToList();
+
+        if (timeOrScopeMoved || quotaMovedVendorIds.Count > 0)
+        {
+            var scopeName = (scope ?? await _db.ScopesOfWork
+                    .FirstOrDefaultAsync(s => s.Id == shift.ScopeOfWorkId, ct))?.Name
+                ?? "(unknown)";
+
+            List<Guid> crewIds   = new();
+            List<Guid> vendorIds = quotaMovedVendorIds;
+
+            if (timeOrScopeMoved)
+            {
+                var people = await _db.EventAssignments
+                    .Where(a => a.ShiftId == shift.Id)
+                    .Select(a => new { a.CrewId, a.VendorId, a.Status })
+                    .ToListAsync(ct);
+
+                crewIds = people
+                    .Where(x => x.CrewId != null && ShiftChangeNotification.IsLive(x.Status))
+                    .Select(x => x.CrewId!.Value)
+                    .Distinct()
+                    .ToList();
+
+                vendorIds = vendorIds
+                    .Concat(people
+                        .Where(x => x.VendorId != null && ShiftChangeNotification.IsLive(x.Status))
+                        .Select(x => x.VendorId!.Value))
+                    // A vendor holding a quota on the shift is accountable for it even
+                    // with nobody placed yet, so they hear about a move too.
+                    .Concat(allocations.Where(a => !a.IsDeleted).Select(a => a.VendorId))
+                    .Distinct()
+                    .ToList();
+            }
+
+            // Keyed on the shift's new shape, so pressing Save twice is one message
+            // while a real second edit is a second message. Minute stamp for the same
+            // revert-to-an-earlier-shape reason as EVENT_UPDATED.
+            var changeKey = $"{shift.StartAt:yyyyMMddHHmm}-{shift.EndAt:yyyyMMddHHmm}" +
+                            $"-{shift.ScopeOfWorkId.ToString()[..8]}-{shift.CrewCount}" +
+                            $":{DateTime.UtcNow:yyyyMMddHHmm}";
+
+            var requests = ShiftChangeNotification.Build(
+                ev, shift.Id,
+                ShiftChangeNotification.Label(scopeName, shift.StartAt, shift.EndAt),
+                changeKey, crewIds, vendorIds);
+
+            if (requests.Count > 0)
+                _notifications.Enqueue(requests);
         }
 
         await _uow.SaveChangesAsync(ct);

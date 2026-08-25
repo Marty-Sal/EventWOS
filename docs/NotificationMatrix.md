@@ -28,7 +28,7 @@ applies, and WhatsApp nowhere at all until Meta/AiSensy credentials are set.
 
 - **30** notification types defined, all **30** with seeded templates
 - **21** are wired to a real trigger and fire today
-- **8** have templates and policy but nothing triggers them yet (marked DORMANT)
+- **6** have templates and policy but nothing triggers them yet (marked DORMANT)
 - **1** is deliberately outside the platform (the reset OTP)
 
 
@@ -73,9 +73,9 @@ applies, and WhatsApp nowhere at all until Meta/AiSensy credentials are set.
 |---|---|---|---|---|---|---|
 | `EVENT_ANNOUNCEMENT` | A free-text message from the organiser to everyone on an event | Admin sends an event announcement<br>`SendEventAnnouncement` | All crew and vendors on the event | Bell + Push + Email + WhatsApp | Normal | `/notifications` |
 | `EVENT_CANCELLED` | The event is off -- nobody should travel | Admin changes event status to Cancelled<br>`ChangeEventStatus` | All crew and vendors on the event | Bell + Push + Email + WhatsApp | Critical | `/notifications` |
-| `EVENT_UPDATED` | Event details changed (time, venue, brief) | **DORMANT** -- nothing raises it yet | All crew and vendors on the event | Bell + Push + WhatsApp | High | `/notifications` |
+| `EVENT_UPDATED` | Event details changed (time, venue, brief) | `UpdateEventCommand` -- title, venue, address, start or end moved | All crew and vendors on the event | Bell + Push + WhatsApp | High | `/notifications` |
 | `EVENT_STARTING` | The event is about to start | **DORMANT** -- nothing raises it yet | All crew and vendors on the event | Bell + Push + WhatsApp | High | `/notifications` |
-| `SHIFT_CHANGED` | A shift's time or role changed under someone already assigned | **DORMANT** -- nothing raises it yet | Crew on that shift | Bell + Push + WhatsApp | High | `/my-assignments` |
+| `SHIFT_CHANGED` | A shift's time or role changed under someone already assigned | `UpdateEventShiftCommand` (time/scope, or quota move) + `ArchiveEventShiftCommand` (removed) | Crew and vendors on that shift | Bell + Push + WhatsApp | High | `/my-assignments` |
 
 ## 5. Attendance on the day
 
@@ -102,17 +102,29 @@ rather than a feature:
 - **PROFILE_COMPLETED** -- A crew member finishes filling in their profile and documents. Needs: a trigger.
 - **VENDOR_EVENT_REMINDER** -- Nudge a vendor before their event. Needs: a trigger.
 - **CREW_ASSIGNMENT_REMINDER** -- Nudge crew before their shift. Needs: a trigger.
-- **EVENT_UPDATED** -- Event details changed (time, venue, brief). Needs: a trigger.
 - **EVENT_STARTING** -- The event is about to start. Needs: a trigger.
-- **SHIFT_CHANGED** -- A shift's time or role changed under someone already assigned. Needs: a trigger.
 - **ATTENDANCE_REMINDER** -- Reminder to check in. Needs: a trigger.
 
 The four reminders (`CREW_ASSIGNMENT_REMINDER`, `ATTENDANCE_REMINDER`,
 `VENDOR_EVENT_REMINDER`, `EVENT_STARTING`) all need the same thing that does not exist
-yet: a scheduled job that looks ahead at shifts. `EVENT_UPDATED` and `SHIFT_CHANGED`
-need the edit commands to notice a material change and say so -- worth doing, because
-a venue or time change reaching nobody is the same failure as a cancellation reaching
-nobody.
+yet: a scheduled job that looks ahead at shifts.
+
+`EVENT_UPDATED` and `SHIFT_CHANGED` are now live. Both compare before and after rather
+than firing on every save, because a message for a corrected typo trains people to
+ignore the channel -- the same failure as sending nothing:
+
+- **EVENT_UPDATED** -- fans out to crew and vendors when the title, venue, address,
+  start or end moved. Description and MaxCrew are deliberately silent. The whole new
+  window travels in `{{EventDate}}`, because the seeded body has no `{{EventTime}}` and
+  a time-only move would otherwise read identically to the message before it.
+- **SHIFT_CHANGED** -- a time or scope move reaches every live crew member and vendor on
+  that shift; a capacity-only change reaches just the vendors whose quota actually moved
+  (the case that used to leave a vendor's Assign Crew modal saying "full" after the
+  shift grew). Archiving a shift sends the same code with a `(removed)` label, so a
+  shift vanishing from My Events is distinguishable from a bug.
+
+Keys are content-based, not timestamps: pressing Save twice is one message, while a
+genuinely different edit is a different key and gets through.
 
 ## Deliberate silences
 
