@@ -15,7 +15,7 @@ namespace EventOpsOracle.Infrastructure.Geo;
 ///   • Max 1 request per second per unique IP.
 ///   • A valid identifying User-Agent is REQUIRED — no browsers, no
 ///     "curl", no blanks. We send "OpsOracle/1.0 (contact via
-///     admin@eventwos.local)". Update the contact if we ever ship a
+///     support@eventopsoracle.com)". Update the contact if we ever ship a
 ///     public support address.
 ///   • No bulk / batch geocoding of large datasets. Our workload is
 ///     one lookup per QR check-in — far under any reasonable interpretation.
@@ -74,7 +74,7 @@ public sealed class GeoLocationService : IGeoLocationService, IDisposable
         // Nominatim REQUIRES an identifying User-Agent. Requests without
         // one are blocked with HTTP 403.
         c.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "OpsOracle/1.0 (contact: admin@eventwos.local)");
+            "OpsOracle/1.0 (contact: support@eventopsoracle.com)");
         c.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en");
         return c;
     }

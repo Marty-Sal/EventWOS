@@ -35,7 +35,7 @@
  * (check-in, ratings) still require network by design.
  */
 
-const CACHE_VERSION = 'v9-2026-08-25-opsoracle-brand';
+const CACHE_VERSION = 'v10-2026-08-26-landing-stats';
 const SHELL_CACHE   = `opsoracle-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `opsoracle-runtime-${CACHE_VERSION}`;
 

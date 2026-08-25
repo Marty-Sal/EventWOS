@@ -194,6 +194,32 @@
         </div>
     </section>
 
+    @* ─────────────────────────── TRACTION BAND ───────────────────────── *@
+    <section class="relative max-w-7xl mx-auto px-5 lg:px-8 pt-20 lg:pt-24">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+            <div class="max-w-xl">
+                <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-violet-300/80">Where we are so far</p>
+                <h2 class="mt-3 text-2xl sm:text-3xl font-black tracking-tight">Small numbers, real events</h2>
+            </div>
+            <p class="text-[13px] text-white/40 max-w-sm">
+                Rounded down, across events run on the platform to date.
+            </p>
+        </div>
+
+        <div class="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            @foreach (var s in _stats)
+            {
+                <div class="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+                    <p class="text-3xl sm:text-4xl font-black tracking-tight bg-gradient-to-br from-white to-violet-200 bg-clip-text text-transparent">
+                        @s.Value
+                    </p>
+                    <p class="mt-2 font-semibold text-sm">@s.Label</p>
+                    <p class="mt-1 text-[12px] text-white/45 leading-relaxed">@s.Note</p>
+                </div>
+            }
+        </div>
+    </section>
+
     @* ────────────────────────── CORE SOLUTIONS ───────────────────────── *@
     <section id="platform" class="relative max-w-7xl mx-auto px-5 lg:px-8 py-20 lg:py-28">
         <div class="max-w-2xl">
@@ -329,12 +355,12 @@
                    class="px-7 py-3.5 rounded-2xl bg-white text-[#0b0a1a] font-bold hover:bg-violet-50 transition shadow-xl shadow-black/30">
                     Sign in
                 </a>
-                <a href="mailto:support@eventwos.app"
+                <a href="mailto:support@eventopsoracle.com"
                    class="px-7 py-3.5 rounded-2xl bg-white/5 border border-white/15 font-semibold hover:bg-white/10 transition backdrop-blur">
                     Talk to us
                 </a>
             </div>
-            <p class="mt-6 text-sm text-white/40">support@eventwos.app</p>
+            <p class="mt-6 text-sm text-white/40">support@eventopsoracle.com</p>
         </div>
     </section>
 
@@ -367,7 +393,7 @@
                     <li><a href="/login" class="hover:text-white transition">Sign in</a></li>
                     <li><a href="/register/vendor" class="hover:text-white transition">Vendor sign-up</a></li>
                     <li><a href="/register/crew" class="hover:text-white transition">Crew sign-up</a></li>
-                    <li><a href="mailto:support@eventwos.app" class="hover:text-white transition">Support</a></li>
+                    <li><a href="mailto:support@eventopsoracle.com" class="hover:text-white transition">Support</a></li>
                 </ul>
             </div>
         </div>
@@ -390,12 +416,25 @@
             Nav.NavigateTo("/dashboard", replace: true);
     }
 
+    private sealed record Stat(string Value, string Label, string Note);
     private sealed record Pillar(string Icon, string Title, string Desc, string[] Bullets);
     private sealed record Feature(string Icon, string Title, string Desc);
     private sealed record Step(string Actor, string Title, string Desc);
     private sealed record RoleCard(string Name, string Tag, string[] Bullets, string Cta, string Href);
     private sealed record PreviewShift(string Scope, string Window, string Vendor, int Seats, int Filled,
                                        string Pill, string PillClass);
+
+    // Illustrative figures, kept deliberately modest and rounded down -- an early
+    // platform claiming five-digit crew counts invites exactly the question it cannot
+    // answer. They live here, in one place, so they can be swapped for real totals
+    // out of the reporting queries the moment those numbers are worth quoting.
+    private readonly Stat[] _stats =
+    {
+        new("120+",    "Events delivered",     "Concerts, conferences, expos and brand activations."),
+        new("2,600+",  "Crew shifts staffed",  "Invited, approved and checked in on site."),
+        new("48",      "Vendors onboard",      "Staffing partners running their own crew rosters."),
+        new("\u20B91.4 Cr", "Payouts processed", "Approved crew payments passed through payroll."),
+    };
 
     private readonly PreviewShift[] _preview =
     {

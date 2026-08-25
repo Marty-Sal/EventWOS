@@ -78,7 +78,16 @@ public sealed class UnauthorizedRedirectHandler : DelegatingHandler
                 var current = nav.ToBaseRelativePath(nav.Uri);
                 var currentPath = ("/" + current.Split('?')[0].Split('#')[0])
                     .TrimEnd('/');
-                if (currentPath.StartsWith("/login", StringComparison.OrdinalIgnoreCase)
+                // The public landing page counts as "already somewhere sensible".
+                // A visitor holding a stale token lands on "/" , a background call
+                // 401s, and this handler used to force-load them into a login form
+                // before they had read a single line of the page. Tokens are cleared
+                // above, so leaving them on the landing page is the correct outcome.
+                var isLanding = currentPath.Length == 0
+                    || currentPath.Equals("/home", StringComparison.OrdinalIgnoreCase);
+
+                if (isLanding
+                    || currentPath.StartsWith("/login", StringComparison.OrdinalIgnoreCase)
                     || currentPath.StartsWith("/register", StringComparison.OrdinalIgnoreCase)
                     || currentPath.StartsWith("/setup-password", StringComparison.OrdinalIgnoreCase))
                 {
