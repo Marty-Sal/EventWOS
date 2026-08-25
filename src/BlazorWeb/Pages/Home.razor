@@ -1,213 +1,382 @@
+@page "/"
 @page "/home"
 @layout EventOpsOracle.BlazorWeb.Layout.EmptyLayout
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthState
 @using Microsoft.AspNetCore.Components.Authorization
 
-<PageTitle>EveWos — Event Workforce Operating System</PageTitle>
+@*
+    Public landing page. It owns "/" as well as "/home": a signed-in visitor is
+    redirected to their dashboard below, and the PWA's start_url is /dashboard, so
+    installed users never land here -- this page is for the person arriving cold.
 
-<div class="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900 text-white overflow-x-hidden">
+    Claims are limited to what the product actually does. No customer counts, no
+    testimonials, no logo wall: inventing them is the fastest way to lose the first
+    serious buyer who asks a follow-up question.
+*@
 
-    @* ═══════════════════════════════════════ NAV ═══════════════════════════════════════ *@
-    <header class="relative z-20">
-        <div class="max-w-7xl mx-auto px-6 lg:px-10 h-20 flex items-center justify-between">
-            <div class="flex items-center gap-2.5">
-                <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-900/40">⚡</div>
-                <div class="leading-tight">
-                    <p class="text-lg font-bold tracking-tight">EveWos</p>
-                    <p class="text-[10px] text-indigo-200/70 uppercase tracking-widest">Workforce OS</p>
-                </div>
-            </div>
-            <nav class="hidden md:flex items-center gap-8 text-sm text-indigo-100/80">
-                <a href="#features" class="hover:text-white transition">Features</a>
-                <a href="#roles" class="hover:text-white transition">For Teams</a>
-                <a href="#workflow" class="hover:text-white transition">Workflow</a>
+<PageTitle>OpsOracle — Event workforce operations</PageTitle>
+
+<style>
+    .oo-grid {
+        background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+        background-size: 64px 64px;
+    }
+    .oo-ray { background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0)); }
+    .oo-marquee { display: flex; width: max-content; animation: oo-slide 38s linear infinite; }
+    .oo-marquee.rev { animation-direction: reverse; }
+    .oo-marquee:hover { animation-play-state: paused; }
+    @@keyframes oo-slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    @@media (prefers-reduced-motion: reduce) { .oo-marquee { animation: none; } }
+</style>
+
+<div class="min-h-screen bg-[#0b0a1a] text-white overflow-x-hidden selection:bg-fuchsia-500/30">
+
+    @* ─────────────────────────────── NAV ─────────────────────────────── *@
+    <header class="sticky top-0 z-40 backdrop-blur-xl bg-[#0b0a1a]/70 border-b border-white/5">
+        <div class="max-w-7xl mx-auto px-5 lg:px-8 h-16 flex items-center justify-between">
+            <a href="/home" class="flex items-center gap-2.5">
+                <BrandMark Size="34" Class="rounded-[10px] shadow-lg shadow-violet-900/40" />
+                <span class="leading-none">
+                    <span class="block text-[17px] font-bold tracking-tight">OpsOracle</span>
+                    <span class="block text-[9px] uppercase tracking-[0.18em] text-violet-300/70 mt-1">Event workforce ops</span>
+                </span>
+            </a>
+
+            <nav class="hidden md:flex items-center gap-7 text-sm text-white/70">
+                <a href="#platform" class="hover:text-white transition">Platform</a>
+                <a href="#how"      class="hover:text-white transition">How it works</a>
+                <a href="#roles"    class="hover:text-white transition">Roles</a>
+                <a href="#contact"  class="hover:text-white transition">Contact</a>
             </nav>
-            <button @onclick="GoLogin"
-                    class="px-5 py-2.5 rounded-xl bg-white text-gray-900 text-sm font-semibold hover:bg-indigo-50 transition shadow-lg shadow-black/20">
-                Login →
-            </button>
+
+            <div class="flex items-center gap-2">
+                <a href="/register/vendor"
+                   class="hidden sm:inline-flex px-3.5 py-2 rounded-xl text-sm font-semibold text-white/80 hover:text-white hover:bg-white/5 transition">
+                    Sign up
+                </a>
+                <a href="/login"
+                   class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white text-[#0b0a1a] text-sm font-bold hover:bg-violet-50 transition shadow-lg shadow-black/30">
+                    Sign in
+                </a>
+            </div>
         </div>
     </header>
 
-    @* ═══════════════════════════════════════ HERO ═══════════════════════════════════════ *@
-    <section class="relative">
-        @* glow blobs *@
-        <div class="absolute top-20 -left-20 w-96 h-96 bg-indigo-600/30 rounded-full blur-3xl"></div>
-        <div class="absolute top-40 right-0 w-96 h-96 bg-fuchsia-600/20 rounded-full blur-3xl"></div>
+    @* ─────────────────────────────── HERO ────────────────────────────── *@
+    <section class="relative overflow-hidden">
+        @* Gradient field, grid and light rays -- the reference's visual language, done
+           in CSS so there is no hero image to download on a venue's 3G. *@
+        <div class="absolute inset-0 opacity-[0.55] bg-[radial-gradient(ellipse_at_20%_-10%,#4f46e5_0%,transparent_55%),radial-gradient(ellipse_at_85%_10%,#d946ef_0%,transparent_50%),radial-gradient(ellipse_at_50%_120%,#7c3aed_0%,transparent_60%)]"></div>
+        <div class="absolute inset-0 oo-grid opacity-40"></div>
+        <div class="absolute -top-24 left-[18%] w-px h-[520px] oo-ray rotate-[18deg] opacity-50"></div>
+        <div class="absolute -top-24 left-[46%] w-px h-[620px] oo-ray rotate-[14deg] opacity-30"></div>
+        <div class="absolute -top-24 left-[72%] w-px h-[480px] oo-ray rotate-[20deg] opacity-40"></div>
 
-        <div class="relative max-w-7xl mx-auto px-6 lg:px-10 pt-16 pb-28 text-center">
-            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-indigo-200 backdrop-blur mb-8">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Event Workforce Operating System
-            </div>
-
-            <h1 class="text-5xl md:text-7xl font-bold tracking-tight leading-[1.05] max-w-4xl mx-auto">
-                Run every event,
-                <span class="bg-gradient-to-r from-indigo-300 via-fuchsia-300 to-indigo-300 bg-clip-text text-transparent">
-                    every crew, every payment
+        <div class="relative max-w-7xl mx-auto px-5 lg:px-8 pt-16 lg:pt-24 pb-20 grid lg:grid-cols-[1.05fr_.95fr] gap-14 items-center">
+            <div>
+                <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] font-semibold tracking-wide text-violet-200 backdrop-blur">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    Built for event organisers, staffing vendors and crew
                 </span>
-                — in one place.
-            </h1>
 
-            <p class="mt-7 text-lg md:text-xl text-indigo-100/70 max-w-2xl mx-auto leading-relaxed">
-                EveWos is the operating system for event teams. Plan events, invite vendors, staff crew,
-                track attendance, approve work and run payroll — without spreadsheets, group chats or chaos.
-            </p>
+                <h1 class="mt-6 text-[2.6rem] leading-[1.06] sm:text-6xl font-black tracking-tight">
+                    Every shift staffed.
+                    <span class="block bg-gradient-to-r from-violet-300 via-fuchsia-300 to-indigo-200 bg-clip-text text-transparent">
+                        Every check-in proven.
+                    </span>
+                </h1>
 
-            <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <button @onclick="GoLogin"
-                        class="px-7 py-3.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-500 transition shadow-xl shadow-indigo-900/50 flex items-center gap-2">
-                    Sign in
-                    <span>→</span>
-                </button>
-                <a href="#features"
-                   class="px-7 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition backdrop-blur">
-                    See how it works
-                </a>
+                <p class="mt-6 text-lg text-white/70 max-w-xl">
+                    OpsOracle runs the people side of live events end to end — shifts and seat quotas,
+                    vendor crews, two-stage approvals, GPS-verified attendance and payouts — in one
+                    system your whole ground team can open on their phone.
+                </p>
+
+                <div class="mt-9 flex flex-wrap items-center gap-3">
+                    <a href="/login"
+                       class="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-white text-[#0b0a1a] font-bold hover:bg-violet-50 transition shadow-xl shadow-black/30">
+                        Sign in to your workspace →
+                    </a>
+                    <a href="/register/vendor"
+                       class="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-white/5 border border-white/15 font-semibold hover:bg-white/10 transition backdrop-blur">
+                        Register as a vendor
+                    </a>
+                    <a href="/register/crew"
+                       class="inline-flex items-center gap-2 px-5 py-3.5 rounded-2xl text-white/70 font-semibold hover:text-white transition">
+                        or join as crew
+                    </a>
+                </div>
+
+                <div class="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-white/45">
+                    <span>Installs like an app — no app store</span>
+                    <span class="hidden sm:inline">·</span>
+                    <span>WhatsApp, email and push notifications</span>
+                    <span class="hidden sm:inline">·</span>
+                    <span>Every sensitive action audit-logged</span>
+                </div>
             </div>
 
-            @* Self-registration entry points — quietly visible under the main CTAs *@
-            <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-sm text-indigo-200/80">
-                <span>New here?</span>
-                <a href="/register/vendor"
-                   class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-100 hover:bg-emerald-500/30 transition">
-                    🏢 Vendor sign-up
-                </a>
-                <a href="/register/crew"
-                   class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-500/20 border border-orange-400/30 text-orange-100 hover:bg-orange-500/30 transition"
-                   title="Requires a vendor referral code">
-                    🧑‍🔧 Crew sign-up
-                </a>
-            </div>
+            @* Product preview: a real screen's structure -- a shift, its seat count, its
+               vendor and its state -- rather than a decorative illustration. *@
+            <div class="relative">
+                <div class="absolute -inset-6 bg-gradient-to-tr from-violet-600/20 to-fuchsia-500/20 blur-3xl rounded-[2rem]"></div>
+                <div class="relative rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5 shadow-2xl shadow-black/50">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[11px] uppercase tracking-widest text-white/40">Live event</p>
+                            <p class="font-bold mt-1">The MIX · Jio Garden</p>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-lg bg-emerald-400/15 text-emerald-300 text-[11px] font-bold border border-emerald-400/20">
+                            IN PROGRESS
+                        </span>
+                    </div>
 
-            @* trust strip *@
-            <div class="mt-16 grid grid-cols-2 md:grid-cols-4 gap-px bg-white/5 rounded-2xl overflow-hidden border border-white/10 max-w-3xl mx-auto">
-                <div class="bg-gray-900/40 backdrop-blur px-6 py-5">
-                    <p class="text-2xl font-bold">4 Roles</p>
-                    <p class="text-xs text-indigo-200/60 mt-1">Admin · Manager · Vendor · Crew</p>
-                </div>
-                <div class="bg-gray-900/40 backdrop-blur px-6 py-5">
-                    <p class="text-2xl font-bold">3-Step</p>
-                    <p class="text-xs text-indigo-200/60 mt-1">Vendor + Manager approval</p>
-                </div>
-                <div class="bg-gray-900/40 backdrop-blur px-6 py-5">
-                    <p class="text-2xl font-bold">Real-time</p>
-                    <p class="text-xs text-indigo-200/60 mt-1">Live updates via SignalR</p>
-                </div>
-                <div class="bg-gray-900/40 backdrop-blur px-6 py-5">
-                    <p class="text-2xl font-bold">Secure</p>
-                    <p class="text-xs text-indigo-200/60 mt-1">OTP login · audit logs</p>
+                    <div class="mt-5 space-y-2.5">
+                        @foreach (var s in _preview)
+                        {
+                            <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="font-semibold text-sm truncate">@s.Scope</p>
+                                        <p class="text-[11px] text-white/40 mt-0.5">@s.Window · @s.Vendor</p>
+                                    </div>
+                                    <span class="shrink-0 text-[11px] font-bold px-2 py-1 rounded-lg @s.PillClass">@s.Pill</span>
+                                </div>
+                                <div class="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                                    <div class="h-full rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400"
+                                         style="width:@(s.Filled * 100 / s.Seats)%"></div>
+                                </div>
+                                <p class="mt-2 text-[11px] text-white/45">@s.Filled of @s.Seats seats filled</p>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+                        <div class="rounded-xl bg-white/[0.03] border border-white/10 py-2.5">
+                            <p class="text-lg font-bold">18</p>
+                            <p class="text-[10px] text-white/40 uppercase tracking-wider">Checked in</p>
+                        </div>
+                        <div class="rounded-xl bg-white/[0.03] border border-white/10 py-2.5">
+                            <p class="text-lg font-bold">3</p>
+                            <p class="text-[10px] text-white/40 uppercase tracking-wider">Awaiting</p>
+                        </div>
+                        <div class="rounded-xl bg-white/[0.03] border border-white/10 py-2.5">
+                            <p class="text-lg font-bold">₹42k</p>
+                            <p class="text-[10px] text-white/40 uppercase tracking-wider">Payable</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    @* ═══════════════════════════════════════ FEATURES ═══════════════════════════════════════ *@
-    <section id="features" class="relative py-24 bg-gray-50 text-gray-900">
-        <div class="max-w-7xl mx-auto px-6 lg:px-10">
-            <div class="text-center max-w-2xl mx-auto mb-16">
-                <p class="text-sm font-semibold text-indigo-600 uppercase tracking-widest">What's inside</p>
-                <h2 class="mt-3 text-4xl md:text-5xl font-bold tracking-tight text-gray-900">Everything an event team needs.</h2>
-                <p class="mt-4 text-gray-500 text-lg">From the first invite to the final payout.</p>
+    @* ──────────────────────── CAPABILITY MARQUEE ─────────────────────── *@
+    <section class="relative border-y border-white/5 bg-white/[0.02] py-7 space-y-3 overflow-hidden">
+        <div class="oo-marquee gap-3">
+            @for (var pass = 0; pass < 2; pass++)
+            {
+                @foreach (var c in _marqueeTop)
+                {
+                    <span class="shrink-0 px-4 py-2 rounded-xl border border-white/10 bg-white/[0.03] text-sm text-white/70">@c</span>
+                }
+            }
+        </div>
+        <div class="oo-marquee rev gap-3">
+            @for (var pass = 0; pass < 2; pass++)
+            {
+                @foreach (var c in _marqueeBottom)
+                {
+                    <span class="shrink-0 px-4 py-2 rounded-xl border border-white/10 bg-white/[0.03] text-sm text-white/70">@c</span>
+                }
+            }
+        </div>
+    </section>
+
+    @* ────────────────────────── CORE SOLUTIONS ───────────────────────── *@
+    <section id="platform" class="relative max-w-7xl mx-auto px-5 lg:px-8 py-20 lg:py-28">
+        <div class="max-w-2xl">
+            <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-violet-300/80">The platform</p>
+            <h2 class="mt-3 text-3xl sm:text-4xl font-black tracking-tight">Three problems, solved properly</h2>
+            <p class="mt-4 text-white/60">
+                Most event tools stop at a roster spreadsheet. OpsOracle covers what happens after
+                that — who is actually allowed on a shift, who turned up, and who gets paid.
+            </p>
+        </div>
+
+        <div class="mt-12 grid md:grid-cols-3 gap-5">
+            @foreach (var p in _pillars)
+            {
+                <div class="group relative rounded-3xl border border-white/10 bg-white/[0.03] p-7 hover:bg-white/[0.055] hover:border-white/20 transition">
+                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center text-lg shadow-lg shadow-violet-900/40">
+                        @p.Icon
+                    </div>
+                    <h3 class="mt-5 text-lg font-bold">@p.Title</h3>
+                    <p class="mt-2.5 text-sm text-white/60 leading-relaxed">@p.Desc</p>
+                    <ul class="mt-5 space-y-2">
+                        @foreach (var b in p.Bullets)
+                        {
+                            <li class="flex gap-2.5 text-[13px] text-white/70">
+                                <span class="mt-[7px] w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0"></span>
+                                <span>@b</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    </section>
+
+    @* ───────────────────────── FULL CAPABILITIES ─────────────────────── *@
+    <section class="relative bg-white/[0.02] border-y border-white/5">
+        <div class="max-w-7xl mx-auto px-5 lg:px-8 py-20 lg:py-24">
+            <div class="max-w-2xl">
+                <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-violet-300/80">Everything included</p>
+                <h2 class="mt-3 text-3xl sm:text-4xl font-black tracking-tight">One system, from planning to payout</h2>
             </div>
 
-            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-7">
                 @foreach (var f in _features)
                 {
-                    <div class="group bg-white border border-gray-100 rounded-2xl p-7 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-100/50 transition-all">
-                        <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl mb-5 group-hover:bg-indigo-600 group-hover:text-white transition">
-                            @f.Icon
+                    <div class="flex gap-4">
+                        <div class="shrink-0 w-10 h-10 rounded-xl border border-white/10 bg-white/[0.04] flex items-center justify-center">@f.Icon</div>
+                        <div>
+                            <h3 class="font-semibold">@f.Title</h3>
+                            <p class="mt-1 text-[13px] text-white/55 leading-relaxed">@f.Desc</p>
                         </div>
-                        <h3 class="font-semibold text-gray-900 text-lg">@f.Title</h3>
-                        <p class="text-sm text-gray-500 mt-2 leading-relaxed">@f.Desc</p>
                     </div>
                 }
             </div>
         </div>
     </section>
 
-    @* ═══════════════════════════════════════ WORKFLOW ═══════════════════════════════════════ *@
-    <section id="workflow" class="relative py-24 bg-white text-gray-900">
-        <div class="max-w-7xl mx-auto px-6 lg:px-10">
-            <div class="text-center max-w-2xl mx-auto mb-16">
-                <p class="text-sm font-semibold text-indigo-600 uppercase tracking-widest">How it flows</p>
-                <h2 class="mt-3 text-4xl md:text-5xl font-bold tracking-tight">A clean, accountable workflow.</h2>
-                <p class="mt-4 text-gray-500 text-lg">Every action approved. Every change logged.</p>
-            </div>
+    @* ───────────────────────────── HOW IT WORKS ──────────────────────── *@
+    <section id="how" class="relative max-w-7xl mx-auto px-5 lg:px-8 py-20 lg:py-28">
+        <div class="max-w-2xl">
+            <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-violet-300/80">How it works</p>
+            <h2 class="mt-3 text-3xl sm:text-4xl font-black tracking-tight">Four steps, and nobody is guessing</h2>
+        </div>
 
-            <div class="grid md:grid-cols-4 gap-5">
-                @{ int n = 1; }
-                @foreach (var step in _steps)
-                {
-                    <div class="relative bg-gradient-to-br from-gray-50 to-white border border-gray-100 rounded-2xl p-6">
-                        <div class="absolute -top-3 -left-3 w-9 h-9 rounded-xl bg-indigo-600 text-white text-sm font-bold flex items-center justify-center shadow-lg">@(n++)</div>
-                        <p class="text-xs font-semibold text-indigo-600 uppercase tracking-wider mt-2">@step.Actor</p>
-                        <h3 class="mt-2 font-semibold text-gray-900">@step.Title</h3>
-                        <p class="text-sm text-gray-500 mt-2 leading-relaxed">@step.Desc</p>
+        <div class="mt-12 grid md:grid-cols-4 gap-5">
+            @foreach (var item in _steps.Select((s, i) => (Step: s, Index: i)))
+            {
+                <div class="relative rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+                    <div class="flex items-center justify-between">
+                        <span class="text-4xl font-black text-white/10">0@(item.Index + 1)</span>
+                        <span class="px-2.5 py-1 rounded-lg bg-violet-500/15 border border-violet-400/20 text-[10px] font-bold uppercase tracking-wider text-violet-200">
+                            @item.Step.Actor
+                        </span>
                     </div>
-                }
-            </div>
+                    <h3 class="mt-4 font-bold">@item.Step.Title</h3>
+                    <p class="mt-2 text-[13px] text-white/55 leading-relaxed">@item.Step.Desc</p>
+                </div>
+            }
         </div>
     </section>
 
-    @* ═══════════════════════════════════════ ROLES ═══════════════════════════════════════ *@
-    <section id="roles" class="relative py-24 bg-gray-50 text-gray-900">
-        <div class="max-w-7xl mx-auto px-6 lg:px-10">
-            <div class="text-center max-w-2xl mx-auto mb-16">
-                <p class="text-sm font-semibold text-indigo-600 uppercase tracking-widest">Built for everyone on the ground</p>
-                <h2 class="mt-3 text-4xl md:text-5xl font-bold tracking-tight">One platform. Every role.</h2>
+    @* ─────────────────────────────── ROLES ──────────────────────────── *@
+    <section id="roles" class="relative bg-white/[0.02] border-y border-white/5">
+        <div class="max-w-7xl mx-auto px-5 lg:px-8 py-20 lg:py-24">
+            <div class="max-w-2xl">
+                <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-violet-300/80">Built for every role</p>
+                <h2 class="mt-3 text-3xl sm:text-4xl font-black tracking-tight">Each person sees only their job</h2>
+                <p class="mt-4 text-white/60">
+                    Separate portals, permission-gated, so a vendor never sees another vendor's crew and
+                    a crew member never sees the payroll.
+                </p>
             </div>
 
-            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div class="mt-12 grid md:grid-cols-3 gap-5">
                 @foreach (var r in _roles)
                 {
-                    <div class="bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-xl hover:shadow-gray-200/50 transition">
-                        <div class="text-3xl">@r.Emoji</div>
-                        <h3 class="mt-4 font-bold text-gray-900 text-lg">@r.Name</h3>
-                        <p class="text-xs text-indigo-600 font-semibold uppercase tracking-wider mt-0.5">@r.Tag</p>
-                        <ul class="mt-4 space-y-2 text-sm text-gray-600">
+                    <div class="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.05] to-transparent p-7">
+                        <p class="text-[11px] font-bold uppercase tracking-widest text-violet-300/70">@r.Tag</p>
+                        <h3 class="mt-2 text-xl font-bold">@r.Name</h3>
+                        <ul class="mt-5 space-y-2.5">
                             @foreach (var b in r.Bullets)
                             {
-                                <li class="flex gap-2">
-                                    <span class="text-indigo-500 mt-0.5">✓</span>
-                                    <span>@b</span>
+                                <li class="flex gap-2.5 text-sm text-white/70">
+                                    <span class="text-violet-300">✓</span><span>@b</span>
                                 </li>
                             }
                         </ul>
+                        <a href="@r.Href" class="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-violet-200 hover:text-white transition">
+                            @r.Cta →
+                        </a>
                     </div>
                 }
             </div>
         </div>
     </section>
 
-    @* ═══════════════════════════════════════ CTA ═══════════════════════════════════════ *@
-    <section class="relative py-28 bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900 text-white overflow-hidden">
-        <div class="absolute inset-0 opacity-30">
-            <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-indigo-600/40 rounded-full blur-3xl"></div>
-        </div>
-        <div class="relative max-w-3xl mx-auto px-6 text-center">
-            <h2 class="text-4xl md:text-5xl font-bold tracking-tight">Ready to run a calmer event?</h2>
-            <p class="mt-5 text-lg text-indigo-100/70">Sign in to your EveWos workspace and pick up right where your team left off.</p>
-            <div class="mt-9">
-                <button @onclick="GoLogin"
-                        class="px-8 py-4 rounded-xl bg-white text-gray-900 font-semibold hover:bg-indigo-50 transition shadow-2xl shadow-black/40 inline-flex items-center gap-2">
-                    Login to EveWos
-                    <span>→</span>
-                </button>
+    @* ──────────────────────────── FINAL CTA ─────────────────────────── *@
+    <section id="contact" class="relative overflow-hidden">
+        <div class="absolute inset-0 opacity-50 bg-[radial-gradient(ellipse_at_50%_0%,#7c3aed_0%,transparent_60%)]"></div>
+        <div class="absolute inset-0 oo-grid opacity-30"></div>
+
+        <div class="relative max-w-4xl mx-auto px-5 lg:px-8 py-24 text-center">
+            <div class="flex justify-center">
+                <BrandMark Size="56" Class="rounded-2xl shadow-2xl shadow-violet-900/50" />
             </div>
+            <h2 class="mt-7 text-3xl sm:text-5xl font-black tracking-tight">Let's get your event staffed</h2>
+            <p class="mt-5 text-lg text-white/65">
+                Bring your vendors and crew into one workspace, and stop reconciling attendance over
+                WhatsApp screenshots.
+            </p>
+            <div class="mt-9 flex flex-wrap justify-center gap-3">
+                <a href="/login"
+                   class="px-7 py-3.5 rounded-2xl bg-white text-[#0b0a1a] font-bold hover:bg-violet-50 transition shadow-xl shadow-black/30">
+                    Sign in
+                </a>
+                <a href="mailto:support@eventwos.app"
+                   class="px-7 py-3.5 rounded-2xl bg-white/5 border border-white/15 font-semibold hover:bg-white/10 transition backdrop-blur">
+                    Talk to us
+                </a>
+            </div>
+            <p class="mt-6 text-sm text-white/40">support@eventwos.app</p>
         </div>
     </section>
 
-    @* ═══════════════════════════════════════ FOOTER ═══════════════════════════════════════ *@
-    <footer class="bg-gray-950 text-indigo-100/60 border-t border-white/5">
-        <div class="max-w-7xl mx-auto px-6 lg:px-10 py-10 flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
-            <div class="flex items-center gap-2">
-                <div class="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-sm">⚡</div>
-                <span class="font-semibold text-white">EveWos</span>
-                <span class="text-indigo-200/40">· Event Workforce Operating System</span>
+    @* ─────────────────────────────── FOOTER ─────────────────────────── *@
+    <footer class="border-t border-white/5 bg-[#080714]">
+        <div class="max-w-7xl mx-auto px-5 lg:px-8 py-12 grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
+            <div>
+                <div class="flex items-center gap-2.5">
+                    <BrandMark Size="30" Class="rounded-lg" />
+                    <span class="font-bold">OpsOracle</span>
+                </div>
+                <p class="mt-4 text-sm text-white/45 max-w-xs leading-relaxed">
+                    Event workforce operations — shifts, vendor crews, attendance and payouts in one system.
+                </p>
             </div>
-            <p>© @DateTime.UtcNow.Year EveWos. All rights reserved.</p>
+
+            <div>
+                <p class="text-[11px] font-bold uppercase tracking-widest text-white/40">Platform</p>
+                <ul class="mt-4 space-y-2.5 text-sm text-white/60">
+                    <li><a href="#platform" class="hover:text-white transition">Staffing &amp; quotas</a></li>
+                    <li><a href="#platform" class="hover:text-white transition">Attendance</a></li>
+                    <li><a href="#platform" class="hover:text-white transition">Payments</a></li>
+                    <li><a href="#how" class="hover:text-white transition">How it works</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <p class="text-[11px] font-bold uppercase tracking-widest text-white/40">Get started</p>
+                <ul class="mt-4 space-y-2.5 text-sm text-white/60">
+                    <li><a href="/login" class="hover:text-white transition">Sign in</a></li>
+                    <li><a href="/register/vendor" class="hover:text-white transition">Vendor sign-up</a></li>
+                    <li><a href="/register/crew" class="hover:text-white transition">Crew sign-up</a></li>
+                    <li><a href="mailto:support@eventwos.app" class="hover:text-white transition">Support</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="border-t border-white/5">
+            <div class="max-w-7xl mx-auto px-5 lg:px-8 py-6 text-xs text-white/35 flex flex-wrap gap-2 justify-between">
+                <span>© @DateTime.UtcNow.Year OpsOracle. All rights reserved.</span>
+                <span>Event workforce operations</span>
+            </div>
         </div>
     </footer>
 </div>
@@ -215,43 +384,89 @@
 @code {
     protected override async Task OnInitializedAsync()
     {
-        // If the visitor is already signed in, send them straight to their dashboard.
+        // Already signed in? This page is not for you -- go straight to work.
         var state = await AuthState.GetAuthenticationStateAsync();
         if (state.User?.Identity?.IsAuthenticated == true)
-        {
             Nav.NavigateTo("/dashboard", replace: true);
-        }
     }
 
-    private void GoLogin() => Nav.NavigateTo("/login");
-
+    private sealed record Pillar(string Icon, string Title, string Desc, string[] Bullets);
     private sealed record Feature(string Icon, string Title, string Desc);
     private sealed record Step(string Actor, string Title, string Desc);
-    private sealed record RoleCard(string Emoji, string Name, string Tag, string[] Bullets);
+    private sealed record RoleCard(string Name, string Tag, string[] Bullets, string Cta, string Href);
+    private sealed record PreviewShift(string Scope, string Window, string Vendor, int Seats, int Filled,
+                                       string Pill, string PillClass);
+
+    private readonly PreviewShift[] _preview =
+    {
+        new("Box Office",  "09:00 – 18:00", "Sameer Khan", 3, 3, "STAFFED",   "bg-emerald-400/15 text-emerald-300 border border-emerald-400/20"),
+        new("Gate Access", "10:00 – 22:00", "Vertex Crew", 8, 5, "5 / 8",     "bg-amber-400/15 text-amber-300 border border-amber-400/20"),
+        new("Hospitality", "12:00 – 20:00", "Unassigned",  4, 0, "NO VENDOR", "bg-white/10 text-white/60 border border-white/15"),
+    };
+
+    private readonly string[] _marqueeTop =
+    {
+        "Events & shifts", "Scope of work", "Vendor seat quotas", "Crew rosters", "Crew groups",
+        "Two-stage approval", "Invite & re-invite", "Shift capacity guards",
+    };
+
+    private readonly string[] _marqueeBottom =
+    {
+        "QR check-in", "Geofenced attendance", "Payment approvals", "Payroll batches",
+        "WhatsApp notifications", "Web push", "Ratings", "Audit log", "Roles & permissions",
+    };
+
+    private readonly Pillar[] _pillars =
+    {
+        new("🎯", "Staffing & vendor quotas",
+            "Give each vendor a seat quota on a shift and let them staff it from their own roster. The seat maths refuses to overbook.",
+            new[] { "Shifts with scope of work and windows", "Per-vendor seat allocation", "Shrinking a shift is blocked once crew are placed" }),
+
+        new("📍", "Attendance you can prove",
+            "Crew check in on site, verified against the venue's coordinates, with a vendor QR scan as the second factor.",
+            new[] { "GPS geofence set per event, not per venue", "QR scan by the vendor on the ground", "Check-in and check-out trail that stays put" }),
+
+        new("💸", "Payments & payroll",
+            "Approve what each crew member earned, batch it into payroll, and keep the paper trail attached to the shift they worked.",
+            new[] { "Per-crew payment approval with reasons", "Payroll batches you release when ready", "Vendor and crew payout visibility" }),
+    };
 
     private readonly Feature[] _features =
     {
-        new("📅", "Events",      "Plan events end-to-end — venue, schedule, capacity and crew, all in one record."),
-        new("👥", "Crew",        "Maintain a verified crew roster with skills, ratings and discipline scores."),
-        new("🤝", "Vendors",     "Onboard vendors, assign them to events and let them staff their own teams."),
-        new("✅", "Attendance",  "Crew check-in and check-out with audit trail — no more lost timesheets."),
-        new("💸", "Payments",    "Approve crew payments, batch payroll and track every paid rupee."),
-        new("🛡️", "Approvals",  "Two-step approval: vendor confirms, manager signs off — clean and accountable."),
+        new("📅", "Events & shifts",        "Plan an event once — venue, window, scope of work and the shifts it needs."),
+        new("🤝", "Vendor allocations",     "Allocate seats per shift; vendors see only the events they hold seats on."),
+        new("👥", "Crew & groups",          "Verified crew profiles, with reusable groups for teams that always work together."),
+        new("🛡️", "Two-stage approval",    "The vendor approves their crew, the manager signs off. Both stages are recorded."),
+        new("📲", "QR & geofence check-in", "Location-checked check-in with a vendor scan, built for gates with no desk."),
+        new("💰", "Payments & payroll",     "Approvals, rejections with reasons, and payroll batches you release when ready."),
+        new("🔔", "Multi-channel alerts",   "WhatsApp, email, in-app and web push — each notification deep-links to the screen."),
+        new("⭐", "Ratings",                "Rate crew on skill and attitude after the event; the score follows their profile."),
+        new("🔐", "Roles & permissions",    "Granular permissions per role, with sensitive document access audit-logged."),
+        new("📊", "Reports",                "Per-vendor and per-crew reporting on assignments, attendance and earnings."),
+        new("📱", "Installs like an app",   "A PWA — add to home screen on Android or iPhone, no app store, offline shell."),
+        new("🧾", "Audit log",              "Who changed what, when and from where — including every document opened."),
     };
 
     private readonly Step[] _steps =
     {
-        new("Manager",  "Create the event",       "Set venue, dates and crew capacity. Pick assignment mode: crew-only, vendor-only or vendor + crew."),
-        new("Vendor",   "Staff the event",        "Invite crew from your roster. They accept on their phone — no app install needed."),
-        new("Manager",  "Final approval",         "Manager reviews vendor-approved crew in the Approval Queue and gives the final yes."),
-        new("Everyone", "Run it & get paid",      "Crew check in on-site. Vendor rates. Manager approves payment. Done."),
+        new("Organiser", "Publish the event",        "Create the event with its venue and geofence, then add the shifts and the scope of work each one covers."),
+        new("Organiser", "Allocate vendor seats",    "Give each vendor their seat quota on a shift. They are invited automatically and see it in My Events."),
+        new("Vendor",    "Staff it, then get signed off", "The vendor assigns crew from their roster; the manager gives the final yes in the approval queue."),
+        new("Everyone",  "Run it, then pay",         "Crew check in on site. Attendance flows into payment approvals and payroll batches."),
     };
 
     private readonly RoleCard[] _roles =
     {
-        new("🛡️", "Admin",   "Full Control",      new[] { "Manage users & roles", "Configure permissions", "Full audit log access" }),
-        new("📋", "Manager", "Plans & Approves",  new[] { "Create & publish events", "Approval queue & payments", "Permission-gated access" }),
-        new("🤝", "Vendor",  "Brings the team",   new[] { "Build your crew roster", "Self-assign to events", "Track your payouts" }),
-        new("🧑‍🔧", "Crew",  "On the ground",     new[] { "Accept invites", "Check in & out", "View earnings & ratings" }),
+        new("Organiser / Manager", "Plans and approves",
+            new[] { "Events, shifts and vendor quotas", "Approval queue for every crew response", "Payments, payroll and full reporting" },
+            "Admin sign in", "/login/admin"),
+
+        new("Vendor", "Brings the crew",
+            new[] { "Staff your seats from your own roster", "Approve your crew before the manager does", "Track your payouts and crew ratings" },
+            "Vendor sign-up", "/register/vendor"),
+
+        new("Crew", "On the ground",
+            new[] { "Accept shift invites on your phone", "Check in and out at the venue", "See your attendance and earnings" },
+            "Crew sign-up", "/register/crew"),
     };
 }
